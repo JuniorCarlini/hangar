@@ -89,6 +89,26 @@ limit_note = "After 5 wrong attempts, new attempts are blocked for 15 minutes."
 [twofa.error]
 invalid = "Wrong or already used code."
 
+[setup]
+page_title = "First access · Hangar"
+title = "Create the owner account"
+subtitle = "There is no one on this panel yet. Whoever creates the account now becomes the owner, with full access."
+code = "Setup code"
+code_hint = "The installer showed this code at the end of the installation. To see it again, on the server: sudo cat {file}"
+email = "E-mail"
+password = "Password"
+password_hint = "At least {min} characters. There is no \"forgot password\": keep it in a password manager."
+confirm = "Repeat the password"
+twofa = "Protect with two-step verification (recommended)"
+twofa_hint = "Right after creating the account, you scan a QR code with your authenticator app. You can turn it on or off later in My account."
+twofa_required = "This server requires two-step verification: you will set it up right after creating the account."
+submit = "Create account and sign in"
+
+[setup.error]
+closed = "First access is already done. Sign in with your account."
+code = "Wrong setup code."
+mismatch = "The two passwords are not the same."
+
 [sudo]
 confirm = "Confirm"
 password_label = "Confirm your password to continue"

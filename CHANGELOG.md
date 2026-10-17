@@ -12,6 +12,21 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Primeiro acesso pelo navegador**: na primeira visita ao painel aparece
+  **Criar a conta de dono** (e-mail, senha e verificação em duas etapas
+  opcional, que já vem marcada). Para ninguém mais criar a conta antes de
+  você, a tela pede o **código de configuração** que o instalador mostra no
+  fim; ela some assim que o dono existe. `hangard user create` continua
+  funcionando.
+
+### Alterado
+
+- A verificação em duas etapas passa a ser opcional por padrão em novas
+  instalações (`require_2fa = false`): cada conta liga em **Minha conta**, e
+  quem está sem ela vê um aviso no topo. Instalações existentes não mudam.
+
 ## [0.1.0] - 2026-10-17
 
 Primeira versão pública.

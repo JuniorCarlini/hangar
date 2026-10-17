@@ -77,7 +77,9 @@ func Open(ctx context.Context, cfg config.Config, log *slog.Logger) (*Core, erro
 		return nil, err
 	}
 	al := audit.New(st.DB)
-	svc, err := auth.NewService(st.DB, box, al, auth.Options{Require2FA: cfg.Auth.Require2FA})
+	svc, err := auth.NewService(st.DB, box, al, auth.Options{
+		Require2FA: cfg.Auth.Require2FA, SetupCodeFile: SetupCodeFile(cfg),
+	})
 	if err != nil {
 		_ = st.Close()
 		return nil, err
@@ -91,6 +93,10 @@ func Open(ctx context.Context, cfg config.Config, log *slog.Logger) (*Core, erro
 
 // Close closes the database.
 func (c *Core) Close() error { return c.Store.Close() }
+
+// SetupCodeFile is where the first-run setup code lives while the panel has
+// no user.
+func SetupCodeFile(cfg config.Config) string { return filepath.Join(cfg.DataDir, "setup-code") }
 
 // Serve runs the panel on every panel.listen address and blocks until ctx
 // is canceled or a server fails.
@@ -146,6 +152,13 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// Endpoints for services older than them, and a unique link name for
 	// each, before the edge builds its routes from them.
 	// A failure here is logged, not fatal: the panel must come up to fix it.
+	// No user yet: the owner can be created from the browser, with the
+	// one-time code written here (the installer prints it).
+	if open, err := core.Auth.PrepareSetup(ctx); err != nil {
+		log.Error("prepare first-run setup", "error", err)
+	} else if open {
+		log.Warn("no user yet: open the panel to create the owner; the setup code is in the file", "file", SetupCodeFile(cfg))
+	}
 	if n, err := pm.EnsureEndpoints(ctx); err != nil {
 		log.Error("prepare endpoints", "error", err)
 	} else if n > 0 {
@@ -199,7 +212,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	defer bm.Wait()
 	handler, err := web.New(web.Deps{
 		Hosts: cfg.Panel.Hosts, Log: log, Audit: al, Auth: core.Auth,
-		Updates: checker, UpdateDir: UpdateDir(cfg), Projects: pm, Metrics: mc, HooksBase: hooksBase, Backups: bm, ServerIP: serverIP(ctx, cfg), BaseDomain: cfg.Edge.BaseDomain, AutoLinkIP: autoLinkIP(cfg), ErrorPages: pages, Brand: errpages.NewStore(core.Store.DB),
+		Updates: checker, UpdateDir: UpdateDir(cfg), SetupCodeFile: SetupCodeFile(cfg), Projects: pm, Metrics: mc, HooksBase: hooksBase, Backups: bm, ServerIP: serverIP(ctx, cfg), BaseDomain: cfg.Edge.BaseDomain, AutoLinkIP: autoLinkIP(cfg), ErrorPages: pages, Brand: errpages.NewStore(core.Store.DB),
 		Deps: dm, Status: sp, StatusHosts: cfg.Status.Hosts,
 		Alerts: core.Alerts, Lock: core.Lock,
 	})

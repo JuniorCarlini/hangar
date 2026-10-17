@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"os"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -73,6 +74,8 @@ type Service struct {
 	// dummyHash equalizes response time when the e-mail does not exist.
 	dummyHash  string
 	require2FA bool
+	// setupFile holds the first-run setup code ("" = no browser setup).
+	setupFile string
 }
 
 // Options tunes the Service (tests use cheap argon and a fixed clock).
@@ -82,6 +85,9 @@ type Options struct {
 	// Require2FA refuses login to accounts without 2FA. Off, 2FA is per
 	// account (like Easypanel): whoever turned it on is asked for the code.
 	Require2FA bool
+	// SetupCodeFile is where the first-run setup code lives while the panel
+	// has no user. Empty, the owner can only be created on the command line.
+	SetupCodeFile string
 }
 
 // NewService creates the authentication service.
@@ -100,7 +106,7 @@ func NewService(db *sql.DB, box *secrets.Box, al *audit.Logger, opt Options) (*S
 	return &Service{
 		db: db, q: dbq.New(db), box: box, audit: al, now: opt.Now, argon: opt.Argon,
 		limits: newLimiter(LimitFailures, LimitWindow, opt.Now), dummyHash: dummy, argon2: newArgonPool(),
-		require2FA: opt.Require2FA,
+		require2FA: opt.Require2FA, setupFile: opt.SetupCodeFile,
 	}, nil
 }
 
@@ -109,18 +115,7 @@ func NewService(db *sql.DB, box *secrets.Box, al *audit.Logger, opt Options) (*S
 // CreateUser creates a user without 2FA. They can only log in after
 // EnrollTOTP.
 func (s *Service) CreateUser(ctx context.Context, email, password string, role Role) (string, error) {
-	email = strings.TrimSpace(email)
-	addr, err := mail.ParseAddress(email)
-	if err != nil || addr.Address != email || len(email) > 254 {
-		return "", i18n.E("user.error.email_invalid", "email", email)
-	}
-	if role == RoleNone {
-		return "", i18n.E("user.error.role_required")
-	}
-	if err := CheckPasswordStrength(password, email); err != nil {
-		return "", err
-	}
-	hash, err := HashPassword(password, s.argon)
+	email, hash, err := s.newAccount(email, password, role)
 	if err != nil {
 		return "", err
 	}
@@ -135,11 +130,36 @@ func (s *Service) CreateUser(ctx context.Context, email, password string, role R
 		}
 		return "", fmt.Errorf("create user: %w", err)
 	}
+	// An owner made on the command line closes the browser setup too.
+	if s.setupFile != "" {
+		_ = os.Remove(s.setupFile)
+	}
 	s.record(ctx, audit.Entry{
 		ActorID: id, Action: "user.create", Outcome: audit.OK,
 		TargetType: "user", TargetID: id, Summary: map[string]any{"role": role.String(), "via": "cli"},
 	})
 	return id, nil
+}
+
+// newAccount validates a new account's e-mail, role and password and returns
+// the trimmed e-mail and the password hash.
+func (s *Service) newAccount(email, password string, role Role) (string, string, error) {
+	email = strings.TrimSpace(email)
+	addr, err := mail.ParseAddress(email)
+	if err != nil || addr.Address != email || len(email) > 254 {
+		return "", "", i18n.E("user.error.email_invalid", "email", email)
+	}
+	if role == RoleNone {
+		return "", "", i18n.E("user.error.role_required")
+	}
+	if err := CheckPasswordStrength(password, email); err != nil {
+		return "", "", err
+	}
+	hash, err := HashPassword(password, s.argon)
+	if err != nil {
+		return "", "", err
+	}
+	return email, hash, nil
 }
 
 // UserIDByEmail resolves the id (CLI).

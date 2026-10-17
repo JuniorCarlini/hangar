@@ -69,6 +69,7 @@ type handlers struct {
 	auth       *auth.Service
 	updates    updates
 	updateDir  string
+	setupFile  string
 	projects   *projects.Manager
 	metrics    *metrics.Collector
 	audit      *audit.Logger
@@ -132,11 +133,76 @@ func (h *handlers) loginPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
+	// No account yet: the first visit creates the owner.
+	if h.auth.SetupOpen(r.Context()) {
+		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		return
+	}
 	msg := ""
 	if r.URL.Query().Get("expired") == "1" {
 		msg = i18n.T(r.Context(), "login.error.expired")
 	}
 	render(w, withLoginToken(w, r), http.StatusOK, views.Login("", msg, h.lockNotice(r)))
+}
+
+func (h *handlers) setupForm(r *http.Request) views.SetupForm {
+	return views.SetupForm{
+		Email: strings.TrimSpace(r.PostFormValue("email")), TwoFA: true,
+		Required: h.auth.Require2FA(), CodeFile: h.setupFile, MinLen: auth.MinPasswordLen,
+	}
+}
+
+func (h *handlers) setupPage(w http.ResponseWriter, r *http.Request) {
+	if !h.auth.SetupOpen(r.Context()) {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	render(w, withLoginToken(w, r), http.StatusOK, views.Setup(h.setupForm(r), ""))
+}
+
+func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
+	if !h.auth.SetupOpen(r.Context()) {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	valid := validLoginToken(r)
+	form := withLoginToken(w, r)
+	f := h.setupForm(r)
+	f.TwoFA = f.Required || r.PostFormValue("twofa") == "1"
+	if !valid {
+		render(w, form, http.StatusForbidden, views.Setup(f, i18n.T(r.Context(), "login.error.form_expired")))
+		return
+	}
+	password := r.PostFormValue("password")
+	if password != r.PostFormValue("confirm") {
+		render(w, form, http.StatusUnprocessableEntity, views.Setup(f, i18n.T(r.Context(), "setup.error.mismatch")))
+		return
+	}
+	token, err := h.auth.CreateOwner(r.Context(), r.PostFormValue("code"), f.Email, password, client(r))
+
+	var rl *auth.RateLimitedError
+	var ie *i18n.Error
+	switch {
+	case err == nil:
+		setCookie(w, sessionCookie, token, auth.SessionMax)
+		if f.TwoFA {
+			// Straight to the 2FA card of "My account", where the QR code is.
+			http.Redirect(w, r, "/account#totp", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	case errors.Is(err, auth.ErrSetupClosed):
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	case errors.Is(err, auth.ErrSetupCode):
+		render(w, form, http.StatusUnauthorized, views.Setup(f, i18n.T(r.Context(), "setup.error.code")))
+	case errors.As(err, &rl):
+		render(w, form, http.StatusTooManyRequests, views.Setup(f, i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes())))
+	case errors.As(err, &ie):
+		render(w, form, http.StatusUnprocessableEntity, views.Setup(f, i18n.Message(i18n.Locale(r.Context()), err)))
+	default:
+		loggerFrom(r.Context()).Error("setup", "error", err)
+		render(w, form, http.StatusInternalServerError, views.Setup(f, i18n.T(r.Context(), "error.internal")))
+	}
 }
 
 // lockNotice tells whoever reaches the login page (only possible from the

@@ -38,7 +38,9 @@ type Deps struct {
 	// Updates and UpdateDir feed the update page (docs/21).
 	Updates   updates
 	UpdateDir string
-	Projects  *projects.Manager
+	// SetupCodeFile is shown on the first-run page, to find the code again.
+	SetupCodeFile string
+	Projects      *projects.Manager
 	// Metrics feeds the overview and the service metrics; nil shows zeros.
 	Metrics *metrics.Collector
 	// Deps is the dependency and vulnerability monitor (docs/14); nil
@@ -88,7 +90,7 @@ func New(d Deps) (http.Handler, error) {
 	views.AssetVersion = assetVersion()
 	rt := newRouter(d.Auth, d.Audit)
 	hs := &handlers{
-		auth: d.Auth, updates: d.Updates, updateDir: d.UpdateDir, projects: d.Projects, metrics: d.Metrics, audit: d.Audit,
+		auth: d.Auth, updates: d.Updates, updateDir: d.UpdateDir, setupFile: d.SetupCodeFile, projects: d.Projects, metrics: d.Metrics, audit: d.Audit,
 		deps: d.Deps, status: d.Status, pub: newPublicStatus(d.Status), alerts: d.Alerts, lock: d.Lock, hooksBase: d.HooksBase, backups: d.Backups,
 		hookFails: newHookFails(), serverIP: d.ServerIP, baseDomain: d.BaseDomain, autoLinkIP: d.AutoLinkIP, errorPages: d.ErrorPages, brand: d.Brand,
 	}
@@ -123,6 +125,10 @@ func routes(rt *Router, h *handlers) {
 	// GitHub's webhook: no session, authenticated by the HMAC signature.
 	rt.HandleFunc("POST "+projects.HookPath+"{token}", h.gitHook, Policy{Public: true, Audit: "service.webhook", AuditByHandler: true})
 
+	// First-run setup: only while there is no user, and only with the
+	// one-time code from the server.
+	rt.HandleFunc("GET /setup", h.setupPage, public)
+	rt.HandleFunc("POST /setup", h.setupSubmit, Policy{Public: true, Audit: "user.create", AuditByHandler: true})
 	rt.HandleFunc("GET /login", h.loginPage, public)
 	rt.HandleFunc("POST /login", h.loginSubmit, Policy{Public: true, Audit: "auth.login.password", AuditByHandler: true})
 	rt.HandleFunc("GET /login/2fa", h.twoFactorPage, public)

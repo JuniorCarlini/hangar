@@ -8,6 +8,13 @@ SELECT * FROM users WHERE email = ?;
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = ?;
 
+-- name: CreateFirstUser :execrows
+-- The first-run owner: inserted only while there is no user at all, so two
+-- setup requests racing each other cannot both create an account.
+INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
+SELECT ?, ?, ?, ?, ?, ?
+WHERE NOT EXISTS (SELECT 1 FROM users);
+
 -- name: CountUsers :one
 SELECT count(*) FROM users;
 

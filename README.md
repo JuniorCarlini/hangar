@@ -93,8 +93,8 @@ GitHub) e `--token-file arquivo` (token só leitura, para um fork privado).
 O instalador **não instala nada sem conferir** a assinatura Ed25519 do
 `release.json` e o SHA-256 do binário. Depois cria o usuário de sistema
 `hangar`, configura o Docker (logs com rotação, `live-restore`), gera a chave
-mestra em `/etc/hangar/master.key`, escreve `/etc/hangar/hangar.toml` com
-`require_2fa = true` e sobe o serviço `hangard`. Rodar de novo é seguro: nunca
+mestra em `/etc/hangar/master.key`, escreve `/etc/hangar/hangar.toml`, sobe o serviço `hangard` e mostra o
+**código de configuração** do primeiro acesso. Rodar de novo é seguro: nunca
 apaga dados nem a chave.
 
 <details>
@@ -119,14 +119,22 @@ shasum -a 256 hangard-linux-amd64    # tem que bater com o valor em release.json
 
 ### Primeiro acesso
 
-```bash
-# 1. Crie o dono da conta; o QR code da 2FA aparece no terminal.
-sudo -u hangar hangard user create -config /etc/hangar/hangar.toml -email voce@exemplo.com
+O painel só escuta em 127.0.0.1 (modo bunker). Do seu computador:
 
-# 2. O painel só escuta em 127.0.0.1 (modo bunker). Do seu computador:
+```bash
 ssh -L 7700:127.0.0.1:7700 usuario@servidor
 # e abra http://localhost:7700
 ```
+
+Na primeira visita aparece **Criar a conta de dono**: e-mail, senha e o
+código de configuração que o instalador mostrou (para ver de novo:
+`sudo cat /var/lib/hangar/setup-code`). A verificação em duas etapas vem
+marcada; deixando marcada, você escaneia o QR code logo em seguida. Quem
+criar a conta vira o dono, e a tela some para sempre.
+
+Prefere o terminal? `sudo -u hangar hangard user create -config
+/etc/hangar/hangar.toml -email voce@exemplo.com` cria o dono com o QR code
+da 2FA no terminal, e também fecha a tela de primeiro acesso.
 
 Depois de entrar:
 
@@ -190,7 +198,7 @@ listen = ["127.0.0.1:7700"]                     # só loopback ou IP privado, nu
 hosts  = ["127.0.0.1:7700", "localhost:7700"]   # Host aceito; o resto recebe 421
 
 [auth]
-require_2fa = true
+require_2fa = false   # true: ninguém entra sem 2FA
 
 [update]
 repo       = "JuniorCarlini/hangar"

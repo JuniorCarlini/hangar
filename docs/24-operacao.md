@@ -42,16 +42,14 @@ do Hangar tem limite próprio (`journald-hangar.conf`).
 Numa VPS **limpa** (Debian 13 ou Ubuntu 26.04):
 
 ```
-vps$ curl -fsSLO https://github.com/JuniorCarlini/hangar/releases/latest/download/install.sh
-vps$ sudo bash install.sh --token-file /root/github-token   # sem --token-file se o repositório for público
-vps$ sudo -u hangar hangard user create -email voce@exemplo.com    # QR code do 2FA no terminal
-$    ssh -L 7700:127.0.0.1:7700 usuario@vps                        # e abrir http://localhost:7700
+vps$ curl -fsSL https://github.com/JuniorCarlini/hangar/releases/latest/download/install.sh | sudo bash
+$    ssh -L 7700:127.0.0.1:7700 usuario@vps     # abrir http://localhost:7700 e criar o dono com o código mostrado
 ```
 
 O instalador confere a assinatura Ed25519 e o SHA-256 antes de instalar
 qualquer coisa, cria o usuário `hangar`, instala o Docker (log com rotação,
-`live-restore`), gera a chave mestra e escreve o `hangar.toml` com
-`require_2fa = true`. Rodar de novo é seguro: nunca apaga dados nem a chave.
+`live-restore`), gera a chave mestra, escreve o `hangar.toml` e mostra o código do
+primeiro acesso. Rodar de novo é seguro: nunca apaga dados nem a chave.
 
 **O que o instalador ainda NÃO faz** (fazer à mão):
 

@@ -141,3 +141,67 @@ templ TwoFactor(errMsg string) {
 		</main>
 	}
 }
+
+// SetupForm is what the first-run setup page shows and keeps between tries.
+type SetupForm struct {
+	Email    string
+	TwoFA    bool
+	Required bool   // the server demands 2FA (require_2fa)
+	CodeFile string // where the setup code lives on the server
+	MinLen   int
+}
+
+// Setup is the first-run page: the owner account, created from the browser
+// with the setup code the installer printed.
+templ Setup(f SetupForm, errMsg string) {
+	@layout(t(ctx, "setup.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<form class="flex w-full max-w-[420px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7" method="post" action="/setup" autocomplete="on">
+				<input type="hidden" name="csrf" value={ loginCSRF(ctx) }/>
+				@brand("")
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "setup.title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "setup.subtitle") }</p>
+				</div>
+				@errorAlert(errMsg)
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="code">{ t(ctx, "setup.code") }</label>
+					<input class="tuc-input font-mono uppercase tracking-wider" id="code" name="code" autocomplete="off" spellcheck="false" maxlength="40" required autofocus/>
+					<span class="tuc-hint">{ t(ctx, "setup.code_hint", "file", f.CodeFile) }</span>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="email">{ t(ctx, "setup.email") }</label>
+					<input class="tuc-input" id="email" name="email" type="email" autocomplete="username" maxlength="254" required value={ f.Email }/>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="password">{ t(ctx, "setup.password") }</label>
+					<input class="tuc-input" id="password" name="password" type="password" autocomplete="new-password" minlength={ f.MinLen } maxlength="256" required data-tuc-reveal/>
+					<span class="tuc-hint">{ t(ctx, "setup.password_hint", "min", f.MinLen) }</span>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="confirm">{ t(ctx, "setup.confirm") }</label>
+					<input class="tuc-input" id="confirm" name="confirm" type="password" autocomplete="new-password" minlength={ f.MinLen } maxlength="256" required data-tuc-reveal/>
+				</div>
+				if f.Required {
+					<div class="tuc-alert is-info" role="note">
+						@Icon("shield-check", "size-4")
+						<div class="tuc-alert__body"><p>{ t(ctx, "setup.twofa_required") }</p></div>
+					</div>
+				} else {
+					<div class="flex flex-col gap-1">
+						<label class="tuc-choice">
+							<input type="checkbox" class="tuc-check" name="twofa" value="1" checked?={ f.TwoFA }/>
+							<span>{ t(ctx, "setup.twofa") }</span>
+						</label>
+						<p class="tuc-hint">{ t(ctx, "setup.twofa_hint") }</p>
+					</div>
+				}
+				<button class="tuc-btn is-primary is-block" type="submit">
+					@Icon("arrow-right", "size-4")
+					{ t(ctx, "setup.submit") }
+				</button>
+				@languageSwitch()
+			</form>
+		</main>
+	}
+}

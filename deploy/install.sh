@@ -179,9 +179,10 @@ repo = "${REPO}"
 ${TOKEN_LINE}
 
 [auth]
-# Com true, ninguém entra sem 2FA. Com false, o 2FA é opcional por conta
-# (cada um liga em "Minha conta") e quem não ligou vê um aviso no topo.
-require_2fa = true
+# Com false (padrão), o 2FA é opcional por conta: cada um liga em "Minha
+# conta" (o primeiro acesso já oferece) e quem não ligou vê um aviso no topo.
+# Com true, ninguém entra sem 2FA.
+require_2fa = false
 
 # Proxy de borda (Caddy): HTTPS automático nos domínios dos serviços e nos
 # domínios dos clientes (docs/03). Desligado por padrão para não tomar as
@@ -233,17 +234,34 @@ done
 [[ "$(cat /var/lib/hangar/run/ready 2>/dev/null || true)" == "$REL_VERSION" ]] \
   || die "o painel não subiu; veja: journalctl -u hangard -n 50"
 
-cat <<DONE
+SETUP_FILE=/var/lib/hangar/setup-code
+if [[ -s "$SETUP_FILE" ]]; then
+  SETUP_CODE="$(tr -d '[:space:]' < "$SETUP_FILE")"
+  cat <<DONE
 
 Hangar $REL_VERSION instalado e rodando.
 
-Próximos passos:
-  1. Crie o dono (QR code do 2FA aparece no terminal):
-       sudo -u hangar hangard user create -config /etc/hangar/hangar.toml -email voce@exemplo.com
-  2. Acesse por túnel SSH, do seu computador:
+Primeiro acesso (criar a conta de dono):
+  1. Do seu computador, abra um túnel SSH até o painel:
        ssh -L 7700:127.0.0.1:7700 usuario@este-servidor
-       e abra http://localhost:7700
+  2. Abra http://localhost:7700 e use este código de configuração:
+
+       $SETUP_CODE
+
+     (vale até a conta ser criada; para ver de novo: sudo cat $SETUP_FILE)
   3. Guarde uma cópia de /etc/hangar/master.key fora do servidor.
 
 Atualizações: botão "Atualização" no painel, ou: sudo -u hangar hangard self-update stage -config /etc/hangar/hangar.toml
 DONE
+else
+  cat <<DONE
+
+Hangar $REL_VERSION instalado e rodando.
+
+Acesse por túnel SSH, do seu computador:
+  ssh -L 7700:127.0.0.1:7700 usuario@este-servidor
+  e abra http://localhost:7700
+
+Atualizações: botão "Atualização" no painel, ou: sudo -u hangar hangard self-update stage -config /etc/hangar/hangar.toml
+DONE
+fi

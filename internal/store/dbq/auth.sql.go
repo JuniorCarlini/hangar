@@ -63,6 +63,38 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createFirstUser = `-- name: CreateFirstUser :execrows
+INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
+SELECT ?, ?, ?, ?, ?, ?
+WHERE NOT EXISTS (SELECT 1 FROM users)
+`
+
+type CreateFirstUserParams struct {
+	ID           string
+	Email        string
+	PasswordHash string
+	Role         string
+	CreatedAt    int64
+	UpdatedAt    int64
+}
+
+// The first-run owner: inserted only while there is no user at all, so two
+// setup requests racing each other cannot both create an account.
+func (q *Queries) CreateFirstUser(ctx context.Context, arg CreateFirstUserParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, createFirstUser,
+		arg.ID,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Role,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (id_hash, user_id, stage, csrf_token, ip, user_agent, created_at, last_seen_at, expires_at, sudo_until)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

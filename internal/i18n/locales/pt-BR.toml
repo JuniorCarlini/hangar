@@ -89,6 +89,26 @@ limit_note = "Depois de 5 tentativas erradas, novas tentativas ficam bloqueadas 
 [twofa.error]
 invalid = "Código incorreto ou já usado."
 
+[setup]
+page_title = "Primeiro acesso · Hangar"
+title = "Criar a conta de dono"
+subtitle = "Ainda não há ninguém neste painel. Quem criar a conta agora vira o dono, com acesso total."
+code = "Código de configuração"
+code_hint = "O instalador mostrou este código no fim da instalação. Para ver de novo, no servidor: sudo cat {file}"
+email = "E-mail"
+password = "Senha"
+password_hint = "Pelo menos {min} caracteres. Não há \"esqueci a senha\": guarde num gerenciador de senhas."
+confirm = "Repita a senha"
+twofa = "Proteger com verificação em duas etapas (recomendado)"
+twofa_hint = "Logo depois de criar a conta, você escaneia um QR code no app autenticador. Pode ligar ou desligar depois em Minha conta."
+twofa_required = "Este servidor exige verificação em duas etapas: você vai configurá-la logo depois de criar a conta."
+submit = "Criar conta e entrar"
+
+[setup.error]
+closed = "O primeiro acesso já foi feito. Entre com a sua conta."
+code = "Código de configuração incorreto."
+mismatch = "As duas senhas não são iguais."
+
 [sudo]
 confirm = "Confirmar"
 password_label = "Confirme sua senha para continuar"

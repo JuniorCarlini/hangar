@@ -60,7 +60,7 @@ type env struct {
 	now    time.Time
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, opts ...func(*auth.Options)) *env {
 	t.Helper()
 	dir := t.TempDir()
 	st, err := store.Open(context.Background(), filepath.Join(dir, "h.db"), filepath.Join(dir, "b"), discard)
@@ -71,10 +71,14 @@ func newEnv(t *testing.T) *env {
 	box, _ := secrets.NewBox(bytes.Repeat([]byte{3}, 32))
 	al := audit.New(st.DB)
 	e := &env{st: st, now: time.Now()}
-	e.svc, err = auth.NewService(st.DB, box, al, auth.Options{
+	ao := auth.Options{
 		Argon: auth.Argon2Params{Memory: 1024, Time: 1, Threads: 1},
 		Now:   func() time.Time { return e.now },
-	})
+	}
+	for _, o := range opts {
+		o(&ao)
+	}
+	e.svc, err = auth.NewService(st.DB, box, al, ao)
 	if err != nil {
 		t.Fatal(err)
 	}

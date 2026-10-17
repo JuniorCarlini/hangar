@@ -35,9 +35,9 @@ Dois modos, escolhidos na instalação:
 - **2FA**: TOTP com códigos de recuperação (10, de uso único). Como no
   Easypanel, cada conta liga ou desliga em "Minha conta"; quem está sem 2FA
   entra só com a senha, vê um aviso fixo no topo de todas as telas, e as
-  ações perigosas pedem a senha de novo em vez do código. Em produção,
-  `[auth] require_2fa = true` no `hangar.toml` (o instalador já escreve
-  assim) recusa login de conta sem 2FA e impede desligar. No servidor,
+  ações perigosas pedem a senha de novo em vez do código. Com
+  `[auth] require_2fa = true` no `hangar.toml` (o instalador escreve
+  `false`), o painel recusa login de conta sem 2FA e impede desligar. No servidor,
   `hangard user totp-off -email ...` desliga a 2FA de uma conta (celular
   perdido), encerrando as sessões dela.
 - **Passkeys (WebAuthn)**: recomendadas; podem substituir senha+TOTP.
@@ -46,8 +46,14 @@ Dois modos, escolhidos na instalação:
   no servidor (`hangard user unlock`).
 - **Sem enumeração de usuário**: mesma resposta e mesmo tempo para usuário
   inexistente.
-- Primeiro usuário criado **pela CLI no servidor** (`hangard user create`),
-  nunca por uma tela "crie o admin" exposta na internet.
+- **Primeiro acesso**: enquanto não existe usuário, a tela "Criar a conta
+  de dono" pede um **código de configuração** de uso único (80 bits) que só
+  quem tem shell no servidor lê (`/var/lib/hangar/setup-code`, 0600; o
+  instalador mostra). Erros contam no mesmo limite do login; o dono só é
+  gravado se a tabela de usuários ainda estiver vazia (duas tentativas ao
+  mesmo tempo não criam dois donos); depois disso o código é apagado e a
+  tela some. O painel continua só em 127.0.0.1. A CLI (`hangard user
+  create`) segue disponível e também fecha a tela.
 
 ## Sessão
 
