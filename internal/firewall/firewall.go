@@ -19,12 +19,19 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // Chain is Hangar's chain, jumped to from DOCKER-USER.
 const Chain = "HANGAR-PORTS"
+
+// EdgeChain, jumped to first from INPUT, lets Caddy reach the panel's
+// listeners on the edge gateway. Some provider images (Oracle's, for one)
+// reject every new connection to the host but SSH, which would cut Caddy
+// off from the panel and the certificate check.
+const EdgeChain = "HANGAR-EDGE-IN"
 
 const (
 	desiredFile = "desired.json"
@@ -40,10 +47,19 @@ type Rule struct {
 	Allow    []netip.Prefix `json:"allow"`
 }
 
+// EdgeAccess lets Caddy (and only Caddy) reach the panel's listeners on
+// the edge gateway.
+type EdgeAccess struct {
+	Caddy   netip.Addr `json:"caddy"`
+	Gateway netip.Addr `json:"gateway"`
+	Ports   []int      `json:"ports"`
+}
+
 // State is the desired file.
 type State struct {
-	Version int    `json:"version"`
-	Rules   []Rule `json:"rules"`
+	Version int         `json:"version"`
+	Rules   []Rule      `json:"rules"`
+	Edge    *EdgeAccess `json:"edge,omitempty"`
 }
 
 // Applied is what the root unit reports back.
@@ -60,6 +76,19 @@ func (s State) Validate() error {
 	}
 	if len(s.Rules) > maxRules {
 		return errors.New("too many rules")
+	}
+	if e := s.Edge; e != nil {
+		if !e.Caddy.Is4() || !e.Caddy.IsPrivate() || !e.Gateway.Is4() || !e.Gateway.IsPrivate() {
+			return errors.New("edge access: private IPv4 addresses only")
+		}
+		if len(e.Ports) == 0 || len(e.Ports) > 4 {
+			return errors.New("edge access: between 1 and 4 ports")
+		}
+		for _, p := range e.Ports {
+			if p < 1 || p > 65535 {
+				return fmt.Errorf("edge access: invalid port %d", p)
+			}
+		}
 	}
 	for _, r := range s.Rules {
 		if r.Port < 1 || r.Port > 65535 || (r.Protocol != "tcp" && r.Protocol != "udp") {
@@ -86,15 +115,34 @@ func (s State) hash() string {
 // Writer writes the desired state (the panel side).
 type Writer struct{ Dir string }
 
-// Write replaces the desired state atomically; the path unit notices it.
+// current reads the desired state written before (empty when none).
+func (w Writer) current() State {
+	var st State
+	if raw, err := os.ReadFile(filepath.Join(w.Dir, desiredFile)); err == nil {
+		_ = json.Unmarshal(raw, &st)
+	}
+	return st
+}
+
+// Write replaces the port rules, keeping the edge access, atomically; the
+// path unit notices it.
 func (w Writer) Write(rules []Rule) error {
+	return w.write(rules, w.current().Edge)
+}
+
+// SetEdge replaces the edge access (nil removes it), keeping the port rules.
+func (w Writer) SetEdge(e *EdgeAccess) error {
+	return w.write(w.current().Rules, e)
+}
+
+func (w Writer) write(rules []Rule, edge *EdgeAccess) error {
 	slices.SortFunc(rules, func(a, b Rule) int {
 		if a.Port != b.Port {
 			return a.Port - b.Port
 		}
 		return strings.Compare(a.Protocol, b.Protocol)
 	})
-	st := State{Version: 1, Rules: rules}
+	st := State{Version: 1, Rules: rules, Edge: edge}
 	if st.Rules == nil {
 		st.Rules = []Rule{}
 	}
@@ -145,7 +193,15 @@ func (w Writer) Status() (pending bool, applied Applied) {
 // traffic between containers is never affected; loopback is always allowed.
 func Restore(st State, family int) string {
 	var b strings.Builder
-	b.WriteString("*filter\n:" + Chain + " - [0:0]\n")
+	b.WriteString("*filter\n:" + Chain + " - [0:0]\n:" + EdgeChain + " - [0:0]\n")
+	if e := st.Edge; e != nil && family == 4 {
+		ports := make([]string, len(e.Ports))
+		for i, p := range e.Ports {
+			ports[i] = strconv.Itoa(p)
+		}
+		fmt.Fprintf(&b, "-A %s -s %s/32 -d %s/32 -p tcp -m multiport --dports %s -j ACCEPT\n",
+			EdgeChain, e.Caddy, e.Gateway, strings.Join(ports, ","))
+	}
 	loop := netip.MustParsePrefix("127.0.0.0/8")
 	if family == 6 {
 		loop = netip.MustParsePrefix("::1/128")
@@ -216,6 +272,12 @@ func applyFamily(ctx context.Context, bin, restore string) error {
 	}
 	if err := run(restore, bin+"-restore", "--noflush"); err != nil {
 		return err
+	}
+	// First in INPUT, ahead of any reject rule of the provider's image.
+	if run("", bin, "-C", "INPUT", "-j", EdgeChain) != nil {
+		if err := run("", bin, "-I", "INPUT", "1", "-j", EdgeChain); err != nil {
+			return err
+		}
 	}
 	// Docker creates DOCKER-USER; create it if Docker has not run yet.
 	_ = run("", bin, "-N", "DOCKER-USER")

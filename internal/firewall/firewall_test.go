@@ -70,3 +70,38 @@ func TestParseAllow(t *testing.T) {
 		t.Error("garbage accepted")
 	}
 }
+
+// With the edge on, Caddy (only Caddy) may reach the panel's gateway ports,
+// and later port rules keep that access.
+func TestEdgeAccessLetsOnlyCaddyIn(t *testing.T) {
+	w := Writer{Dir: t.TempDir()}
+	edge := &EdgeAccess{Caddy: netip.MustParseAddr("172.30.0.2"), Gateway: netip.MustParseAddr("172.30.0.1"), Ports: []int{7701, 7702}}
+	if err := w.SetEdge(edge); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write([]Rule{{Port: 5432, Protocol: "tcp", Allow: []netip.Prefix{netip.MustParsePrefix("189.10.20.30/32")}}}); err != nil {
+		t.Fatal(err)
+	}
+	st := w.current()
+	if st.Edge == nil || len(st.Rules) != 1 {
+		t.Fatalf("state after a port rule: %+v", st)
+	}
+	r4 := Restore(st, 4)
+	want := "-A " + EdgeChain + " -s 172.30.0.2/32 -d 172.30.0.1/32 -p tcp -m multiport --dports 7701,7702 -j ACCEPT"
+	if !strings.Contains(r4, want) {
+		t.Fatalf("IPv4 rules:\n%s", r4)
+	}
+	if strings.Contains(Restore(st, 6), "--dports") {
+		t.Error("the edge network is IPv4 only")
+	}
+	if err := w.SetEdge(nil); err != nil {
+		t.Fatal(err)
+	}
+	if r := Restore(w.current(), 4); strings.Contains(r, "--dports") || !strings.Contains(r, ":"+EdgeChain) {
+		t.Errorf("edge off must empty the chain:\n%s", r)
+	}
+	bad := State{Version: 1, Rules: []Rule{}, Edge: &EdgeAccess{Caddy: netip.MustParseAddr("8.8.8.8"), Gateway: netip.MustParseAddr("172.30.0.1"), Ports: []int{7702}}}
+	if bad.Validate() == nil {
+		t.Error("a public address in the edge access must be refused")
+	}
+}
