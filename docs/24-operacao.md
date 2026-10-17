@@ -43,13 +43,14 @@ Numa VPS **limpa** (Debian 13 ou Ubuntu 26.04):
 
 ```
 vps$ curl -fsSL https://github.com/JuniorCarlini/hangar/releases/latest/download/install.sh | sudo bash
-$    ssh -L 7700:127.0.0.1:7700 usuario@vps     # abrir http://localhost:7700 e criar o dono com o código mostrado
+# o instalador mostra o endereço: https://hangar.<ip>.sslip.io
+# abrir e criar a conta de dono em até 30 min (sudo systemctl restart hangard reabre)
 ```
 
 O instalador confere a assinatura Ed25519 e o SHA-256 antes de instalar
 qualquer coisa, cria o usuário `hangar`, instala o Docker (log com rotação,
-`live-restore`), gera a chave mestra, escreve o `hangar.toml` e mostra o código do
-primeiro acesso. Rodar de novo é seguro: nunca apaga dados nem a chave.
+`live-restore`), gera a chave mestra, escreve o `hangar.toml` (HTTPS e painel público
+ligados quando as portas 80/443 estão livres) e mostra o endereço do painel. Rodar de novo é seguro: nunca apaga dados nem a chave.
 
 **O que o instalador ainda NÃO faz** (fazer à mão):
 

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
@@ -136,4 +137,34 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// BehindEdge serves the public panel on the edge gateway: only Caddy may
+// connect there, and the visitor's address (for rate limits, sessions and
+// the audit log) is taken from the X-Forwarded-For Caddy sets. Requests that
+// arrive this way are never "local", so a locked panel refuses them.
+func BehindEdge(next http.Handler, caddy netip.Addr) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ap, err := netip.ParseAddrPort(r.RemoteAddr)
+		if err != nil || ap.Addr().Unmap() != caddy {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		ip := ""
+		if v := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); v != "" {
+			if i := strings.LastIndex(v, ","); i >= 0 {
+				v = v[i+1:]
+			}
+			if a, err := netip.ParseAddr(strings.TrimSpace(v)); err == nil {
+				ip = a.Unmap().String()
+			}
+		}
+		if ip == "" {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		r2 := r.Clone(r.Context())
+		r2.RemoteAddr = net.JoinHostPort(ip, "0")
+		next.ServeHTTP(w, r2)
+	})
 }

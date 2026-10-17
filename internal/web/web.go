@@ -38,9 +38,7 @@ type Deps struct {
 	// Updates and UpdateDir feed the update page (docs/21).
 	Updates   updates
 	UpdateDir string
-	// SetupCodeFile is shown on the first-run page, to find the code again.
-	SetupCodeFile string
-	Projects      *projects.Manager
+	Projects  *projects.Manager
 	// Metrics feeds the overview and the service metrics; nil shows zeros.
 	Metrics *metrics.Collector
 	// Deps is the dependency and vulnerability monitor (docs/14); nil
@@ -90,7 +88,7 @@ func New(d Deps) (http.Handler, error) {
 	views.AssetVersion = assetVersion()
 	rt := newRouter(d.Auth, d.Audit)
 	hs := &handlers{
-		auth: d.Auth, updates: d.Updates, updateDir: d.UpdateDir, setupFile: d.SetupCodeFile, projects: d.Projects, metrics: d.Metrics, audit: d.Audit,
+		auth: d.Auth, updates: d.Updates, updateDir: d.UpdateDir, projects: d.Projects, metrics: d.Metrics, audit: d.Audit,
 		deps: d.Deps, status: d.Status, pub: newPublicStatus(d.Status), alerts: d.Alerts, lock: d.Lock, hooksBase: d.HooksBase, backups: d.Backups,
 		hookFails: newHookFails(), serverIP: d.ServerIP, baseDomain: d.BaseDomain, autoLinkIP: d.AutoLinkIP, errorPages: d.ErrorPages, brand: d.Brand,
 	}

@@ -29,6 +29,10 @@ const AskPath = "/internal/tls/ask"
 // AskPort is where the ask endpoint listens, on the edge gateway address.
 const AskPort = 7701
 
+// PanelPort is where the panel listens on the edge gateway address when it
+// is public: Caddy terminates HTTPS on its public hostname and proxies here.
+const PanelPort = 7702
+
 const (
 	adminSocket   = "admin.sock"
 	bootstrapFile = "bootstrap.json"
@@ -48,6 +52,10 @@ type Options struct {
 	// to Hooks. Both empty = no public webhooks.
 	HooksHost string
 	Hooks     http.Handler
+	// PanelHost publishes the panel on the internet: Caddy serves it with
+	// HTTPS at this hostname and proxies to the panel's listener on the
+	// gateway (PanelPort). Empty = the panel stays private.
+	PanelHost string
 	// PublicIPs are the server's public addresses; the first builds the
 	// automatic sslip.io link of a public endpoint (docs/28).
 	PublicIPs []netip.Addr
@@ -247,6 +255,13 @@ func (m *Manager) build(ctx context.Context) ([]byte, error) {
 	rows, err := m.q.ListAllDomains(ctx)
 	if err != nil {
 		return nil, err
+	}
+	if m.opts.PanelHost != "" {
+		in.Fixed = append(in.Fixed, Route{
+			Hosts:    []string{m.opts.PanelHost},
+			Upstream: net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(PanelPort)),
+			Key:      "hangar_panel",
+		})
 	}
 	byUpstream := map[string]*Route{}
 	for _, r := range rows {

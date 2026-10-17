@@ -2,103 +2,91 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/subtle"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
-// First-run setup: while the panel has no user, whoever reaches it can create
-// the owner account from the browser, like other self-hosted panels. Reaching
-// the panel is not enough, though: the form also asks for a one-time setup
-// code that only someone with a shell on the server can read (the installer
-// prints it). The code file is created when the panel starts with no user and
-// removed as soon as the owner exists; the owner is inserted only if the users
-// table is still empty, so two requests racing each other cannot both win.
+// First-run setup: while the panel has no user, whoever opens it can create
+// the owner account from the browser, like other self-hosted panels. The page
+// is open only for SetupWindow after the panel starts with no user: an
+// install left behind does not stay claimable forever, and restarting the
+// service (which needs a shell on the server) opens a new window. The owner
+// is inserted only if the users table is still empty, so two requests racing
+// each other cannot both win.
 
-// Setup errors the handlers translate for the UI.
-var (
-	ErrSetupClosed = &i18n.Error{Key: "setup.error.closed"}
-	ErrSetupCode   = &i18n.Error{Key: "setup.error.code"}
+// SetupWindow is how long the first-run page stays open after the panel
+// starts with no user.
+const SetupWindow = 30 * time.Minute
+
+// SetupState is where the first-run setup stands.
+type SetupState int
+
+const (
+	// SetupDone: there is a user (or the browser setup is off).
+	SetupDone SetupState = iota
+	// SetupAvailable: no user yet and the window is open.
+	SetupAvailable
+	// SetupExpired: no user yet, but the window has closed.
+	SetupExpired
 )
 
-// setupCodeLen is the number of base32 characters in a setup code (80 bits),
-// shown in groups of four.
-const setupCodeLen = 16
+// ErrSetupClosed tells the setup page the owner can no longer be created.
+var ErrSetupClosed = &i18n.Error{Key: "setup.error.closed"}
 
-// SetupOpen reports whether the first-run setup is available: browser setup
-// configured and no user yet.
-func (s *Service) SetupOpen(ctx context.Context) bool {
-	if s.setupFile == "" {
-		return false
+// setupDeadline holds the end of the setup window (Unix seconds, 0 = never
+// opened); handlers read it while the panel serves.
+type setupDeadline = atomic.Int64
+
+// Setup reports the first-run state and, while open, when it closes.
+func (s *Service) Setup(ctx context.Context) (SetupState, time.Time) {
+	if !s.firstRun {
+		return SetupDone, time.Time{}
 	}
-	n, err := s.q.CountUsers(ctx)
-	return err == nil && n == 0
+	if n, err := s.q.CountUsers(ctx); err != nil || n > 0 {
+		return SetupDone, time.Time{}
+	}
+	end := s.setupUntil.Load()
+	if end == 0 || !s.now().Before(time.Unix(end, 0)) {
+		return SetupExpired, time.Time{}
+	}
+	return SetupAvailable, time.Unix(end, 0)
 }
 
-// PrepareSetup creates the setup code file when the panel has no user and
-// there is no code yet. It returns whether setup is open. With no file
-// configured (development, tests) setup stays closed: the owner comes from
-// the command line.
-func (s *Service) PrepareSetup(ctx context.Context) (bool, error) {
-	if !s.SetupOpen(ctx) {
-		return false, nil
+// PrepareSetup opens the setup window when the panel starts with no user and
+// returns when it closes (zero when there is nothing to set up).
+func (s *Service) PrepareSetup(ctx context.Context) (time.Time, error) {
+	if !s.firstRun {
+		return time.Time{}, nil
 	}
-	f, err := os.OpenFile(s.setupFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, fs.ErrExist) {
-		return true, nil
-	}
+	n, err := s.q.CountUsers(ctx)
 	if err != nil {
-		return false, fmt.Errorf("setup code: %w", err)
+		return time.Time{}, err
 	}
-	_, werr := f.WriteString(newSetupCode() + "\n")
-	if cerr := f.Close(); werr == nil {
-		werr = cerr
+	if n > 0 {
+		return time.Time{}, nil
 	}
-	if werr != nil {
-		_ = os.Remove(s.setupFile)
-		return false, fmt.Errorf("setup code: %w", werr)
-	}
-	return true, nil
+	until := s.now().Add(SetupWindow)
+	s.setupUntil.Store(until.Unix())
+	return until, nil
 }
 
 // CreateOwner creates the first account (owner) from the setup page and
-// opens its session. It checks the setup code first, with the same attempt
-// limits as the login.
-func (s *Service) CreateOwner(ctx context.Context, code, email, password string, c Client) (string, error) {
+// opens its session, with the same attempt limits as the login.
+func (s *Service) CreateOwner(ctx context.Context, email, password string, c Client) (string, error) {
 	ipKey := "ip:" + c.IP
 	if err := s.checkLimits(ipKey, "setup"); err != nil {
 		return "", err
 	}
 	defer s.limits.end(ipKey, "setup")
 
-	if !s.SetupOpen(ctx) {
+	if st, _ := s.Setup(ctx); st != SetupAvailable {
 		return "", ErrSetupClosed
 	}
-	want, err := os.ReadFile(s.setupFile)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", ErrSetupClosed
-	}
-	if err != nil {
-		return "", fmt.Errorf("setup code: %w", err)
-	}
-	wantCode := normalizeSetupCode(string(want))
-	if len(wantCode) != setupCodeLen {
-		// A damaged or emptied file must never match an empty answer.
-		return "", ErrSetupClosed
-	}
-	if subtle.ConstantTimeCompare([]byte(normalizeSetupCode(code)), []byte(wantCode)) != 1 {
-		s.fail(ctx, c, "", "wrong_setup_code", ipKey, "setup")
-		return "", ErrSetupCode
-	}
-
 	email, hash, err := s.newAccount(email, password, RoleOwner)
 	if err != nil {
 		return "", err
@@ -114,8 +102,6 @@ func (s *Service) CreateOwner(ctx context.Context, code, email, password string,
 	if n == 0 {
 		return "", ErrSetupClosed
 	}
-	// The code has done its job; a leftover file would only mislead.
-	_ = os.Remove(s.setupFile)
 	s.limits.reset(ipKey)
 	s.limits.reset("setup")
 	s.record(ctx, audit.Entry{
@@ -131,26 +117,4 @@ func (s *Service) CreateOwner(ctx context.Context, code, email, password string,
 		Summary: map[string]any{"second_factor": "none", "via": "setup"},
 	})
 	return token, nil
-}
-
-// newSetupCode returns 80 random bits as XXXX-XXXX-XXXX-XXXX.
-func newSetupCode() string {
-	raw := make([]byte, 10)
-	if _, err := rand.Read(raw); err != nil {
-		panic("crypto/rand failed: " + err.Error())
-	}
-	c := b32.EncodeToString(raw)[:setupCodeLen]
-	return c[0:4] + "-" + c[4:8] + "-" + c[8:12] + "-" + c[12:16]
-}
-
-// normalizeSetupCode ignores case, spaces and dashes, so a code read aloud or
-// pasted with a line break still matches.
-func normalizeSetupCode(s string) string {
-	var b strings.Builder
-	for _, r := range strings.ToUpper(s) {
-		if (r >= 'A' && r <= 'Z') || (r >= '2' && r <= '7') {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
 }

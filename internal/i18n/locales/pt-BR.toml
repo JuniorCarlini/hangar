@@ -90,11 +90,12 @@ limit_note = "Depois de 5 tentativas erradas, novas tentativas ficam bloqueadas 
 invalid = "Código incorreto ou já usado."
 
 [setup]
+expired_title = "A tela de primeiro acesso fechou"
+expired_text = "Por segurança, a conta de dono só pode ser criada nos primeiros {min} minutos depois que o Hangar liga. Para abrir de novo, rode no servidor:"
+closes_in = "Fecha em {min} min"
 page_title = "Primeiro acesso · Hangar"
 title = "Criar a conta de dono"
 subtitle = "Ainda não há ninguém neste painel. Quem criar a conta agora vira o dono, com acesso total."
-code = "Código de configuração"
-code_hint = "O instalador mostrou este código no fim da instalação. Para ver de novo, no servidor: sudo cat {file}"
 email = "E-mail"
 password = "Senha"
 password_hint = "Pelo menos {min} caracteres. Não há \"esqueci a senha\": guarde num gerenciador de senhas."
@@ -106,7 +107,6 @@ submit = "Criar conta e entrar"
 
 [setup.error]
 closed = "O primeiro acesso já foi feito. Entre com a sua conta."
-code = "Código de configuração incorreto."
 mismatch = "As duas senhas não são iguais."
 
 [sudo]
@@ -431,6 +431,8 @@ edge_acme_ca = "edge.acme_ca precisa ser uma URL https: \"{value}\"."
 edge_acme_root = "edge.acme_ca_root só faz sentido junto com edge.acme_ca."
 edge_public_ip = "IP inválido em edge.public_ips: \"{value}\"."
 edge_rate = "edge.max_new_certs_per_hour precisa estar entre 1 e 1000 (veio {value})."
+panel_public_host = "panel.public_host precisa ser um domínio em minúsculas (veio {value})."
+panel_public_edge = "panel.public = true exige edge.enabled = true: é o Caddy que publica o painel com HTTPS."
 edge_hooks_host = "edge.hooks_hostname precisa ser um domínio em minúsculas (veio {value})."
 edge_hooks_disabled = "edge.hooks_hostname exige edge.enabled = true: é o Caddy que deixa o caminho público."
 edge_base_domain = "edge.base_domain precisa ser um domínio em minúsculas (veio {value})."

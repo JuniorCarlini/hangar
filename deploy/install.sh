@@ -19,6 +19,7 @@ FROM_DIR=""
 
 die() { echo "erro: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
+warn() { echo "aviso: $*" >&2; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -161,6 +162,53 @@ if [[ -n "$TOKEN_FILE" ]]; then
   TOKEN_LINE='token_file = "/etc/hangar/github-token"'
 fi
 
+# A fresh install publishes the panel with HTTPS when it can: Caddy needs
+# ports 80 and 443 free, and the server's public IPv4 names the panel
+# (hangar.<ip>.sslip.io). Otherwise the panel stays reachable only through
+# an SSH tunnel, and the edge can be turned on later in hangar.toml.
+public_v4() {
+  local a b
+  [[ "$1" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
+  a=${BASH_REMATCH[1]} b=${BASH_REMATCH[2]}
+  (( a == 0 || a == 10 || a == 127 || a >= 224 )) && return 1
+  (( a == 172 && b >= 16 && b <= 31 )) && return 1
+  (( a == 192 && b == 168 )) && return 1
+  (( a == 169 && b == 254 )) && return 1
+  (( a == 100 && b >= 64 && b <= 127 )) && return 1
+  return 0
+}
+detect_public_ip() {
+  local ip url
+  # A public address on an interface (most VPS)...
+  for ip in $(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1); do
+    public_v4 "$ip" && { echo "$ip"; return; }
+  done
+  # ...or behind the provider's NAT (Oracle, AWS, GCP): ask from outside.
+  for url in https://api.ipify.org https://ifconfig.me/ip; do
+    ip="$(curl -4 -fsS --max-time 5 "$url" 2>/dev/null | tr -d '[:space:]')" || continue
+    public_v4 "$ip" && { echo "$ip"; return; }
+  done
+}
+
+EDGE_BLOCK='# [edge]
+# enabled = true
+# public_ips = ["203.0.113.10"]'
+PANEL_PUBLIC='# public = true   # painel na internet com HTTPS (exige [edge])'
+if [[ ! -f /etc/hangar/hangar.toml ]]; then
+  PUBLIC_IP="$(detect_public_ip || true)"
+  if [[ -z "$PUBLIC_IP" ]]; then
+    warn "não descobri o IP público: o painel fica só pelo túnel SSH (ligue [edge] e [panel] public depois)"
+  elif ss -Hltn '( sport = :80 or sport = :443 )' 2>/dev/null | grep -q .; then
+    warn "as portas 80/443 já estão em uso: o painel fica só pelo túnel SSH (ligue [edge] e [panel] public depois)"
+  else
+    info "painel público com HTTPS em hangar.${PUBLIC_IP//./-}.sslip.io"
+    EDGE_BLOCK="[edge]
+enabled = true
+public_ips = [\"${PUBLIC_IP}\"]"
+    PANEL_PUBLIC='public = true'
+  fi
+fi
+
 if [[ ! -f /etc/hangar/hangar.toml ]]; then
   info "criando /etc/hangar/hangar.toml"
   cat > /etc/hangar/hangar.toml <<CFG
@@ -169,10 +217,14 @@ data_dir = "/var/lib/hangar"
 master_key_file = "/etc/hangar/master.key"
 
 [panel]
-# Modo bunker: o painel só escuta localmente. Acesse por túnel SSH:
+# O painel escuta localmente; com public = true o Caddy também o publica na
+# internet com HTTPS, em hangar.<ip>.sslip.io (ou em public_host). Sem ele,
+# acesse por túnel SSH:
 #   ssh -L 7700:127.0.0.1:7700 usuario@servidor  ->  http://localhost:7700
 listen = ["127.0.0.1:7700"]
 hosts  = ["127.0.0.1:7700", "localhost:7700"]
+${PANEL_PUBLIC}
+# public_host = "painel.exemplo.com"   # endereço próprio, com DNS apontando para cá
 
 [update]
 repo = "${REPO}"
@@ -184,13 +236,11 @@ ${TOKEN_LINE}
 # Com true, ninguém entra sem 2FA.
 require_2fa = false
 
-# Proxy de borda (Caddy): HTTPS automático nos domínios dos serviços e nos
-# domínios dos clientes (docs/03). Desligado por padrão para não tomar as
-# portas 80 e 443 de outro proxy que já esteja no servidor.
-# [edge]
-# enabled = true
-# acme_email = "voce@exemplo.com"
-# public_ips = ["203.0.113.10"]   # exige DNS apontando para cá antes de emitir
+# Proxy de borda (Caddy) nas portas 80 e 443: HTTPS automático no painel,
+# nos serviços e nos domínios dos clientes (docs/03). O instalador liga
+# quando as portas estão livres e descobre o IP público.
+${EDGE_BLOCK}
+# acme_email = "voce@exemplo.com"   # avisos de expiração do certificado
 # Deploy automático por push (webhook do GitHub): um domínio que aponte
 # para este servidor. O Caddy publica só /hooks/git/* nele; o painel
 # continua fechado.
@@ -225,43 +275,41 @@ mv -f /usr/local/bin/hangard.new /usr/local/bin/hangard
 /usr/local/bin/hangard system install-units
 systemctl enable --now hangar-updater.path >/dev/null
 systemctl enable hangard >/dev/null
+STARTED="$(date '+%Y-%m-%d %H:%M:%S')"
 systemctl restart hangard
 
-for _ in $(seq 1 30); do
+# The first start with the edge on also pulls the Caddy image: give it time.
+for _ in $(seq 1 180); do
   [[ "$(cat /var/lib/hangar/run/ready 2>/dev/null || true)" == "$REL_VERSION" ]] && break
   sleep 1
 done
 [[ "$(cat /var/lib/hangar/run/ready 2>/dev/null || true)" == "$REL_VERSION" ]] \
   || die "o painel não subiu; veja: journalctl -u hangard -n 50"
 
-SETUP_FILE=/var/lib/hangar/setup-code
-if [[ -s "$SETUP_FILE" ]]; then
-  SETUP_CODE="$(tr -d '[:space:]' < "$SETUP_FILE")"
-  cat <<DONE
+# What the panel said on this start: its public address, and whether the
+# owner still has to be created (the first-run window).
+LOG="$(journalctl -u hangard --since "$STARTED" -o cat --no-pager 2>/dev/null || true)"
+PANEL_URL="$(grep '"msg":"panel public"' <<<"$LOG" | tail -n1 | sed -E 's/.*"url":"([^"]+)".*/\1/' || true)"
+NEEDS_OWNER=0
+grep -q '"msg":"no user yet' <<<"$LOG" && NEEDS_OWNER=1
 
-Hangar $REL_VERSION instalado e rodando.
-
-Primeiro acesso (criar a conta de dono):
-  1. Do seu computador, abra um túnel SSH até o painel:
-       ssh -L 7700:127.0.0.1:7700 usuario@este-servidor
-  2. Abra http://localhost:7700 e use este código de configuração:
-
-       $SETUP_CODE
-
-     (vale até a conta ser criada; para ver de novo: sudo cat $SETUP_FILE)
-  3. Guarde uma cópia de /etc/hangar/master.key fora do servidor.
-
-Atualizações: botão "Atualização" no painel, ou: sudo -u hangar hangard self-update stage -config /etc/hangar/hangar.toml
-DONE
+echo
+echo "Hangar $REL_VERSION instalado e rodando."
+echo
+if [[ -n "$PANEL_URL" ]]; then
+  echo "Painel: $PANEL_URL"
+  echo "  (o certificado HTTPS sai no primeiro minuto; as portas 80 e 443 precisam"
+  echo "   estar liberadas também no firewall do provedor, se ele tiver um)"
 else
-  cat <<DONE
-
-Hangar $REL_VERSION instalado e rodando.
-
-Acesse por túnel SSH, do seu computador:
-  ssh -L 7700:127.0.0.1:7700 usuario@este-servidor
-  e abra http://localhost:7700
-
-Atualizações: botão "Atualização" no painel, ou: sudo -u hangar hangard self-update stage -config /etc/hangar/hangar.toml
-DONE
+  echo "Painel (só pelo túnel SSH), do seu computador:"
+  echo "  ssh -L 7700:127.0.0.1:7700 usuario@este-servidor"
+  echo "  e abra http://localhost:7700"
 fi
+echo
+if [[ "$NEEDS_OWNER" == 1 ]]; then
+  echo "Crie a conta de dono no painel nos próximos 30 minutos. Passou do prazo?"
+  echo "  sudo systemctl restart hangard   (abre mais 30 minutos)"
+  echo
+fi
+echo "Guarde uma cópia de /etc/hangar/master.key fora do servidor."
+echo "Atualizações: botão \"Atualização\" no painel, ou: sudo -u hangar hangard self-update stage -config /etc/hangar/hangar.toml"

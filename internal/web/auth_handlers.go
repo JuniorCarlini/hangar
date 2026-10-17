@@ -69,7 +69,6 @@ type handlers struct {
 	auth       *auth.Service
 	updates    updates
 	updateDir  string
-	setupFile  string
 	projects   *projects.Manager
 	metrics    *metrics.Collector
 	audit      *audit.Logger
@@ -134,7 +133,7 @@ func (h *handlers) loginPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// No account yet: the first visit creates the owner.
-	if h.auth.SetupOpen(r.Context()) {
+	if st, _ := h.auth.Setup(r.Context()); st != auth.SetupDone {
 		http.Redirect(w, r, "/setup", http.StatusSeeOther)
 		return
 	}
@@ -145,29 +144,51 @@ func (h *handlers) loginPage(w http.ResponseWriter, r *http.Request) {
 	render(w, withLoginToken(w, r), http.StatusOK, views.Login("", msg, h.lockNotice(r)))
 }
 
-func (h *handlers) setupForm(r *http.Request) views.SetupForm {
+func (h *handlers) setupForm(r *http.Request, until time.Time) views.SetupForm {
 	return views.SetupForm{
 		Email: strings.TrimSpace(r.PostFormValue("email")), TwoFA: true,
-		Required: h.auth.Require2FA(), CodeFile: h.setupFile, MinLen: auth.MinPasswordLen,
+		Required: h.auth.Require2FA(), MinLen: auth.MinPasswordLen,
+		MinutesLeft: max(1, int(time.Until(until).Minutes()+0.999)),
 	}
+}
+
+// setupClosed answers a setup request once the owner can no longer be
+// created there: to the login when someone already has an account, or the
+// "window closed" page while there is still no user.
+func (h *handlers) setupClosed(w http.ResponseWriter, r *http.Request, st auth.SetupState) {
+	if st == auth.SetupExpired {
+		render(w, r, http.StatusForbidden, views.SetupExpired(auth.SetupWindow))
+		return
+	}
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
 func (h *handlers) setupPage(w http.ResponseWriter, r *http.Request) {
-	if !h.auth.SetupOpen(r.Context()) {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	st, until := h.auth.Setup(r.Context())
+	if st != auth.SetupAvailable {
+		h.setupClosed(w, r, st)
 		return
 	}
-	render(w, withLoginToken(w, r), http.StatusOK, views.Setup(h.setupForm(r), ""))
+	// ?lang= picks the language, as on the login page.
+	if l := r.URL.Query().Get("lang"); l != "" {
+		if i18n.Supported(l) {
+			setCookie(w, langCookie, l, 365*24*time.Hour)
+		}
+		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		return
+	}
+	render(w, withLoginToken(w, r), http.StatusOK, views.Setup(h.setupForm(r, until), ""))
 }
 
 func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
-	if !h.auth.SetupOpen(r.Context()) {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	st, until := h.auth.Setup(r.Context())
+	if st != auth.SetupAvailable {
+		h.setupClosed(w, r, st)
 		return
 	}
 	valid := validLoginToken(r)
 	form := withLoginToken(w, r)
-	f := h.setupForm(r)
+	f := h.setupForm(r, until)
 	f.TwoFA = f.Required || r.PostFormValue("twofa") == "1"
 	if !valid {
 		render(w, form, http.StatusForbidden, views.Setup(f, i18n.T(r.Context(), "login.error.form_expired")))
@@ -178,7 +199,7 @@ func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
 		render(w, form, http.StatusUnprocessableEntity, views.Setup(f, i18n.T(r.Context(), "setup.error.mismatch")))
 		return
 	}
-	token, err := h.auth.CreateOwner(r.Context(), r.PostFormValue("code"), f.Email, password, client(r))
+	token, err := h.auth.CreateOwner(r.Context(), f.Email, password, client(r))
 
 	var rl *auth.RateLimitedError
 	var ie *i18n.Error
@@ -192,9 +213,8 @@ func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	case errors.Is(err, auth.ErrSetupClosed):
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-	case errors.Is(err, auth.ErrSetupCode):
-		render(w, form, http.StatusUnauthorized, views.Setup(f, i18n.T(r.Context(), "setup.error.code")))
+		st, _ := h.auth.Setup(r.Context())
+		h.setupClosed(w, r, st)
 	case errors.As(err, &rl):
 		render(w, form, http.StatusTooManyRequests, views.Setup(f, i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes())))
 	case errors.As(err, &ie):

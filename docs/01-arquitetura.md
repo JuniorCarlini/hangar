@@ -38,8 +38,9 @@
   exposto à internet.
 - Nunca escuta em IP público. Listeners:
   - `127.0.0.1:7700` — painel, para acesso via túnel SSH/WireGuard (modo bunker).
-  - `172.30.0.1:7700` — painel, no gateway da rede `hangar-edge`, para o Caddy
-    publicar em `painel.seudominio.com` (opcional; ver [04](04-seguranca.md)).
+  - `172.30.0.1:7702` — painel, no gateway da rede `hangar-edge`, para o Caddy
+    publicar com HTTPS em `hangar.<ip>.sslip.io` ou `painel.seudominio.com`
+    (`[panel] public`; ver [04](04-seguranca.md)).
   - `172.30.0.1:7701` — **somente** `/internal/tls/ask` (ver [03](03-dominios-customizados-tls.md)).
   - Os listeners no gateway aceitam conexões **apenas** do IP fixo do Caddy
     (`172.30.0.2`), checado no código e reforçado por regra nftables.

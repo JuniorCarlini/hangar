@@ -4,7 +4,7 @@
 
 | Ameaça | Exemplo | Controles |
 |---|---|---|
-| Invasão do painel | Força bruta, senha vazada, sessão roubada | 2FA (obrigatório em produção com `require_2fa`), passkeys, rate limit, lockout, sessão curta, modo bunker |
+| Invasão do painel | Força bruta, senha vazada, sessão roubada | 2FA (obrigatório em produção com `require_2fa`), passkeys, rate limit, lockout, sessão curta, painel só por HTTPS (ou modo bunker) |
 | Abuso de domínio dinâmico | Esgotar rate limit da Let's Encrypt, phishing | `ask` com autorização da app, limites, fail-closed ([03](03-dominios-customizados-tls.md)) |
 | Container comprometido escapando | RCE na aplicação → host | Hardening de container, sem docker.sock, redes isoladas ([05](05-isolamento-e-recursos.md)) |
 | Movimento lateral entre projetos | App A acessa Postgres do projeto B | Rede por projeto; conexão entre projetos só quando você liga; senhas fortes geradas |
@@ -15,17 +15,26 @@
 
 ## Acesso ao painel
 
-Dois modos, escolhidos na instalação:
+Dois modos:
 
-1. **Bunker (recomendado)** — o painel **não** tem domínio público. Acesso só
-   por WireGuard/Tailscale ou túnel SSH (`ssh -L 7700:127.0.0.1:7700 vps`).
-   A internet nem sabe que o painel existe.
-2. **Público** — `painel.seudominio.com` via Caddy, com:
-   - Allowlist de IP opcional (seu IP fixo, VPN da empresa).
-   - Cabeçalhos: HSTS (com preload), CSP estrita (`default-src 'self'`, sem
-     `unsafe-inline` — por isso HTMX e Tucano são servidos localmente, e o Editor
-     do Tucano, que grava `style` em atributo, não é usado), `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
-     `Permissions-Policy` restrita, `Cross-Origin-Opener-Policy: same-origin`.
+1. **Público (padrão da instalação)** — `[panel] public = true`: o Caddy
+   publica o painel com HTTPS em `hangar.<ip>.sslip.io` (sem domínio, com
+   certificado Let's Encrypt de verdade) ou em `public_host`
+   (`painel.seudominio.com`). O instalador liga quando as portas 80/443
+   estão livres e descobre o IP público. O painel continua escutando só em
+   127.0.0.1 e no gateway da rede `hangar-edge`, onde **só o IP do Caddy**
+   é aceito; o IP do visitante vem do `X-Forwarded-For` que o Caddy põe, e
+   vale para limites de tentativa, sessões e auditoria. Com o painel
+   trancado, quem chega pelo Caddy recebe 403.
+2. **Bunker** — sem `public`: o painel **não** tem endereço público. Acesso
+   só por WireGuard/Tailscale ou túnel SSH (`ssh -L 7700:127.0.0.1:7700
+   vps`). A internet nem sabe que o painel existe.
+
+Nos dois modos, cabeçalhos: HSTS (com preload), CSP estrita
+(`default-src 'self'`, sem `unsafe-inline` — por isso HTMX e Tucano são
+servidos localmente, e o Editor do Tucano, que grava `style` em atributo, não
+é usado), `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
+`Permissions-Policy` restrita, `Cross-Origin-Opener-Policy: same-origin`.
 
 ## Autenticação
 
@@ -47,13 +56,13 @@ Dois modos, escolhidos na instalação:
 - **Sem enumeração de usuário**: mesma resposta e mesmo tempo para usuário
   inexistente.
 - **Primeiro acesso**: enquanto não existe usuário, a tela "Criar a conta
-  de dono" pede um **código de configuração** de uso único (80 bits) que só
-  quem tem shell no servidor lê (`/var/lib/hangar/setup-code`, 0600; o
-  instalador mostra). Erros contam no mesmo limite do login; o dono só é
-  gravado se a tabela de usuários ainda estiver vazia (duas tentativas ao
-  mesmo tempo não criam dois donos); depois disso o código é apagado e a
-  tela some. O painel continua só em 127.0.0.1. A CLI (`hangard user
-  create`) segue disponível e também fecha a tela.
+  de dono" fica aberta por **30 minutos** depois que o painel liga. Passado
+  o prazo, ela fecha e só reabre com `sudo systemctl restart hangard` (quem
+  reabre tem shell no servidor): uma instalação esquecida não fica para
+  quem achar o endereço. Tentativas contam no mesmo limite do login; o dono
+  só é gravado se a tabela de usuários ainda estiver vazia (duas tentativas
+  ao mesmo tempo não criam dois donos); depois disso a tela some. A CLI
+  (`hangard user create`) segue disponível e também fecha a tela.
 
 ## Sessão
 

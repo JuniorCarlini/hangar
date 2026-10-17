@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -64,5 +65,26 @@ func TestBuildWithoutIPSkipsSslip(t *testing.T) {
 	m := NewManager(f.q, nil, nil, Options{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if _, err := m.build(ctx); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A public panel gets an exact HTTPS route to its listener on the gateway,
+// with its certificate managed like any fixed domain.
+func TestBuildRoutesThePublicPanel(t *testing.T) {
+	f := newFixture(t, false)
+	m := NewManager(f.q, nil, nil, Options{
+		Spec:      node.EdgeSpec{Gateway: netip.MustParseAddr("172.30.0.1")},
+		PanelHost: "hangar.203-0-113-10.sslip.io",
+	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	cfg, err := m.build(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(cfg)
+	if !strings.Contains(s, `"dial": "172.30.0.1:7702"`) {
+		t.Error("the panel route should point at the panel's gateway listener")
+	}
+	if strings.Count(s, "hangar.203-0-113-10.sslip.io") < 2 {
+		t.Error("the panel host should be routed and get a certificate")
 	}
 }

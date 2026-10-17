@@ -224,10 +224,10 @@ senha ──► argon2id confere ──► falhou? ──► contador +1, atraso
    cria sessão nova ─► audit "login.ok" ─► IP novo? ─► alerta "login de IP novo"
 ```
 
-**Primeiro usuário:** pela tela de primeiro acesso, com o código de
-configuração de uso único que só quem tem shell no servidor lê, ou pela CLI
-(`hangard user create`). A tela só existe enquanto não há usuário, e o
-painel continua fechado em 127.0.0.1 (ver [04](04-seguranca.md)).
+**Primeiro usuário:** pela tela de primeiro acesso, aberta só enquanto não
+há usuário e por 30 minutos depois que o painel liga (reabre com `sudo
+systemctl restart hangard`), ou pela CLI (`hangard user create`). Ver
+[04](04-seguranca.md).
 
 ---
 

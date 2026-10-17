@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
-	"os"
 	"runtime/debug"
 	"slices"
 	"strings"
@@ -74,8 +73,10 @@ type Service struct {
 	// dummyHash equalizes response time when the e-mail does not exist.
 	dummyHash  string
 	require2FA bool
-	// setupFile holds the first-run setup code ("" = no browser setup).
-	setupFile string
+	// firstRun lets the owner be created from the browser while there is
+	// no user, until setupUntil.
+	firstRun   bool
+	setupUntil setupDeadline
 }
 
 // Options tunes the Service (tests use cheap argon and a fixed clock).
@@ -85,9 +86,10 @@ type Options struct {
 	// Require2FA refuses login to accounts without 2FA. Off, 2FA is per
 	// account (like Easypanel): whoever turned it on is asked for the code.
 	Require2FA bool
-	// SetupCodeFile is where the first-run setup code lives while the panel
-	// has no user. Empty, the owner can only be created on the command line.
-	SetupCodeFile string
+	// FirstRunSetup lets the owner be created from the browser while there
+	// is no user, for SetupWindow after start. Off, only the command line
+	// creates users.
+	FirstRunSetup bool
 }
 
 // NewService creates the authentication service.
@@ -106,7 +108,7 @@ func NewService(db *sql.DB, box *secrets.Box, al *audit.Logger, opt Options) (*S
 	return &Service{
 		db: db, q: dbq.New(db), box: box, audit: al, now: opt.Now, argon: opt.Argon,
 		limits: newLimiter(LimitFailures, LimitWindow, opt.Now), dummyHash: dummy, argon2: newArgonPool(),
-		require2FA: opt.Require2FA, setupFile: opt.SetupCodeFile,
+		require2FA: opt.Require2FA, firstRun: opt.FirstRunSetup,
 	}, nil
 }
 
@@ -129,10 +131,6 @@ func (s *Service) CreateUser(ctx context.Context, email, password string, role R
 			return "", ErrEmailTaken
 		}
 		return "", fmt.Errorf("create user: %w", err)
-	}
-	// An owner made on the command line closes the browser setup too.
-	if s.setupFile != "" {
-		_ = os.Remove(s.setupFile)
 	}
 	s.record(ctx, audit.Entry{
 		ActorID: id, Action: "user.create", Outcome: audit.OK,

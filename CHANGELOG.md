@@ -12,6 +12,20 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Painel na internet com HTTPS, sem SSH**: a instalação já liga o HTTPS e
+  mostra o endereço do painel, `https://hangar.<seu-ip>.sslip.io`, com
+  certificado de verdade e sem precisar de domínio. Com domínio:
+  `[panel] public_host`. Se as portas 80/443 estiverem ocupadas, o painel
+  fica pelo túnel SSH, como antes.
+
+### Alterado
+
+- O primeiro acesso não pede mais código: a tela de criar a conta de dono
+  fica aberta por **30 minutos** depois que o Hangar liga. Passou do prazo,
+  `sudo systemctl restart hangard` abre mais 30.
+
 ## [0.2.0] - 2026-10-17
 
 ### Adicionado

@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -78,7 +79,7 @@ func Open(ctx context.Context, cfg config.Config, log *slog.Logger) (*Core, erro
 	}
 	al := audit.New(st.DB)
 	svc, err := auth.NewService(st.DB, box, al, auth.Options{
-		Require2FA: cfg.Auth.Require2FA, SetupCodeFile: SetupCodeFile(cfg),
+		Require2FA: cfg.Auth.Require2FA, FirstRunSetup: true,
 	})
 	if err != nil {
 		_ = st.Close()
@@ -94,9 +95,25 @@ func Open(ctx context.Context, cfg config.Config, log *slog.Logger) (*Core, erro
 // Close closes the database.
 func (c *Core) Close() error { return c.Store.Close() }
 
-// SetupCodeFile is where the first-run setup code lives while the panel has
-// no user.
-func SetupCodeFile(cfg config.Config) string { return filepath.Join(cfg.DataDir, "setup-code") }
+// PanelPublicHost is the panel's public hostname when [panel] public is on:
+// public_host, or "hangar." under the base domain, or "hangar.<ip>.sslip.io"
+// from the first public IPv4. Empty when the panel stays private (or no
+// name can be built).
+func PanelPublicHost(cfg config.Config) string {
+	if !cfg.Panel.Public || !cfg.Edge.Enabled {
+		return ""
+	}
+	if cfg.Panel.PublicHost != "" {
+		return strings.ToLower(cfg.Panel.PublicHost)
+	}
+	var ips []netip.Addr
+	for _, s := range cfg.Edge.PublicIPs {
+		if ip, err := netip.ParseAddr(s); err == nil {
+			ips = append(ips, ip)
+		}
+	}
+	return edge.AutoHost(cfg.Edge.BaseDomain, edge.PublicAutoIP(ips), "hangar")
+}
 
 // Serve runs the panel on every panel.listen address and blocks until ctx
 // is canceled or a server fails.
@@ -152,12 +169,15 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// Endpoints for services older than them, and a unique link name for
 	// each, before the edge builds its routes from them.
 	// A failure here is logged, not fatal: the panel must come up to fix it.
-	// No user yet: the owner can be created from the browser, with the
-	// one-time code written here (the installer prints it).
-	if open, err := core.Auth.PrepareSetup(ctx); err != nil {
+	// No user yet: the owner can be created from the browser for a while.
+	// v0.2.0 asked for a setup code; the window below replaces it.
+	_ = os.Remove(filepath.Join(cfg.DataDir, "setup-code"))
+	panelHost := PanelPublicHost(cfg)
+	if until, err := core.Auth.PrepareSetup(ctx); err != nil {
 		log.Error("prepare first-run setup", "error", err)
-	} else if open {
-		log.Warn("no user yet: open the panel to create the owner; the setup code is in the file", "file", SetupCodeFile(cfg))
+	} else if !until.IsZero() {
+		log.Warn("no user yet: open the panel to create the owner before the setup window closes",
+			"until", until.Format(time.RFC3339), "public_url", publicURL(panelHost))
 	}
 	if n, err := pm.EnsureEndpoints(ctx); err != nil {
 		log.Error("prepare endpoints", "error", err)
@@ -175,14 +195,26 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// The brand settings re-render the error pages Caddy serves (nothing
 	// to do while the edge is off: it renders them when it starts).
 	var pages func(map[string][]byte) error
+	edgeUp := false
+	pm.SetPanelHost(panelHost)
 	if cfg.Edge.Enabled {
 		if n == nil {
 			log.Error("edge enabled but docker is unavailable; domains are not served")
-		} else if em, err := startEdge(ctx, cfg, core, n, hooks, log); err != nil {
+		} else if em, err := startEdge(ctx, cfg, core, n, hooks, panelHost, log); err != nil {
 			// The panel stays up so the problem can be seen and fixed.
 			log.Error("start edge proxy", "error", err)
 		} else {
 			pm.SetEdge(em)
+			edgeUp = true
+			// Caddy must reach the ask and panel listeners on the gateway
+			// even where the image's own firewall rejects new connections
+			// to the host (the root unit applies it).
+			_, gw, caddyIP := cfg.Edge.EdgeAddrs()
+			if err := (firewall.Writer{Dir: FirewallDir(cfg)}).SetEdge(&firewall.EdgeAccess{
+				Caddy: caddyIP, Gateway: gw, Ports: []int{edge.AskPort, edge.PanelPort},
+			}); err != nil {
+				log.Error("allow caddy to reach the panel", "error", err)
+			}
 			pm.SetEdgeCap(cfg.Edge.MaxNewCertsPerHour)
 			pages = em.WritePages
 		}
@@ -211,8 +243,8 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	}
 	defer bm.Wait()
 	handler, err := web.New(web.Deps{
-		Hosts: cfg.Panel.Hosts, Log: log, Audit: al, Auth: core.Auth,
-		Updates: checker, UpdateDir: UpdateDir(cfg), SetupCodeFile: SetupCodeFile(cfg), Projects: pm, Metrics: mc, HooksBase: hooksBase, Backups: bm, ServerIP: serverIP(ctx, cfg), BaseDomain: cfg.Edge.BaseDomain, AutoLinkIP: autoLinkIP(cfg), ErrorPages: pages, Brand: errpages.NewStore(core.Store.DB),
+		Hosts: panelHosts(cfg, panelHost), Log: log, Audit: al, Auth: core.Auth,
+		Updates: checker, UpdateDir: UpdateDir(cfg), Projects: pm, Metrics: mc, HooksBase: hooksBase, Backups: bm, ServerIP: serverIP(ctx, cfg), BaseDomain: cfg.Edge.BaseDomain, AutoLinkIP: autoLinkIP(cfg), ErrorPages: pages, Brand: errpages.NewStore(core.Store.DB),
 		Deps: dm, Status: sp, StatusHosts: cfg.Status.Hosts,
 		Alerts: core.Alerts, Lock: core.Lock,
 	})
@@ -232,6 +264,21 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 			return i18n.E("app.error.listen", "addr", addr, "error", err)
 		}
 		listeners = append(listeners, ln)
+	}
+
+	// The public panel: Caddy terminates HTTPS on its hostname and proxies
+	// to this listener on the edge gateway, which only Caddy may reach.
+	var edgeLn net.Listener
+	if panelHost != "" && edgeUp {
+		_, gw, _ := cfg.Edge.EdgeAddrs()
+		ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", net.JoinHostPort(gw.String(), strconv.Itoa(edge.PanelPort)))
+		if err != nil {
+			for _, l := range listeners {
+				_ = l.Close()
+			}
+			return i18n.E("app.error.listen", "addr", gw.String(), "error", err)
+		}
+		edgeLn = ln
 	}
 
 	if err := al.Record(ctx, audit.Entry{
@@ -276,10 +323,22 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	}
 	auditUpdateResult(ctx, core, cfg, log)
 
-	errc := make(chan error, len(listeners))
+	errc := make(chan error, len(listeners)+1)
 	for _, ln := range listeners {
 		log.Info("panel listening", "address", ln.Addr().String(), "version", version)
 		go func() { errc <- srv.Serve(ln) }()
+	}
+	var pubSrv *http.Server
+	if edgeLn != nil {
+		_, _, caddyIP := cfg.Edge.EdgeAddrs()
+		pubSrv = &http.Server{
+			Handler:           web.BehindEdge(handler, caddyIP),
+			ReadHeaderTimeout: srv.ReadHeaderTimeout, ReadTimeout: srv.ReadTimeout,
+			WriteTimeout: srv.WriteTimeout, IdleTimeout: srv.IdleTimeout,
+			MaxHeaderBytes: srv.MaxHeaderBytes, ErrorLog: srv.ErrorLog,
+		}
+		log.Info("panel public", "url", publicURL(panelHost), "address", edgeLn.Addr().String())
+		go func() { errc <- pubSrv.Serve(edgeLn) }()
 	}
 	// Only now is this version up: database migrated and listening. It is the
 	// signal the update applier waits for before giving up on a rollback.
@@ -299,10 +358,31 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	log.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer cancel()
+	if pubSrv != nil {
+		_ = pubSrv.Shutdown(shutdownCtx)
+	}
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return al.Record(shutdownCtx, audit.Entry{Action: "system.stop", Outcome: audit.OK})
+}
+
+// panelHosts are the Host values the panel accepts: the configured ones and
+// its public hostname.
+func panelHosts(cfg config.Config, public string) []string {
+	hosts := slices.Clone(cfg.Panel.Hosts)
+	if public != "" {
+		hosts = append(hosts, public)
+	}
+	return hosts
+}
+
+// publicURL is the panel's public address ("" when private).
+func publicURL(host string) string {
+	if host == "" {
+		return ""
+	}
+	return "https://" + host
 }
 
 // expectedPorts are the host ports allowed to listen to the internet: the
@@ -371,7 +451,7 @@ func NewBackups(core *Core, pm *projects.Manager, cfg config.Config, version str
 
 // startEdge brings Caddy up with the domains in the database and starts the
 // endpoint that authorizes on-demand certificates.
-func startEdge(ctx context.Context, cfg config.Config, core *Core, n node.Node, hooks http.Handler, log *slog.Logger) (*edge.Manager, error) {
+func startEdge(ctx context.Context, cfg config.Config, core *Core, n node.Node, hooks http.Handler, panelHost string, log *slog.Logger) (*edge.Manager, error) {
 	subnet, gw, caddyIP := cfg.Edge.EdgeAddrs()
 	uid, gid := os.Getuid(), os.Getgid()
 	if uid == 0 {
@@ -390,7 +470,7 @@ func startEdge(ctx context.Context, cfg config.Config, core *Core, n node.Node, 
 			UID:      uid, GID: gid,
 		},
 		Email: cfg.Edge.ACMEEmail, ACMECA: cfg.Edge.ACMECA, ACMECARoot: cfg.Edge.ACMECARoot,
-		HooksHost: cfg.Edge.HooksHostname, Hooks: hooks, BaseDomain: cfg.Edge.BaseDomain,
+		HooksHost: cfg.Edge.HooksHostname, Hooks: hooks, PanelHost: panelHost, BaseDomain: cfg.Edge.BaseDomain,
 		DNSProvider: cfg.Edge.DNSProvider, DNSToken: cfg.Edge.DNSToken,
 		PublicIPs: auth.PublicIPs,
 		Pages: func(ctx context.Context) (map[string][]byte, error) {

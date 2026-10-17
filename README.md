@@ -93,8 +93,9 @@ GitHub) e `--token-file arquivo` (token só leitura, para um fork privado).
 O instalador **não instala nada sem conferir** a assinatura Ed25519 do
 `release.json` e o SHA-256 do binário. Depois cria o usuário de sistema
 `hangar`, configura o Docker (logs com rotação, `live-restore`), gera a chave
-mestra em `/etc/hangar/master.key`, escreve `/etc/hangar/hangar.toml`, sobe o serviço `hangard` e mostra o
-**código de configuração** do primeiro acesso. Rodar de novo é seguro: nunca
+mestra em `/etc/hangar/master.key`, escreve `/etc/hangar/hangar.toml` (com o HTTPS e o painel público ligados
+quando as portas 80/443 estão livres), sobe o serviço `hangard` e mostra o
+endereço do painel. Rodar de novo é seguro: nunca
 apaga dados nem a chave.
 
 <details>
@@ -119,18 +120,22 @@ shasum -a 256 hangard-linux-amd64    # tem que bater com o valor em release.json
 
 ### Primeiro acesso
 
-O painel só escuta em 127.0.0.1 (modo bunker). Do seu computador:
+O instalador termina mostrando o endereço do painel, já com HTTPS:
 
-```bash
-ssh -L 7700:127.0.0.1:7700 usuario@servidor
-# e abra http://localhost:7700
+```
+Painel: https://hangar.203-0-113-10.sslip.io
 ```
 
-Na primeira visita aparece **Criar a conta de dono**: e-mail, senha e o
-código de configuração que o instalador mostrou (para ver de novo:
-`sudo cat /var/lib/hangar/setup-code`). A verificação em duas etapas vem
-marcada; deixando marcada, você escaneia o QR code logo em seguida. Quem
-criar a conta vira o dono, e a tela some para sempre.
+Abra e crie a **conta de dono** (e-mail, senha e verificação em duas etapas
+opcional, que vem marcada) nos **30 minutos** seguintes. Passou do prazo?
+`sudo systemctl restart hangard` abre mais 30. Quem criar a conta vira o
+dono, e a tela some para sempre.
+
+Se as portas 80/443 já estiverem em uso ou o IP público não for
+descoberto, o painel fica só pelo túnel SSH (`ssh -L 7700:127.0.0.1:7700
+usuario@servidor` e `http://localhost:7700`); ligue `[edge]` e `[panel]
+public` no `hangar.toml` depois. Para usar o seu domínio no painel:
+`public_host = "painel.seudominio.com"`.
 
 Prefere o terminal? `sudo -u hangar hangard user create -config
 /etc/hangar/hangar.toml -email voce@exemplo.com` cria o dono com o QR code
@@ -196,6 +201,8 @@ master_key_file = "/etc/hangar/master.key"
 [panel]
 listen = ["127.0.0.1:7700"]                     # só loopback ou IP privado, nunca público
 hosts  = ["127.0.0.1:7700", "localhost:7700"]   # Host aceito; o resto recebe 421
+public = true                                   # painel com HTTPS pelo Caddy (exige [edge])
+# public_host = "painel.exemplo.com"            # padrão: hangar.<ip>.sslip.io
 
 [auth]
 require_2fa = false   # true: ninguém entra sem 2FA
@@ -259,7 +266,8 @@ trancado, containers e Caddy continuam servindo.
 ## Segurança
 
 - O painel só escuta em loopback ou IP privado e confere o cabeçalho `Host`;
-  acesso por túnel SSH.
+  na internet ele aparece só pelo Caddy, com HTTPS (ou só por túnel SSH, no
+  modo bunker).
 - Senhas argon2id, 2FA TOTP, sessões curtas em cookie `__Host-`, CSRF em toda
   escrita, CSP sem `unsafe-*`, **sudo** (2FA de novo) para revelar segredos,
   abrir portas, mexer em domínios e conectar projetos.

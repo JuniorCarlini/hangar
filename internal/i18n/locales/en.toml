@@ -90,11 +90,12 @@ limit_note = "After 5 wrong attempts, new attempts are blocked for 15 minutes."
 invalid = "Wrong or already used code."
 
 [setup]
+expired_title = "The first-access page has closed"
+expired_text = "For safety, the owner account can only be created in the first {min} minutes after Hangar starts. To open it again, run on the server:"
+closes_in = "Closes in {min} min"
 page_title = "First access · Hangar"
 title = "Create the owner account"
 subtitle = "There is no one on this panel yet. Whoever creates the account now becomes the owner, with full access."
-code = "Setup code"
-code_hint = "The installer showed this code at the end of the installation. To see it again, on the server: sudo cat {file}"
 email = "E-mail"
 password = "Password"
 password_hint = "At least {min} characters. There is no \"forgot password\": keep it in a password manager."
@@ -106,7 +107,6 @@ submit = "Create account and sign in"
 
 [setup.error]
 closed = "First access is already done. Sign in with your account."
-code = "Wrong setup code."
 mismatch = "The two passwords are not the same."
 
 [sudo]
@@ -431,6 +431,8 @@ edge_acme_ca = "edge.acme_ca must be an https URL: \"{value}\"."
 edge_acme_root = "edge.acme_ca_root only makes sense with edge.acme_ca."
 edge_public_ip = "invalid IP in edge.public_ips: \"{value}\"."
 edge_rate = "edge.max_new_certs_per_hour must be between 1 and 1000 (got {value})."
+panel_public_host = "panel.public_host must be a lowercase domain (got {value})."
+panel_public_edge = "panel.public = true needs edge.enabled = true: Caddy is what publishes the panel over HTTPS."
 edge_hooks_host = "edge.hooks_hostname must be a domain name in lowercase (got {value})."
 edge_hooks_disabled = "edge.hooks_hostname needs edge.enabled = true: Caddy is what makes it public."
 edge_base_domain = "edge.base_domain must be a domain name in lowercase (got {value})."

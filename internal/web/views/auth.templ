@@ -1,5 +1,10 @@
 package views
 
+import "time"
+
+// restartCommand opens a new setup window (a command, not prose).
+const restartCommand = "sudo systemctl restart hangard"
+
 templ layout(title string) {
 	<!DOCTYPE html>
 	<html
@@ -144,34 +149,29 @@ templ TwoFactor(errMsg string) {
 
 // SetupForm is what the first-run setup page shows and keeps between tries.
 type SetupForm struct {
-	Email    string
-	TwoFA    bool
-	Required bool   // the server demands 2FA (require_2fa)
-	CodeFile string // where the setup code lives on the server
-	MinLen   int
+	Email       string
+	TwoFA       bool
+	Required    bool // the server demands 2FA (require_2fa)
+	MinLen      int
+	MinutesLeft int // until the setup window closes
 }
 
 // Setup is the first-run page: the owner account, created from the browser
-// with the setup code the installer printed.
+// while the setup window is open.
 templ Setup(f SetupForm, errMsg string) {
 	@layout(t(ctx, "setup.page_title")) {
 		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
 			<form class="flex w-full max-w-[420px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7" method="post" action="/setup" autocomplete="on">
 				<input type="hidden" name="csrf" value={ loginCSRF(ctx) }/>
-				@brand("")
+				@brand(t(ctx, "setup.closes_in", "min", f.MinutesLeft))
 				<div>
 					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "setup.title") }</h1>
 					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "setup.subtitle") }</p>
 				</div>
 				@errorAlert(errMsg)
 				<div class="flex min-w-0 flex-col gap-1.5">
-					<label class="tuc-label" for="code">{ t(ctx, "setup.code") }</label>
-					<input class="tuc-input font-mono uppercase tracking-wider" id="code" name="code" autocomplete="off" spellcheck="false" maxlength="40" required autofocus/>
-					<span class="tuc-hint">{ t(ctx, "setup.code_hint", "file", f.CodeFile) }</span>
-				</div>
-				<div class="flex min-w-0 flex-col gap-1.5">
 					<label class="tuc-label" for="email">{ t(ctx, "setup.email") }</label>
-					<input class="tuc-input" id="email" name="email" type="email" autocomplete="username" maxlength="254" required value={ f.Email }/>
+					<input class="tuc-input" id="email" name="email" type="email" autocomplete="username" maxlength="254" required value={ f.Email } autofocus/>
 				</div>
 				<div class="flex min-w-0 flex-col gap-1.5">
 					<label class="tuc-label" for="password">{ t(ctx, "setup.password") }</label>
@@ -200,8 +200,38 @@ templ Setup(f SetupForm, errMsg string) {
 					@Icon("arrow-right", "size-4")
 					{ t(ctx, "setup.submit") }
 				</button>
-				@languageSwitch()
+				@setupLanguageSwitch()
 			</form>
 		</main>
 	}
+}
+
+// SetupExpired tells a visitor the setup window closed with no account
+// created, and how the operator opens a new one.
+templ SetupExpired(window time.Duration) {
+	@layout(t(ctx, "setup.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<div class="flex w-full max-w-[420px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7">
+				@brand("")
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "setup.expired_title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "setup.expired_text", "min", int(window.Minutes())) }</p>
+				</div>
+				<pre class="m-0 overflow-x-auto rounded-sm border border-border bg-bg px-3 py-2 font-mono text-[13px]">{ restartCommand }</pre>
+			</div>
+		</main>
+	}
+}
+
+// setupLanguageSwitch is the language picker of the setup page.
+templ setupLanguageSwitch() {
+	<nav class="flex justify-center gap-3 text-xs text-subtle [&_[aria-current]]:font-medium [&_[aria-current]]:text-fg" aria-label={ t(ctx, "common.language") }>
+		for _, l := range Locales() {
+			if l == lang(ctx) {
+				<span aria-current="true">{ t(ctx, "locale." + l) }</span>
+			} else {
+				<a href={ templ.SafeURL("/setup?lang=" + l) } hreflang={ l }>{ t(ctx, "locale." + l) }</a>
+			}
+		}
+	</nav>
 }

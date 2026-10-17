@@ -118,6 +118,10 @@ func (m *Manager) AddDomain(ctx context.Context, a Actor, projectSlug, serviceSl
 	if strings.HasSuffix(strings.TrimPrefix(host, "*."), ".sslip.io") {
 		return i18n.E("domain.error.reserved", "domain", host)
 	}
+	// The panel's own public hostname is never a service's.
+	if m.panelHost != "" && (host == m.panelHost || (strings.HasPrefix(host, "*.") && strings.HasSuffix(m.panelHost, host[1:]) && !strings.Contains(strings.TrimSuffix(m.panelHost, host[1:]), "."))) {
+		return i18n.E("domain.error.reserved", "domain", host)
+	}
 	if m.baseDomain != "" {
 		if label, ok := strings.CutSuffix(strings.TrimPrefix(host, "*."), "."+m.baseDomain); ok && !strings.Contains(label, ".") {
 			if n, err := m.q.HostLabelTaken(ctx, label); err != nil {

@@ -78,6 +78,7 @@ type Manager struct {
 	// baseDomain is the edge's base domain (SetBaseDomain): automatic links
 	// live under it, so a custom domain must not take one of their names.
 	baseDomain string
+	panelHost  string
 	// templates is the service catalog (SetTemplates); the embedded one
 	// until the community catalog is wired in.
 	templates *templates.Registry
@@ -695,6 +696,10 @@ func (m *Manager) ListEnv(ctx context.Context, serviceID string) ([]EnvVar, erro
 // SetEnv creates or replaces a variable.
 // SetBaseDomain tells the manager the edge's base domain ("" = none).
 func (m *Manager) SetBaseDomain(d string) { m.baseDomain = strings.ToLower(strings.TrimSuffix(d, ".")) }
+
+// SetPanelHost reserves the panel's public hostname: no service domain may
+// take it.
+func (m *Manager) SetPanelHost(h string) { m.panelHost = strings.ToLower(h) }
 
 func (m *Manager) SetEnv(ctx context.Context, a Actor, serviceID, key, value string, secret bool) error {
 	key = strings.TrimSpace(key)

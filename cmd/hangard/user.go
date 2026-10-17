@@ -20,8 +20,8 @@ import (
 )
 
 // userCmd manages users from the server's command line. It is also a way to
-// create the first owner (the other is the first-run page, which needs the
-// setup code); either one closes the first-run page.
+// create the first owner (the other is the first-run page, open for a while
+// after start); either one closes the first-run page.
 func userCmd(ctx context.Context, args []string, stdout, stderr io.Writer, log *slog.Logger) error {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, tr("cli.user.usage"))

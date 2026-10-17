@@ -187,6 +187,13 @@ type Panel struct {
 	// Hosts are the values accepted in the Host header. Anything else gets
 	// 421, which closes the door on DNS rebinding attacks.
 	Hosts []string `toml:"hosts"`
+	// Public also serves the panel on the internet, through Caddy with
+	// HTTPS (needs the edge): at PublicHost, or by default at
+	// "hangar.<ip>.sslip.io" (or "hangar.<base_domain>").
+	Public bool `toml:"public"`
+	// PublicHost is the panel's own public hostname (e.g.
+	// "painel.example.com", DNS pointing here); empty = automatic.
+	PublicHost string `toml:"public_host"`
 }
 
 // Default returns the configuration of a fresh install in bunker mode.
@@ -282,6 +289,12 @@ func (c Config) Validate() error {
 		}
 	}
 
+	if c.Panel.PublicHost != "" && (!hostnameRE.MatchString(c.Panel.PublicHost) || len(c.Panel.PublicHost) > 253) {
+		errs = append(errs, i18n.E("config.error.panel_public_host", "value", c.Panel.PublicHost))
+	}
+	if c.Panel.Public && !c.Edge.Enabled {
+		errs = append(errs, i18n.E("config.error.panel_public_edge"))
+	}
 	if len(c.Panel.Hosts) == 0 {
 		errs = append(errs, i18n.E("config.error.hosts_empty"))
 	}
