@@ -62,9 +62,9 @@ templ Account(d AccountData) {
 								}
 							</select>
 						</div>
-						<fieldset class="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
-							<legend class="tuc-label mb-1.5 p-0">{ t(ctx, "account.theme") }</legend>
-							<div class="tuc-btn-group is-segmented" role="group" aria-label={ t(ctx, "account.theme") }>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<span class="tuc-label" id="theme-label">{ t(ctx, "account.theme") }</span>
+							<div class="tuc-btn-group is-segmented" role="radiogroup" aria-labelledby="theme-label">
 								for _, th := range []string{"system", "dark", "light"} {
 									<label class="tuc-btn">
 										<input type="radio" class="tuc-btn__input" name="theme" value={ th } checked?={ d.Theme == th }/>
@@ -73,7 +73,7 @@ templ Account(d AccountData) {
 									</label>
 								}
 							</div>
-						</fieldset>
+						</div>
 					</div>
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<span class="tuc-hint">{ t(ctx, "account.preferences_hint") }</span>
