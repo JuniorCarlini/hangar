@@ -105,6 +105,7 @@ func New(d Deps) (http.Handler, error) {
 	var h http.Handler = rt.mux
 	h = cop.Handler(h)
 	h = lockGate(d.Lock, h)
+	h = friendlyErrors(h)
 	h = withLocale(h)
 	h = limitBody(h)
 	h = hostCheck(d.Hosts, d.StatusHosts, h)

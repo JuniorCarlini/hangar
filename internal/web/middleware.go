@@ -10,6 +10,7 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/lockdown"
+	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
 // maxBodyBytes caps the body of any panel request. Large uploads (recovery
@@ -168,3 +169,65 @@ func BehindEdge(next http.Handler, caddy netip.Addr) http.Handler {
 		next.ServeHTTP(w, r2)
 	})
 }
+
+// friendlyErrors turns the plain-text errors of the panel (an unknown route,
+// a refused request, http.Error anywhere) into the panel's own error page
+// when a browser is navigating. Fetches, htmx swaps, JSON and every response
+// that already has its own body keep theirs.
+func friendlyErrors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead ||
+			r.Header.Get("HX-Request") != "" || !strings.Contains(r.Header.Get("Accept"), "text/html") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		fw := &errorPageWriter{ResponseWriter: w}
+		next.ServeHTTP(fw, r)
+		if fw.status == 0 {
+			return
+		}
+		h := w.Header()
+		h.Del("Content-Length")
+		h.Del("X-Content-Type-Options")
+		h.Set("X-Content-Type-Options", "nosniff")
+		render(w, r, fw.status, views.ErrorPage(fw.status, strings.TrimSpace(fw.msg.String())))
+	})
+}
+
+// errorPageWriter holds back a plain-text error so friendlyErrors can answer
+// with the page instead. Anything else passes straight through.
+type errorPageWriter struct {
+	http.ResponseWriter
+	status  int // set when the response is being replaced
+	decided bool
+	msg     strings.Builder
+}
+
+func (e *errorPageWriter) WriteHeader(code int) {
+	if e.decided {
+		return
+	}
+	e.decided = true
+	if code >= 400 && strings.HasPrefix(e.Header().Get("Content-Type"), "text/plain") {
+		e.status = code
+		return
+	}
+	e.ResponseWriter.WriteHeader(code)
+}
+
+func (e *errorPageWriter) Write(b []byte) (int, error) {
+	if !e.decided {
+		e.WriteHeader(http.StatusOK)
+	}
+	if e.status != 0 {
+		if e.msg.Len() < 512 {
+			e.msg.Write(b[:min(len(b), 512-e.msg.Len())])
+		}
+		return len(b), nil
+	}
+	return e.ResponseWriter.Write(b)
+}
+
+// Unwrap lets http.ResponseController reach Flush and Hijack (logs, the
+// terminal's WebSocket) on the real writer.
+func (e *errorPageWriter) Unwrap() http.ResponseWriter { return e.ResponseWriter }

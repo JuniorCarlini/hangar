@@ -159,3 +159,25 @@ func TestBehindEdgeTrustsOnlyCaddy(t *testing.T) {
 		t.Errorf("through Caddy: %d, client %q", code, seen)
 	}
 }
+
+// A browser that opens an address the panel does not have sees the panel's
+// own error page, not Go's plain text; scripts keep the plain answer.
+func TestUnknownAddressShowsThePanelErrorPage(t *testing.T) {
+	e := newEnv(t)
+	rec := e.do(req{method: "GET", target: "/setupdasd", header: map[string]string{"Accept": "text/html,application/xhtml+xml"}})
+	body := rec.Body.String()
+	if rec.Code != http.StatusNotFound || !strings.Contains(body, i18n.Tl("pt-BR", "errorpage.not_found.title")) || strings.Contains(body, "404 page not found") {
+		t.Fatalf("browser: status %d, body %.200s", rec.Code, body)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("content type %q", ct)
+	}
+	rec = e.do(req{method: "GET", target: "/setupdasd"})
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "404 page not found") {
+		t.Errorf("non-browser: status %d, body %q", rec.Code, rec.Body)
+	}
+	rec = e.do(req{method: "GET", target: "/setupdasd", header: map[string]string{"Accept": "text/html", "HX-Request": "true"}})
+	if strings.Contains(rec.Body.String(), "<html") {
+		t.Error("an htmx request must keep the plain answer")
+	}
+}

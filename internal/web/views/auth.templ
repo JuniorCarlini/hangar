@@ -1,6 +1,10 @@
 package views
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // restartCommand opens a new setup window (a command, not prose).
 const restartCommand = "sudo systemctl restart hangard"
@@ -234,4 +238,54 @@ templ setupLanguageSwitch() {
 			}
 		}
 	</nav>
+}
+
+// errorKey picks the texts of an error page by status.
+func errorKey(status int) string {
+	switch {
+	case status == 404 || status == 405:
+		return "not_found"
+	case status == 403:
+		return "forbidden"
+	case status == 429:
+		return "too_many"
+	case status >= 500:
+		return "server"
+	}
+	return "other"
+}
+
+// errorDetail keeps the server's own message when it says something more
+// than the status (Go's "404 page not found" adds nothing).
+func errorDetail(status int, msg string) string {
+	if status == 404 || status == 405 || msg == "" || strings.HasPrefix(msg, fmt.Sprint(status)) {
+		return ""
+	}
+	return msg
+}
+
+// ErrorPage is what a browser sees for a panel error: the status, a plain
+// explanation and a way back.
+templ ErrorPage(status int, msg string) {
+	@layout(t(ctx, "errorpage." + errorKey(status) + ".title") + " · Hangar") {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<div class="flex w-full max-w-[420px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7">
+				@brand(fmt.Sprint(status))
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "errorpage." + errorKey(status) + ".title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "errorpage." + errorKey(status) + ".text") }</p>
+				</div>
+				if d := errorDetail(status, msg); d != "" {
+					<div class="tuc-alert is-danger" role="alert">
+						@Icon("circle-alert", "size-4")
+						<div class="tuc-alert__body"><p>{ d }</p></div>
+					</div>
+				}
+				<a class="tuc-btn is-primary is-block" href="/">
+					@Icon("arrow-left", "size-4")
+					{ t(ctx, "errorpage.home") }
+				</a>
+			</div>
+		</main>
+	}
 }

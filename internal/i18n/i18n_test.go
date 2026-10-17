@@ -119,6 +119,7 @@ var dynamicPrefixes = map[string][]string{
 	"deploy.trigger.":      {"create", "manual", "webhook", "rollback", "ports", "restore", "rebuild"},
 	"update.state.":        {"ok", "rolled_back", "failed", "applying"},
 	"role.":                {"owner", "admin", "operator", "viewer"},
+	"errorpage.":           {"not_found.title", "not_found.text", "forbidden.title", "forbidden.text", "too_many.title", "too_many.text", "server.title", "server.text", "other.title", "other.text"},
 	"theme.":               {"system", "dark", "light"},
 	"canvas.kind.":         {"app", "db", "cache"},
 	"compose.kind.":        {"template", "image", "git", "skip"},

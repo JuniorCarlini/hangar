@@ -100,7 +100,7 @@ email = "E-mail"
 password = "Senha"
 password_hint = "Pelo menos {min} caracteres. Não há \"esqueci a senha\": guarde num gerenciador de senhas."
 confirm = "Repita a senha"
-twofa = "Proteger com verificação em duas etapas (recomendado)"
+twofa = "Proteger com verificação em duas etapas"
 twofa_hint = "Logo depois de criar a conta, você escaneia um QR code no app autenticador. Pode ligar ou desligar depois em Minha conta."
 twofa_required = "Este servidor exige verificação em duas etapas: você vai configurá-la logo depois de criar a conta."
 submit = "Criar conta e entrar"
@@ -108,6 +108,29 @@ submit = "Criar conta e entrar"
 [setup.error]
 closed = "O primeiro acesso já foi feito. Entre com a sua conta."
 mismatch = "As duas senhas não são iguais."
+
+[errorpage]
+home = "Voltar para o início"
+
+[errorpage.not_found]
+title = "Página não encontrada"
+text = "Esse endereço não existe no painel. Confira o link ou volte para o início."
+
+[errorpage.forbidden]
+title = "Acesso negado"
+text = "Você não tem permissão para abrir esta página."
+
+[errorpage.too_many]
+title = "Muitas tentativas"
+text = "Espere um pouco e tente de novo."
+
+[errorpage.server]
+title = "Algo deu errado"
+text = "O painel não conseguiu concluir o pedido. Tente de novo em instantes; se continuar, veja os logs no servidor: journalctl -u hangard -n 50"
+
+[errorpage.other]
+title = "Não foi possível abrir"
+text = "O pedido não pôde ser atendido."
 
 [sudo]
 confirm = "Confirmar"

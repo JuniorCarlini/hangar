@@ -100,7 +100,7 @@ email = "E-mail"
 password = "Password"
 password_hint = "At least {min} characters. There is no \"forgot password\": keep it in a password manager."
 confirm = "Repeat the password"
-twofa = "Protect with two-step verification (recommended)"
+twofa = "Protect with two-step verification"
 twofa_hint = "Right after creating the account, you scan a QR code with your authenticator app. You can turn it on or off later in My account."
 twofa_required = "This server requires two-step verification: you will set it up right after creating the account."
 submit = "Create account and sign in"
@@ -108,6 +108,29 @@ submit = "Create account and sign in"
 [setup.error]
 closed = "First access is already done. Sign in with your account."
 mismatch = "The two passwords are not the same."
+
+[errorpage]
+home = "Back to the start"
+
+[errorpage.not_found]
+title = "Page not found"
+text = "This address does not exist in the panel. Check the link or go back to the start."
+
+[errorpage.forbidden]
+title = "Access denied"
+text = "You are not allowed to open this page."
+
+[errorpage.too_many]
+title = "Too many attempts"
+text = "Wait a little and try again."
+
+[errorpage.server]
+title = "Something went wrong"
+text = "The panel could not complete the request. Try again in a moment; if it keeps happening, check the logs on the server: journalctl -u hangard -n 50"
+
+[errorpage.other]
+title = "Could not open"
+text = "The request could not be served."
 
 [sudo]
 confirm = "Confirm"
