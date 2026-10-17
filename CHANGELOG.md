@@ -12,6 +12,15 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.3.1] - 2026-10-17
+
+### Corrigido
+
+- Um endereço que não existe no painel mostrava "404 page not found" em
+  texto puro; agora aparece a página de erro do próprio Hangar, com um
+  botão para voltar ao início. O mesmo vale para acesso negado e excesso
+  de tentativas.
+
 ## [0.3.0] - 2026-10-17
 
 ### Adicionado
@@ -76,7 +85,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.3.0...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/JuniorCarlini/hangar/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/JuniorCarlini/hangar/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/JuniorCarlini/hangar/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/JuniorCarlini/hangar/releases/tag/v0.1.0
