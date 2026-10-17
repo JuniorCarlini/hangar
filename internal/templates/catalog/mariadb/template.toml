@@ -1,0 +1,55 @@
+id = "mariadb"
+version = 1
+category = "database"
+tags = ["sql", "relational", "mysql"]
+docs = "https://mariadb.com/docs/server/"
+main = "mariadb"
+name = { en = "MariaDB", "pt-BR" = "MariaDB" }
+description = { en = "MySQL-compatible relational database (LTS release). Generated passwords, persistent volume and healthcheck.", "pt-BR" = "Banco relacional compatível com MySQL (versão LTS). Senhas geradas, volume persistente e healthcheck." }
+
+[variables.database]
+default = "app"
+pattern = '^[a-z_][a-z0-9_]{0,63}$'
+label = { en = "Database name", "pt-BR" = "Nome do banco" }
+
+[variables.user]
+default = "app"
+pattern = '^[a-z_][a-z0-9_]{0,31}$'
+label = { en = "User", "pt-BR" = "Usuário" }
+
+[variables.password]
+generate = "secret"
+
+[variables.root_password]
+generate = "secret"
+
+[[exports]]
+key = "DATABASE_URL"
+value = "mysql://${user}:${password}@${service}:3306/${database}"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "3306"
+
+[[exports]]
+key = "USER"
+value = "${user}"
+
+[[exports]]
+key = "DATABASE"
+value = "${database}"
+
+[[exports]]
+key = "PASSWORD"
+value = "${password}"
+secret = true
+
+[[exports]]
+key = "ROOT_PASSWORD"
+value = "${root_password}"
+secret = true

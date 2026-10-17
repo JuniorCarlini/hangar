@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="{{.Lang}}"{{if .Theme}} data-theme="{{.Theme}}"{{end}}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{.Title}}</title>
+<style>
+:root{--bg:#0b0d10;--surface:#13161b;--surface-2:#1a1e24;--border:#262b33;--border-strong:#353b45;--fg:#e8eaed;--muted:#9aa2ae;--subtle:#7d8592;--danger:#ff6369;--danger-soft:rgba(255,99,105,.12);--info:#4cb3ff;--info-soft:rgba(76,179,255,.12);--warning:#f5b83d;--warning-soft:rgba(245,184,61,.12);--success:#3dd68c;--success-soft:rgba(61,214,140,.12);--neutral:#9aa2ae;--neutral-soft:#1a1e24;--shadow:rgba(0,0,0,.45)}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]){--bg:#fff;--surface:#fff;--surface-2:#f2f4f7;--border:#e3e6eb;--border-strong:#c9ced6;--fg:#0f1216;--muted:#5b6472;--subtle:#6b7380;--danger:#d1242f;--danger-soft:rgba(209,36,47,.08);--info:#0969da;--info-soft:rgba(9,105,218,.08);--warning:#a86400;--warning-soft:rgba(168,100,0,.08);--success:#11845b;--success-soft:rgba(17,132,91,.08);--neutral:#5b6472;--neutral-soft:#f2f4f7;--shadow:rgba(15,18,22,.12)}}
+:root[data-theme=light]{--bg:#fff;--surface:#fff;--surface-2:#f2f4f7;--border:#e3e6eb;--border-strong:#c9ced6;--fg:#0f1216;--muted:#5b6472;--subtle:#6b7380;--danger:#d1242f;--danger-soft:rgba(209,36,47,.08);--info:#0969da;--info-soft:rgba(9,105,218,.08);--warning:#a86400;--warning-soft:rgba(168,100,0,.08);--success:#11845b;--success-soft:rgba(17,132,91,.08);--neutral:#5b6472;--neutral-soft:#f2f4f7;--shadow:rgba(15,18,22,.12)}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg)}
+body{font:14px/20px system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.ep{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;padding:48px 16px;position:relative;overflow:hidden}
+.ep::before{content:"";position:absolute;inset:0;background-image:radial-gradient(var(--border) 1px,transparent 1px);background-size:22px 22px;-webkit-mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,#000 30%,transparent 75%);mask-image:radial-gradient(ellipse 60% 55% at 50% 45%,#000 30%,transparent 75%);opacity:.7;pointer-events:none}
+.brand{position:relative;display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+.brand img{max-height:32px;max-width:200px}
+.brand .dark{display:none}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .brand .light.has-dark{display:none}:root:not([data-theme=light]) .brand .dark{display:inline}}
+:root[data-theme=dark] .brand .light.has-dark{display:none}:root[data-theme=dark] .brand .dark{display:inline}
+.card{position:relative;width:min(520px,100%);border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:36px 32px 28px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;box-shadow:0 24px 60px -30px var(--shadow);animation:in .6s cubic-bezier(.16,1,.3,1) both}
+h1{margin:6px 0 0;font-size:24px;line-height:30px;font-weight:600;letter-spacing:-.02em}
+p{margin:0;color:var(--muted);font-size:14px;line-height:21px;max-width:400px}
+.glyph{width:84px;height:84px;position:relative;display:flex;align-items:center;justify-content:center;color:var(--c)}
+.core{width:56px;height:56px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;position:relative}
+.ring{position:absolute;inset:0;border-radius:50%;border:2px solid var(--c);opacity:0;animation:ping 2.4s cubic-bezier(0,0,.2,1) infinite}
+.ring.d2{animation-delay:.8s}.ring.d3{animation-delay:1.6s}
+svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.meta{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin-top:6px;padding-top:16px;border-top:1px dashed var(--border);width:100%;font:12px/16px ui-monospace,"SF Mono",Menlo,Consolas,monospace;color:var(--subtle)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:4px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--fg);font:inherit;font-size:13px;font-weight:500;cursor:pointer;text-decoration:none}
+.btn svg{width:14px;height:14px}
+.btn.main{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.btn{transition:background-color .15s ease-out,border-color .15s ease-out,color .15s ease-out,box-shadow .15s ease-out,scale 60ms ease-out}
+.btn:hover{background:var(--surface-2);border-color:var(--border-strong)}
+.btn.main:hover{background:color-mix(in srgb,var(--accent) 86%,#000);border-color:color-mix(in srgb,var(--accent) 86%,#000)}
+.btn:active{scale:.98}
+.btn:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 35%,transparent)}
+.retry{width:100%;max-width:280px;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden}
+.retry span{display:block;height:100%;background:var(--accent);transform-origin:0 50%;animation:fill 10s linear both}
+.sweep{width:100%;max-width:320px;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;position:relative}
+.sweep span{position:absolute;inset:0;width:40%;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:sweep 1.4s ease-in-out infinite}
+.note{width:100%;text-align:left;border:1px solid var(--border);border-radius:6px;padding:12px 14px;background:var(--surface-2);font-size:13px;line-height:20px;color:var(--fg)}
+.foot{position:relative;font-size:12px;color:var(--subtle)}
+.foot a{color:var(--muted)}
+.hand{transform-box:view-box;transform-origin:12px 12px;animation:spin 1.6s linear infinite}.hand.slow{animation-duration:19.2s}
+.wrench{animation:wiggle 2.6s ease-in-out infinite}
+.spin{animation:spin 2.4s linear infinite}
+@keyframes in{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes ping{0%{transform:scale(.6);opacity:.55}80%,100%{transform:scale(1.25);opacity:0}}
+@keyframes fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes sweep{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes wiggle{0%,60%,100%{transform:rotate(0)}70%{transform:rotate(-14deg)}80%{transform:rotate(10deg)}90%{transform:rotate(-6deg)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+{{.AccentCSS}}
+</style>
+</head>
+<body>
+<main class="ep">
+{{if .Brand.Show}}<div class="brand">{{if .Brand.LogoLight}}<img class="light{{if .Brand.LogoDark}} has-dark{{end}}" src="{{.Brand.LogoLight}}" alt="{{.Brand.Name}}">{{end}}{{if .Brand.LogoDark}}<img class="dark" src="{{.Brand.LogoDark}}" alt="{{.Brand.Name}}">{{end}}{{if and .Brand.Name (not .Brand.LogoLight) (not .Brand.LogoDark)}}<span>{{.Brand.Name}}</span>{{end}}</div>{{end}}
+<div class="card" role="alert">
+<div class="glyph" style="--c:var(--{{.Tone}});--soft:var(--{{.Tone}}-soft)">{{if .Rings}}<span class="ring"></span><span class="ring d2"></span><span class="ring d3"></span>{{end}}<span class="core">{{.Icon}}</span></div>
+<h1>{{.Title}}</h1>
+<p>{{.Text}}</p>
+{{.Extra}}
+<div class="meta"><span>{{.Code}}</span><span>ID [[placeholder "http.request.uuid" | trunc 8]]</span><span>[[now | date "02/01 15:04"]] UTC</span></div>
+</div>
+{{if .Brand.Contact}}<div class="foot">{{.T.help}} {{if .ContactHref}}<a href="{{.ContactHref}}">{{.Brand.Contact}}</a>{{else}}{{.Brand.Contact}}{{end}}</div>{{end}}
+</main>
+{{if .Retry}}<script>
+(function(){var n={{.Retry}},el=document.getElementById("count");var t=setInterval(function(){n--;if(el)el.textContent=n+" s";if(n<=0){clearInterval(t);location.reload();}},1000);var b=document.getElementById("again");if(b)b.addEventListener("click",function(){location.reload();});})();
+</script>{{end}}
+</body>
+</html>

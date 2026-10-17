@@ -1,0 +1,367 @@
+package views
+
+import (
+	"context"
+	"fmt"
+	"sort"
+)
+
+// UpdatesData feeds the "Updates and vulnerabilities" page (docs/14).
+type UpdatesData struct {
+	CSRF         string
+	CanOperate   bool
+	Running      bool
+	LastRun      string // "há 2 h"; "" = never
+	LastError    bool
+	Level        string // filter; "" = all
+	Counts       map[string]int
+	Findings     []FindingRow
+	IgnoredCount int
+	Ignores      []IgnoreRow
+	Problems     []ScanProblem
+	Error        string
+	Flash        string
+}
+
+// FindingRow is one pending update or vulnerability.
+type FindingRow struct {
+	ID               string
+	Level            string // critical, security, minor, major
+	Where            string // project/service, or "edge"
+	Href             string
+	Package          string
+	Ecosystem        string
+	Current          string
+	Suggested        string
+	Severity         string
+	Kind             string
+	Advisory         string
+	AdvisoryURL      string
+	Aliases          string
+	Summary          string
+	Action           string
+	Code             string
+	CanIgnoreVersion bool
+}
+
+// IgnoreRow is an ignore rule in force.
+type IgnoreRow struct {
+	ID       string
+	Where    string
+	Package  string
+	Advisory string
+	Until    string
+	Reason   string
+}
+
+// ScanProblem is a target whose inventory could not read everything.
+type ScanProblem struct {
+	Where    string
+	Detail   string
+	Packages int
+}
+
+// SortScanProblems orders problems by place.
+func SortScanProblems(p []ScanProblem) {
+	sort.Slice(p, func(i, j int) bool { return p[i].Where < p[j].Where })
+}
+
+// levelBadge is the Tucano badge of a level: 🔴 critical, 🟠 security,
+// 🟡 patch/minor, ⚪ major.
+func levelBadge(level string) string {
+	switch level {
+	case "critical":
+		return "tuc-badge is-danger"
+	case "security":
+		return "tuc-badge is-warning"
+	case "minor":
+		return "tuc-badge is-info"
+	}
+	return "tuc-badge"
+}
+
+func levelTone(level string) string {
+	switch level {
+	case "critical":
+		return "text-danger"
+	case "security":
+		return "text-warning"
+	case "minor":
+		return "text-info"
+	}
+	return ""
+}
+
+func levelHref(level string) string {
+	if level == "" {
+		return "/updates"
+	}
+	return "/updates?level=" + level
+}
+
+func totalCount(c map[string]int) int {
+	n := 0
+	for _, v := range c {
+		n += v
+	}
+	return n
+}
+
+// Updates is the updates and vulnerabilities page.
+templ Updates(d UpdatesData) {
+	@shell(t(ctx, "deps.page_title")) {
+		if d.Running {
+			<meta http-equiv="refresh" content="5"/>
+		}
+		@pageHead(t(ctx, "deps.title"), d.subtitle(ctx)) {
+			if d.CanOperate {
+				<form method="post" action="/updates/scan">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<button class="tuc-btn is-primary" type="submit" disabled?={ d.Running }>
+						if d.Running {
+							<span class="tuc-spinner" aria-hidden="true"></span>
+							{ t(ctx, "deps.scanning") }
+						} else {
+							@Icon("refresh-cw", "size-3.5")
+							{ t(ctx, "deps.scan_now") }
+						}
+					</button>
+				</form>
+			}
+		}
+		@pageBody() {
+			@errorAlert(d.Error)
+			@toast("success", d.Flash)
+			<div class="flex flex-wrap gap-3">
+				for _, lv := range []string{"critical", "security", "minor", "major"} {
+					<a class={ "flex flex-[1_1_180px] flex-col gap-0.5 rounded-md border bg-surface px-4 py-3.5 text-fg no-underline hover:border-border-strong", templ.KV("border-accent bg-accent-soft", d.Level == lv), templ.KV("border-border", d.Level != lv) } href={ templ.SafeURL(levelHref(lv)) } aria-current?={ d.Level == lv }>
+						<span class="text-xs text-muted">{ t(ctx, "deps.level." + lv) }</span>
+						<span class={ "text-[22px] leading-[30px] font-semibold tabular-nums " + levelTone(lv) }>{ fmt.Sprint(d.Counts[lv]) }</span>
+						<span class="text-xs text-subtle">{ t(ctx, "deps.level_hint." + lv) }</span>
+					</a>
+				}
+			</div>
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "deps.pending")) {
+					if d.Level != "" {
+						<a class="tuc-btn is-ghost is-sm" href="/updates">
+							@Icon("x", "size-3.5")
+							{ t(ctx, "deps.show_all") }
+						</a>
+					}
+				}
+				<div class={ cardBodyClass }>
+					if len(d.Findings) == 0 {
+						if d.LastRun == "" && totalCount(d.Counts) == 0 {
+							@emptyState("shield", t(ctx, "deps.never_scanned"))
+						} else {
+							@emptyState("shield-check", t(ctx, "deps.empty"))
+						}
+					} else {
+						<div class="tuc-table-wrap">
+							<table class="tuc-table is-compact w-full min-w-[860px]">
+								<thead>
+									<tr>
+										<th>{ t(ctx, "deps.col.level") }</th>
+										<th>{ t(ctx, "deps.col.where") }</th>
+										<th>{ t(ctx, "deps.col.package") }</th>
+										<th>{ t(ctx, "deps.col.version") }</th>
+										<th>{ t(ctx, "deps.col.advisory") }</th>
+										<th>{ t(ctx, "deps.col.action") }</th>
+										<th class="tuc-table__actions"></th>
+									</tr>
+								</thead>
+								<tbody>
+									for _, f := range d.Findings {
+										<tr>
+											<td><span class={ levelBadge(f.Level) }>{ t(ctx, "deps.level." + f.Level) }</span></td>
+											<td class="font-mono text-xs">
+												if f.Href != "" {
+													<a class="text-fg no-underline hover:text-accent-text hover:underline" href={ templ.SafeURL(f.Href) }>{ f.Where }</a>
+												} else {
+													{ f.Where }
+												}
+											</td>
+											<td>
+												<div class="flex flex-col">
+													<span class="font-mono text-xs">{ f.Package }</span>
+													<span class="text-xs text-subtle">{ f.Ecosystem }</span>
+												</div>
+											</td>
+											<td class="font-mono text-xs whitespace-nowrap">
+												{ f.Current }
+												if f.Suggested != "" {
+													<span class="text-muted">{ " → " }</span>
+													<span class="text-success">{ f.Suggested }</span>
+												}
+											</td>
+											<td class="max-w-[320px]">
+												if f.Advisory != "" {
+													<div class="flex flex-col gap-0.5">
+														<a class="inline-flex items-center gap-1 font-mono text-xs" href={ templ.SafeURL(f.AdvisoryURL) } target="_blank" rel="noopener noreferrer">
+															{ f.Advisory }
+															@Icon("external-link", "size-3")
+														</a>
+														if f.Aliases != "" {
+															<span class="font-mono text-[11px] text-subtle">{ f.Aliases }</span>
+														}
+														if f.Summary != "" {
+															<span class="text-xs text-muted">{ f.Summary }</span>
+														}
+														<span class="text-[11px] text-subtle">{ t(ctx, "deps.severity." + f.Severity) }</span>
+													</div>
+												} else {
+													<span class="text-xs text-muted">{ t(ctx, "deps.kind." + f.Kind) }</span>
+												}
+											</td>
+											<td class="max-w-[300px]">
+												<div class="flex flex-col gap-1">
+													<span class="text-xs text-muted">{ f.Action }</span>
+													if f.Code != "" {
+														<span class="flex items-center gap-1">
+															<code class="rounded-xs bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{ f.Code }</code>
+															<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ f.Code } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "deps.copy") }>
+																@Icon("copy", "size-3.5")
+															</button>
+														</span>
+													}
+												</div>
+											</td>
+											<td class="tuc-table__actions">
+												if d.CanOperate {
+													<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal={ "#ignore-" + f.ID }>
+														@Icon("eye-off", "size-3.5")
+														{ t(ctx, "deps.ignore.button") }
+													</button>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+					if d.IgnoredCount > 0 {
+						<p class="m-0 text-xs text-muted">{ t(ctx, "deps.ignored_count", "n", d.IgnoredCount) }</p>
+					}
+				</div>
+			</section>
+			if d.CanOperate {
+				for _, f := range d.Findings {
+					@ignoreDialog(d.CSRF, f)
+				}
+			}
+			if len(d.Problems) > 0 {
+				<section class={ cardClass }>
+					@cardHead(t(ctx, "deps.problems"))
+					<div class={ cardBodyClass }>
+						@notice("warning", "triangle-alert", t(ctx, "deps.problems_hint"))
+						<ul class="m-0 flex list-none flex-col gap-2 p-0">
+							for _, p := range d.Problems {
+								<li class="flex items-center gap-2.5">
+									@Icon("triangle-alert", "size-4 text-warning")
+									<div class="flex min-w-0 flex-col">
+										<span class="font-mono text-xs">{ p.Where }</span>
+										<span class="truncate font-mono text-[11px] text-subtle" title={ p.Detail }>{ p.Detail }</span>
+									</div>
+								</li>
+							}
+						</ul>
+					</div>
+				</section>
+			}
+			if len(d.Ignores) > 0 {
+				<section class={ cardClass }>
+					@cardHead(t(ctx, "deps.ignores"))
+					<div class={ cardBodyClass }>
+						<div class="tuc-table-wrap">
+							<table class="tuc-table is-compact w-full">
+								<thead><tr><th>{ t(ctx, "deps.col.where") }</th><th>{ t(ctx, "deps.col.package") }</th><th>{ t(ctx, "deps.col.until") }</th><th>{ t(ctx, "deps.col.reason") }</th><th class="tuc-table__actions"></th></tr></thead>
+								<tbody>
+									for _, i := range d.Ignores {
+										<tr>
+											<td class="font-mono text-xs">{ i.Where }</td>
+											<td class="font-mono text-xs">
+												{ i.Package }
+												if i.Advisory != "" {
+													<span class="text-subtle">{ " · " + i.Advisory }</span>
+												}
+											</td>
+											<td class="text-muted">{ i.Until }</td>
+											<td>{ i.Reason }</td>
+											<td class="tuc-table__actions">
+												if d.CanOperate {
+													<form data-confirm={ t(ctx, "confirm.unignore.title") } data-confirm-text={ t(ctx, "confirm.unignore.text") } data-confirm-ok={ t(ctx, "confirm.unignore.ok") } data-tone="warning" method="post" action="/updates/unignore">
+														<input type="hidden" name="csrf" value={ d.CSRF }/>
+														<input type="hidden" name="id" value={ i.ID }/>
+														<button class="tuc-btn is-outline is-sm" type="submit">
+															@Icon("eye", "size-3.5")
+															{ t(ctx, "deps.unignore") }
+														</button>
+													</form>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					</div>
+				</section>
+			}
+		}
+	}
+}
+
+// ignoreDialog asks why and for how long a finding is ignored.
+templ ignoreDialog(csrf string, f FindingRow) {
+	<dialog class="tuc-modal is-md is-warning" id={ "ignore-" + f.ID } aria-labelledby={ "ignore-title-" + f.ID }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id={ "ignore-title-" + f.ID }>{ t(ctx, "deps.ignore.title", "package", f.Package) }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action="/updates/ignore" class="tuc-modal__body flex flex-col gap-4">
+				<input type="hidden" name="csrf" value={ csrf }/>
+				<input type="hidden" name="id" value={ f.ID }/>
+				<p class="tuc-modal__text">{ t(ctx, "deps.ignore.text") }</p>
+				<fieldset class="flex flex-col gap-2 border-0 p-0">
+					<legend class="tuc-label mb-1.5">{ t(ctx, "deps.ignore.mode") }</legend>
+					<label class="tuc-choice">
+						<input class="tuc-radio" type="radio" name="mode" value="days" checked?={ !f.CanIgnoreVersion }/>
+						{ t(ctx, "deps.ignore.days") }
+					</label>
+					if f.CanIgnoreVersion {
+						<label class="tuc-choice">
+							<input class="tuc-radio" type="radio" name="mode" value="version" checked/>
+							{ t(ctx, "deps.ignore.version", "version", f.Suggested) }
+						</label>
+					}
+				</fieldset>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for={ "reason-" + f.ID }>{ t(ctx, "deps.col.reason") }</label>
+					<input class="tuc-input" id={ "reason-" + f.ID } name="reason" required minlength="3" maxlength="300" placeholder={ t(ctx, "deps.ignore.reason_placeholder") }/>
+				</div>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("eye-off", "size-3.5")
+						{ t(ctx, "deps.ignore.button") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+func (d UpdatesData) subtitle(ctx context.Context) string {
+	if d.LastRun == "" {
+		return t(ctx, "deps.never")
+	}
+	if d.LastError {
+		return t(ctx, "deps.last_run_partial", "when", d.LastRun)
+	}
+	return t(ctx, "deps.last_run", "when", d.LastRun)
+}

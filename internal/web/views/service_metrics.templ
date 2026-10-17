@@ -1,0 +1,47 @@
+package views
+
+// ServiceMetrics is the "Metrics" tab of a service: current usage against its
+// limits and the history over the chosen period.
+type ServiceMetrics struct {
+	Period  string
+	Periods []string
+	Running bool
+	CPU     string // "0,35 CPU"
+	CPUNote string // "35% de 1 CPU"
+	CPUHist []int  // percent of the CPU limit; -1 = no data
+	Mem     string // "80 MB"
+	MemNote string // "31% de 256 MB"
+	MemHist []int  // percent of the memory limit
+	Disk     string // volume usage, "210 MB" or "–"
+	DiskNote string // "em volumes" / "sem volume"
+	NetDown string
+	NetUp   string
+	NetUnit string
+	NetHist []int
+	NetNote string
+}
+
+templ tabMetrics(d ServiceData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "service.tab.metrics")) {
+			@periodPicker(d.base(), d.Metrics.Period, "overview", d.Metrics.Periods)
+		}
+		<div id="metrics-live" class={ cardBodyClass }>
+			if !d.Metrics.Running {
+				<p class="m-0 text-[13px] text-muted">{ t(ctx, "service.metrics.stopped") }</p>
+			}
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
+				@metricCard("CPU", d.Metrics.CPUNote, d.Metrics.CPU, lastLevel(d.Metrics.CPUHist)) {
+					@spark(d.Metrics.CPUHist, "")
+				}
+				@metricCard(t(ctx, "overview.memory"), d.Metrics.MemNote, d.Metrics.Mem, lastLevel(d.Metrics.MemHist)) {
+					@spark(d.Metrics.MemHist, "")
+				}
+				@metricCard(t(ctx, "overview.disk"), d.Metrics.DiskNote, d.Metrics.Disk, "") {
+				}
+				@netCard(t(ctx, "overview.network"), t(ctx, "overview.now"), d.Metrics.NetDown, d.Metrics.NetUp, d.Metrics.NetUnit, d.Metrics.NetHist, d.Metrics.NetNote)
+			</div>
+			<p class="m-0 text-xs text-muted">{ t(ctx, "service.metrics.hint") }</p>
+		</div>
+	</section>
+}

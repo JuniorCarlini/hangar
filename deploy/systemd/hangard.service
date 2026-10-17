@@ -1,0 +1,50 @@
+# Hangar panel. Runs as an unprivileged user, with a read-only filesystem
+# (except /var/lib/hangar) and no capabilities (docs/04).
+[Unit]
+Description=Hangar — painel
+Documentation=https://github.com/JuniorCarlini/hangar
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hangar
+Group=hangar
+ExecStart=/usr/local/bin/hangard serve -config /etc/hangar/hangar.toml
+Restart=on-failure
+RestartSec=3
+UMask=0077
+LimitNOFILE=65536
+# Go returns memory to the OS sooner; and if something goes very wrong, only
+# the panel is contained (the stores run in containers, outside this limit).
+Environment=GOMEMLIMIT=192MiB
+MemoryHigh=256M
+MemoryMax=384M
+
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ReadWritePaths=/var/lib/hangar
+ReadOnlyPaths=/etc/hangar
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target

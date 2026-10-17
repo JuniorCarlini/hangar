@@ -1,0 +1,47 @@
+id = "mongodb"
+version = 1
+category = "database"
+tags = ["nosql", "document"]
+docs = "https://www.mongodb.com/docs/manual/"
+main = "mongodb"
+name = { en = "MongoDB", "pt-BR" = "MongoDB" }
+description = { en = "Document database with authentication always on. Generated password, persistent volume and healthcheck.", "pt-BR" = "Banco de documentos com autenticação sempre ligada. Senha gerada, volume persistente e healthcheck." }
+
+[variables.database]
+default = "app"
+pattern = '^[a-zA-Z_][a-zA-Z0-9_-]{0,62}$'
+label = { en = "Database name", "pt-BR" = "Nome do banco" }
+
+[variables.user]
+default = "app"
+pattern = '^[a-z_][a-z0-9_]{0,62}$'
+label = { en = "User", "pt-BR" = "Usuário" }
+
+[variables.password]
+generate = "secret"
+
+[[exports]]
+key = "MONGODB_URL"
+value = "mongodb://${user}:${password}@${service}:27017/${database}?authSource=admin"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "27017"
+
+[[exports]]
+key = "USER"
+value = "${user}"
+
+[[exports]]
+key = "DATABASE"
+value = "${database}"
+
+[[exports]]
+key = "PASSWORD"
+value = "${password}"
+secret = true

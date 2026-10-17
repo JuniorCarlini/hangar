@@ -1,0 +1,50 @@
+id = "rustfs"
+version = 2
+category = "storage"
+tags = ["s3", "object-storage", "minio"]
+docs = "https://docs.rustfs.com/"
+main = "rustfs"
+name = { en = "RustFS (S3 storage)", "pt-BR" = "RustFS (armazenamento S3)" }
+description = { en = "S3-compatible object storage, a drop-in for MinIO (which no longer publishes images). Generated keys; the console is on port 9001.", "pt-BR" = "Armazenamento de objetos compatível com S3, no lugar do MinIO (que parou de publicar imagens). Chaves geradas; o console fica na porta 9001." }
+
+[variables.access_key]
+generate = "secret"
+
+[variables.secret_key]
+generate = "secret"
+
+[[exports]]
+key = "S3_ENDPOINT"
+value = "http://${service}:9000"
+
+[[exports]]
+key = "S3_ACCESS_KEY"
+value = "${access_key}"
+secret = true
+
+[[exports]]
+key = "S3_SECRET_KEY"
+value = "${secret_key}"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "9000"
+
+[[endpoints]]
+name = "console"
+port = 9001
+label = { en = "Console", "pt-BR" = "Console" }
+# The console administers every bucket: project network only until made
+# public in the Network tab.
+public = false
+
+[[endpoints]]
+name = "cdn"
+port = 9000
+label = { en = "S3 / CDN", "pt-BR" = "S3 / CDN" }
+public = false

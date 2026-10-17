@@ -1,0 +1,1127 @@
+package views
+
+import (
+	"context"
+	"strconv"
+	"strings"
+)
+
+// The service panel tabs (docs/18, prototype "Serviço › …"). Actions that
+// need a re-confirmed identity open the sudo dialog when it is not active.
+
+func isRef(v string) bool { return strings.Contains(v, "${{") }
+
+// refWarning explains a broken reference in plain words.
+func refWarning(ctx context.Context, w RefWarning) string {
+	switch {
+	case w.Problem == "project":
+		return t(ctx, "service.env.broken.project", "key", w.Key, "project", w.Project)
+	case w.Problem == "service" && w.Project != "":
+		return t(ctx, "service.env.broken.service_in", "key", w.Key, "service", w.Service, "project", w.Project)
+	case w.Problem == "service":
+		return t(ctx, "service.env.broken.service", "key", w.Key, "service", w.Service)
+	}
+	return t(ctx, "service.env.broken.key", "key", w.Key, "service", w.Service, "target", w.TargetKey)
+}
+
+// refWarnings joins the explanations for one variable: the title of its
+// "ref" badge ("" = its references are fine).
+func refWarnings(ctx context.Context, ws []RefWarning, key string) string {
+	var out []string
+	for _, w := range ws {
+		if w.Key == key {
+			out = append(out, refWarning(ctx, w))
+		}
+	}
+	return strings.Join(out, " ")
+}
+
+// sudoDialog is the "Confirm it's you" modal of the panel.
+templ sudoDialog(d ServiceData) {
+	if d.CanAdmin && !d.SudoActive {
+		<dialog class="tuc-modal is-warning" id="sudo-dialog" aria-labelledby="sudo-title">
+			<div class="tuc-modal__panel sudo-panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id="sudo-title">{ t(ctx, "sudo.title") }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+					</button>
+				</div>
+				<div class="tuc-modal__body">
+					<p class="tuc-modal__text">{ t(ctx, "sudo.text") }</p>
+					@sudoForm(d.CSRF, d.base()+"?tab="+d.Tab, t(ctx, "service.sudo_label"))
+				</div>
+			</div>
+		</dialog>
+	}
+}
+
+// sudoButton opens the sudo dialog in place of an action that needs it.
+templ sudoButton(label string) {
+	<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#sudo-dialog">
+		<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="1"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+		{ label }
+	</button>
+}
+
+templ eyeIcon() {
+	<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+}
+
+templ copyIcon() {
+	<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="1"></rect><path d="M5 15V5a1 1 0 0 1 1-1h10"></path></svg>
+}
+
+// pendingBanner: variables changed since the last deploy.
+templ pendingBanner(d ServiceData) {
+	if d.Pending {
+		<div class="flex items-center gap-2.5 rounded border border-dashed border-accent bg-accent-soft px-3 py-2.5 text-[13px] [&_form]:inline-flex" role="status">
+			<span class="grow min-w-0">{ t(ctx, "service.pending") }</span>
+			if d.CanOperate {
+				<form method="post" action={ templ.SafeURL(d.base() + "/deploy") }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<button class="tuc-btn is-primary is-sm" type="submit">
+						@Icon("rocket", "size-4")
+						{ t(ctx, "service.apply_deploy") }
+					</button>
+				</form>
+			}
+		</div>
+	}
+}
+
+templ tabVariables(d ServiceData) {
+	@pendingBanner(d)
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "service.tab.variables")) {
+			if d.CanOperate {
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#env-bulk" aria-label={ t(ctx, "service.env.bulk") }>
+					@Icon("file-text", "size-3.5")
+					.env
+				</button>
+				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#env-new">
+					@Icon("plus", "size-3.5")
+					{ t(ctx, "service.env.add") }
+				</button>
+			}
+		}
+		if len(d.RefWarnings) > 0 {
+			<div class="px-4 pt-4">
+				<div class="tuc-alert is-danger" role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body">
+						<p class="tuc-alert__title">{ t(ctx, "service.env.broken_title", "n", len(d.RefWarnings)) }</p>
+						for _, w := range d.RefWarnings {
+							<p>{ refWarning(ctx, w) }</p>
+						}
+						<p>{ t(ctx, "service.env.broken_hint") }</p>
+					</div>
+				</div>
+			</div>
+		}
+		if len(d.Env) > 0 {
+			<div class="tuc-table-wrap">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "service.env.name") }</th><th>{ t(ctx, "service.env.value") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<tbody>
+						for _, v := range d.Env {
+							<tr>
+								<td class="font-mono text-[13px]">{ v.Key }</td>
+								<td class="max-w-[260px] truncate font-mono text-[13px] [&_form]:inline-flex">
+									if v.Secret && !v.Revealed {
+										<span class="tuc-reveal">
+											<span class="text-muted">••••••••••••</span>
+											if d.CanAdmin && d.SudoActive {
+												<form method="post" action={ templ.SafeURL(d.base() + "/env/reveal") }>
+													<input type="hidden" name="csrf" value={ d.CSRF }/>
+													<input type="hidden" name="key" value={ v.Key }/>
+													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.reveal") }>
+														@Icon("eye", "size-3.5")
+													</button>
+												</form>
+											} else if d.CanAdmin {
+												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "service.env.reveal") }>
+													@Icon("eye", "size-3.5")
+												</button>
+											}
+										</span>
+									} else if broken := refWarnings(ctx, d.RefWarnings, v.Key); broken != "" {
+										<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
+										<span class="ref-text">{ v.Value }</span>
+									} else if isRef(v.Value) {
+										<span class="tuc-badge is-info ref-badge">ref</span>
+										<span class="ref-text">{ v.Value }</span>
+									} else {
+										{ v.Value }
+									}
+								</td>
+								<td class="tuc-table__actions">
+									if d.CanOperate {
+										<form data-confirm={ t(ctx, "confirm.env_delete.title") } data-confirm-text={ t(ctx, "confirm.env_delete.text") } data-confirm-ok={ t(ctx, "confirm.env_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<input type="hidden" name="key" value={ v.Key }/>
+											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.delete_named", "key", v.Key) } title={ t(ctx, "service.env.delete") }>
+												@Icon("trash", "size-3.5")
+											</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		} else {
+			@emptyState("braces", t(ctx, "service.env.empty"))
+		}
+	</section>
+	if d.CanOperate && d.EnvSuggest != nil {
+		@envSuggestions(d)
+	}
+	if d.CanOperate {
+		<dialog class="tuc-modal is-md" id="env-new" aria-labelledby="env-new-title">
+			<div class="tuc-modal__panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id="env-new-title">{ t(ctx, "service.env.add") }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						@Icon("x", "size-4")
+					</button>
+				</div>
+				<form method="post" action={ templ.SafeURL(d.base() + "/env") } class="tuc-modal__body">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for="key">{ t(ctx, "service.env.name") }</label>
+						<input class="tuc-input font-mono" id="key" name="key" required pattern="[A-Za-z_][A-Za-z0-9_]{0,127}" placeholder="DATABASE_URL" autofocus/>
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for="value">{ t(ctx, "service.env.value") }</label>
+						<input class="tuc-input font-mono" id="value" name="value" type="password" autocomplete="off" placeholder={ t(ctx, "service.env.value_placeholder") } data-tuc-reveal/>
+					</div>
+					@notice("info", "git-pull-request-arrow", t(ctx, "service.env.next_deploy"))
+					<div class="flex justify-end gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("save", "size-3.5")
+							{ t(ctx, "service.env.save") }
+						</button>
+					</div>
+				</form>
+			</div>
+		</dialog>
+		<dialog class="tuc-modal is-lg" id="env-bulk" aria-labelledby="env-bulk-title">
+			<div class="tuc-modal__panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id="env-bulk-title">{ t(ctx, "service.env.bulk") }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						@Icon("x", "size-4")
+					</button>
+				</div>
+				<form method="post" action={ templ.SafeURL(d.base() + "/env/bulk") } class="tuc-modal__body" data-envimport>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<p class="tuc-modal__text">{ t(ctx, "service.env.bulk_hint") }</p>
+					// Source the editor fills from. A secret's real value never
+					// reaches the page: it is an empty span, shown as a commented
+					// line so saving the file does not overwrite the secret.
+					<div hidden data-envfile>
+						for _, v := range d.Env {
+							if v.Secret && !v.Revealed {
+								<span data-k={ v.Key } data-secret="1"></span>
+							} else {
+								<span data-k={ v.Key }>{ v.Value }</span>
+							}
+						}
+					</div>
+					// What "Add" in the suggested variables card appends to the
+					// editor, under a comment naming the file.
+					if d.EnvSuggest != nil {
+						<div hidden data-envsuggest data-comment={ t(ctx, "service.env.suggest.comment", "file", d.EnvSuggest.File) }>
+							for _, v := range d.EnvSuggest.Vars {
+								<span data-k={ v.Key }>{ v.Example }</span>
+							}
+						</div>
+					}
+					<div class="flex flex-col gap-1.5">
+						<div class="flex items-center justify-between gap-2">
+							<label class="tuc-label" for="bulk-env">{ t(ctx, "service.env.bulk_label") }</label>
+							<button type="button" class="tuc-btn is-ghost is-sm" data-env-copy data-copied={ t(ctx, "common.copied") }>
+								@Icon("copy", "size-3.5")
+								<span data-env-copy-label>{ t(ctx, "service.env.copy") }</span>
+							</button>
+						</div>
+						<textarea class="tuc-input font-mono text-[13px]" id="bulk-env" name="env" rows="16" spellcheck="false" autocomplete="off" placeholder={ t(ctx, "service.env.bulk_placeholder") } data-envimport-src></textarea>
+					</div>
+					<div class="flex justify-end gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button type="submit" class="tuc-btn is-primary">
+							@Icon("save", "size-3.5")
+							{ t(ctx, "service.env.bulk_save") }
+						</button>
+					</div>
+				</form>
+			</div>
+		</dialog>
+	}
+}
+
+// envSuggestions is the "Suggested variables" card: keys the repository's
+// example file lists that the service lacks. "Add" opens the .env editor
+// with them appended, so the operator reviews before saving.
+templ envSuggestions(d ServiceData) {
+	<section class={ cardClass } id="env-suggested">
+		@cardHead(t(ctx, "service.env.suggest.title")) {
+			<form method="post" action={ templ.SafeURL(d.base() + "/env/suggestions/dismiss") } class="inline-flex">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<button class="tuc-btn is-ghost is-sm" type="submit">
+					@Icon("x", "size-3.5")
+					{ t(ctx, "service.env.suggest.dismiss") }
+				</button>
+			</form>
+			<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#env-bulk" data-env-suggest>
+				@Icon("plus", "size-3.5")
+				{ t(ctx, "service.env.suggest.add") }
+			</button>
+		}
+		<div class={ cardBodyClass }>
+			@notice("info", "file-text", t(ctx, "service.env.suggest.hint", "file", d.EnvSuggest.File))
+		</div>
+		<div class="tuc-table-wrap border-t border-border">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "service.env.name") }</th><th>{ t(ctx, "service.env.suggest.example") }</th></tr></thead>
+				<tbody>
+					for _, v := range d.EnvSuggest.Vars {
+						<tr>
+							<td class="font-mono text-[13px]">{ v.Key }</td>
+							<td class="max-w-[260px] truncate font-mono text-[13px]">
+								if v.Example == "" {
+									<span class="text-muted">—</span>
+								} else {
+									{ v.Example }
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</section>
+}
+
+// tabConnection is the "Offers to others" card of the Variables tab: the
+// values other services reference instead of copying them.
+templ tabConnection(d ServiceData) {
+	if len(d.Exports) == 0 {
+		<section class={ cardClass }>
+			@cardHead(t(ctx, "export.title"))
+			@emptyState("cable", t(ctx, "export.empty"))
+		</section>
+	}
+	if len(d.Exports) > 0 {
+		<section class={ cardClass }>
+			@cardHead(t(ctx, "export.title"))
+			<div class={ cardBodyClass }>
+				@notice("info", "link", t(ctx, "export.hint", "example", refOf(d.Slug, "KEY")))
+			</div>
+			<div class="tuc-table-wrap border-t border-border">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "export.key") }</th><th>{ t(ctx, "service.env.value") }</th><th class="tuc-table__actions">{ t(ctx, "export.reference") }</th></tr></thead>
+					<tbody>
+						for _, e := range d.Exports {
+							<tr>
+								<td class="font-mono text-[13px]">{ e.Key }</td>
+								<td class="max-w-[200px] truncate font-mono text-[13px] [&_form]:inline-flex">
+									if e.Secret && !e.Revealed {
+										<span class="tuc-reveal">
+											<span class="text-muted">••••••••••••</span>
+											if d.CanAdmin && d.SudoActive {
+												<form method="post" action={ templ.SafeURL(d.base() + "/exports/reveal") }>
+													<input type="hidden" name="csrf" value={ d.CSRF }/>
+													<input type="hidden" name="key" value={ e.Key }/>
+													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.reveal") }>
+														@Icon("eye", "size-3.5")
+													</button>
+												</form>
+											} else if d.CanAdmin {
+												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "service.env.reveal") }>
+													@Icon("eye", "size-3.5")
+												</button>
+											}
+										</span>
+									} else {
+										{ e.Value }
+									}
+								</td>
+								<td class="tuc-table__actions">
+									<button type="button" class="tuc-btn is-ghost is-sm" data-copy={ refOf(d.Slug, e.Key) } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy", "ref", refOf(d.Slug, e.Key)) }>
+										@Icon("copy", "size-3.5")
+										<span class="font-mono text-xs">{ refOf(d.Slug, e.Key) }</span>
+									</button>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	}
+}
+
+templ tabPorts(d ServiceData) {
+	<section class={ cardClass } id="ports">
+		@cardHead(t(ctx, "port.title_plural")) {
+			if d.CanAdmin && d.SudoActive {
+				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#port-new">
+					@Icon("plug", "size-3.5")
+					{ t(ctx, "port.open") }
+				</button>
+			} else if d.CanAdmin {
+				@sudoButton(t(ctx, "port.open"))
+			}
+		}
+		<div class="px-4 pt-4">
+			@notice("info", "info", t(ctx, "port.hint"))
+		</div>
+		if len(d.Ports) > 0 {
+			<div class="tuc-table-wrap pt-3">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "port.title") }</th><th>{ t(ctx, "port.access_label") }</th><th>{ t(ctx, "port.expires") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<tbody>
+						for _, p := range d.Ports {
+							<tr>
+								<td class="font-mono text-[13px] whitespace-nowrap">{ sz(int(p.HostPort)) } → { sz(int(p.ContainerPort)) }/{ p.Protocol }</td>
+								<td>
+									<div class="flex flex-col gap-1">
+										<span><span class={ portTone(p.Access) }>{ t(ctx, "port.access." + p.Access) }</span></span>
+										if p.IPs != "" {
+											<span class="font-mono text-xs text-muted">{ p.IPs }</span>
+										}
+										if p.Access == "localhost" {
+											<span class="font-mono text-xs text-muted">{ t(ctx, "port.ssh_command", "port", p.HostPort, "target", d.ServerHint) }</span>
+										}
+									</div>
+								</td>
+								<td class="whitespace-nowrap text-muted">
+									if p.Expires != "" {
+										{ p.Expires }
+									} else {
+										{ t(ctx, "port.expires_never") }
+									}
+								</td>
+								<td class="tuc-table__actions">
+									if d.CanAdmin {
+										<form data-confirm={ t(ctx, "confirm.port_close.title") } data-confirm-text={ t(ctx, "confirm.port_close.text") } data-confirm-ok={ t(ctx, "confirm.port_close.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/ports/delete") }>
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<input type="hidden" name="id" value={ p.ID }/>
+											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "port.close_named", "port", p.HostPort) } title={ t(ctx, "port.close") }>
+												@Icon("x", "size-3.5")
+											</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		} else {
+			@emptyState("plug", t(ctx, "port.empty"))
+		}
+	</section>
+	if d.CanAdmin && d.SudoActive {
+		<dialog class="tuc-modal is-lg" id="port-new" aria-labelledby="port-new-title">
+			<div class="tuc-modal__panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id="port-new-title">{ t(ctx, "port.open") }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						@Icon("x", "size-4")
+					</button>
+				</div>
+				<form method="post" action={ templ.SafeURL(d.base() + "/ports") } class="tuc-modal__body">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="host_port">{ t(ctx, "port.host_port") }</label>
+							<input class="tuc-input font-mono" id="host_port" name="host_port" required inputmode="numeric" maxlength="5" pattern="[1-9][0-9]{0,4}" data-allow="port" placeholder="5433"/>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="container_port">{ t(ctx, "port.container_port") }</label>
+							<input class="tuc-input font-mono" id="container_port" name="container_port" required inputmode="numeric" maxlength="5" pattern="[1-9][0-9]{0,4}" data-allow="port" value={ portValue(d.Port) }/>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="protocol">{ t(ctx, "port.protocol") }</label>
+							<select class="tuc-input" id="protocol" name="protocol" data-tuc-select data-clearable="false">
+								<option value="tcp">TCP</option>
+								<option value="udp">UDP</option>
+							</select>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="expires">{ t(ctx, "port.expires") }</label>
+							<select class="tuc-input" id="expires" name="expires" data-tuc-select data-clearable="false">
+								<option value="1h">{ t(ctx, "port.expires_1h") }</option>
+								<option value="24h">{ t(ctx, "port.expires_24h") }</option>
+								<option value="168h">{ t(ctx, "port.expires_7d") }</option>
+								<option value="0">{ t(ctx, "port.expires_never") }</option>
+							</select>
+						</div>
+					</div>
+					<fieldset class="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
+						<legend class="tuc-label mb-1.5 p-0">{ t(ctx, "port.access_label") }</legend>
+						// The choice decides what else the form asks: IPs only
+						// for "only these IPs" (ui.js, data-shown-when), a
+						// warning for "any IP".
+						<div class="tuc-btn-group is-segmented port-access flex w-full" role="radiogroup" aria-label={ t(ctx, "port.access_label") }>
+							<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="ips" checked/>{ t(ctx, "port.access.ips") }</label>
+							<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="localhost"/>{ t(ctx, "port.access.localhost") }</label>
+							<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="any"/>{ t(ctx, "port.access.any") }</label>
+						</div>
+					</fieldset>
+					<div data-shown-when="access=localhost" hidden>
+						@notice("info", "info", t(ctx, "port.localhost_hint", "target", d.ServerHint))
+					</div>
+					<div data-shown-when="access=any" hidden>
+						if d.Stateful {
+							@notice("warning", "triangle-alert", t(ctx, "port.database_warning"))
+						} else {
+							@notice("warning", "triangle-alert", t(ctx, "port.any_warning"))
+						}
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5" data-shown-when="access=ips">
+						<label class="tuc-label" for="ips">{ t(ctx, "port.ips") }</label>
+						<input class="tuc-input font-mono" id="ips" name="ips" required maxlength="600" data-allow="ips" value={ d.ClientIP } placeholder={ t(ctx, "port.ips_placeholder") } autocomplete="off"/>
+						if d.ClientIP != "" {
+							<span class="tuc-hint">{ t(ctx, "port.your_ip", "ip", d.ClientIP) }</span>
+						}
+					</div>
+					@notice("info", "refresh-cw", t(ctx, "port.recreate"))
+					<div class="flex justify-end gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("plug", "size-3.5")
+							{ t(ctx, "port.open") }
+						</button>
+					</div>
+				</form>
+			</div>
+		</dialog>
+	}
+}
+
+// certBadge is a host's certificate state: issued, being issued, or (state
+// unknown, e.g. the edge cannot read its storage) the plain promise.
+templ certBadge(state string) {
+	if state == "active" {
+		<span class="tuc-badge is-success">{ t(ctx, "domain.cert_active") }</span>
+	} else if state == "pending" {
+		<span class="tuc-badge is-warning" title={ t(ctx, "domain.cert_pending_hint") }>{ t(ctx, "domain.cert_pending") }</span>
+	} else {
+		<span class="tuc-badge is-success">{ t(ctx, "domain.https_auto") }</span>
+	}
+}
+
+// tabDomains is the Domains card of the Network tab: the fixed domains
+// (wildcards included) and, below them, whether this service takes the
+// customers' own domains.
+templ tabDomains(d ServiceData) {
+	<section class={ cardClass } id="domains">
+		@cardHead(t(ctx, "domain.title")) {
+			if d.Port != 0 || len(d.Domains.Endpoints) > 0 {
+				if d.CanAdmin && d.SudoActive {
+					<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#domain-new">
+						@Icon("plus", "size-3.5")
+						{ t(ctx, "domain.add") }
+					</button>
+				} else if d.CanAdmin {
+					@sudoButton(t(ctx, "domain.add"))
+				}
+			}
+		}
+		if d.Port == 0 && len(d.Domains.Endpoints) == 0 {
+			@emptyState("globe", t(ctx, "domain.need_port"))
+			// An older domain left on a service without a port is not
+			// served, but it must stay visible to be removed.
+			if len(d.Domains.Fixed) > 0 {
+				<div class={ cardBodyClass }>
+					@fixedDomains(d)
+				</div>
+			}
+		} else {
+			<div class={ cardBodyClass }>
+				if !d.Domains.EdgeEnabled {
+					@notice("warning", "triangle-alert", t(ctx, "domain.edge_disabled"))
+				}
+				if d.Domains.EdgeEnabled && d.Domains.NoAutoLink {
+					@notice("info", "info", t(ctx, "endpoint.no_link"))
+				}
+				if len(d.Domains.Endpoints) > 0 {
+					<div class="flex flex-col gap-2">
+						<span class="tuc-label">{ t(ctx, "endpoint.section") }</span>
+						for _, e := range d.Domains.Endpoints {
+							<div class="flex flex-wrap items-center gap-3 rounded-sm border border-border px-3.5 py-3">
+								<div class="flex min-w-0 grow flex-col gap-0.5">
+									<span class="flex items-center gap-2">
+										<strong class="text-[13px] font-semibold">{ e.Label }</strong>
+										<span class="font-mono text-xs text-muted">:{ strconv.Itoa(e.Port) }</span>
+									</span>
+									if e.Public && e.SslipEnabled && e.AutoHost != "" {
+										<span class="flex flex-wrap items-center gap-2">
+											<a class="font-mono text-xs text-accent-text break-all hover:underline" href={ templ.SafeURL("https://" + e.AutoHost) } target="_blank" rel="noopener">{ e.AutoHost }</a>
+											@certBadge(e.Cert)
+										</span>
+									} else if e.Public && e.SslipEnabled {
+										<span class="text-xs text-muted">{ t(ctx, "endpoint.no_link_short") }</span>
+									} else if e.Public {
+										<span class="text-xs text-muted">{ t(ctx, "endpoint.link_off") }</span>
+									} else {
+										<span class="text-xs text-muted">{ t(ctx, "endpoint.internal_hint") }</span>
+									}
+								</div>
+								if e.Public && e.SslipEnabled && e.AutoHost != "" {
+									<div class="flex shrink-0 items-center gap-1">
+										<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ "https://" + e.AutoHost } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "export.copy") }>
+											@Icon("copy", "size-3.5")
+										</button>
+										<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL("https://" + e.AutoHost) } target="_blank" rel="noopener" aria-label={ t(ctx, "endpoint.open") } title={ t(ctx, "endpoint.open") }>
+											@Icon("external-link", "size-3.5")
+										</a>
+									</div>
+								}
+								if d.CanOperate {
+									<div class="flex shrink-0 items-center gap-4 border-l border-border pl-3">
+										// Putting a service on the internet takes an admin with
+										// sudo and a confirmation (as a domain does); taking it
+										// off only lowers exposure: any operator, confirmed.
+										if e.Public {
+											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/internal") } data-confirm={ t(ctx, "endpoint.internal_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.internal_confirm_text") } data-confirm-ok={ t(ctx, "endpoint.internal_confirm_ok") } data-tone="warning">
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="id" value={ e.ID }/>
+												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } checked data-autosubmit/>
+												<span class="text-xs text-muted">{ t(ctx, "endpoint.public") }</span>
+											</form>
+										} else if d.CanAdmin && d.SudoActive {
+											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/public") } data-confirm={ t(ctx, "endpoint.public_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.public_confirm_text", "label", e.Label) } data-confirm-ok={ t(ctx, "endpoint.public_confirm_ok") } data-tone="warning">
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="id" value={ e.ID }/>
+												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } data-autosubmit/>
+												<span class="text-xs text-muted">{ t(ctx, "endpoint.public") }</span>
+											</form>
+										} else if d.CanAdmin {
+											@sudoButton(t(ctx, "endpoint.make_public"))
+										} else {
+											<span class="flex items-center gap-2" title={ t(ctx, "endpoint.admin_only") }>
+												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } disabled/>
+												<span class="text-xs text-subtle">{ t(ctx, "endpoint.public") }</span>
+											</span>
+										}
+										if e.Public && e.SslipEnabled {
+											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-off") }>
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="id" value={ e.ID }/>
+												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } checked data-autosubmit/>
+												<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip") }</span>
+											</form>
+										} else if e.Public && d.CanAdmin && d.SudoActive {
+											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-on") } data-confirm={ t(ctx, "endpoint.sslip_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.sslip_confirm_text") } data-confirm-ok={ t(ctx, "endpoint.sslip_confirm_ok") } data-tone="warning">
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="id" value={ e.ID }/>
+												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } data-autosubmit/>
+												<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip") }</span>
+											</form>
+										} else if e.Public && d.CanAdmin {
+											@sudoButton(t(ctx, "endpoint.sslip"))
+										} else if e.Public {
+											<span class="flex items-center gap-2" title={ t(ctx, "endpoint.admin_only") }>
+												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } disabled/>
+												<span class="text-xs text-subtle">{ t(ctx, "endpoint.sslip") }</span>
+											</span>
+										}
+									</div>
+								}
+							</div>
+						}
+					</div>
+				}
+				@fixedDomains(d)
+				@dynamicDomains(d)
+			</div>
+		}
+	</section>
+	if (d.Port != 0 || len(d.Domains.Endpoints) > 0) && d.CanAdmin && d.SudoActive {
+		@domainDialog(d)
+	}
+}
+
+// fixedDomains lists the service's own domains, with their certificate
+// state and the button to remove them.
+templ fixedDomains(d ServiceData) {
+	if len(d.Domains.Fixed) > 0 {
+		<div class="tuc-table-wrap rounded-sm border border-border">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "domain.fixed") }</th><th>{ t(ctx, "domain.certificate") }</th><th class="tuc-table__actions"></th></tr></thead>
+				<tbody>
+					for _, dm := range d.Domains.Fixed {
+						<tr>
+							<td>
+								<span class="flex flex-wrap items-center gap-1.5">
+									<span class="font-mono text-[13px] break-all">{ dm.Hostname }</span>
+									if isWildcard(dm.Hostname) {
+										<span class="tuc-badge">{ t(ctx, "domain.wildcard_badge") }</span>
+									}
+								</span>
+							</td>
+							<td>
+								if isWildcard(dm.Hostname) {
+									<span class="tuc-badge is-info" title={ t(ctx, "domain.wildcard_cert_hint") }>{ t(ctx, "domain.wildcard_cert") }</span>
+								} else if dm.Offline {
+									<span class="tuc-badge is-danger" title={ t(ctx, "domain.offline_hint") }>{ t(ctx, "domain.offline") }</span>
+								} else {
+									@certBadge(dm.Cert)
+								}
+							</td>
+							<td class="tuc-table__actions">
+								if d.CanAdmin && !d.SudoActive {
+									<button type="button" class="tuc-btn is-ghost is-icon is-sm text-danger" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "domain.remove_named", "host", dm.Hostname) } title={ t(ctx, "domain.remove_sudo") }>
+										@Icon("trash", "size-3.5")
+									</button>
+								} else if d.CanAdmin {
+									<form data-confirm={ t(ctx, "confirm.domain_delete.title") } data-confirm-text={ t(ctx, "confirm.domain_delete.text") } data-confirm-ok={ t(ctx, "confirm.domain_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/domains/delete") }>
+										<input type="hidden" name="csrf" value={ d.CSRF }/>
+										<input type="hidden" name="id" value={ dm.ID }/>
+										<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" aria-label={ t(ctx, "domain.remove_named", "host", dm.Hostname) } title={ t(ctx, "domain.remove") }>
+											@Icon("trash", "size-3.5")
+										</button>
+									</form>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	} else {
+		@emptyState("globe", t(ctx, "domain.empty"))
+	}
+}
+
+// dynamicDomains is the "accept the customers' domains" switch and, when on,
+// how the app takes part.
+templ dynamicDomains(d ServiceData) {
+	<div class="flex flex-col gap-3 border-t border-border pt-3">
+		if d.Domains.DynamicElsewhere != "" && !d.Domains.Dynamic {
+			<div class="flex min-w-0 flex-col gap-0.5">
+				<strong class="text-[13px] font-semibold">{ t(ctx, "domain.dynamic.switch") }</strong>
+				<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.elsewhere", "service", d.Domains.DynamicElsewhere) }</span>
+			</div>
+		} else {
+			<form class="flex items-center gap-4" data-confirm={ t(ctx, "confirm.dynamic.title") } data-confirm-text={ t(ctx, "confirm.dynamic.text") } data-confirm-ok={ t(ctx, "confirm.dynamic.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/domains/dynamic") }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				if d.Domains.Dynamic {
+					<input type="hidden" name="action" value="disable"/>
+				} else {
+					<input type="hidden" name="action" value="enable"/>
+				}
+				if d.CanAdmin && d.SudoActive {
+					<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.dynamic.switch") } checked?={ d.Domains.Dynamic } data-autosubmit/>
+				} else if d.CanAdmin {
+					@sudoButton(t(ctx, "domain.dynamic.unlock"))
+				} else {
+					<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.dynamic.switch") } checked?={ d.Domains.Dynamic } disabled/>
+				}
+				<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+					<strong class="text-[13px] font-semibold">{ t(ctx, "domain.dynamic.switch") }</strong>
+					<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.explain") }</span>
+				</div>
+			</form>
+		}
+		if d.Domains.Dynamic {
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3">
+				<div class="flex min-w-0 flex-col gap-1"><span class="tuc-label">{ t(ctx, "domain.dynamic.check_path") }</span><code class="font-mono text-xs break-all">{ d.Domains.CheckPath }</code></div>
+				<div class="flex min-w-0 flex-col gap-1">
+					<span class="tuc-label">{ t(ctx, "domain.dynamic.secret_env") }</span>
+					<span class="flex flex-wrap items-center gap-1.5 [&_form]:inline-flex">
+						<code class="font-mono text-xs">HANGAR_DOMAIN_CHECK_SECRET</code>
+						if d.Domains.CheckSecret == "" && d.CanAdmin && d.SudoActive {
+							<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret") }>
+								<input type="hidden" name="csrf" value={ d.CSRF }/>
+								<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "domain.dynamic.reveal") } aria-label={ t(ctx, "domain.dynamic.reveal") }>
+									@Icon("eye", "size-3.5")
+								</button>
+							</form>
+						}
+					</span>
+					if d.Domains.CheckSecret != "" {
+						<div class="flex items-center gap-1.5">
+							<code class="grow rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs break-all select-all">{ d.Domains.CheckSecret }</code>
+							<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Domains.CheckSecret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "domain.dynamic.secret_copy") } title={ t(ctx, "domain.dynamic.secret_copy") }>
+								@Icon("copy", "size-3.5")
+							</button>
+						</div>
+					}
+					if d.CanAdmin && d.SudoActive {
+						<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret/rotate") } data-confirm={ t(ctx, "confirm.secret_rotate.title") } data-confirm-text={ t(ctx, "confirm.secret_rotate.text") } data-confirm-ok={ t(ctx, "confirm.secret_rotate.ok") } data-tone="warning">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<button type="submit" class="tuc-btn is-outline is-sm">
+								@Icon("refresh-cw", "size-3.5")
+								{ t(ctx, "domain.dynamic.rotate") }
+							</button>
+						</form>
+						<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.rotate_hint") }</span>
+					}
+				</div>
+			</div>
+			<div>
+				<a class="tuc-btn is-outline is-sm" href="/domains">
+					@Icon("list", "size-3.5")
+					{ t(ctx, "domain.dynamic.requests") }
+				</a>
+			</div>
+		}
+	</div>
+}
+
+func isWildcard(host string) bool { return strings.HasPrefix(host, "*.") }
+
+// domainDialog adds a domain. "Wildcard" puts "*." in front of what was
+// typed, and the preview shows exactly what will be stored (ui.js).
+templ domainDialog(d ServiceData) {
+	<dialog class="tuc-modal is-md" id="domain-new" aria-labelledby="domain-new-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="domain-new-title">{ t(ctx, "domain.add") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action={ templ.SafeURL(d.base() + "/domains") } class="tuc-modal__body" autocomplete="off">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="hostname">{ t(ctx, "domain.hostname") }</label>
+					<input class="tuc-input font-mono" id="hostname" name="hostname" required maxlength="253" placeholder="loja.exemplo.com.br" autofocus/>
+				</div>
+				if len(d.Domains.Endpoints) > 0 {
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for="domain-endpoint">{ t(ctx, "domain.endpoint_label") }</label>
+						<select class="tuc-input" id="domain-endpoint" name="endpoint" data-tuc-select data-clearable="false">
+							// Defaults to the service's own port (where a domain
+							// went before endpoints), not the first by number.
+							for _, e := range d.Domains.Endpoints {
+								<option value={ e.ID } selected?={ int64(e.Port) == d.Port }>{ e.Label } (:{ strconv.Itoa(e.Port) })</option>
+							}
+						</select>
+						<span class="tuc-hint">{ t(ctx, "endpoint.bind_hint") }</span>
+					</div>
+				}
+				<label class="tuc-choice is-end">
+					<span>
+						<strong class="font-semibold">{ t(ctx, "domain.wildcard") }</strong>
+						<span class="tuc-choice__hint">{ t(ctx, "domain.wildcard_hint") }</span>
+					</span>
+					<input type="checkbox" role="switch" class="tuc-switch" id="domain-wildcard" name="wildcard" value="1"/>
+				</label>
+				<div class="flex min-w-0 items-center gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[13px]">
+					<span class="shrink-0 text-muted">{ t(ctx, "domain.preview") }</span>
+					<code class="min-w-0 truncate font-mono" data-domain-preview data-empty="—">—</code>
+				</div>
+				<div data-shown-when="domain-wildcard=0">
+					@notice("info", "globe", t(ctx, "domain.dns_hint"))
+				</div>
+				<div data-shown-when="domain-wildcard=1" hidden>
+					@notice("warning", "asterisk", t(ctx, "domain.wildcard_notice"))
+				</div>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("plus", "size-3.5")
+						{ t(ctx, "domain.add") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+templ tabSettings(d ServiceData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "service.resources"))
+		@serviceStats(d)
+	</section>
+	@maintenanceCard(d)
+	if d.CanAdmin {
+		@dangerZone(t(ctx, "service.danger.title"), t(ctx, "service.danger.hint")) {
+			<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteServiceModal(d.SudoActive) }>
+				@Icon("trash", "size-3.5")
+				{ t(ctx, "service.danger.delete") }…
+			</button>
+		}
+		if d.SudoActive {
+			<dialog class="tuc-modal is-md is-danger" id="service-delete" aria-labelledby="service-delete-title">
+				<div class="tuc-modal__panel">
+					<div class="tuc-modal__header">
+						<h2 class="tuc-modal__title" id="service-delete-title">{ t(ctx, "service.danger.delete") } { d.Slug }</h2>
+						<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+							@Icon("x", "size-4")
+						</button>
+					</div>
+					<form method="post" action={ templ.SafeURL(d.base() + "/delete") } class="tuc-modal__body">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<p class="tuc-modal__text">{ t(ctx, "service.danger.hint") }</p>
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="confirm">{ t(ctx, "service.danger.type_name") } <span class="font-mono">{ d.Slug }</span></label>
+							<input class="tuc-input font-mono" id="confirm" name="confirm" required autocomplete="off"/>
+						</div>
+						<div class="flex justify-end gap-2">
+							<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+							<button class="tuc-btn is-danger" type="submit">
+								@Icon("trash", "size-3.5")
+								{ t(ctx, "service.danger.delete") }
+							</button>
+						</div>
+					</form>
+				</div>
+			</dialog>
+		}
+	}
+}
+
+// maintenanceCard turns the maintenance page on and off for every domain
+// of the service. Turning it on takes the site off the air, so it asks
+// first; turning it off only brings the site back.
+templ maintenanceCard(d ServiceData) {
+	<section class={ cardClass } id="maintenance">
+		@cardHead(t(ctx, "service.maintenance.title")) {
+			if d.Maintenance {
+				<span class="tuc-badge is-warning">{ t(ctx, "service.maintenance.badge") }</span>
+			}
+		}
+		<div class={ cardBodyClass }>
+			if d.Maintenance {
+				@notice("warning", "wrench", t(ctx, "service.maintenance.active"))
+			} else {
+				@notice("info", "info", t(ctx, "service.maintenance.hint"))
+			}
+			if !d.Domains.EdgeEnabled {
+				@notice("warning", "triangle-alert", t(ctx, "service.maintenance.no_edge"))
+			} else if len(d.Domains.Fixed) == 0 && !d.Domains.Dynamic {
+				@notice("info", "globe", t(ctx, "service.maintenance.no_domains"))
+			}
+			if d.CanAdmin {
+				<div class="flex justify-end [&_form]:inline-flex">
+					if d.Maintenance {
+						<form method="post" action={ templ.SafeURL(d.base() + "/maintenance") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="action" value="off"/>
+							<button class="tuc-btn is-primary is-sm" type="submit">
+								@Icon("play", "size-3.5")
+								{ t(ctx, "service.maintenance.turn_off") }
+							</button>
+						</form>
+					} else {
+						<form data-confirm={ t(ctx, "confirm.maintenance_on.title", "name", d.Slug) } data-confirm-text={ t(ctx, "confirm.maintenance_on.text") } data-confirm-ok={ t(ctx, "confirm.maintenance_on.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/maintenance") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="action" value="on"/>
+							<button class="tuc-btn is-outline is-sm" type="submit">
+								@Icon("wrench", "size-3.5")
+								{ t(ctx, "service.maintenance.turn_on") }
+							</button>
+						</form>
+					}
+				</div>
+			}
+		</div>
+	</section>
+}
+
+// VolumeRow is a disk of the service.
+type VolumeRow struct {
+	Name   string
+	Path   string
+	Docker string
+	Fixed  bool // the template's own (database files): not removable here
+}
+
+// volumesCard lists the service's disks and adds new ones.
+templ volumesCard(d ServiceData) {
+	<section class={ cardClass } id="volumes">
+		@cardHead(t(ctx, "volume.title")) {
+			<span class="text-xs text-muted">{ t(ctx, "volume.count", "n", len(d.Volumes)) }</span>
+			if d.CanAdmin {
+				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#volume-new">
+					@Icon("plus", "size-3.5")
+					{ t(ctx, "volume.add") }
+				</button>
+			}
+		}
+		<div class={ cardBodyClass }>
+			@notice("info", "hard-drive", t(ctx, "volume.hint"))
+			if len(d.Volumes) == 0 {
+				@emptyState("hard-drive", t(ctx, "volume.empty"))
+			} else {
+				<div class="tuc-table-wrap">
+					<table class="tuc-table is-compact w-full">
+						<thead><tr><th>{ t(ctx, "volume.name") }</th><th>{ t(ctx, "volume.path") }</th><th class="tuc-table__actions"></th></tr></thead>
+						<tbody>
+							for _, v := range d.Volumes {
+								<tr>
+									<td class="font-medium">
+										{ v.Name }
+										if v.Fixed {
+											<span class="tuc-badge ml-1.5">{ t(ctx, "volume.fixed") }</span>
+										}
+									</td>
+									<td>
+										<span class="block font-mono text-xs">{ v.Path }</span>
+										<span class="block font-mono text-[11px] text-subtle" title={ t(ctx, "volume.docker") }>{ v.Docker }</span>
+									</td>
+									<td class="tuc-table__actions">
+										if d.CanAdmin && !v.Fixed {
+											<span class="inline-flex items-center gap-1.5 [&_form]:inline-flex">
+												<form data-confirm={ t(ctx, "confirm.volume_remove.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_remove.text") } data-confirm-ok={ t(ctx, "confirm.volume_remove.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/volumes/remove") }>
+													<input type="hidden" name="csrf" value={ d.CSRF }/>
+													<input type="hidden" name="name" value={ v.Name }/>
+													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "volume.detach") } aria-label={ t(ctx, "volume.detach") }>
+														@Icon("unplug", "size-3.5")
+													</button>
+												</form>
+												if d.SudoActive {
+													<form data-confirm={ t(ctx, "confirm.volume_wipe.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_wipe.text") } data-confirm-ok={ t(ctx, "confirm.volume_wipe.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/volumes/wipe") }>
+														<input type="hidden" name="csrf" value={ d.CSRF }/>
+														<input type="hidden" name="name" value={ v.Name }/>
+														<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "volume.wipe") } aria-label={ t(ctx, "volume.wipe") }>
+															@Icon("trash", "size-3.5")
+														</button>
+													</form>
+												} else {
+													<button type="button" class="tuc-btn is-ghost is-icon is-sm text-danger" data-tuc-modal="#sudo-dialog" title={ t(ctx, "volume.wipe") } aria-label={ t(ctx, "volume.wipe") }>
+														@Icon("trash", "size-3.5")
+													</button>
+												}
+											</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		</div>
+	</section>
+	if d.CanAdmin {
+		<dialog class="tuc-modal is-md" id="volume-new" aria-labelledby="volume-new-title">
+			<div class="tuc-modal__panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id="volume-new-title">{ t(ctx, "volume.add") }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						@Icon("x", "size-4")
+					</button>
+				</div>
+				<form method="post" action={ templ.SafeURL(d.base() + "/volumes") } class="tuc-modal__body" autocomplete="off">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<p class="tuc-modal__text">{ t(ctx, "volume.modal_text") }</p>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for="vol-name">{ t(ctx, "volume.name") }</label>
+						<input class="tuc-input font-mono" id="vol-name" name="name" required maxlength="30" pattern="[a-z][a-z0-9\-]{0,29}" placeholder="media" autofocus/>
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for="vol-path">{ t(ctx, "volume.path") }</label>
+						<input class="tuc-input font-mono" id="vol-path" name="path" required maxlength="200" placeholder="/app/media"/>
+					</div>
+					@notice("info", "info", t(ctx, "volume.next_deploy"))
+					<div class="flex justify-end gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("plus", "size-3.5")
+							{ t(ctx, "volume.add") }
+						</button>
+					</div>
+				</form>
+			</div>
+		</dialog>
+	}
+}
+
+// terminalDialogs are the modals behind the drawer's Terminal button: the
+// near-fullscreen terminal (a frame on GET .../terminal, the one page whose
+// CSP lets xterm.js write its styles; the frame loads when the modal opens
+// and is emptied when it closes, which ends the shell) or, without sudo,
+// the identity check that comes back with the terminal open.
+templ terminalDialogs(d ServiceData) {
+	if d.CanAdmin && d.State == "running" {
+		if d.SudoActive {
+			<dialog class="tuc-modal is-full terminal-modal" id="terminal-modal" aria-labelledby="terminal-title" data-open={ boolAttr(d.OpenTerminal) }>
+				<div class="tuc-modal__panel">
+					<div class="terminal-modal__head">
+						@Icon("square-terminal", "size-[18px]")
+						<h2 class="tuc-modal__title" id="terminal-title">{ t(ctx, "terminal.title") }</h2>
+						<span class="truncate font-mono text-xs text-muted">{ d.Slug } · { d.Project }_{ d.Slug }</span>
+						<span class="grow"></span>
+						<span class="hidden text-xs text-subtle sm:inline">{ t(ctx, "terminal.audited") }</span>
+						<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "terminal.close") }>
+							@Icon("x", "size-4")
+						</button>
+					</div>
+					<iframe class="terminal-frame" title={ t(ctx, "terminal.title") } data-src={ d.base() + "/terminal" }></iframe>
+				</div>
+			</dialog>
+		} else {
+			<dialog class="tuc-modal is-warning" id="terminal-sudo" aria-labelledby="terminal-sudo-title">
+				<div class="tuc-modal__panel sudo-panel">
+					<div class="tuc-modal__header">
+						<h2 class="tuc-modal__title" id="terminal-sudo-title">{ t(ctx, "sudo.title") }</h2>
+						<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+							@Icon("x", "size-4")
+						</button>
+					</div>
+					<div class="tuc-modal__body">
+						@notice("warning", "shield-alert", t(ctx, "terminal.sudo", "service", d.Slug))
+						@sudoFormID("terminal-sudo-code", d.CSRF, d.base()+"?tab="+d.Tab+"&terminal=1", t(ctx, "service.sudo_label"))
+					</div>
+				</div>
+			</dialog>
+		}
+	}
+}
+
+// deleteServiceModal is the dialog the delete button opens: the sudo one
+// first, while sudo is off.
+func deleteServiceModal(sudo bool) string {
+	if sudo {
+		return "#service-delete"
+	}
+	return "#sudo-dialog"
+}
+
+// dangerZone is the red card at the bottom of a settings page: what the
+// action does on top, its button at the bottom right.
+templ dangerZone(title, hint string) {
+	<section class="flex flex-wrap items-center gap-3 rounded-md border border-danger/50 bg-surface px-4 py-3.5">
+		<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-danger-soft text-danger">
+			@Icon("triangle-alert", "size-4")
+		</span>
+		<div class="flex min-w-0 grow flex-col gap-1">
+			<h2 class="m-0 text-sm font-semibold">{ title }</h2>
+			<p class="m-0 text-[13px] leading-5 text-muted">{ hint }</p>
+		</div>
+		<div class="shrink-0">
+			{ children... }
+		</div>
+	</section>
+}
+
+func boolAttr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
+
+// expandButton blows its [data-expandable] block up to the whole screen and
+// back (ui.js; Escape also closes).
+templ expandButton() {
+	<button type="button" class="tuc-btn is-outline is-sm expand-btn" data-expand aria-pressed="false" title={ t(ctx, "common.expand") } aria-label={ t(ctx, "common.expand") }>
+		<span class="expand-on">
+			@Icon("maximize", "size-3.5")
+		</span>
+		<span class="expand-off">
+			@Icon("minimize-2", "size-3.5")
+		</span>
+	</button>
+}

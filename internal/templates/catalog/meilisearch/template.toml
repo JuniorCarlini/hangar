@@ -1,0 +1,28 @@
+id = "meilisearch"
+version = 1
+category = "search"
+tags = ["full-text", "search-engine"]
+docs = "https://www.meilisearch.com/docs"
+main = "meilisearch"
+name = { en = "Meilisearch", "pt-BR" = "Meilisearch" }
+description = { en = "Fast search engine for catalogs and sites, in production mode. Generated master key and persistent volume.", "pt-BR" = "Busca rápida para catálogos e sites, em modo de produção. Master key gerada e volume persistente." }
+
+[variables.master_key]
+generate = "secret"
+
+[[exports]]
+key = "URL"
+value = "http://${service}:7700"
+
+[[exports]]
+key = "MASTER_KEY"
+value = "${master_key}"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "7700"

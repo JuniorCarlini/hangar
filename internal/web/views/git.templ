@@ -1,0 +1,331 @@
+package views
+
+import "context"
+
+// Build from Git (docs/07, Etapa 10): the "Repositório Git" tab of the new
+// service dialog and the repository and webhook cards of the service panel.
+
+// GitView is the repository of a service built from Git.
+type GitView struct {
+	URL        string
+	Display    string // host/owner/repo
+	Branch     string
+	Subdir     string
+	Dockerfile string
+	HasToken   bool
+	Webhook    bool // automatic deploys on
+	// HooksPublic: a public hooks address is configured, so GitHub can
+	// reach the panel.
+	HooksPublic bool
+	// The saved credential it clones with, and the ones it could pick.
+	CredentialID   string
+	CredentialName string
+	CredentialHost string
+	CredentialMine bool
+	CredOptions    []GitCredOption
+	// Shown only in the response right after a sudo reveal or a rotation.
+	Token      string
+	HookURL    string
+	HookSecret string
+}
+
+// gitField is one "label: value" pair of the repository card.
+templ gitField(label string) {
+	<div class="flex min-w-0 flex-col gap-1">
+		<span class="tuc-label">{ label }</span>
+		<span class="flex min-w-0 items-center gap-1.5 text-[13px]">
+			{ children... }
+		</span>
+	</div>
+}
+
+// copyField is a value to paste elsewhere, with its copy button.
+templ copyField(id, label, value string) {
+	<div class="flex min-w-0 flex-col gap-1.5">
+		<label class="tuc-label" for={ id }>{ label }</label>
+		<div class="flex min-w-0 items-center gap-2">
+			<input class="tuc-input grow font-mono text-[13px]" id={ id } value={ value } readonly/>
+			<button type="button" class="tuc-btn is-outline is-icon" data-copy={ value } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "git.copy", "what", label) }>
+				@Icon("copy", "size-4")
+			</button>
+		</div>
+	</div>
+}
+
+// newGitServiceForm creates a service built from a repository: the address,
+// one name (suggested from the repository) and, folded, what rarely changes.
+templ newGitServiceForm(d NewServiceData) {
+	<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/services/git") } class="flex flex-col gap-4" autocomplete="off">
+		<input type="hidden" name="csrf" value={ d.CSRF }/>
+		@placeFields(d.Place)
+		@notice("info", "git-branch", t(ctx, "git.new.hint"))
+		<div class="flex min-w-0 flex-col gap-1.5">
+			<label class="tuc-label" for="ns-git-repo">{ t(ctx, "git.repo") }</label>
+			<input class="tuc-input font-mono" id="ns-git-repo" name="repo" type="url" required maxlength="300" placeholder="https://github.com/dono/repositorio" value={ d.Form.Repo }/>
+			<span class="tuc-hint">{ t(ctx, "git.repo_hint") }</span>
+		</div>
+		<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] items-start gap-3">
+			@nameField("ns-git-name", d.GitName, d.GitSlug, "ns-git-repo", "repo")
+			@smallField("ns-git-branch", "branch", t(ctx, "git.branch"), d.Form.Branch, "main", "")
+		</div>
+		<div class="grid grid-cols-1 gap-3">
+			@gitCredPicker("git", d.CredOptions, d.CredSelected)
+		</div>
+		@advanced(d.Advanced && d.Tab == "git") {
+			@smallField("ns-git-subdir", "subdir", t(ctx, "git.subdir"), d.Form.Subdir, t(ctx, "git.subdir_placeholder"), "")
+			@smallField("ns-git-dockerfile", "dockerfile", t(ctx, "git.dockerfile"), d.Form.Dockerfile, "Dockerfile", "")
+			@smallField("ns-git-port", "port", t(ctx, "project.form.port"), d.Form.Port, t(ctx, "new_service.port_auto"), "numeric")
+			@smallField("ns-git-memory", "memory_mb", t(ctx, "project.form.memory"), d.Form.MemoryMB, "512", "numeric")
+			@smallField("ns-git-cpus", "cpus", t(ctx, "project.form.cpus"), d.Form.CPUs, "1", "decimal")
+		}
+		@notice("info", "shield", t(ctx, "git.new.security"))
+		@formFooter("rocket", t(ctx, "git.new.submit"))
+	</form>
+}
+
+func orRoot(ctx context.Context, subdir string) string {
+	if subdir == "" {
+		return t(ctx, "git.subdir_root")
+	}
+	return subdir
+}
+
+// gitCards are the repository and automatic-deploy cards of the panel's
+// settings tab.
+templ gitCards(d ServiceData) {
+	{{ g := d.Git }}
+	<section class={ cardClass } id="git-source">
+		@cardHead(t(ctx, "git.title")) {
+			if d.CanAdmin {
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#git-edit">
+					@Icon("settings", "size-3.5")
+					{ t(ctx, "git.edit") }
+				</button>
+			}
+		}
+		<div class={ cardBodyClass }>
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
+				@gitField(t(ctx, "git.repo")) {
+					@Icon("git-branch", "size-3.5 text-muted")
+					<a class="truncate font-mono" href={ templ.SafeURL(g.URL) } rel="noopener noreferrer" target="_blank">{ g.Display }</a>
+				}
+				@gitField(t(ctx, "git.branch")) {
+					<code class="font-mono">{ g.Branch }</code>
+				}
+				@gitField(t(ctx, "git.subdir")) {
+					<code class="font-mono">{ orRoot(ctx, g.Subdir) }</code>
+				}
+				@gitField(t(ctx, "git.dockerfile")) {
+					<code class="font-mono">{ g.Dockerfile }</code>
+				}
+			</div>
+			<div class="flex flex-wrap items-center gap-3 border-t border-border pt-3 [&_form]:inline-flex">
+				<div class="flex min-w-0 flex-[1_1_220px] flex-col gap-1">
+					<span class="tuc-label">{ t(ctx, "gitcred.pick") }</span>
+					if g.CredentialID != "" {
+						<span class="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px]">
+							@Icon("key-round", "size-3.5 text-muted")
+							<span class="font-medium">{ orDash(g.CredentialName) }</span>
+							<span class="font-mono text-xs text-muted">{ g.CredentialHost }</span>
+							if g.CredentialMine {
+								<span class="tuc-badge">{ t(ctx, "gitcred.scope.this_project") }</span>
+							} else {
+								<span class="tuc-badge is-info">{ t(ctx, "gitcred.scope.server") }</span>
+							}
+						</span>
+					} else if g.Token != "" {
+						<code class="rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs break-all select-all">{ g.Token }</code>
+					} else if g.HasToken {
+						<span class="text-[13px]">{ t(ctx, "gitcred.own_token") } <span class="font-mono text-muted">••••••••</span></span>
+						<span class="tuc-hint">{ t(ctx, "gitcred.own_token_hint") }</span>
+					} else {
+						<span class="text-[13px] text-muted">{ t(ctx, "git.token_none") }</span>
+					}
+				</div>
+				if d.CanAdmin {
+					if g.HasToken && g.Token == "" && g.CredentialID == "" {
+						if d.SudoActive {
+							<form method="post" action={ templ.SafeURL(d.base() + "/git/token/reveal") }>
+								<input type="hidden" name="csrf" value={ d.CSRF }/>
+								<button class="tuc-btn is-ghost is-sm" type="submit">
+									@Icon("eye", "size-3.5")
+									{ t(ctx, "git.token_reveal") }
+								</button>
+							</form>
+						} else {
+							@sudoButton(t(ctx, "git.token_reveal"))
+						}
+					}
+					<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#git-token-edit">
+						@Icon("key-round", "size-3.5")
+						{ t(ctx, "gitcred.change") }
+					</button>
+				}
+			</div>
+			<p class="tuc-hint m-0">{ t(ctx, "git.build_hint") }</p>
+		</div>
+	</section>
+	@gitWebhookCard(d)
+	if d.CanAdmin {
+		@gitEditDialog(d)
+		@gitTokenDialog(d)
+	}
+}
+
+templ gitWebhookCard(d ServiceData) {
+	{{ g := d.Git }}
+	<section class={ cardClass } id="git-webhook">
+		@cardHead(t(ctx, "git.webhook.title")) {
+			if g.Webhook {
+				<span class="tuc-badge is-success">{ t(ctx, "git.webhook.on") }</span>
+			} else {
+				<span class="tuc-badge">{ t(ctx, "git.webhook.off") }</span>
+			}
+		}
+		<div class={ cardBodyClass }>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "git.webhook.hint", "branch", g.Branch) }</p>
+			if !g.HooksPublic {
+				<div class="tuc-alert is-warning">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "git.webhook.not_public") }</p></div>
+				</div>
+			}
+			if g.HookURL != "" {
+				<div class="flex flex-col gap-3 rounded-sm border border-accent bg-accent-soft p-3">
+					<p class="m-0 text-[13px] font-medium">{ t(ctx, "git.webhook.steps") }</p>
+					@copyField("hook-url", t(ctx, "git.webhook.url"), g.HookURL)
+					@copyField("hook-secret", t(ctx, "git.webhook.secret"), g.HookSecret)
+					<ul class="m-0 flex list-disc flex-col gap-1 pl-5 text-[13px] text-muted">
+						<li>{ t(ctx, "git.webhook.content_type") } <code class="font-mono">{ "application/json" }</code></li>
+						<li>{ t(ctx, "git.webhook.events") }</li>
+					</ul>
+				</div>
+			}
+			if d.CanAdmin {
+				<div class="flex flex-wrap items-center justify-end gap-2 [&_form]:inline-flex">
+					if !d.SudoActive {
+						if g.Webhook {
+							@sudoButton(t(ctx, "git.webhook.show"))
+						} else {
+							@sudoButton(t(ctx, "git.webhook.enable"))
+						}
+					} else if g.Webhook {
+						if g.HookURL == "" {
+							<form method="post" action={ templ.SafeURL(d.base() + "/git/webhook/reveal") }>
+								<input type="hidden" name="csrf" value={ d.CSRF }/>
+								<button class="tuc-btn is-outline is-sm" type="submit">
+									@Icon("eye", "size-3.5")
+									{ t(ctx, "git.webhook.show") }
+								</button>
+							</form>
+						}
+						<form data-confirm={ t(ctx, "confirm.git_webhook_rotate.title") } data-confirm-text={ t(ctx, "confirm.git_webhook_rotate.text") } data-confirm-ok={ t(ctx, "confirm.git_webhook_rotate.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/git/webhook") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="action" value="rotate"/>
+							<button class="tuc-btn is-ghost is-sm" type="submit">
+								@Icon("refresh-cw", "size-3.5")
+								{ t(ctx, "git.webhook.rotate") }
+							</button>
+						</form>
+						<form data-confirm={ t(ctx, "confirm.git_webhook_off.title") } data-confirm-text={ t(ctx, "confirm.git_webhook_off.text") } data-confirm-ok={ t(ctx, "confirm.git_webhook_off.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/git/webhook") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="action" value="disable"/>
+							<button class="tuc-btn is-ghost is-sm text-danger" type="submit">
+								@Icon("plug", "size-3.5")
+								{ t(ctx, "git.webhook.disable") }
+							</button>
+						</form>
+					} else {
+						<form method="post" action={ templ.SafeURL(d.base() + "/git/webhook") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="action" value="rotate"/>
+							<button class="tuc-btn is-primary is-sm" type="submit">
+								@Icon("zap", "size-3.5")
+								{ t(ctx, "git.webhook.enable") }
+							</button>
+						</form>
+					}
+				</div>
+			}
+		</div>
+	</section>
+}
+
+templ gitEditDialog(d ServiceData) {
+	{{ g := d.Git }}
+	<dialog class="tuc-modal is-md" id="git-edit" aria-labelledby="git-edit-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="git-edit-title">{ t(ctx, "git.edit_title") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action={ templ.SafeURL(d.base() + "/git") } class="tuc-modal__body" autocomplete="off">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="edit-repo">{ t(ctx, "git.repo") }</label>
+					<input class="tuc-input font-mono" id="edit-repo" name="repo" type="url" required maxlength="300" value={ g.URL }/>
+				</div>
+				<div class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="edit-branch">{ t(ctx, "git.branch") }</label>
+						<input class="tuc-input font-mono" id="edit-branch" name="branch" required maxlength="200" value={ g.Branch }/>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="edit-subdir">{ t(ctx, "git.subdir") }</label>
+						<input class="tuc-input font-mono" id="edit-subdir" name="subdir" maxlength="200" placeholder={ t(ctx, "git.subdir_placeholder") } value={ g.Subdir }/>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="edit-dockerfile">{ t(ctx, "git.dockerfile") }</label>
+						<input class="tuc-input font-mono" id="edit-dockerfile" name="dockerfile" maxlength="200" value={ g.Dockerfile }/>
+					</div>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="edit-token">{ t(ctx, "git.token_new") }</label>
+					<input class="tuc-input font-mono" id="edit-token" name="token" type="password" autocomplete="off" maxlength="512" placeholder={ t(ctx, "git.token_keep") } data-tuc-reveal/>
+					<span class="tuc-hint">{ t(ctx, "git.repo_change_hint") }</span>
+				</div>
+				<span class="tuc-hint">{ t(ctx, "deploy.settings.next_deploy") }</span>
+				<div class="flex items-center justify-end gap-2">
+					<span class="flex gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("save", "size-3.5")
+							{ t(ctx, "deploy.settings.save") }
+						</button>
+					</span>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+templ gitTokenDialog(d ServiceData) {
+	{{ g := d.Git }}
+	<dialog class="tuc-modal is-md" id="git-token-edit" aria-labelledby="git-token-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="git-token-title">{ t(ctx, "gitcred.change") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action={ templ.SafeURL(d.base() + "/git/credential") } class="tuc-modal__body" autocomplete="off">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<input type="hidden" name="repo" value={ g.URL }/>
+				<div class="grid gap-3">
+					@gitCredPicker("svc", g.CredOptions, g.CredentialID)
+				</div>
+				<p class="tuc-hint m-0">{ t(ctx, "gitcred.change_hint") }</p>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("save", "size-3.5")
+						{ t(ctx, "git.token_save") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}

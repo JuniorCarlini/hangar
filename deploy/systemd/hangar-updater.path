@@ -1,0 +1,10 @@
+# Triggers the applier when the panel leaves an update request.
+[Unit]
+Description=Hangar — espera pedidos de atualização
+
+[Path]
+PathExists=/var/lib/hangar/update/request.json
+Unit=hangar-updater.service
+
+[Install]
+WantedBy=multi-user.target

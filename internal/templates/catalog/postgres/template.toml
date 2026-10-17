@@ -1,0 +1,48 @@
+id = "postgres"
+version = 1
+category = "database"
+tags = ["sql", "relational", "postgresql"]
+docs = "https://www.postgresql.org/docs/18/"
+backup = "pg_dump"
+main = "postgres"
+name = { en = "PostgreSQL", "pt-BR" = "PostgreSQL" }
+description = { en = "Relational database. Generated password, persistent volume, healthcheck and one-click backup download.", "pt-BR" = "Banco relacional. Senha gerada, volume persistente, healthcheck e download de backup com um clique." }
+
+[variables.database]
+default = "app"
+pattern = '^[a-z_][a-z0-9_]{0,62}$'
+label = { en = "Database name", "pt-BR" = "Nome do banco" }
+
+[variables.user]
+default = "app"
+pattern = '^[a-z_][a-z0-9_]{0,62}$'
+label = { en = "User", "pt-BR" = "Usuário" }
+
+[variables.password]
+generate = "secret"
+
+[[exports]]
+key = "DATABASE_URL"
+value = "postgres://${user}:${password}@${service}:5432/${database}"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "5432"
+
+[[exports]]
+key = "USER"
+value = "${user}"
+
+[[exports]]
+key = "DATABASE"
+value = "${database}"
+
+[[exports]]
+key = "PASSWORD"
+value = "${password}"
+secret = true

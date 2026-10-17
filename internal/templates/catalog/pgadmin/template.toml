@@ -1,0 +1,36 @@
+id = "pgadmin"
+version = 2
+category = "admin"
+tags = ["postgresql", "sql", "gui"]
+docs = "https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html"
+main = "pgadmin"
+name = { en = "pgAdmin", "pt-BR" = "pgAdmin" }
+description = { en = "Web interface for PostgreSQL. Generated password; prefer a domain with access restricted to you, or a tunnel.", "pt-BR" = "Interface web para o PostgreSQL. Senha gerada; prefira um domínio com acesso só seu, ou um túnel." }
+
+[variables.email]
+default = "admin@example.com"
+pattern = '^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,180}\.[A-Za-z]{2,24}$'
+label = { en = "Login e-mail", "pt-BR" = "E-mail de login" }
+
+[variables.password]
+generate = "secret"
+
+[[exports]]
+key = "EMAIL"
+value = "${email}"
+
+[[exports]]
+key = "PASSWORD"
+value = "${password}"
+secret = true
+
+[[exports]]
+key = "URL"
+value = "http://${service}:5050"
+
+[[endpoints]]
+port = 5050
+label = { en = "pgAdmin", "pt-BR" = "pgAdmin" }
+# An admin screen starts on the project network only: make it public
+# in the Network tab, preferably with a restricted domain.
+public = false

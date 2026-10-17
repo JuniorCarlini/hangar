@@ -1,0 +1,29 @@
+services:
+  mongodb:
+    image: mongo:9.0
+    # The cache stays well inside the memory limit; adjust together with it.
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${user}
+      MONGO_INITDB_ROOT_PASSWORD: ${password}
+      MONGO_INITDB_DATABASE: ${database}
+    volumes:
+      - data:/data/db
+    expose:
+      - "27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)"]
+      interval: 15s
+      timeout: 10s
+      start_period: 40s
+      retries: 5
+    # The entrypoint fixes the data directory owner and drops to the mongodb user.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+volumes:
+  data:

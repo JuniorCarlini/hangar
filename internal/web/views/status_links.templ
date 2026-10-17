@@ -1,0 +1,295 @@
+package views
+
+import "fmt"
+
+// StatusLinksData feeds the status links page (docs/15).
+type StatusLinksData struct {
+	CSRF       string
+	SudoActive bool
+	Enabled    bool
+	Links      []StatusLinkRow
+	Services   []StatusServiceRef
+	// Created is the URL of the link just made: shown once, never again.
+	Created        string
+	CreatedJSON    string
+	CreatedMetrics string
+	Open           bool // reopen the "new link" dialog with the error
+	Error          string
+	Flash          string
+}
+
+// StatusLinkRow is a link in the list (never its token).
+type StatusLinkRow struct {
+	ID         string
+	Name       string
+	Naming     string
+	Services   int
+	IPs        string
+	Expires    string // "" = never
+	Expired    bool
+	Today      int64
+	Total      int64
+	LastAccess string
+	LastIP     string
+}
+
+// StatusServiceRef is a service to pick for a link, with its public alias.
+type StatusServiceRef struct {
+	ID    string
+	Name  string // project/service (only ever shown inside the panel)
+	Alias string
+}
+
+// StatusLinks is the page that creates, lists and revokes status links.
+templ StatusLinks(d StatusLinksData) {
+	@shell(t(ctx, "statuslink.page_title")) {
+		@pageHead(t(ctx, "statuslink.title"), t(ctx, "statuslink.subtitle")) {
+			<button type="button" class="tuc-btn is-primary" data-tuc-modal="#new-status-link">
+				@Icon("plus", "size-3.5")
+				{ t(ctx, "statuslink.new") }
+			</button>
+		}
+		@pageBody() {
+			@errorAlert(d.Error)
+			@toast("success", d.Flash)
+			if d.Created != "" {
+				<div class="tuc-alert is-success" role="status">
+					@Icon("circle-check", "size-4")
+					<div class="tuc-alert__body flex min-w-0 flex-col gap-2">
+						<p class="tuc-alert__title">{ t(ctx, "statuslink.created_title") }</p>
+						<p>{ t(ctx, "statuslink.created_text") }</p>
+						@createdURL(t(ctx, "statuslink.url_page"), d.Created)
+						@createdURL(t(ctx, "statuslink.url_tv"), d.Created+"?tv=1")
+						@createdURL("JSON", d.CreatedJSON)
+						@createdURL("Prometheus", d.CreatedMetrics)
+					</div>
+				</div>
+			}
+			@notice("info", "shield-check", t(ctx, "statuslink.privacy"))
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "statuslink.list"))
+				<div class={ cardBodyClass }>
+					if len(d.Links) == 0 {
+						@emptyState("wifi", t(ctx, "statuslink.empty"))
+					} else {
+						<div class="tuc-table-wrap">
+							<table class="tuc-table is-compact w-full min-w-[760px]">
+								<thead>
+									<tr>
+										<th>{ t(ctx, "statuslink.col.name") }</th>
+										<th>{ t(ctx, "statuslink.col.naming") }</th>
+										<th>{ t(ctx, "statuslink.col.restriction") }</th>
+										<th>{ t(ctx, "statuslink.col.expires") }</th>
+										<th class="is-number">{ t(ctx, "statuslink.col.access") }</th>
+										<th>{ t(ctx, "statuslink.col.last") }</th>
+										<th class="tuc-table__actions"></th>
+									</tr>
+								</thead>
+								<tbody>
+									for _, l := range d.Links {
+										<tr>
+											<td class="font-medium">{ l.Name }</td>
+											<td>
+												<span class="tuc-badge">{ t(ctx, "statuslink.naming." + l.Naming) }</span>
+												if l.Naming != "hidden" {
+													<span class="ml-1.5 text-xs text-muted">{ t(ctx, "statuslink.services_n", "n", l.Services) }</span>
+												}
+											</td>
+											<td class="text-xs text-muted">
+												if l.IPs != "" {
+													<span class="font-mono">{ t(ctx, "statuslink.ip_only", "ips", l.IPs) }</span>
+												} else {
+													{ t(ctx, "statuslink.ip_any") }
+												}
+											</td>
+											<td class="text-xs">
+												if l.Expired {
+													<span class="tuc-badge is-danger">{ t(ctx, "statuslink.expired") }</span>
+												} else if l.Expires != "" {
+													<span class="text-muted">{ t(ctx, "statuslink.expires_at", "date", l.Expires) }</span>
+												} else {
+													<span class="text-muted">{ t(ctx, "statuslink.never") }</span>
+												}
+											</td>
+											<td class="is-number text-xs whitespace-nowrap">{ t(ctx, "statuslink.access_today", "today", fmt.Sprint(l.Today), "total", fmt.Sprint(l.Total)) }</td>
+											<td class="text-xs text-muted">
+												if l.LastAccess != "" {
+													{ l.LastAccess }
+													if l.LastIP != "" {
+														<span class="font-mono">{ " · " + l.LastIP }</span>
+													}
+												} else {
+													{ t(ctx, "statuslink.never_opened") }
+												}
+											</td>
+											<td class="tuc-table__actions">
+												if d.SudoActive {
+													<form data-confirm={ t(ctx, "confirm.revoke_link.title") } data-confirm-text={ t(ctx, "confirm.revoke_link.text") } data-confirm-ok={ t(ctx, "confirm.revoke_link.ok") } data-tone="danger" method="post" action="/status-links/revoke">
+														<input type="hidden" name="csrf" value={ d.CSRF }/>
+														<input type="hidden" name="id" value={ l.ID }/>
+														<button class="tuc-btn is-outline is-sm text-danger" type="submit" aria-label={ t(ctx, "statuslink.revoke_named", "name", l.Name) }>
+															@Icon("ban", "size-3.5")
+															{ t(ctx, "statuslink.revoke") }
+														</button>
+													</form>
+												} else {
+													<button type="button" class="tuc-btn is-outline is-sm text-danger" data-tuc-modal="#status-sudo" aria-label={ t(ctx, "statuslink.revoke_named", "name", l.Name) }>
+														@Icon("lock", "size-3.5")
+														{ t(ctx, "statuslink.revoke") }
+													</button>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+				</div>
+			</section>
+			<section class={ cardClass } id="aliases">
+				@cardHead(t(ctx, "statuslink.aliases"))
+				<div class={ cardBodyClass }>
+					@notice("info", "info", t(ctx, "statuslink.aliases_hint"))
+					if len(d.Services) == 0 {
+						@emptyState("box", t(ctx, "statuslink.no_services"))
+					} else {
+						<div class="tuc-table-wrap">
+							<table class="tuc-table is-compact w-full">
+								<thead><tr><th>{ t(ctx, "overview.service") }</th><th>{ t(ctx, "statuslink.col.alias") }</th></tr></thead>
+								<tbody>
+									for _, s := range d.Services {
+										<tr>
+											<td class="font-mono text-xs">{ s.Name }</td>
+											<td>
+												<form method="post" action="/status-links/alias" class="flex items-center gap-2">
+													<input type="hidden" name="csrf" value={ d.CSRF }/>
+													<input type="hidden" name="service" value={ s.ID }/>
+													<input class="tuc-input max-w-[280px]" name="alias" maxlength="40" value={ s.Alias } placeholder={ t(ctx, "statuslink.alias_placeholder") } aria-label={ t(ctx, "statuslink.alias_for", "service", s.Name) }/>
+													<button class="tuc-btn is-outline is-sm" type="submit">
+														@Icon("save", "size-3.5")
+														{ t(ctx, "statuslink.save") }
+													</button>
+												</form>
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+				</div>
+			</section>
+			@newStatusLinkDialog(d)
+			if !d.SudoActive {
+				<dialog class="tuc-modal is-warning" id="status-sudo" aria-labelledby="status-sudo-title">
+					<div class="tuc-modal__panel sudo-panel">
+						<div class="tuc-modal__header">
+							<h2 class="tuc-modal__title" id="status-sudo-title">{ t(ctx, "sudo.title") }</h2>
+							<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+								@Icon("x", "size-4")
+							</button>
+						</div>
+						<div class="tuc-modal__body">
+							<p class="tuc-modal__text">{ t(ctx, "sudo.text") }</p>
+							@sudoForm(d.CSRF, "/status-links", t(ctx, "service.sudo_label"))
+						</div>
+					</div>
+				</dialog>
+			}
+		}
+	}
+}
+
+// createdURL is one address of the new link with a copy button.
+templ createdURL(label, url string) {
+	<div class="flex min-w-0 flex-wrap items-center gap-2">
+		<span class="w-[92px] shrink-0 text-xs text-muted">{ label }</span>
+		<code class="min-w-0 grow truncate rounded-xs bg-surface-2 px-1.5 py-1 font-mono text-xs">{ url }</code>
+		<button type="button" class="tuc-btn is-outline is-sm" data-copy={ url } data-copied={ t(ctx, "common.copied") }>
+			@Icon("copy", "size-3.5")
+			{ t(ctx, "statuslink.copy") }
+		</button>
+	</div>
+}
+
+// newStatusLinkDialog creates a link (sudo first, like every 🔒 action).
+templ newStatusLinkDialog(d StatusLinksData) {
+	<dialog class="tuc-modal is-md" id="new-status-link" aria-labelledby="new-status-link-title" data-open={ fmt.Sprint(d.Open) }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="new-status-link-title">{ t(ctx, "statuslink.new") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			if !d.SudoActive {
+				<div class="tuc-modal__body">
+					<p class="tuc-modal__text">{ t(ctx, "sudo.text") }</p>
+					@sudoForm(d.CSRF, "/status-links", t(ctx, "service.sudo_label"))
+				</div>
+			} else {
+				<form method="post" action="/status-links" class="tuc-modal__body flex flex-col gap-4">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					if d.Open {
+						@errorAlert(d.Error)
+					}
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="sl-name">{ t(ctx, "statuslink.col.name") }</label>
+						<input class="tuc-input" id="sl-name" name="name" required maxlength="60" autofocus placeholder={ t(ctx, "statuslink.name_placeholder") }/>
+						<span class="tuc-hint">{ t(ctx, "statuslink.name_hint") }</span>
+					</div>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3">
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="sl-naming">{ t(ctx, "statuslink.col.naming") }</label>
+							<select class="tuc-input" id="sl-naming" name="naming" data-tuc-select data-clearable="false">
+								<option value="alias" selected>{ t(ctx, "statuslink.naming.alias") }</option>
+								<option value="generic">{ t(ctx, "statuslink.naming.generic") }</option>
+								<option value="hidden">{ t(ctx, "statuslink.naming.hidden") }</option>
+							</select>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="sl-expiry">{ t(ctx, "statuslink.col.expires") }</label>
+							<select class="tuc-input" id="sl-expiry" name="expiry" data-tuc-select data-clearable="false">
+								<option value="never" selected>{ t(ctx, "statuslink.expiry.never") }</option>
+								<option value="24h">{ t(ctx, "statuslink.expiry.24h") }</option>
+								<option value="7d">{ t(ctx, "statuslink.expiry.7d") }</option>
+								<option value="30d">{ t(ctx, "statuslink.expiry.30d") }</option>
+							</select>
+						</div>
+					</div>
+					<span class="tuc-hint -mt-2">{ t(ctx, "statuslink.naming_hint") }</span>
+					<fieldset class="flex flex-col gap-1.5 border-0 p-0">
+						<legend class="tuc-label mb-1.5">{ t(ctx, "statuslink.services") }</legend>
+						if len(d.Services) == 0 {
+							<span class="tuc-hint">{ t(ctx, "statuslink.no_services") }</span>
+						}
+						<div class="flex max-h-[200px] flex-col gap-1.5 overflow-y-auto">
+							for _, s := range d.Services {
+								<label class="tuc-choice">
+									<input type="checkbox" class="tuc-check" name="service" value={ s.ID } checked/>
+									<span class="font-mono text-xs">{ s.Name }</span>
+									if s.Alias != "" {
+										<span class="text-xs text-muted">{ "→ " + s.Alias }</span>
+									}
+								</label>
+							}
+						</div>
+					</fieldset>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="sl-ips">{ t(ctx, "statuslink.ips") }</label>
+						<input class="tuc-input font-mono" id="sl-ips" name="ips" maxlength="600" data-allow="ips" autocomplete="off" placeholder="189.10.20.30"/>
+						<span class="tuc-hint">{ t(ctx, "statuslink.ips_hint") }</span>
+					</div>
+					<div class="flex justify-end gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("link", "size-3.5")
+							{ t(ctx, "statuslink.create") }
+						</button>
+					</div>
+				</form>
+			}
+		</div>
+	</dialog>
+}

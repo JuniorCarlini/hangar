@@ -1,0 +1,391 @@
+package views
+
+import "fmt"
+
+// The template catalog and "Meus projetos" (docs/08, docs/27): the first
+// dialog only lists — templates with their logos, or the repositories a
+// GitHub credential can read — and picking one opens a second dialog on
+// top with the details on the left and the fields to fill on the right.
+
+// TemplatesWikiURL explains how to send a template to the catalog.
+const TemplatesWikiURL = "https://juniorcarlini.github.io/hangar/wiki/templates.html"
+
+// detailError says the error belongs to a template's own dialog.
+func (d NewServiceData) detailError() bool {
+	return d.Error != "" && d.Tab == "template" && d.Template != ""
+}
+
+// githubIcon is GitHub's mark (Simple Icons, CC0): Lucide has no brand
+// icons.
+templ githubMark(class string) {
+	<svg class={ "shrink-0 " + class } viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"></path></svg>
+}
+
+templ catalogTab(d NewServiceData) {
+	<div class="flex flex-col gap-3" data-catalog>
+		<div class="flex flex-wrap items-center gap-3">
+			<div class="relative min-w-0 flex-[1_1_260px]">
+				@Icon("search", "pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted")
+				<input class="tuc-input w-full pl-8" type="search" placeholder={ t(ctx, "catalog.search") } aria-label={ t(ctx, "catalog.search") } autocomplete="off" data-catalog-search/>
+			</div>
+			<div class="w-[220px] max-w-full">
+				// "all", not "": Tucano treats an empty value as a placeholder and
+				// leaves it out of the list, so it could not be picked again.
+				<select class="tuc-input" aria-label={ t(ctx, "catalog.categories") } data-catalog-cat data-tuc-select data-clearable="false">
+					<option value="all" selected>{ t(ctx, "catalog.all") }</option>
+					for _, c := range d.Categories {
+						<option value={ c.Key }>{ c.Label }</option>
+					}
+				</select>
+			</div>
+			<span class="text-xs text-muted" data-catalog-count>{ t(ctx, "catalog.count", "n", len(d.Templates)) }</span>
+		</div>
+		<div class="grid max-h-[min(56vh,520px)] grid-cols-[repeat(auto-fill,minmax(min(230px,100%),1fr))] content-start gap-2.5 overflow-y-auto p-0.5">
+			for _, tp := range d.Templates {
+				<button type="button" class="catalog-card" data-tuc-modal={ "#tpl-" + tp.ID } data-cat={ tp.Category } data-search={ tp.Search }>
+					<span class="catalog-logo">
+						<img src={ tp.LogoURL } alt="" width="24" height="24" loading="lazy"/>
+					</span>
+					<span class="flex min-w-0 flex-col gap-0.5 text-left">
+						<strong class="text-[13px] font-semibold">{ tp.Name }</strong>
+						<span class="line-clamp-3 text-xs leading-4 text-muted">{ tp.Description }</span>
+						<span class="text-[11px] text-muted">{ tp.CategoryLabel }</span>
+					</span>
+				</button>
+			}
+		</div>
+		<p class="m-0 py-6 text-center text-[13px] text-muted" hidden data-catalog-empty>{ t(ctx, "catalog.empty") }</p>
+		<div class="tuc-alert is-info" role="note">
+			@Icon("book-open", "size-4")
+			<div class="tuc-alert__body">
+				<p>
+					<strong>{ t(ctx, "catalog.missing") }</strong>
+					{ t(ctx, "catalog.missing_text") }
+					<a href={ templ.SafeURL(TemplatesWikiURL) } target="_blank" rel="noopener">{ t(ctx, "catalog.how_to_add") }</a>
+				</p>
+			</div>
+		</div>
+	</div>
+}
+
+// detailShell is the second dialog: details on the left, the form on the
+// right (it scrolls on its own), buttons at the bottom right.
+templ detailShell(id, title string, open bool) {
+	<dialog class="tuc-modal is-lg ns-detail" id={ id } aria-labelledby={ id + "-title" } data-open={ fmt.Sprint(open) }>
+		<div class="tuc-modal__panel">
+			{ children... }
+		</div>
+	</dialog>
+}
+
+templ detailHead(id, title string) {
+	<div class="ns-detail__head">
+		<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal-close aria-label={ t(ctx, "catalog.back") }>
+			@Icon("arrow-left", "size-4")
+		</button>
+		<h2 class="tuc-modal__title m-0 grow" id={ id + "-title" }>{ title }</h2>
+		<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+			@Icon("x", "size-4")
+		</button>
+	</div>
+}
+
+templ detailRow(label string) {
+	<div class="flex items-baseline justify-between gap-3 text-xs">
+		<span class="shrink-0 text-muted">{ label }</span>
+		<span class="min-w-0 text-right break-words">{ children... }</span>
+	</div>
+}
+
+templ detailSection(title string) {
+	<div class="flex flex-col gap-2">
+		<span class="text-[11px] font-semibold tracking-wide text-muted uppercase">{ title }</span>
+		{ children... }
+	</div>
+}
+
+templ requiredLabel(forID, label string) {
+	<label class="tuc-label" for={ forID }>{ label } <span class="text-danger" aria-hidden="true">*</span></label>
+}
+
+templ detailFooter(icon, label string) {
+	<div class="ns-detail__foot">
+		<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+		<button class="tuc-btn is-primary" type="submit">
+			@Icon(icon, "size-3.5")
+			{ label }
+		</button>
+	</div>
+}
+
+templ templateDialog(d NewServiceData, tp NewTemplate) {
+	{{ id := "tpl-" + tp.ID }}
+	{{ mine := d.Tab == "template" && d.Template == tp.ID }}
+	@detailShell(id, tp.Name, d.Open && mine && d.Error != "") {
+		@detailHead(id, t(ctx, "catalog.new_in", "template", tp.Name, "project", d.ProjectName))
+		<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/templates") } class="ns-detail__grid" autocomplete="off">
+			<aside class="ns-detail__side">
+				<div class="flex items-center gap-3">
+					<span class="catalog-logo is-lg">
+						<img src={ tp.LogoURL } alt="" width="30" height="30"/>
+					</span>
+					<span class="flex min-w-0 flex-col gap-1">
+						<strong class="text-base font-semibold">{ tp.Name }</strong>
+						<span class="flex flex-wrap gap-1.5">
+							<span class="tuc-badge">{ tp.CategoryLabel }</span>
+							<span class="tuc-badge">v{ fmt.Sprint(tp.Version) }</span>
+							if tp.Remote {
+								<span class="tuc-badge is-info">{ t(ctx, "catalog.community") }</span>
+							}
+						</span>
+					</span>
+				</div>
+				<p class="m-0 text-[13px] leading-5 text-muted">{ tp.Description }</p>
+				@detailSection(t(ctx, "catalog.creates")) {
+					for _, s := range tp.Services {
+						if len(tp.Services) > 1 {
+							<span class="font-mono text-xs font-semibold">{ s.Name }</span>
+						}
+						@detailRow(t(ctx, "catalog.image")) {
+							<code class="font-mono">{ s.Image }</code>
+						}
+						for _, disk := range s.Disks {
+							@detailRow(t(ctx, "catalog.disk")) {
+								<code class="font-mono">{ disk }</code>
+							}
+						}
+						@detailRow(t(ctx, "catalog.limits")) {
+							{ s.Limits }
+						}
+						if s.Health {
+							@detailRow(t(ctx, "catalog.health")) {
+								{ t(ctx, "catalog.health_yes") }
+							}
+						}
+					}
+					@detailRow(t(ctx, "catalog.ports")) {
+						{ t(ctx, "catalog.ports_none") }
+					}
+				}
+				if len(tp.Links) > 0 {
+					// Says up front what goes on the internet and what stays
+					// on the project network.
+					@detailSection(t(ctx, "catalog.links")) {
+						for _, l := range tp.Links {
+							@detailRow(l.Label + " :" + fmt.Sprint(l.Port)) {
+								if l.Public {
+									<span class="tuc-badge is-warning">{ t(ctx, "catalog.link_public") }</span>
+								} else if l.NeedsSudo {
+									<span class="tuc-badge" title={ t(ctx, "catalog.link_needs_sudo") }>{ t(ctx, "catalog.link_internal") }</span>
+								} else {
+									<span class="tuc-badge">{ t(ctx, "catalog.link_internal") }</span>
+								}
+							}
+						}
+					}
+				}
+				if len(tp.Exports) > 0 {
+					@detailSection(t(ctx, "catalog.exports")) {
+						<span class="flex flex-wrap gap-1.5">
+							for _, e := range tp.Exports {
+								<span class="tuc-badge font-mono">{ e }</span>
+							}
+						</span>
+					}
+				}
+				if tp.Docs != "" {
+					<a class="inline-flex items-center gap-1.5 text-xs" href={ templ.SafeURL(tp.Docs) } target="_blank" rel="noopener noreferrer">
+						@Icon("book-open", "size-3.5")
+						{ t(ctx, "catalog.docs") }
+					</a>
+				}
+			</aside>
+			<div class="ns-detail__main">
+				<div class="ns-detail__fields">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="template" value={ tp.ID }/>
+					@placeFields(d.Place)
+					if mine {
+						@errorAlert(d.Error)
+					}
+					@nameField(id+"-name", tp.FormName, tp.FormSlug, "", "")
+					for _, in := range tp.Inputs {
+						<div class="flex min-w-0 flex-col gap-1.5">
+							@requiredLabel(id+"-"+in.Key, in.Label)
+							<input class="tuc-input font-mono" id={ id + "-" + in.Key } name={ "in_" + in.Key } pattern={ in.Pattern } value={ in.Value } required/>
+						</div>
+					}
+					@notice("info", "lock", t(ctx, "template.generated_hint"))
+				</div>
+				@detailFooter("plus", t(ctx, "new_service.create"))
+			</div>
+		</form>
+	}
+}
+
+templ myReposTab(d NewServiceData) {
+	<div class="flex flex-col gap-3">
+		if len(d.GitHubCreds) == 0 {
+			<div class="flex flex-col items-center gap-3 px-4 py-8 text-center">
+				<span class="flex size-10 items-center justify-center rounded-md border border-border bg-surface-2 text-muted">
+					@githubMark("size-5")
+				</span>
+				<p class="m-0 max-w-[420px] text-[13px] text-muted">{ t(ctx, "myrepos.no_cred") }</p>
+				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#new-git-cred">
+					@Icon("key-round", "size-3.5")
+					{ t(ctx, "myrepos.add_cred") }
+				</button>
+			</div>
+		} else {
+			<div
+				class="flex flex-col gap-3"
+				data-myrepos
+				data-url={ "/p/" + d.Project + "/github/repos" }
+				data-branches-url={ "/p/" + d.Project + "/github/branches" }
+				data-loading={ t(ctx, "myrepos.loading") }
+				data-empty={ t(ctx, "myrepos.empty") }
+				data-none={ t(ctx, "myrepos.none_match") }
+				data-failed={ t(ctx, "myrepos.failed") }
+				data-private={ t(ctx, "myrepos.private") }
+				data-public={ t(ctx, "myrepos.public") }
+				data-count={ t(ctx, "myrepos.count") }
+			>
+				<div class="flex flex-wrap items-end gap-3">
+					<div class="flex min-w-0 flex-[1_1_220px] flex-col gap-1.5">
+						<label class="tuc-label" for="ns-gh-cred">{ t(ctx, "gitcred.pick") }</label>
+						<select class="tuc-input" id="ns-gh-cred" data-myrepos-cred data-tuc-select data-clearable="false">
+							for _, o := range d.GitHubCreds {
+								<option value={ o.ID } selected?={ o.ID == d.GitHubSelected }>
+									{ o.Name } ·
+									if o.Project {
+										{ t(ctx, "gitcred.scope.this_project") }
+									} else {
+										{ t(ctx, "gitcred.scope.server") }
+									}
+								</option>
+							}
+						</select>
+					</div>
+					<div class="relative min-w-0 flex-[2_1_240px]">
+						@Icon("search", "pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted")
+						<input class="tuc-input w-full pl-8" type="search" placeholder={ t(ctx, "myrepos.search") } aria-label={ t(ctx, "myrepos.search") } autocomplete="off" data-myrepos-search/>
+					</div>
+					<span class="flex flex-wrap gap-2">
+						<button type="button" class="tuc-btn is-outline" data-tuc-modal="#new-git-cred">
+							@Icon("key-round", "size-3.5")
+							{ t(ctx, "myrepos.new_cred") }
+						</button>
+						<button type="button" class="tuc-btn is-outline" data-tuc-modal="#repo-url">
+							@Icon("link", "size-3.5")
+							{ t(ctx, "myrepos.manual") }
+						</button>
+					</span>
+				</div>
+				<span class="text-xs text-muted" data-myrepos-status>{ t(ctx, "myrepos.scope_hint") }</span>
+				// The same cards as the template catalog, with GitHub's mark as
+				// the logo (assets/newservice.js clones it into each card).
+				<div class="grid max-h-[min(56vh,520px)] grid-cols-[repeat(auto-fill,minmax(min(230px,100%),1fr))] content-start gap-2.5 overflow-y-auto p-0.5" data-myrepos-list></div>
+				<template data-repo-mark>
+					@githubMark("size-6")
+				</template>
+			</div>
+		}
+		if len(d.GitHubCreds) == 0 {
+			<div class="flex justify-center">
+				<button type="button" class="tuc-btn is-ghost" data-tuc-modal="#repo-url">
+					@Icon("link", "size-3.5")
+					{ t(ctx, "myrepos.manual_public") }
+				</button>
+			</div>
+		}
+	</div>
+}
+
+// repoDialog is filled by assets/newservice.js with the repository picked
+// in "Meus projetos".
+templ repoDialog(d NewServiceData) {
+	if len(d.GitHubCreds) > 0 {
+		@detailShell("repo-detail", "", false) {
+			@detailHead("repo-detail", t(ctx, "myrepos.new_from"))
+			<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/services/git") } class="ns-detail__grid" autocomplete="off" data-repo-form>
+				<aside class="ns-detail__side">
+					<div class="flex items-center gap-3">
+						<span class="catalog-logo is-lg text-muted">
+							@githubMark("size-6")
+						</span>
+						<span class="flex min-w-0 flex-col gap-1">
+							<strong class="font-mono text-sm font-semibold break-all" data-repo-out="full_name"></strong>
+							<span class="flex flex-wrap gap-1.5">
+								<span class="tuc-badge" data-repo-out="visibility"></span>
+								<span class="tuc-badge" data-repo-out="language"></span>
+							</span>
+						</span>
+					</div>
+					<p class="m-0 text-[13px] leading-5 text-muted" data-repo-out="description"></p>
+					@detailSection(t(ctx, "myrepos.in_repo")) {
+						@detailRow(t(ctx, "myrepos.default_branch")) {
+							<code class="font-mono" data-repo-out="default_branch"></code>
+						}
+						@detailRow(t(ctx, "myrepos.pushed")) {
+							<span data-repo-out="pushed"></span>
+						}
+						@detailRow(t(ctx, "myrepos.credential")) {
+							<span data-repo-out="credential"></span>
+						}
+					}
+					@notice("info", "shield", t(ctx, "git.new.security"))
+					<a class="inline-flex items-center gap-1.5 text-xs" href="#" target="_blank" rel="noopener noreferrer" data-repo-link>
+						@Icon("external-link", "size-3.5")
+						{ t(ctx, "myrepos.open_github") }
+					</a>
+				</aside>
+				<div class="ns-detail__main">
+					<div class="ns-detail__fields">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<input type="hidden" name="repo" data-repo-in="url"/>
+						<input type="hidden" name="credential" data-repo-in="credential"/>
+						@placeFields(d.Place)
+						@nameField("ns-gh-name", "", "", "", "")
+						<div class="flex min-w-0 flex-col gap-1.5">
+							@requiredLabel("ns-gh-branch", t(ctx, "git.branch"))
+							<select class="tuc-input font-mono" id="ns-gh-branch" name="branch" required data-repo-branches data-tuc-select data-clearable="false"></select>
+							<span class="tuc-hint">{ t(ctx, "myrepos.branch_hint") }</span>
+						</div>
+						@advanced(false) {
+							@smallField("ns-gh-subdir", "subdir", t(ctx, "git.subdir"), "", t(ctx, "git.subdir_placeholder"), "")
+							@smallField("ns-gh-dockerfile", "dockerfile", t(ctx, "git.dockerfile"), "", "Dockerfile", "")
+							@smallField("ns-gh-port", "port", t(ctx, "project.form.port"), "", t(ctx, "new_service.port_expose"), "numeric")
+							@smallField("ns-gh-memory", "memory_mb", t(ctx, "project.form.memory"), "", "512", "numeric")
+							@smallField("ns-gh-cpus", "cpus", t(ctx, "project.form.cpus"), "", "1", "decimal")
+						}
+					</div>
+					@detailFooter("rocket", t(ctx, "git.new.submit"))
+				</div>
+			</form>
+		}
+	}
+}
+
+// repoURLDialog takes any repository address (public, GitLab, Gitea…): a
+// modal over the new-service one, like the repository details.
+templ repoURLDialog(d NewServiceData) {
+	<dialog class="tuc-modal is-lg" id="repo-url" aria-labelledby="repo-url-title" data-open={ fmt.Sprint(d.Open && d.ManualGit) }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<div class="flex flex-col gap-1">
+					<h2 class="tuc-modal__title" id="repo-url-title">{ t(ctx, "myrepos.url_title") }</h2>
+					<p class="tuc-modal__text">{ t(ctx, "myrepos.url_hint") }</p>
+				</div>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<div class="tuc-modal__body">
+				if d.ManualGit {
+					@errorAlert(d.Error)
+				}
+				@newGitServiceForm(d)
+			</div>
+		</div>
+	</dialog>
+}

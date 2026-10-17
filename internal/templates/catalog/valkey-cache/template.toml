@@ -1,0 +1,29 @@
+id = "valkey-cache"
+version = 1
+category = "cache"
+tags = ["valkey", "redis", "key-value", "cache"]
+docs = "https://valkey.io/docs/"
+main = "valkey"
+name = { en = "Valkey (cache)", "pt-BR" = "Valkey (cache)" }
+description = { en = "Open source Redis fork, as a cache with no persistence: evicts the least used keys when full. Generated password; FLUSHALL, CONFIG and DEBUG disabled.", "pt-BR" = "Fork aberto do Redis, como cache sem persistência: descarta as chaves menos usadas quando enche. Senha gerada; FLUSHALL, CONFIG e DEBUG desligados." }
+
+[variables.password]
+generate = "secret"
+
+[[exports]]
+key = "REDIS_URL"
+value = "redis://:${password}@${service}:6379/0"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "6379"
+
+[[exports]]
+key = "PASSWORD"
+value = "${password}"
+secret = true

@@ -1,0 +1,800 @@
+package views
+
+import "fmt"
+
+// Backups screens (docs/09): the overview, the recovery kit generated in
+// the browser, the destination form and the service's Backups tab.
+
+// BackupsData feeds the backups overview.
+type BackupsData struct {
+	CSRF       string
+	CanOperate bool
+	CanAdmin   bool
+	CanOwner   bool
+	SudoActive bool
+	Ready      bool
+	Status     string // "ok", "warning", "danger", "setup"
+	Alerts     []BackupAlert
+	Keys       []BackupKeyRow
+	Targets    []BackupTargetRow
+	Services   []BackupServiceRow
+	Panel      BackupServiceRow
+	Runs       []BackupRunRow
+	Folders    []BackupFolder
+	Error      string
+	Flash      string
+}
+
+// BackupAlert is an alert already in the user's language.
+type BackupAlert struct {
+	Tone string // "danger" or "warning"
+	Text string
+}
+
+// BackupKeyRow is a public key of a recovery kit.
+type BackupKeyRow struct {
+	ID        string
+	Label     string
+	Public    string
+	Created   string
+	Confirmed bool
+}
+
+// BackupTargetRow is a destination.
+type BackupTargetRow struct {
+	ID       string
+	Name     string
+	Provider string
+	Where    string
+	Lock     string
+	Checked  string
+	Error    string
+	Primary  bool
+}
+
+// BackupServiceRow is a line of the services table.
+type BackupServiceRow struct {
+	Label    string
+	Href     string
+	Schedule string
+	Last     string
+	LastTone string // badge tone of the last backup
+	WAL      string
+	WALTone  string
+	Size     string
+	Tested   bool
+	HasRun   bool
+}
+
+// BackupRunRow is one backup in the history.
+type BackupRunRow struct {
+	ID       string
+	When     string
+	Label    string
+	Kind     string
+	Class    string
+	Trigger  string
+	Size     string
+	Status   string
+	Tone     string
+	Verified bool
+	Checked  string // "3 tabelas, 1.500 linhas"
+	Uploads  string
+	Warning  string
+	Error    string
+	CanLink  bool
+}
+
+// BackupFolder is a bucket folder and how long its lifecycle rule keeps it.
+type BackupFolder struct {
+	Folder string
+	Days   int
+	What   string
+}
+
+func badgeTone(tone string) string {
+	switch tone {
+	case "success", "warning", "danger", "info":
+		return "tuc-badge is-" + tone
+	}
+	return "tuc-badge"
+}
+
+func alertTone(tone string) string {
+	if tone == "danger" {
+		return "tuc-alert is-danger"
+	}
+	return "tuc-alert is-warning"
+}
+
+templ backupStatusBadge(status string) {
+	switch status {
+		case "ok":
+			<span class="tuc-badge is-success">{ t(ctx, "backups.status.ok") }</span>
+		case "warning":
+			<span class="tuc-badge is-warning">{ t(ctx, "backups.status.warning") }</span>
+		case "danger":
+			<span class="tuc-badge is-danger">{ t(ctx, "backups.status.danger") }</span>
+		default:
+			<span class="tuc-badge is-info">{ t(ctx, "backups.status.setup") }</span>
+	}
+}
+
+// Backups is the backups overview (docs/09 "Tela de Backups").
+templ Backups(d BackupsData) {
+	@shell(t(ctx, "backups.page_title")) {
+		@pageHead(t(ctx, "backups.title"), "") {
+			@backupStatusBadge(d.Status)
+			if d.CanOperate && d.Ready {
+				<form method="post" action="/backups/panel">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<button class="tuc-btn is-outline" type="submit">
+						@Icon("database-backup", "size-3.5")
+						{ t(ctx, "backups.panel_now") }
+					</button>
+				</form>
+			}
+			if d.CanOwner {
+				<a class="tuc-btn is-outline" href="/backups/targets/new">
+					@Icon("cloud-upload", "size-3.5")
+					{ t(ctx, "backups.target_add") }
+				</a>
+				<a class="tuc-btn is-primary" href="/backups/kit">
+					@Icon("key-round", "size-3.5")
+					{ t(ctx, "backups.kit_generate") }
+				</a>
+			}
+		}
+		@pageBody() {
+			@errorAlert(d.Error)
+			@toast("success", d.Flash)
+			for _, a := range d.Alerts {
+				<div class={ alertTone(a.Tone) } role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p>{ a.Text }</p></div>
+				</div>
+			}
+			if !d.Ready {
+				@backupSetup(d)
+			}
+			@backupKeys(d)
+			@backupTargets(d)
+			@backupServices(d)
+			@backupHistory(d)
+			@backupRules(d)
+			<script src={ asset("kit.js") } defer></script>
+		}
+	}
+}
+
+// backupSetup is the checklist shown until backups can run.
+templ backupSetup(d BackupsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "backups.setup.title"))
+		<div class={ cardBodyClass }>
+			@notice("info", "shield-check", t(ctx, "backups.setup.intro"))
+			<ol class="tuc-timeline">
+				<li class={ "tuc-timeline__item " + stepTone(hasConfirmedKey(d.Keys)) }>
+					<div class="tuc-timeline__head"><p class="tuc-timeline__title">{ t(ctx, "backups.setup.kit") }</p></div>
+					<div class="tuc-timeline__body">{ t(ctx, "backups.setup.kit_text") }</div>
+				</li>
+				<li class={ "tuc-timeline__item " + stepTone(len(d.Targets) > 0) }>
+					<div class="tuc-timeline__head"><p class="tuc-timeline__title">{ t(ctx, "backups.setup.target") }</p></div>
+					<div class="tuc-timeline__body">{ t(ctx, "backups.setup.target_text") }</div>
+				</li>
+				<li class="tuc-timeline__item">
+					<div class="tuc-timeline__head"><p class="tuc-timeline__title">{ t(ctx, "backups.setup.services") }</p></div>
+					<div class="tuc-timeline__body">{ t(ctx, "backups.setup.services_text") }</div>
+				</li>
+			</ol>
+		</div>
+	</section>
+}
+
+func stepTone(done bool) string {
+	if done {
+		return "is-success is-filled"
+	}
+	return "is-accent"
+}
+
+func hasConfirmedKey(keys []BackupKeyRow) bool {
+	for _, k := range keys {
+		if k.Confirmed {
+			return true
+		}
+	}
+	return false
+}
+
+// backupKeys carries kit.js's messages: the confirmation reads the kit
+// file in the browser.
+templ backupKeys(d BackupsData) {
+	<section
+		class={ cardClass }
+		id="kit-app"
+		data-mismatch={ t(ctx, "kit.mismatch") }
+		data-no-key={ t(ctx, "kit.no_key") }
+		data-file-ok={ t(ctx, "kit.file_ok") }
+	>
+		@cardHead(t(ctx, "backups.keys.title")) {
+			<span class="text-xs text-muted">{ t(ctx, "backups.keys.hint") }</span>
+		}
+		if len(d.Keys) == 0 {
+			@emptyState("key-round", t(ctx, "backups.keys.empty")) {
+				if d.CanOwner {
+					<a class="tuc-btn is-primary is-sm" href="/backups/kit">
+						@Icon("key-round", "size-3.5")
+						{ t(ctx, "backups.kit_generate") }
+					</a>
+				}
+			}
+		} else {
+			<div class="tuc-table-wrap">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "backups.keys.label") }</th><th>{ t(ctx, "backups.keys.public") }</th><th>{ t(ctx, "backups.keys.state") }</th><th>{ t(ctx, "backups.keys.created") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<tbody>
+						for _, k := range d.Keys {
+							<tr>
+								<td>{ k.Label }</td>
+								<td class="max-w-[280px] truncate font-mono text-xs" title={ k.Public }>{ k.Public }</td>
+								<td>
+									if k.Confirmed {
+										<span class="tuc-badge is-success">{ t(ctx, "backups.keys.confirmed") }</span>
+									} else {
+										<span class="tuc-badge is-warning">{ t(ctx, "backups.keys.pending") }</span>
+									}
+								</td>
+								<td class="text-muted">{ k.Created }</td>
+								<td class="tuc-table__actions">
+									if d.CanOwner && d.SudoActive {
+										<form data-confirm={ t(ctx, "confirm.backup_key_delete.title") } data-confirm-text={ t(ctx, "confirm.backup_key_delete.text") } data-confirm-ok={ t(ctx, "confirm.backup_key_delete.ok") } data-tone="danger" method="post" action="/backups/keys/delete">
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<input type="hidden" name="id" value={ k.ID }/>
+											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "backups.keys.delete", "label", k.Label) }>
+												@Icon("trash", "size-3.5")
+											</button>
+										</form>
+									}
+								</td>
+							</tr>
+							if !k.Confirmed && d.CanOwner {
+								<tr>
+									<td colspan="5">
+										@kitConfirmForm(d.CSRF, k, d.SudoActive)
+									</td>
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		if d.CanOwner && !d.SudoActive && len(d.Keys) > 0 {
+			<div class="border-t border-border p-4">
+				@sudoForm(d.CSRF, "/backups", t(ctx, "backups.sudo_label"))
+			</div>
+		}
+	</section>
+}
+
+// kitConfirmForm proves the kit was kept: the file is read in the
+// browser (kit.js) and only the code is sent; the code can also be typed.
+templ kitConfirmForm(csrf string, k BackupKeyRow, sudo bool) {
+	<form method="post" action="/backups/keys/confirm" class="flex flex-wrap items-end gap-3 py-1">
+		<input type="hidden" name="csrf" value={ csrf }/>
+		<input type="hidden" name="id" value={ k.ID }/>
+		<div class="flex min-w-[220px] flex-[1_1_260px] flex-col gap-1.5">
+			<label class="tuc-label" for={ "kit-file-" + k.ID }>{ t(ctx, "backups.keys.confirm_file") }</label>
+			<input class="tuc-input" id={ "kit-file-" + k.ID } type="file" accept=".txt,.age,text/plain" data-kit-file data-public={ k.Public }/>
+			<span class="tuc-hint" data-kit-file-msg aria-live="polite">{ t(ctx, "backups.keys.confirm_file_hint") }</span>
+		</div>
+		<div class="flex min-w-[180px] flex-col gap-1.5">
+			<label class="tuc-label" for={ "kit-code-" + k.ID }>{ t(ctx, "backups.keys.code") }</label>
+			<input class="tuc-input font-mono uppercase" id={ "kit-code-" + k.ID } name="code" required maxlength="20" autocomplete="off" placeholder={ "XXXX-XXXX-XXXX" }/>
+		</div>
+		if sudo {
+			<button class="tuc-btn is-success" type="submit">
+				@Icon("shield-check", "size-3.5")
+				{ t(ctx, "backups.keys.confirm") }
+			</button>
+		}
+	</form>
+}
+
+templ backupTargets(d BackupsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "backups.targets.title")) {
+			<span class="text-xs text-muted">{ t(ctx, "backups.targets.hint") }</span>
+		}
+		if len(d.Targets) == 0 {
+			@emptyState("cloud-upload", t(ctx, "backups.targets.empty")) {
+				if d.CanOwner {
+					<a class="tuc-btn is-primary is-sm" href="/backups/targets/new">
+						@Icon("plus", "size-3.5")
+						{ t(ctx, "backups.target_add") }
+					</a>
+				}
+			}
+		} else {
+			<div class="tuc-table-wrap">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "backups.targets.name") }</th><th>{ t(ctx, "backups.targets.where") }</th><th>{ t(ctx, "backups.targets.lock") }</th><th>{ t(ctx, "backups.targets.check") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<tbody>
+						for _, tg := range d.Targets {
+							<tr>
+								<td>
+									{ tg.Name }
+									if tg.Primary {
+										<span class="tuc-badge is-info is-plain ml-1.5">{ t(ctx, "backups.targets.primary") }</span>
+									}
+								</td>
+								<td class="max-w-[320px] truncate font-mono text-xs">{ tg.Where }</td>
+								<td>
+									<span class="tuc-badge is-success">
+										@Icon("lock", "size-3")
+										{ tg.Lock }
+									</span>
+								</td>
+								<td>
+									if tg.Error != "" {
+										<span class="tuc-badge is-danger" title={ tg.Error }>{ t(ctx, "backups.targets.failed") }</span>
+									} else {
+										<span class="text-xs text-muted">{ tg.Checked }</span>
+									}
+								</td>
+								<td class="tuc-table__actions">
+									<div class="flex justify-end gap-1 [&_form]:inline-flex">
+										if d.CanAdmin {
+											<form method="post" action="/backups/targets/check">
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="id" value={ tg.ID }/>
+												<button class="tuc-btn is-outline is-sm" type="submit">
+													@Icon("refresh-cw", "size-3.5")
+													{ t(ctx, "backups.targets.test") }
+												</button>
+											</form>
+										}
+										if d.CanOwner && d.SudoActive {
+											<form data-confirm={ t(ctx, "confirm.backup_target_delete.title") } data-confirm-text={ t(ctx, "confirm.backup_target_delete.text") } data-confirm-ok={ t(ctx, "confirm.backup_target_delete.ok") } data-tone="danger" method="post" action="/backups/targets/delete">
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="id" value={ tg.ID }/>
+												<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "backups.targets.delete", "name", tg.Name) }>
+													@Icon("trash", "size-3.5")
+												</button>
+											</form>
+										}
+									</div>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</section>
+}
+
+templ backupServices(d BackupsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "backups.services.title"))
+		<div class="tuc-table-wrap">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "backups.services.service") }</th><th>{ t(ctx, "backups.services.schedule") }</th><th>{ t(ctx, "backups.services.last") }</th><th>{ t(ctx, "backups.services.wal") }</th><th class="is-number">{ t(ctx, "backups.services.size") }</th><th>{ t(ctx, "backups.services.tested") }</th><th class="tuc-table__actions"></th></tr></thead>
+				<tbody>
+					for _, s := range d.Services {
+						@backupServiceRow(s, true)
+					}
+					@backupServiceRow(d.Panel, false)
+				</tbody>
+			</table>
+		</div>
+		if len(d.Services) == 0 {
+			<p class="m-0 border-t border-border px-4 py-3 text-[13px] text-muted">{ t(ctx, "backups.services.none") }</p>
+		}
+	</section>
+}
+
+templ backupServiceRow(s BackupServiceRow, link bool) {
+	<tr>
+		<td class="font-mono text-[13px]">
+			if link {
+				<a href={ templ.SafeURL(s.Href) }>{ s.Label }</a>
+			} else {
+				<span class="flex items-center gap-1.5">
+					@Icon("server", "size-3.5 text-muted")
+					{ t(ctx, "backups.services.panel") }
+				</span>
+			}
+		</td>
+		<td class="text-muted">{ s.Schedule }</td>
+		<td>
+			if s.HasRun {
+				<span class={ badgeTone(s.LastTone) }>{ s.Last }</span>
+			} else {
+				<span class="text-muted">—</span>
+			}
+		</td>
+		<td>
+			if s.WAL != "" {
+				<span class={ badgeTone(s.WALTone) }>{ s.WAL }</span>
+			} else {
+				<span class="text-muted">—</span>
+			}
+		</td>
+		<td class="is-number">{ s.Size }</td>
+		<td>
+			if s.Tested {
+				<span class="tuc-badge is-success is-plain">
+					@Icon("check", "size-3")
+					{ t(ctx, "backups.services.tested_yes") }
+				</span>
+			} else {
+				<span class="text-muted">—</span>
+			}
+		</td>
+		<td class="tuc-table__actions">
+			if link {
+				<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(s.Href) }>
+					@Icon("settings", "size-3.5")
+					{ t(ctx, "backups.services.open") }
+				</a>
+			}
+		</td>
+	</tr>
+}
+
+templ backupHistory(d BackupsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "backups.history.title"))
+		if len(d.Runs) == 0 {
+			@emptyState("history", t(ctx, "backups.history.empty"))
+		} else {
+			@backupRunsTable(d.Runs, true, d.CanAdmin && d.SudoActive)
+		}
+	</section>
+}
+
+templ backupRunsTable(runs []BackupRunRow, showLabel, canLink bool) {
+	<div class="tuc-table-wrap">
+		<table class="tuc-table is-compact w-full">
+			<thead>
+				<tr>
+					<th>{ t(ctx, "backups.history.when") }</th>
+					if showLabel {
+						<th>{ t(ctx, "backups.history.what") }</th>
+					}
+					<th>{ t(ctx, "backups.history.kind") }</th>
+					<th class="is-number">{ t(ctx, "backups.services.size") }</th>
+					<th>{ t(ctx, "backups.history.check") }</th>
+					<th>{ t(ctx, "backups.history.result") }</th>
+					<th class="tuc-table__actions"></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, r := range runs {
+					<tr>
+						<td class="whitespace-nowrap text-muted">{ r.When }</td>
+						if showLabel {
+							<td class="font-mono text-[13px]">{ r.Label }</td>
+						}
+						<td>
+							{ r.Kind }
+							if r.Class != "" {
+								<span class="tuc-badge is-plain ml-1">{ r.Class }</span>
+							}
+							<span class="block text-xs text-subtle">{ r.Trigger }</span>
+						</td>
+						<td class="is-number">{ r.Size }</td>
+						<td class="text-xs text-muted">
+							if r.Verified {
+								<span class="tuc-badge is-success is-plain">
+					@Icon("check", "size-3")
+					{ t(ctx, "backups.services.tested_yes") }
+				</span>
+							}
+							{ r.Checked }
+						</td>
+						<td>
+							<span class={ badgeTone(r.Tone) }>{ r.Status }</span>
+							if r.Warning != "" {
+								<span class="tuc-badge is-warning ml-1">{ r.Warning }</span>
+							}
+							if r.Uploads != "" {
+								<span class="block text-xs text-subtle">{ r.Uploads }</span>
+							}
+							if r.Error != "" {
+								<span class="block max-w-[360px] truncate text-xs text-danger" title={ r.Error }>{ r.Error }</span>
+							}
+						</td>
+						<td class="tuc-table__actions">
+							if canLink && r.CanLink {
+								<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL("/backups/runs/" + r.ID + "/download") } aria-label={ t(ctx, "backups.history.download") } title={ t(ctx, "backups.history.download") }>
+									@Icon("download", "size-3.5")
+								</a>
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+// backupRules tells how to set the bucket up: what the server's credential
+// may do and the lifecycle rules that expire old backups.
+templ backupRules(d BackupsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "backups.rules.title"))
+		<div class={ cardBodyClass }>
+			@notice("info", "info", t(ctx, "backups.rules.intro"))
+			<div class="tuc-table-wrap">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "backups.rules.folder") }</th><th>{ t(ctx, "backups.rules.what") }</th><th class="is-number">{ t(ctx, "backups.rules.days") }</th></tr></thead>
+					<tbody>
+						for _, f := range d.Folders {
+							<tr>
+								<td class="font-mono">{ f.Folder }/</td>
+								<td class="text-muted">{ f.What }</td>
+								<td class="is-number">{ fmt.Sprint(f.Days) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="tuc-alert is-info">
+				@Icon("shield", "size-4")
+				<div class="tuc-alert__body">
+					<p class="tuc-alert__title">{ t(ctx, "backups.rules.credential_title") }</p>
+					<p>{ t(ctx, "backups.rules.credential") }</p>
+				</div>
+			</div>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "backups.rules.cofre") }</p>
+			<pre class="m-0 overflow-auto rounded-sm border border-border bg-surface-2 p-3 font-mono text-xs">{ "hangar-cofre setup-bucket" }</pre>
+		</div>
+	</section>
+}
+
+// KitData feeds the recovery kit page.
+type KitData struct {
+	CSRF         string
+	SudoActive   bool
+	DefaultLabel string
+	Template     string // the kit file text, localized, with {label} {date} {public} {code}
+	Error        string
+}
+
+// BackupKit generates the recovery kit in the browser (kit.js). Only the
+// public key and the hash of the confirmation code are posted.
+templ BackupKit(d KitData) {
+	@shell(t(ctx, "kit.page_title")) {
+		@pageHead(t(ctx, "kit.title"), t(ctx, "kit.subtitle")) {
+			<a class="tuc-btn is-ghost" href="/backups">
+				@Icon("arrow-right", "size-3.5 rotate-180")
+				{ t(ctx, "kit.back") }
+			</a>
+		}
+		@pageBody() {
+			@errorAlert(d.Error)
+			<div
+				id="kit-app"
+				class="flex flex-col gap-4"
+				data-template={ d.Template }
+				data-default-label={ d.DefaultLabel }
+				data-locale={ lang(ctx) }
+				data-error-crypto={ t(ctx, "kit.error_crypto") }
+				data-mismatch={ t(ctx, "kit.mismatch") }
+				data-no-key={ t(ctx, "kit.no_key") }
+				data-file-ok={ t(ctx, "kit.file_ok") }
+				data-qr-label={ t(ctx, "kit.qr_label") }
+			>
+				<div class="tuc-alert is-danger" id="kit-error" hidden role="alert">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p data-kit-error-text></p></div>
+				</div>
+				<div class="tuc-alert is-info">
+					@Icon("shield", "size-4")
+					<div class="tuc-alert__body">
+						<p class="tuc-alert__title">{ t(ctx, "kit.how_title") }</p>
+						<p>{ t(ctx, "kit.how") }</p>
+					</div>
+				</div>
+				if !d.SudoActive {
+					<section class={ cardClass }>
+						@cardHead(t(ctx, "kit.sudo_title"))
+						<div class={ cardBodyClass }>
+							@sudoForm(d.CSRF, "/backups/kit", t(ctx, "backups.sudo_label"))
+						</div>
+					</section>
+				} else {
+					<section class={ cardClass } id="kit-start">
+						@cardHead(t(ctx, "kit.step1"))
+						<div class={ cardBodyClass }>
+							<div class="flex flex-wrap items-end gap-3">
+								<div class="flex min-w-[220px] flex-col gap-1.5">
+									<label class="tuc-label" for="kit-label">{ t(ctx, "kit.label") }</label>
+									<input class="tuc-input" id="kit-label" maxlength="60" value={ d.DefaultLabel }/>
+								</div>
+								<button class="tuc-btn is-primary" type="button" data-kit-generate>
+									@Icon("key-round", "size-3.5")
+									{ t(ctx, "kit.generate") }
+								</button>
+							</div>
+							<p class="tuc-hint">{ t(ctx, "kit.label_hint") }</p>
+						</div>
+					</section>
+					<div id="kit-out" class="flex flex-col gap-4" hidden>
+						<section class={ cardClass }>
+							@cardHead(t(ctx, "kit.step2"))
+							<div class={ cardBodyClass }>
+								<p class="m-0 text-[13px] text-muted">{ t(ctx, "kit.save_text") }</p>
+								<div class="flex flex-col gap-1">
+									<span class="tuc-label">{ t(ctx, "kit.public") }</span>
+									<code class="font-mono text-xs break-all" id="kit-public"></code>
+								</div>
+								<div class="flex flex-wrap gap-2">
+									<button class="tuc-btn is-primary" type="button" data-kit-download>
+										@Icon("download", "size-3.5")
+										{ t(ctx, "kit.download") }
+									</button>
+									<button class="tuc-btn is-outline" type="button" data-kit-print>
+										@Icon("printer", "size-3.5")
+										{ t(ctx, "kit.print") }
+									</button>
+								</div>
+								<div class="tuc-alert is-warning">
+									@Icon("triangle-alert", "size-4")
+									<div class="tuc-alert__body"><p>{ t(ctx, "kit.warning") }</p></div>
+								</div>
+							</div>
+						</section>
+						<section class={ cardClass }>
+							@cardHead(t(ctx, "kit.step3"))
+							<form class={ cardBodyClass } method="post" action="/backups/keys" id="kit-register">
+								<input type="hidden" name="csrf" value={ d.CSRF }/>
+								<input type="hidden" name="label" id="kit-form-label"/>
+								<input type="hidden" name="public_key" id="kit-form-public"/>
+								<input type="hidden" name="code_hash" id="kit-form-hash"/>
+								<label class="tuc-choice">
+									<input type="checkbox" class="tuc-check" id="kit-saved" required/>
+									<span>{ t(ctx, "kit.saved") }</span>
+								</label>
+								<p class="tuc-hint">{ t(ctx, "kit.register_hint") }</p>
+								<div>
+									<button class="tuc-btn is-success" type="submit" id="kit-register-btn" disabled>
+										@Icon("shield-check", "size-3.5")
+										{ t(ctx, "kit.register") }
+									</button>
+								</div>
+							</form>
+						</section>
+						<div class="kit-paper" aria-hidden="true">
+							<h1>{ t(ctx, "kit.paper_title") }</h1>
+							<p>{ t(ctx, "kit.paper_text") }</p>
+							<div id="kit-paper-qr"></div>
+							<pre id="kit-paper-text"></pre>
+						</div>
+					</div>
+				}
+			</div>
+			<script src={ asset("vendor/qrcode-generator/qrcode.js") } defer></script>
+			<script src={ asset("kit.js") } defer></script>
+		}
+	}
+}
+
+// TargetFormData feeds the destination form.
+type TargetFormData struct {
+	CSRF       string
+	SudoActive bool
+	Name       string
+	Provider   string
+	Endpoint   string
+	Region     string
+	Bucket     string
+	Prefix     string
+	LockMode   string
+	LockDays   string
+	PathStyle  bool
+	Providers  []string
+	Error      string
+}
+
+// BackupTargetForm adds a destination. Saving runs the real check
+// (write with lock, read, delete refused).
+templ BackupTargetForm(d TargetFormData) {
+	@shell(t(ctx, "target.page_title")) {
+		@pageHead(t(ctx, "target.title"), t(ctx, "target.subtitle")) {
+			<a class="tuc-btn is-ghost" href="/backups">
+				@Icon("arrow-right", "size-3.5 rotate-180")
+				{ t(ctx, "kit.back") }
+			</a>
+		}
+		@pageBody() {
+			@errorAlert(d.Error)
+			<div class="tuc-alert is-info">
+				@Icon("shield", "size-4")
+				<div class="tuc-alert__body">
+					<p class="tuc-alert__title">{ t(ctx, "target.how_title") }</p>
+					<p>{ t(ctx, "target.how") }</p>
+				</div>
+			</div>
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "target.form_title"))
+				if !d.SudoActive {
+					<div class={ cardBodyClass }>
+						@sudoForm(d.CSRF, "/backups/targets/new", t(ctx, "backups.sudo_label"))
+					</div>
+				} else {
+					<form class={ cardBodyClass } method="post" action="/backups/targets" autocomplete="off">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<div class="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label is-required" for="tg-name">{ t(ctx, "target.name") }</label>
+								<input class="tuc-input" id="tg-name" name="name" required maxlength="60" value={ d.Name } placeholder={ t(ctx, "target.name_placeholder") }/>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="tg-provider">{ t(ctx, "target.provider") }</label>
+								<select class="tuc-input" id="tg-provider" name="provider" data-tuc-select data-clearable="false">
+									for _, p := range d.Providers {
+										<option value={ p } selected?={ p == d.Provider }>{ t(ctx, "target.providers." + p) }</option>
+									}
+								</select>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label is-required" for="tg-endpoint">{ t(ctx, "target.endpoint") }</label>
+								<input class="tuc-input font-mono" id="tg-endpoint" name="endpoint" type="url" required value={ d.Endpoint } placeholder="https://s3.us-west-004.backblazeb2.com"/>
+								<span class="tuc-hint">{ t(ctx, "target.endpoint_hint") }</span>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="tg-region">{ t(ctx, "target.region") }</label>
+								<input class="tuc-input font-mono" id="tg-region" name="region" maxlength="40" value={ d.Region } placeholder="us-west-004"/>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label is-required" for="tg-bucket">{ t(ctx, "target.bucket") }</label>
+								<input class="tuc-input font-mono" id="tg-bucket" name="bucket" required maxlength="63" value={ d.Bucket } placeholder="hangar-backups"/>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="tg-prefix">{ t(ctx, "target.prefix") }</label>
+								<input class="tuc-input font-mono" id="tg-prefix" name="prefix" maxlength="200" value={ d.Prefix } placeholder="hangar/"/>
+								<span class="tuc-hint">{ t(ctx, "target.prefix_hint") }</span>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label is-required" for="tg-access">{ t(ctx, "target.access_key") }</label>
+								<input class="tuc-input font-mono" id="tg-access" name="access_key" required maxlength="256"/>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label is-required" for="tg-secret">{ t(ctx, "target.secret_key") }</label>
+								<input class="tuc-input font-mono" id="tg-secret" name="secret_key" type="password" required maxlength="256" data-tuc-reveal/>
+								<span class="tuc-hint">{ t(ctx, "target.credential_hint") }</span>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="tg-mode">{ t(ctx, "target.lock_mode") }</label>
+								<select class="tuc-input" id="tg-mode" name="lock_mode" data-tuc-select data-clearable="false">
+									<option value="COMPLIANCE" selected?={ d.LockMode != "GOVERNANCE" }>{ t(ctx, "target.lock_compliance") }</option>
+									<option value="GOVERNANCE" selected?={ d.LockMode == "GOVERNANCE" }>{ t(ctx, "target.lock_governance") }</option>
+								</select>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="tg-days">{ t(ctx, "target.lock_days") }</label>
+								<input class="tuc-input" id="tg-days" name="lock_days" type="number" min="1" max="3650" value={ d.LockDays }/>
+								<span class="tuc-hint">{ t(ctx, "target.lock_days_hint") }</span>
+							</div>
+						</div>
+						<label class="tuc-choice">
+							<input type="checkbox" class="tuc-check" name="path_style" value="1" checked?={ d.PathStyle }/>
+							<span>{ t(ctx, "target.path_style") } <span class="tuc-choice__hint">{ t(ctx, "target.path_style_hint") }</span></span>
+						</label>
+						<div class="flex justify-end gap-2">
+							<a class="tuc-btn is-ghost" href="/backups">{ t(ctx, "tucano.cancel") }</a>
+							<button class="tuc-btn is-primary" type="submit">
+								@Icon("shield-check", "size-3.5")
+								{ t(ctx, "target.save") }
+							</button>
+						</div>
+					</form>
+				}
+			</section>
+		}
+	}
+}

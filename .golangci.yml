@@ -1,0 +1,43 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - contextcheck
+    - errorlint
+    - gosec
+    - noctx
+    - revive
+    - sqlclosecheck
+  settings:
+    errcheck:
+      # A failed terminal write has nothing to handle.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    generated: lax
+    rules:
+      # Tests create temp files and use fixed values and context-free calls on
+      # purpose.
+      - path: _test\.go
+        linters: [gosec, noctx, errcheck]
+      # templ components receive the context through Render(ctx, w); the
+      # linter follows the generated closures ($1, $2...) and misses that.
+      - linters: [contextcheck]
+        text: 'Function `[A-Za-z]+->.*\$1.*` should pass the context parameter'
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/JuniorCarlini/hangar

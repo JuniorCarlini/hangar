@@ -1,0 +1,202 @@
+package views
+
+import "context"
+
+// DomainsData is the global dynamic domains page.
+type DomainsData struct {
+	CSRF        string
+	EdgeEnabled bool
+	Dynamic     string // "project/service" taking customer domains, or ""
+	DynamicURL  string
+	Recent      []AskRow
+	Blocked     []BlockedRow
+	Filter      string
+	Certified   int64
+	NewThisHour int64
+	HourCap     int
+	DeniedToday int64
+	CanAdmin    bool
+	Error       string
+	Flash       string
+}
+
+// AskRow is one aggregated certificate decision.
+type AskRow struct {
+	Hostname string
+	Allowed  bool
+	Reason   string
+	Count    int64
+	When     string
+	Blocked  bool
+}
+
+// BlockedRow is a blocked hostname.
+type BlockedRow struct {
+	Hostname string
+	Reason   string
+	When     string
+}
+
+// stat is a number card (label, value, note), as in the prototype.
+templ stat(label, value, sub, tone string) {
+	<div class="flex flex-[1_1_180px] flex-col gap-0.5 rounded-md border border-border bg-surface px-4 py-3.5">
+		<span class="text-xs text-muted">{ label }</span>
+		<span class={ "text-[22px] leading-[30px] font-semibold tabular-nums " + tone }>{ value }</span>
+		<span class="text-xs text-subtle">{ sub }</span>
+	</div>
+}
+
+func capText(n int64, cap int) string {
+	if cap <= 0 {
+		return sz(int(n))
+	}
+	return sz(int(n)) + " / " + sz(cap)
+}
+
+func selectedIf(cur, v string) bool { return cur == v }
+
+// Domains lists recent certificate decisions and the blocklist.
+templ Domains(d DomainsData) {
+	@shell(t(ctx, "domains.page_title")) {
+		@pageHead(t(ctx, "domains.title"), d.subtitle(ctx)) {
+			if d.Dynamic != "" {
+				<a class="tuc-btn is-outline" href={ templ.SafeURL(d.DynamicURL + "?tab=domains") }>
+					@Icon("settings", "size-3.5")
+					{ t(ctx, "domains.configure") }
+				</a>
+			}
+		}
+		@pageBody() {
+			@errorAlert(d.Error)
+			@toast("success", d.Flash)
+			if !d.EdgeEnabled {
+				<div class="tuc-alert is-warning" role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "domain.edge_disabled") }</p></div>
+				</div>
+			}
+			if d.Dynamic == "" {
+				<div class="tuc-alert is-info">
+					@Icon("info", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "domains.no_dynamic") }</p></div>
+				</div>
+			}
+			<div class="flex flex-wrap gap-3">
+				@stat(t(ctx, "domains.stat.certified"), sz(int(d.Certified)), t(ctx, "domains.stat.certified_sub"), "")
+				@stat(t(ctx, "domains.stat.new"), capText(d.NewThisHour, d.HourCap), t(ctx, "domains.stat.new_sub"), "")
+				@stat(t(ctx, "domains.stat.denied"), sz(int(d.DeniedToday)), t(ctx, "domains.stat.denied_sub"), "text-warning")
+			</div>
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "domains.recent")) {
+					<form method="get" action="/domains" class="w-44">
+						<select class="tuc-input w-44" name="f" aria-label={ t(ctx, "domains.filter") } data-tuc-select data-clearable="false" data-autosubmit>
+							<option value="all" selected?={ d.Filter == "" || d.Filter == "all" }>{ t(ctx, "domains.filter_all") }</option>
+							<option value="deny" selected?={ selectedIf(d.Filter, "deny") }>{ t(ctx, "domains.filter_deny") }</option>
+							<option value="allow" selected?={ selectedIf(d.Filter, "allow") }>{ t(ctx, "domains.filter_allow") }</option>
+						</select>
+					</form>
+				}
+				<div class={ cardBodyClass }>
+					if len(d.Recent) == 0 {
+						@emptyState("shield-check", t(ctx, "domains.recent_empty"))
+					} else {
+						<div class="tuc-table-wrap">
+							<table class="tuc-table is-compact w-full">
+								<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.decision") }</th><th>{ t(ctx, "domains.reason") }</th><th class="is-number">{ t(ctx, "domains.count") }</th><th>{ t(ctx, "domains.last") }</th><th class="tuc-table__actions"></th></tr></thead>
+								<tbody>
+									for _, a := range d.Recent {
+										<tr>
+											<td class="font-mono">{ a.Hostname }</td>
+											<td>
+												if a.Allowed {
+													<span class="tuc-badge is-success">{ t(ctx, "domains.allowed") }</span>
+												} else {
+													<span class="tuc-badge is-danger">{ t(ctx, "domains.denied") }</span>
+												}
+											</td>
+											<td class="text-muted">{ t(ctx, "domain.reason." + a.Reason) }</td>
+											<td class="is-number">{ sz(int(a.Count)) }</td>
+											<td class="text-muted">{ a.When }</td>
+											<td class="tuc-table__actions">
+												if d.CanAdmin && !a.Blocked && a.Reason != "invalid_hostname" {
+													<form data-confirm={ t(ctx, "confirm.block.title") } data-confirm-text={ t(ctx, "confirm.block.text") } data-confirm-ok={ t(ctx, "confirm.block.ok") } data-tone="warning" method="post" action="/domains/block">
+														<input type="hidden" name="csrf" value={ d.CSRF }/>
+														<input type="hidden" name="hostname" value={ a.Hostname }/>
+														<button class="tuc-btn is-outline is-sm" type="submit" aria-label={ t(ctx, "domains.block_named", "host", a.Hostname) }>
+															@Icon("ban", "size-3.5")
+															{ t(ctx, "domains.block") }
+														</button>
+													</form>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+				</div>
+			</section>
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "domains.blocked"))
+				<div class={ cardBodyClass }>
+					if len(d.Blocked) == 0 {
+						@emptyState("ban", t(ctx, "domains.blocked_empty"))
+					} else {
+						<div class="tuc-table-wrap">
+							<table class="tuc-table is-compact w-full">
+								<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.reason") }</th><th>{ t(ctx, "domains.since") }</th><th class="tuc-table__actions"></th></tr></thead>
+								<tbody>
+									for _, b := range d.Blocked {
+										<tr>
+											<td class="font-mono">{ b.Hostname }</td>
+											<td>{ b.Reason }</td>
+											<td class="text-muted">{ b.When }</td>
+											<td class="tuc-table__actions">
+												if d.CanAdmin {
+													<form data-confirm={ t(ctx, "confirm.unblock.title") } data-confirm-text={ t(ctx, "confirm.unblock.text") } data-confirm-ok={ t(ctx, "confirm.unblock.ok") } data-tone="success" method="post" action="/domains/unblock">
+														<input type="hidden" name="csrf" value={ d.CSRF }/>
+														<input type="hidden" name="hostname" value={ b.Hostname }/>
+														<button class="tuc-btn is-outline is-sm" type="submit" aria-label={ t(ctx, "domains.unblock_named", "host", b.Hostname) }>
+															@Icon("circle-check", "size-3.5")
+															{ t(ctx, "domains.unblock") }
+														</button>
+													</form>
+												}
+											</td>
+										</tr>
+									}
+								</tbody>
+							</table>
+						</div>
+					}
+					if d.CanAdmin {
+						<form data-confirm={ t(ctx, "confirm.block.title") } data-confirm-text={ t(ctx, "confirm.block.text") } data-confirm-ok={ t(ctx, "confirm.block.ok") } data-tone="warning" method="post" action="/domains/block" class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="hostname">{ t(ctx, "domain.hostname") }</label>
+								<input class="tuc-input font-mono" id="hostname" name="hostname" required maxlength="253" autocomplete="off" placeholder="golpe-banco.com"/>
+							</div>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="reason">{ t(ctx, "domains.reason") }</label>
+								<input class="tuc-input" id="reason" name="reason" maxlength="200" placeholder={ t(ctx, "domains.reason_placeholder") }/>
+							</div>
+							<button class="tuc-btn is-danger" type="submit">
+								@Icon("ban", "size-3.5")
+								{ t(ctx, "domains.block") }
+							</button>
+						</form>
+					}
+				</div>
+			</section>
+		}
+	}
+}
+
+// subtitle names the service taking customer domains.
+func (d DomainsData) subtitle(ctx context.Context) string {
+	if d.Dynamic == "" {
+		return ""
+	}
+	return t(ctx, "domains.subtitle", "service", d.Dynamic)
+}

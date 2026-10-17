@@ -1,0 +1,62 @@
+/* Hangar's stylesheet, compiled by the Tailwind standalone CLI
+   (tools/tailwind.sh) into assets/app.css, which is embedded in the binary:
+   no Node, no build at runtime. */
+@import "tailwindcss" source(none);
+@source "../views/*.templ";
+@source "../views/*.go";
+@source "../*.go";
+
+@import "./tokens.css";
+/* Tucano goes in the components layer, under the utilities: a Tailwind class
+   on a Tucano element (w-40 on a .tuc-input) wins, as written. */
+@import "../assets/vendor/tucano/tucano.min.css" layer(components);
+@import "./components.css" layer(components);
+
+/* Tailwind's palette is replaced by the Pista tokens ("inline": utilities
+   read the variables, so the theme switch needs no rebuild). Only these
+   colors exist: a hard-coded color cannot slip in through a utility. */
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-bg: var(--p-bg);
+  --color-canvas: var(--p-canvas);
+  --color-surface: var(--p-surface);
+  --color-surface-2: var(--p-surface-2);
+  --color-border: var(--p-border);
+  --color-border-strong: var(--p-border-strong);
+  --color-fg: var(--p-fg);
+  --color-muted: var(--p-muted);
+  --color-subtle: var(--p-subtle);
+  --color-accent: var(--p-accent);
+  --color-accent-hover: var(--p-accent-hover);
+  --color-accent-text: var(--p-accent-text);
+  --color-accent-soft: var(--p-accent-soft);
+  --color-on-accent: var(--p-on-accent);
+  --color-success: var(--p-success);
+  --color-success-soft: var(--p-success-soft);
+  --color-info: var(--p-info);
+  --color-info-soft: var(--p-info-soft);
+  --color-warning: var(--p-warning);
+  --color-warning-soft: var(--p-warning-soft);
+  --color-danger: var(--p-danger);
+  --color-danger-soft: var(--p-danger-soft);
+  --font-sans: var(--p-font);
+  --font-mono: var(--p-mono);
+}
+
+@layer base {
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    background: var(--p-bg);
+    color: var(--p-fg);
+    font-family: var(--p-font);
+    font-size: 14px;
+    line-height: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--p-accent-text); text-decoration: none; }
+  a:hover { color: var(--p-fg); }
+  :focus-visible { outline: none; box-shadow: var(--p-ring); }
+}

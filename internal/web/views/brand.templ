@@ -1,0 +1,210 @@
+package views
+
+import "fmt"
+
+// BrandData feeds the "Marca" settings: the optional identity shown on the
+// pages visitors see when a site cannot answer, and each page's text.
+type BrandData struct {
+	CSRF       string
+	SudoActive bool
+	EdgeOff    bool // the edge proxy is off: saved, served when it runs
+	Error      string
+	Flash      string
+	Name       string
+	Contact    string
+	Color      string
+	Theme      string
+	LogoLight  string
+	LogoDark   string
+	Pages      []BrandPage
+	Version    int64 // busts the preview frames' cache after a save
+}
+
+// BrandPage is one page of the list.
+type BrandPage struct {
+	Kind         string
+	Title, Text  string
+	DefaultTitle string
+	DefaultText  string
+	Custom       bool
+}
+
+func orColor(c string) string {
+	if c == "" {
+		return "#5b57f0"
+	}
+	return c
+}
+
+// brandSubmit is a form's save button: it saves with sudo active, else it
+// opens the sudo dialog first.
+templ brandSubmit(active bool, label string) {
+	if active {
+		<button class="tuc-btn is-primary" type="submit">
+			@Icon("save", "size-3.5")
+			{ label }
+		</button>
+	} else {
+		<button class="tuc-btn is-primary" type="button" data-tuc-modal="#sudo-dialog">
+			@Icon("lock", "size-3.5")
+			{ label }
+		</button>
+	}
+}
+
+// BrandSettings is the "Marca" page.
+templ BrandSettings(d BrandData) {
+	@shell(t(ctx, "brand.page_title")) {
+		@pageHead(t(ctx, "brand.title"), t(ctx, "brand.subtitle"))
+		@pageBody() {
+			@errorAlert(d.Error)
+			@toast("success", d.Flash)
+			@notice("info", "info", t(ctx, "brand.hint"))
+			if d.EdgeOff {
+				@notice("warning", "triangle-alert", t(ctx, "brand.edge_off"))
+			}
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "brand.identity")) {
+					<span class="tuc-badge">{ t(ctx, "brand.optional") }</span>
+				}
+				<form method="post" action="/brand" enctype="multipart/form-data" class={ cardBodyClass + " gap-4" } autocomplete="off">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-4">
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="brand-name">{ t(ctx, "brand.name") }</label>
+							<input class="tuc-input" id="brand-name" name="name" maxlength="60" value={ d.Name } placeholder={ t(ctx, "brand.name_placeholder") }/>
+						</div>
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="brand-contact">{ t(ctx, "brand.contact") }</label>
+							<input class="tuc-input" id="brand-contact" name="contact" maxlength="200" value={ d.Contact } placeholder={ t(ctx, "brand.contact_placeholder") }/>
+						</div>
+					</div>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] gap-4">
+						@logoField("logo_light", t(ctx, "brand.logo_light"), d.LogoLight, "logo-well-light")
+						@logoField("logo_dark", t(ctx, "brand.logo_dark"), d.LogoDark, "logo-well-dark")
+					</div>
+					<span class="tuc-hint -mt-2">{ t(ctx, "brand.logo_hint") }</span>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(280px,100%),1fr))] items-start gap-4">
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="brand-color">{ t(ctx, "brand.color") }</label>
+							<input id="brand-color" name="color" value={ orColor(d.Color) } data-tuc-color data-format="hex" data-alpha="false" data-swatches="#5b57f0,#2563eb,#0ea5e9,#0d9488,#16a34a,#65a30d,#ca8a04,#ea580c,#dc2626,#db2777,#9333ea,#475569,#0f172a,#78716c,#000000"/>
+							<span class="tuc-hint">{ t(ctx, "brand.color_hint") }</span>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<span class="tuc-label" id="brand-theme">{ t(ctx, "brand.theme") }</span>
+							<div class="tuc-btn-group is-segmented w-full [&>.tuc-btn]:flex-1" role="radiogroup" aria-labelledby="brand-theme">
+								for _, th := range []string{"", "light", "dark"} {
+									<label class="tuc-btn">
+										<input type="radio" class="tuc-btn__input" name="theme" value={ th } checked?={ d.Theme == th }/>
+										{ t(ctx, "brand.themes." + orAuto(th)) }
+									</label>
+								}
+							</div>
+						</div>
+					</div>
+					<div class="-mx-4 -mb-4 flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+						@brandSubmit(d.SudoActive, t(ctx, "brand.save"))
+					</div>
+				</form>
+			</section>
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "brand.pages")) {
+					<span class="text-xs text-muted">{ t(ctx, "brand.pages_hint") }</span>
+				}
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(min(320px,100%),1fr))] gap-4 p-4">
+					for _, p := range d.Pages {
+						<article class="flex min-w-0 flex-col overflow-hidden rounded-md border border-border bg-surface">
+							<a class="brand-thumb" href={ templ.SafeURL("/brand/preview/" + p.Kind) } target="_blank" rel="noopener" aria-label={ t(ctx, "brand.open_full", "page", t(ctx, "brand.kind."+p.Kind)) }>
+								<iframe src={ fmt.Sprintf("/brand/preview/%s?thumb=1&v=%d", p.Kind, d.Version) } sandbox="" loading="lazy" tabindex="-1" title={ t(ctx, "brand.kind." + p.Kind) }></iframe>
+							</a>
+							<div class="flex grow flex-col gap-1.5 px-4 pt-3 pb-1">
+								<div class="flex items-center gap-2">
+									<h3 class="m-0 text-sm font-semibold">{ t(ctx, "brand.kind." + p.Kind) }</h3>
+									<span class="grow"></span>
+									if p.Custom {
+										<span class="tuc-badge is-info">{ t(ctx, "brand.custom_text") }</span>
+									} else {
+										<span class="tuc-badge">{ t(ctx, "brand.default") }</span>
+									}
+								</div>
+								<p class="m-0 text-xs text-muted">{ t(ctx, "brand.when." + p.Kind) }</p>
+							</div>
+							<div class="flex items-center justify-end gap-1.5 px-3 py-2.5">
+								<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL("/brand/preview/" + p.Kind) } target="_blank" rel="noopener">
+									@Icon("eye", "size-3.5")
+									{ t(ctx, "brand.view") }
+								</a>
+								<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal={ "#brand-page-" + p.Kind }>
+									@Icon("pencil", "size-3.5")
+									{ t(ctx, "brand.edit") }
+								</button>
+							</div>
+							@brandPageDialog(d, p)
+						</article>
+					}
+				</div>
+			</section>
+			@sudoModal(d.CSRF, "/brand", d.SudoActive)
+		}
+	}
+}
+
+func orAuto(th string) string {
+	if th == "" {
+		return "auto"
+	}
+	return th
+}
+
+templ logoField(name, label, current, bg string) {
+	<div class="flex min-w-0 flex-col gap-1.5">
+		<span class="tuc-label">{ label }</span>
+		if current != "" {
+			<div class={ "flex h-16 items-center justify-center rounded-md border border-border " + bg }>
+				<img class="max-h-10 max-w-[80%]" src={ templ.SafeURL(current) } alt=""/>
+			</div>
+			<label class="tuc-choice text-xs">
+				<input type="checkbox" class="tuc-check" name={ "remove_" + name } value="1"/>
+				{ t(ctx, "brand.remove_logo") }
+			</label>
+		}
+		<input type="file" id={ "brand-" + name } name={ name } accept="image/png,image/jpeg,image/webp" data-tuc-upload data-max-size="200KB" aria-label={ label }/>
+	</div>
+}
+
+templ brandPageDialog(d BrandData, p BrandPage) {
+	<dialog class="tuc-modal is-lg" id={ "brand-page-" + p.Kind } aria-labelledby={ "brand-page-title-" + p.Kind }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id={ "brand-page-title-" + p.Kind }>{ t(ctx, "brand.kind." + p.Kind) }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action={ templ.SafeURL("/brand/pages/" + p.Kind) } class="tuc-modal__body flex flex-col gap-4" autocomplete="off">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<p class="tuc-modal__text">{ t(ctx, "brand.when." + p.Kind) }</p>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for={ "bp-title-" + p.Kind }>{ t(ctx, "brand.page_title_label") }</label>
+					<input class="tuc-input" id={ "bp-title-" + p.Kind } name="title" maxlength="120" value={ p.Title } placeholder={ p.DefaultTitle }/>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for={ "bp-text-" + p.Kind }>{ t(ctx, "brand.page_text_label") }</label>
+					<textarea class="tuc-input min-h-[72px] py-2" id={ "bp-text-" + p.Kind } name="text" maxlength="600" placeholder={ p.DefaultText }>{ p.Text }</textarea>
+				</div>
+				<div class="flex flex-wrap items-center justify-end gap-2">
+					if p.Custom && d.SudoActive {
+						<button class="tuc-btn is-ghost" type="submit" name="action" value="reset">
+							@Icon("rotate-ccw", "size-3.5")
+							{ t(ctx, "brand.reset") }
+						</button>
+					}
+					<span class="flex gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						@brandSubmit(d.SudoActive, t(ctx, "brand.save"))
+					</span>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}

@@ -1,0 +1,503 @@
+package views
+
+import "fmt"
+
+// The "Novo serviço" dialog (docs/27): a Tucano modal over the canvas, with
+// one name per service (the identifier is derived from it and shown as a
+// preview), the rarely changed fields folded under "Opções avançadas", and
+// a Compose tab that imports a whole docker-compose file after a preview.
+
+// NewServiceData feeds the new-service dialog.
+type NewServiceData struct {
+	CSRF        string
+	Project     string
+	ProjectName string
+	Open        bool   // open on load (the /new route, or a form came back)
+	Tab         string // template, image, git or compose
+	Error       string
+	Place       Place
+	Taken       string // identifiers in use, space-separated (for the suggestions)
+	Templates   []NewTemplate
+	Categories  []CatalogCategory
+	// GitHubCreds are the credentials made for github.com: "Meus
+	// projetos" lists what they can read.
+	GitHubCreds    []GitCredOption
+	GitHubSelected string
+	ManualGit   bool // open "paste the HTTPS address" (a form came back)
+	Template    string // the selected template
+	// The name each tab starts with, and the identifier derived from it.
+	TemplateName string
+	TemplateSlug string
+	ImageName    string
+	ImageSlug    string
+	GitName      string
+	GitSlug      string
+	Form         ServiceForm
+	CredOptions  []GitCredOption
+	CredSelected string
+	Advanced     bool // open "Opções avançadas" (the error came from there)
+	Compose      ComposeView
+}
+
+// NewTemplate is a catalog entry in the dialog.
+type NewTemplate struct {
+	ID            string
+	Name          string
+	Description   string
+	Kind          string // db, cache or app (the icon)
+	LogoURL       string
+	Category      string // templates.Categories
+	CategoryLabel string
+	Search        string // lowercase words the search box matches
+	Docs          string
+	Version       int
+	Remote        bool // from the community catalog
+	Services      []TemplateService
+	Exports       []string
+	// Links are its web ports and whether each is born public (automatic
+	// link) or on the project network only.
+	Links         []TemplateLink
+	DefaultName   string // its suggested service name, free in the project
+	// FormName is what its name field shows (the suggestion, or what was
+	// typed when the form came back) and FormSlug the address from it.
+	FormName string
+	FormSlug string
+	Inputs   []TemplateInput
+}
+
+// TemplateService is what one service of a template will be, for the
+// detail panel.
+type TemplateService struct {
+	Name   string // its compose name
+	Image  string
+	Disks  []string // "data → /var/lib/postgresql"
+	Limits string
+	Health bool
+}
+
+// TemplateLink is a web port of a template, for the detail panel.
+type TemplateLink struct {
+	Label  string
+	Port   int
+	Public bool
+	// NeedsSudo: the template is meant to be public, but it will start
+	// internal because the password was not confirmed moments ago.
+	NeedsSudo bool
+}
+
+// CatalogCategory is a filter chip of the catalog.
+type CatalogCategory struct {
+	Key   string
+	Label string
+}
+
+// ComposeView is the Compose tab.
+type ComposeView struct {
+	Source       string // paste or git
+	Text         string
+	Repo         string
+	Branch       string
+	CredSelected string
+	Preview      *ComposePreview
+}
+
+// ComposeSampleURL serves the model compose file (loaded only when asked
+// for: it would weigh on every canvas page).
+const ComposeSampleURL = "/compose-sample.yaml"
+
+// ComposePreview is what an import would create.
+type ComposePreview struct {
+	File      string // read from the repository
+	Services  []ComposePreviewService
+	Notes     []PreviewNote
+	Creatable bool
+	Count     int // services that will be created
+	Warnings  int
+	Skipped   int
+}
+
+// ComposePreviewService is one service of the preview.
+type ComposePreviewService struct {
+	Name    string
+	Slug    string
+	Kind    string // template, image, git or skip
+	Icon    string // db, cache or app
+	What    string // the template, the image or the build path
+	Port    string
+	Limits  string
+	Disks   string
+	Env     []PreviewEnv
+	Notes   []PreviewNote
+	Problem string
+}
+
+// PreviewEnv is a variable in the preview.
+type PreviewEnv struct {
+	Key    string
+	Value  string
+	Ref    bool
+	Secret bool
+}
+
+// PreviewNote is one recognized, ignored or refused item.
+type PreviewNote struct {
+	Level string // ok, info, warn, skip
+	Text  string
+}
+
+func noteIcon(level string) string {
+	switch level {
+	case "ok":
+		return "circle-check"
+	case "warn":
+		return "triangle-alert"
+	case "skip":
+		return "ban"
+	}
+	return "info"
+}
+
+func noteTone(level string) string {
+	switch level {
+	case "ok":
+		return "text-success"
+	case "warn":
+		return "text-warning"
+	case "skip":
+		return "text-danger"
+	}
+	return "text-muted"
+}
+
+func composeKindBadge(kind string) string {
+	switch kind {
+	case "template":
+		return "tuc-badge is-success"
+	case "git":
+		return "tuc-badge is-info"
+	case "skip":
+		return "tuc-badge is-danger"
+	}
+	return "tuc-badge"
+}
+
+func slugOrDash(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
+}
+
+// newServiceDialog is the dialog itself; the canvas page always carries it
+// (closed) for whoever may create services.
+templ newServiceDialog(d NewServiceData) {
+	<dialog class="tuc-modal is-lg new-service" id="new-service" aria-labelledby="ns-title" data-open={ fmt.Sprint(d.Open) } data-project={ d.Project } data-taken={ d.Taken }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__top">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id="ns-title">{ t(ctx, "new_service.title", "project", d.ProjectName) }</h2>
+					<p class="tuc-modal__text">{ t(ctx, "new_service.subtitle") }</p>
+				</div>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			if !d.detailError() && !d.ManualGit {
+				@errorAlert(d.Error)
+			}
+			<div class="tuc-modal__body -mx-5 overflow-x-hidden px-5">
+				<div class="tuc-tabs" data-tuc-tabs>
+					<div class="tuc-tabs__list">
+						<button type="button" class="tuc-tabs__tab" aria-selected={ tabClass(d.Tab, "template") }>
+							@Icon("layers", "size-3.5")
+							{ t(ctx, "new_service.tab_template") }
+						</button>
+						<button type="button" class="tuc-tabs__tab" aria-selected={ tabClass(d.Tab, "git") } data-gh-tab>
+							@githubMark("size-3.5")
+							{ t(ctx, "new_service.tab_mine") }
+						</button>
+						<button type="button" class="tuc-tabs__tab" aria-selected={ tabClass(d.Tab, "image") }>
+							@Icon("box", "size-3.5")
+							{ t(ctx, "new_service.tab_image") }
+						</button>
+						<button type="button" class="tuc-tabs__tab" aria-selected={ tabClass(d.Tab, "compose") }>
+							@Icon("file-code", "size-3.5")
+							{ t(ctx, "new_service.tab_compose") }
+						</button>
+					</div>
+					<div class="tuc-tabs__panel pt-4" hidden?={ d.Tab != "template" }>
+						@catalogTab(d)
+					</div>
+					<div class="tuc-tabs__panel pt-4" hidden?={ d.Tab != "git" }>
+						@myReposTab(d)
+					</div>
+					<div class="tuc-tabs__panel pt-4" hidden?={ d.Tab != "image" }>
+						@newImageForm(d)
+					</div>
+					<div class="tuc-tabs__panel pt-4" hidden?={ d.Tab != "compose" }>
+						@composeTab(d)
+					</div>
+				</div>
+			</div>
+		</div>
+	</dialog>
+	for _, tp := range d.Templates {
+		@templateDialog(d, tp)
+	}
+	@repoDialog(d)
+	@repoURLDialog(d)
+	// "Nova credencial" opens the Git credential dialog over this one;
+	// saving it comes back here with the new credential selected.
+	@gitCredNewDialog(d.CSRF, "/p/"+d.Project+"/new?tab=git", d.Project, false, "")
+}
+
+// nameField is the one name a service asks for, with the identifier
+// derived from it (assets/newservice.js keeps the preview in step).
+templ nameField(id, value, slug, suggestFrom, suggestKind string) {
+	<div class="flex min-w-0 flex-col gap-1.5">
+		<label class="tuc-label" for={ id }>{ t(ctx, "new_service.name") }</label>
+		<input
+			class="tuc-input"
+			id={ id }
+			name="name"
+			required
+			maxlength="80"
+			autocomplete="off"
+			value={ value }
+			data-service-name
+			if suggestFrom != "" {
+				data-suggest-from={ suggestFrom }
+				data-suggest-kind={ suggestKind }
+			}
+		/>
+		<span class="tuc-hint">
+			{ t(ctx, "new_service.address") }
+			<code class="font-mono text-fg" data-slug-out>{ slugOrDash(slug) }</code>
+		</span>
+	</div>
+}
+
+// advanced folds the fields most people never change.
+templ advanced(open bool) {
+	<details class="rounded-sm border border-border bg-surface-2" open?={ open }>
+		<summary class="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 text-[13px] font-medium select-none [&::-webkit-details-marker]:hidden">
+			@Icon("sliders-horizontal", "size-3.5 text-muted")
+			{ t(ctx, "new_service.advanced") }
+			<span class="text-xs font-normal text-muted">{ t(ctx, "new_service.advanced_hint") }</span>
+			<span class="grow"></span>
+			@Icon("chevron-down", "size-3.5 text-muted")
+		</summary>
+		<div class="grid grid-cols-[repeat(auto-fill,minmax(min(180px,100%),1fr))] items-start gap-3 border-t border-border p-3">
+			{ children... }
+		</div>
+	</details>
+}
+
+templ smallField(id, name, label, value, placeholder, mode string) {
+	<div class="flex min-w-0 flex-col gap-1.5">
+		<label class="tuc-label" for={ id }>{ label }</label>
+		if name == "port" {
+			<input class="tuc-input font-mono" id={ id } name={ name } inputmode="numeric" maxlength="5" pattern="[1-9][0-9]{0,4}" data-allow="port" placeholder={ placeholder } value={ value } autocomplete="off"/>
+		} else {
+			<input class="tuc-input font-mono" id={ id } name={ name } inputmode={ mode } maxlength="200" placeholder={ placeholder } value={ value } autocomplete="off"/>
+		}
+	</div>
+}
+
+templ formFooter(submitIcon, submit string) {
+	<div class="mt-1 flex justify-end gap-2 border-t border-border pt-4">
+		<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+		<button class="tuc-btn is-primary" type="submit">
+			@Icon(submitIcon, "size-3.5")
+			{ submit }
+		</button>
+	</div>
+}
+
+templ newImageForm(d NewServiceData) {
+	<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/services") } class="flex flex-col gap-4" autocomplete="off">
+		<input type="hidden" name="csrf" value={ d.CSRF }/>
+		@placeFields(d.Place)
+		<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] items-start gap-3">
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="ns-img-image">{ t(ctx, "project.form.image") }</label>
+				<input class="tuc-input font-mono" id="ns-img-image" name="image" required maxlength="255" placeholder="nginx:1.29-alpine" value={ d.Form.Image }/>
+				<span class="tuc-hint">{ t(ctx, "new_service.image_hint") }</span>
+			</div>
+			@nameField("ns-img-name", d.ImageName, d.ImageSlug, "ns-img-image", "image")
+		</div>
+		@advanced(d.Advanced && d.Tab == "image") {
+			@smallField("ns-img-port", "port", t(ctx, "project.form.port"), d.Form.Port, t(ctx, "new_service.port_auto"), "numeric")
+			@smallField("ns-img-memory", "memory_mb", t(ctx, "project.form.memory"), d.Form.MemoryMB, "512", "numeric")
+			@smallField("ns-img-cpus", "cpus", t(ctx, "project.form.cpus"), d.Form.CPUs, "1", "decimal")
+		}
+		@notice("info", "shield", t(ctx, "project.form.hint"))
+		@formFooter("plus", t(ctx, "project.form.submit"))
+	</form>
+}
+
+templ composeTab(d NewServiceData) {
+	{{ c := d.Compose }}
+	<div class="flex flex-col gap-4">
+		<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/compose/preview") } class="flex flex-col gap-4" autocomplete="off">
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			@placeFields(d.Place)
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "compose.hint") }</p>
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="ns-compose-source">{ t(ctx, "compose.source") }</label>
+				<select class="tuc-input" id="ns-compose-source" name="source" data-tuc-select data-clearable="false">
+					<option value="paste" selected?={ c.Source != "git" }>{ t(ctx, "compose.source_paste") }</option>
+					<option value="git" selected?={ c.Source == "git" }>{ t(ctx, "compose.source_git") }</option>
+				</select>
+			</div>
+			<div class="flex flex-col gap-3" data-shown-when="ns-compose-source=paste">
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<span class="flex items-end gap-2">
+						<label class="tuc-label" for="ns-compose-text">{ t(ctx, "compose.file") }</label>
+						<span class="grow"></span>
+						<button type="button" class="tuc-btn is-ghost is-sm" data-compose-sample="#ns-compose-text" data-src={ ComposeSampleURL }>
+							@Icon("file-text", "size-3.5")
+							{ t(ctx, "compose.use_sample") }
+						</button>
+					</span>
+					<textarea class="tuc-input min-h-56 font-mono text-xs leading-relaxed" id="ns-compose-text" name="compose" rows="14" maxlength="262144" spellcheck="false" placeholder={ t(ctx, "compose.placeholder") } required>{ c.Text }</textarea>
+					<span class="tuc-hint">{ t(ctx, "compose.limits", "kb", 256, "n", 20) }</span>
+				</div>
+			</div>
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] items-start gap-3" data-shown-when="ns-compose-source=git">
+				<div class="col-span-full flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="ns-compose-repo">{ t(ctx, "git.repo") }</label>
+					<input class="tuc-input font-mono" id="ns-compose-repo" name="repo" type="url" required maxlength="300" placeholder="https://github.com/dono/repositorio" value={ c.Repo }/>
+					<span class="tuc-hint">{ t(ctx, "compose.repo_hint") }</span>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="ns-compose-branch">{ t(ctx, "git.branch") }</label>
+					<input class="tuc-input font-mono" id="ns-compose-branch" name="branch" maxlength="200" placeholder="main" value={ c.Branch }/>
+				</div>
+				@gitCredPicker("ns-compose", d.CredOptions, c.CredSelected)
+			</div>
+			@notice("info", "shield", t(ctx, "compose.security"))
+			<div class="flex justify-end gap-2">
+				<button class="tuc-btn is-outline" type="submit">
+					@Icon("search", "size-3.5")
+					{ t(ctx, "compose.analyze") }
+				</button>
+			</div>
+		</form>
+		if c.Preview != nil {
+			@composePreview(d, *c.Preview)
+		}
+	</div>
+}
+
+templ composePreview(d NewServiceData, p ComposePreview) {
+	{{ c := d.Compose }}
+	<section class="hg-in d0 flex flex-col gap-3 border-t border-border pt-4" id="compose-preview" aria-labelledby="compose-preview-title">
+		<div class="flex flex-wrap items-center gap-2">
+			<h3 class="m-0 text-sm font-semibold" id="compose-preview-title">{ t(ctx, "compose.preview") }</h3>
+			if p.File != "" {
+				<code class="font-mono text-xs text-muted">{ p.File }</code>
+			}
+			<span class="grow"></span>
+			<span class="tuc-badge is-success">{ t(ctx, "compose.count_create", "n", p.Count) }</span>
+			if p.Warnings > 0 {
+				<span class="tuc-badge is-warning">{ t(ctx, "compose.count_warn", "n", p.Warnings) }</span>
+			}
+			if p.Skipped > 0 {
+				<span class="tuc-badge is-danger">{ t(ctx, "compose.count_skip", "n", p.Skipped) }</span>
+			}
+		</div>
+		for _, n := range p.Notes {
+			@previewNote(n)
+		}
+		<ul class="m-0 flex list-none flex-col gap-2 p-0">
+			for _, s := range p.Services {
+				<li class="flex flex-col gap-2 rounded-sm border border-border bg-surface-2 p-3">
+					<div class="flex min-w-0 flex-wrap items-center gap-2">
+						@nodeIcon(s.Icon)
+						<strong class="font-semibold">{ s.Name }</strong>
+						if s.Slug != "" && s.Slug != s.Name {
+							<span class="font-mono text-xs text-muted">→ { s.Slug }</span>
+						}
+						<span class={ composeKindBadge(s.Kind) }>{ t(ctx, "compose.kind." + s.Kind) }</span>
+						<span class="grow"></span>
+						<span class="truncate font-mono text-xs text-muted">{ s.What }</span>
+					</div>
+					if s.Problem != "" {
+						@notice("danger", "circle-alert", s.Problem)
+					}
+					if s.Port != "" || s.Limits != "" || s.Disks != "" {
+						<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+							if s.Port != "" {
+								<span>{ t(ctx, "compose.port", "port", s.Port) }</span>
+							}
+							if s.Limits != "" {
+								<span>{ s.Limits }</span>
+							}
+							if s.Disks != "" {
+								<span class="flex items-center gap-1">
+									@Icon("hard-drive", "size-3")
+									<span class="font-mono">{ s.Disks }</span>
+								</span>
+							}
+						</div>
+					}
+					if len(s.Env) > 0 {
+						<div class="flex flex-wrap gap-1.5">
+							for _, e := range s.Env {
+								<span class="inline-flex max-w-full items-center gap-1 truncate rounded-xs border border-border bg-surface px-1.5 py-0.5 font-mono text-[11px]">
+									<span>{ e.Key }</span>
+									if e.Ref {
+										<span class="text-accent-text">= { e.Value }</span>
+									} else if e.Secret && e.Value != "" {
+										<span class="text-muted">= ••••</span>
+									}
+								</span>
+							}
+						</div>
+					}
+					if len(s.Notes) > 0 {
+						<ul class="m-0 flex list-none flex-col gap-1 p-0">
+							for _, n := range s.Notes {
+								<li>
+									@previewNote(n)
+								</li>
+							}
+						</ul>
+					}
+				</li>
+			}
+		</ul>
+		<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/compose") } class="flex flex-col gap-3">
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			@placeFields(d.Place)
+			<input type="hidden" name="source" value={ c.Source }/>
+			if c.Source == "git" {
+				<input type="hidden" name="repo" value={ c.Repo }/>
+				<input type="hidden" name="branch" value={ c.Branch }/>
+				<input type="hidden" name="credential" value={ c.CredSelected }/>
+			} else {
+				<input type="hidden" name="compose" value={ c.Text }/>
+			}
+			if !p.Creatable {
+				@notice("warning", "triangle-alert", t(ctx, "compose.blocked_hint"))
+			}
+			<div class="flex justify-end gap-2 border-t border-border pt-4">
+				<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+				<button class="tuc-btn is-primary" type="submit" disabled?={ !p.Creatable }>
+					@Icon("rocket", "size-3.5")
+					{ t(ctx, "compose.create", "n", p.Count) }
+				</button>
+			</div>
+		</form>
+	</section>
+}
+
+templ previewNote(n PreviewNote) {
+	<span class="flex items-start gap-1.5 text-xs">
+		<span class={ "mt-px inline-flex shrink-0 " + noteTone(n.Level) }>
+			@Icon(noteIcon(n.Level), "size-3.5")
+		</span>
+		<span class="min-w-0">{ n.Text }</span>
+	</span>
+}

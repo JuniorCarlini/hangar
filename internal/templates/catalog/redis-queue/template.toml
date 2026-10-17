@@ -1,0 +1,29 @@
+id = "redis-queue"
+version = 1
+category = "queue"
+tags = ["redis", "key-value", "celery", "sessions"]
+docs = "https://redis.io/docs/latest/"
+main = "redis"
+name = { en = "Redis (queues and sessions)", "pt-BR" = "Redis (filas e sessões)" }
+description = { en = "For Celery, queues and sessions: data saved to disk (AOF) and never evicted. Generated password; FLUSHALL, CONFIG and DEBUG disabled.", "pt-BR" = "Para Celery, filas e sessões: dados gravados em disco (AOF) e nunca descartados. Senha gerada; FLUSHALL, CONFIG e DEBUG desligados." }
+
+[variables.password]
+generate = "secret"
+
+[[exports]]
+key = "REDIS_URL"
+value = "redis://:${password}@${service}:6379/0"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "6379"
+
+[[exports]]
+key = "PASSWORD"
+value = "${password}"
+secret = true

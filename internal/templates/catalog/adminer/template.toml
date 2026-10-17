@@ -1,0 +1,19 @@
+id = "adminer"
+version = 2
+category = "admin"
+tags = ["sql", "postgresql", "mysql", "gui"]
+docs = "https://www.adminer.org/"
+main = "adminer"
+name = { en = "Adminer", "pt-BR" = "Adminer" }
+description = { en = "Lightweight web interface for PostgreSQL, MariaDB and others. Stores nothing; prefer a domain with access restricted to you.", "pt-BR" = "Interface web leve para PostgreSQL, MariaDB e outros. Não guarda nada; prefira um domínio com acesso só seu." }
+
+[[exports]]
+key = "URL"
+value = "http://${service}:8080"
+
+[[endpoints]]
+port = 8080
+label = { en = "Adminer", "pt-BR" = "Adminer" }
+# An admin screen starts on the project network only: make it public
+# in the Network tab, preferably with a restricted domain.
+public = false

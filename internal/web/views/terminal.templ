@@ -1,0 +1,144 @@
+package views
+
+import "fmt"
+
+// TerminalData feeds the terminal page, shown in the drawer's terminal
+// modal (terminalDialogs).
+type TerminalData struct {
+	CSRF       string
+	Project    string
+	Slug       string
+	SudoActive bool
+	Running    bool
+	Commands   []SavedCommand
+	Suggested  []SavedCommand // found in the container (Django, npm…)
+	Error      string
+}
+
+// SavedCommand is a command kept for one service's terminal.
+type SavedCommand struct {
+	ID      string
+	Name    string
+	Command string
+}
+
+func (d TerminalData) base() string { return "/p/" + d.Project + "/s/" + d.Slug }
+
+// TerminalPage is the terminal in a page of its own: the shell picker, the
+// saved commands and the screen (terminal.js on xterm.js). It is the one
+// page whose CSP allows inline styles (xterm writes its theme into a
+// <style>), and the only one a panel page may frame.
+templ TerminalPage(d TerminalData) {
+	@layout(t(ctx, "terminal.page_title", "service", d.Slug)) {
+		<div class="terminal-page">
+			@errorAlert(d.Error)
+			if !d.SudoActive {
+				@notice("warning", "shield-alert", t(ctx, "terminal.sudo_expired"))
+			} else if !d.Running {
+				@notice("info", "info", t(ctx, "terminal.not_running"))
+			} else {
+				<div class="terminal-toolbar">
+					<span class="tuc-label">{ t(ctx, "terminal.shell") }</span>
+					<div class="tuc-btn-group is-segmented" role="radiogroup" aria-label={ t(ctx, "terminal.shell") }>
+						<label class="tuc-btn is-sm"><input type="radio" class="tuc-btn__input" name="shell" value="bash" checked/>bash</label>
+						<label class="tuc-btn is-sm"><input type="radio" class="tuc-btn__input" name="shell" value="sh"/>sh</label>
+					</div>
+					<button type="button" class="tuc-btn is-outline is-sm" id="terminal-again">
+						@Icon("rotate-ccw", "size-3.5")
+						{ t(ctx, "terminal.reconnect") }
+					</button>
+					<span class="text-xs text-muted" id="terminal-status" aria-live="polite"></span>
+					<span class="grow"></span>
+					<span class="text-xs text-subtle">{ t(ctx, "terminal.note") }</span>
+					<button type="button" class="tuc-btn is-ghost is-sm" id="terminal-clear">
+						@Icon("eraser", "size-3.5")
+						{ t(ctx, "terminal.clear") }
+					</button>
+				</div>
+				<div class="terminal-main">
+					<aside class="terminal-side" aria-labelledby="saved-title">
+						<div class="flex items-center gap-2">
+							<h2 class="m-0 text-[13px] font-semibold" id="saved-title">{ t(ctx, "terminal.saved") }</h2>
+							<span class="grow"></span>
+							<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#save-command" data-save-command="" data-save-name="">
+								@Icon("plus", "size-3.5")
+								{ t(ctx, "terminal.save_short") }
+							</button>
+						</div>
+						for _, c := range d.Commands {
+							<div class="saved-command">
+								<button type="button" class="saved-command__run" data-run-command={ c.Command } title={ t(ctx, "terminal.run_named", "name", c.Name) }>
+									@Icon("play", "size-3.5")
+									<span class="flex min-w-0 grow flex-col text-left">
+										<span class="truncate text-[13px] font-medium">{ c.Name }</span>
+										<span class="truncate font-mono text-[11px] text-subtle">{ c.Command }</span>
+									</span>
+								</button>
+								<form class="inline-flex" data-confirm={ t(ctx, "confirm.command_delete.title", "name", c.Name) } data-confirm-text={ t(ctx, "confirm.command_delete.text") } data-confirm-ok={ t(ctx, "confirm.command_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/terminal/commands/delete") }>
+									<input type="hidden" name="csrf" value={ d.CSRF }/>
+									<input type="hidden" name="id" value={ c.ID }/>
+									<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "terminal.delete") } aria-label={ t(ctx, "terminal.delete_named", "name", c.Name) }>
+										@Icon("trash", "size-3.5")
+									</button>
+								</form>
+							</div>
+						}
+						if len(d.Suggested) > 0 {
+							<h3 class="m-0 mt-2 text-xs font-medium text-subtle">{ t(ctx, "terminal.suggested") }</h3>
+							for _, c := range d.Suggested {
+								<div class="saved-command">
+									<button type="button" class="saved-command__run" data-run-command={ c.Command } title={ t(ctx, "terminal.run_named", "name", c.Name) }>
+										@Icon("play", "size-3.5")
+										<span class="flex min-w-0 grow flex-col text-left">
+											<span class="truncate text-[13px]">{ c.Name }</span>
+											<span class="truncate font-mono text-[11px] text-subtle">{ c.Command }</span>
+										</span>
+									</button>
+									<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#save-command" data-save-command={ c.Command } data-save-name={ c.Name } title={ t(ctx, "terminal.save_this") } aria-label={ t(ctx, "terminal.save_this") }>
+										@Icon("bookmark", "size-3.5")
+									</button>
+								</div>
+							}
+						}
+					</aside>
+					<link rel="stylesheet" href={ asset("vendor/xterm/xterm.css") }/>
+					<div class="terminal-box">
+						<div class="terminal-screen" id="terminal" data-ws={ d.base() + "/terminal/ws" } data-connecting={ t(ctx, "terminal.connecting") } data-connected={ t(ctx, "terminal.connected") } data-closed={ t(ctx, "terminal.closed") }></div>
+					</div>
+				</div>
+				<dialog class="tuc-modal is-md" id="save-command" aria-labelledby="save-command-title" data-open={ fmt.Sprint(d.Error != "") }>
+					<div class="tuc-modal__panel">
+						<div class="tuc-modal__header">
+							<h2 class="tuc-modal__title" id="save-command-title">{ t(ctx, "terminal.save") }</h2>
+							<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+								@Icon("x", "size-4")
+							</button>
+						</div>
+						<form method="post" action={ templ.SafeURL(d.base() + "/terminal/commands") } class="tuc-modal__body flex flex-col gap-3" autocomplete="off">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<p class="tuc-modal__text">{ t(ctx, "terminal.save_text") }</p>
+							<div class="flex flex-col gap-1.5">
+								<label class="tuc-label" for="cmd-name">{ t(ctx, "terminal.save_name") }</label>
+								<input class="tuc-input" id="cmd-name" name="name" required maxlength="60" placeholder={ t(ctx, "terminal.save_name_placeholder") }/>
+							</div>
+							<div class="flex flex-col gap-1.5">
+								<label class="tuc-label" for="cmd-command">{ t(ctx, "terminal.save_command") }</label>
+								<input class="tuc-input font-mono text-[13px]" id="cmd-command" name="command" required maxlength="1000" spellcheck="false" placeholder={ t(ctx, "terminal.save_command_placeholder") }/>
+							</div>
+							<div class="flex justify-end gap-2">
+								<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+								<button class="tuc-btn is-primary" type="submit">
+									@Icon("save", "size-3.5")
+									{ t(ctx, "terminal.save") }
+								</button>
+							</div>
+						</form>
+					</div>
+				</dialog>
+				<script src={ asset("vendor/xterm/xterm.js") } defer></script>
+				<script src={ asset("vendor/xterm/addon-fit.js") } defer></script>
+				<script src={ asset("terminal.js") } defer></script>
+			}
+		</div>
+	}
+}

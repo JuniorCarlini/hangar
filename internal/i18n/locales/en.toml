@@ -1,0 +1,2599 @@
+# English texts. Keys are the same in every language; CI fails if one is
+# missing (docs/22).
+
+[common]
+expand = "Open full screen"
+language = "Language"
+copied = "Copied"
+
+[locale]
+pt-BR = "Português (Brasil)"
+en = "English"
+
+[role]
+owner = "owner"
+admin = "admin"
+operator = "operator"
+viewer = "viewer"
+
+[theme]
+system = "System"
+dark = "Dark"
+light = "Light"
+
+[nav]
+updates = "Updates"
+status_links = "Status links"
+git_credentials = "Git credentials"
+brand = "Brand"
+ip_copy = "Copy the server IP ({ip})"
+ip_copied = "IP copied"
+
+backups = "Backups"
+search_placeholder = "Search or run…"
+overview = "Overview"
+search = "Search…"
+account = "My account"
+logout = "Log out"
+domains = "Dynamic domains"
+ports = "Open ports"
+alerts = "Alerts"
+menu = "Navigation"
+server = "Server"
+projects = "Projects"
+section_access = "Access"
+section_ops = "Operations"
+section_system = "System"
+new_project = "New project"
+update = "Update Hangar"
+
+[error]
+internal = "Internal error. Please try again."
+unauthenticated = "Not authenticated."
+forbidden = "Not allowed."
+sudo_required = "Confirm with your authenticator code to continue."
+csrf = "Request refused."
+bad_request = "Invalid request."
+not_found = "Not found."
+exists = "One with that name already exists."
+docker_unavailable = "Docker is not available on this server."
+action_failed = "Could not complete: {error}"
+
+[login]
+page_title = "Log in · Hangar"
+step = "Step {n} of {total}"
+title = "Log in"
+subtitle = "Restricted access"
+email = "E-mail"
+password = "Password"
+continue = "Continue"
+no_reset = "No \"forgot password\": recovery uses your recovery codes or the server."
+
+[login.error]
+bad_credentials = "Wrong e-mail or password, or the account is locked."
+rate_limited = "Too many attempts. Try again in {min} min."
+busy = "Too many login attempts right now. Try again shortly."
+no_totp = "This account has no 2FA yet. Set it up on the server with: hangard user totp -email {email}"
+form_expired = "The form expired. Please sign in again."
+expired = "The verification step expired. Please log in again."
+
+[twofa]
+page_title = "Verification · Hangar"
+title = "Authenticator code"
+subtitle = "Open your authenticator app and type the 6 digits. This step expires in 5 minutes."
+code = "Code"
+submit = "Log in"
+lost_phone = "Lost your phone? Use a recovery code in the same field."
+limit_note = "After 5 wrong attempts, new attempts are blocked for 15 minutes."
+
+[twofa.error]
+invalid = "Wrong or already used code."
+
+[sudo]
+confirm = "Confirm"
+password_label = "Confirm your password to continue"
+title = "Confirm it's you"
+text = "Sensitive actions ask for confirmation again; it lasts 5 minutes and is recorded in the audit log."
+
+[password]
+too_short = "Weak password: use at least {min} characters."
+too_long = "Password too long: at most {max} characters."
+same_as_email = "Weak password: it cannot be the same as the e-mail."
+low_variety = "Weak password: use more varied characters."
+common = "Weak password: it is a very common password."
+
+[user.error]
+email_invalid = "Invalid e-mail: {email}"
+email_taken = "A user with this e-mail already exists."
+role_required = "Role is required."
+role_unknown = "Unknown role \"{role}\" (use owner, admin, operator or viewer)."
+not_found = "User {email} does not exist."
+
+[account]
+page_title = "My account · Hangar"
+title = "My account"
+preferences = "Preferences"
+language = "Language"
+language_browser = "Follow the browser"
+theme = "Theme"
+preferences_hint = "Applies to every page, on any computer you log in from."
+save = "Save"
+saved = "Preferences saved."
+name = "Your name"
+name_placeholder = "What the panel calls you"
+
+[account.error]
+locale = "Unsupported language."
+theme = "Invalid theme."
+name = "Name up to 60 characters, without < or >."
+
+[projects]
+update_text = "Signed and verified. The update takes under a minute and rolls back by itself if it fails."
+new = "New project"
+update_banner = "Hangar {version} is available."
+update_view = "View update"
+docker_down = "Docker unavailable: the panel could not reach Docker; projects and services are read-only."
+
+[projects.form]
+name = "Name"
+name_placeholder = "Multi-domain lab"
+slug = "Technical name"
+slug_hint = "Becomes the container prefix:"
+submit = "Create project"
+
+[project]
+back_canvas = "Back to canvas"
+network = "network {name}"
+network_title = "Network"
+network_name = "Project network"
+network_names = "Internal names"
+network_hint = "Inside the project, each service answers to its short name (web) and its full name ({example})."
+
+[project.form]
+image = "Image"
+port = "Internal port"
+memory = "Memory (MB)"
+cpus = "CPU"
+hint = "Starts with no extra privileges, with limits and no port open to the outside."
+submit = "Create and deploy"
+number_invalid = "Invalid number in port, memory or CPU."
+
+[project.error]
+slug = "Invalid technical name: use lowercase letters, digits and hyphens (2 to 32 characters)."
+name_too_long = "Name too long (at most {max})."
+has_services = "The project still has services."
+reserved = "The name \"{slug}\" is reserved by Hangar."
+link_self = "A project cannot connect to itself."
+
+[state]
+running = "Running"
+deploying = "Deploying"
+restarting = "Restarting"
+exited = "Stopped"
+dead = "Dead"
+created = "Created"
+paused = "Paused"
+removing = "Removing"
+missing = "Container missing"
+failed = "Last deploy failed"
+unknown = "Unknown"
+
+[deploy.status]
+live = "Active"
+running = "In progress"
+failed = "Failed"
+superseded = "Superseded"
+
+[deploy.trigger]
+rebuild = "from scratch (no cache)"
+restore = "restore"
+create = "creation"
+manual = "manual"
+webhook = "webhook"
+rollback = "rollback"
+ports = "ports"
+
+[flash]
+compose = "Services created from the compose file. Their deploys have started: databases first."
+volume = "Disk added. It applies from the next deploy."
+volume-removed = "Disk detached. It applies from the next deploy."
+backup-policy = "Backup schedule saved."
+backup-queued = "Backup queued. It shows in the history when done."
+backup-preparing = "Preparing the encrypted backup to download."
+restore-started = "Restore started. Follow it in the history below."
+deploy = "Deploy started."
+env = "Variable saved. Deploy to apply it."
+env-deleted = "Variable deleted. Deploy to apply it."
+action = "Done."
+domain = "Domain added. The certificate is issued on the first visit."
+domain-deleted = "Domain removed."
+dynamic-on = "Dynamic domains on. Deploy so the app receives the secret."
+dynamic-off = "Dynamic domains off."
+domains-blocked = "Domain blocked."
+domains-unblocked = "Domain unblocked."
+port = "Port opened. The service was recreated to publish it."
+port-closed = "Port closed."
+rollback = "Rolling back to the chosen version."
+deploy-settings = "Deploy settings saved."
+git = "Repository saved. It applies from the next deploy."
+git-token = "Token saved."
+webhook-off = "Automatic deploys turned off."
+maintenance-on = "Maintenance mode on. Visitors now see the maintenance page."
+maintenance-off = "Maintenance mode off. The site is answering again."
+
+[service]
+restart_long = "Restart service"
+stop_long = "Stop service"
+start_long = "Start service"
+resources = "Resources"
+deploy = "Deploy"
+restart = "Restart"
+pending = "There are variable changes that are not live yet."
+apply_deploy = "Apply and deploy"
+sudo_label = "To reveal secrets or delete the service, confirm with your authenticator code"
+close = "Close panel"
+tabs = "Service sections"
+summary = "{image} · port {port} · {memory} MB · {cpus} CPU"
+
+[service.stat]
+state = "State"
+image = "Image"
+limits = "Limits"
+limits_value = "{memory} MB · {cpus} CPU"
+restarts = "Restarts"
+oom = "out of memory"
+
+[service.logs]
+mark = "Mark"
+mark_hint = "Drops a timed line in the log; it is saved and shows for whoever opens the log later"
+mark_line = "mark"
+connecting = "Connecting…"
+live = "Streaming"
+reconnecting = "Reconnecting…"
+ended = "Stream ended"
+pause = "Pause"
+resume = "Resume"
+
+[service.deploys]
+empty = "No deploys yet."
+title = "Deploys"
+last = { one = "the latest", other = "last {n}" }
+
+[service.env]
+empty = "No variables yet. Add one or paste a .env."
+reveal = "Reveal"
+delete = "Delete"
+delete_named = "Delete {key}"
+name = "Name"
+value = "Value"
+value_placeholder = "the value is stored encrypted"
+save = "Save variable"
+revealed = "Value revealed on this page; viewing it was recorded in the audit log."
+add = "New variable"
+bulk = ".env file"
+bulk_hint = "Edit or paste a whole .env file. Secrets show as a comment and don't change unless you replace them. Saving adds or updates variables; it never removes."
+bulk_label = ".env content"
+bulk_placeholder = "DJANGO_DEBUG=0"
+bulk_save = "Save"
+copy = "Copy"
+next_deploy = "It stays pending and goes in with the next deploy."
+broken_title = { one = "1 broken reference", other = "{n} broken references" }
+broken_hint = "This service's next deploy will fail until the reference is fixed or removed."
+
+[service.env.broken]
+service = "{key} points to the service {service}, which does not exist in this project."
+service_in = "{key} points to the service {service}, which does not exist in the project {project}."
+key = "{key} points to {target} of the service {service}, but it neither offers nor has a variable with that name."
+project = "{key} points to the project {project}, which is not connected to this one."
+
+[service.env.suggest]
+title = "Suggested variables"
+hint = "The repository's {file} file lists these variables, which this service doesn't have yet. Values are only examples: \"Add\" opens the .env file with them at the end so you can review before saving. Values that look like a secret aren't copied."
+example = "Example"
+add = "Add"
+dismiss = "Dismiss"
+comment = "Suggested by {file} in the repository"
+
+[service.maintenance]
+title = "Maintenance mode"
+hint = "While on, every domain of this service shows the maintenance page (503) instead of the site. The container keeps running: you can migrate the database or check things calmly and turn it off when done. The page text lives in Brand."
+active = "On: visitors to this service's domains are seeing the maintenance page."
+no_edge = "The edge proxy is off on this server, so the maintenance page shows nowhere."
+no_domains = "This service has no domain yet: the maintenance page only shows on its domains."
+turn_on = "Turn maintenance on"
+turn_off = "Turn maintenance off"
+badge = "Under maintenance"
+
+[service.danger]
+title = "Danger zone"
+type_name = "To delete, type"
+hint = "Removes the container and its configuration. Volumes are not deleted."
+delete = "Delete service"
+name_mismatch = "The typed name does not match."
+
+[service.error]
+name = "Use a name with at least two letters or digits."
+slug_taken = "This project already has a service with the internal address {slug}. Pick another name."
+slug = "Invalid service name: lowercase letters, digits and hyphens."
+image = "Invalid image (e.g. nginx:1.29-alpine)."
+port = "Invalid port."
+memory = "Memory between 16 MB and 64 GB."
+cpus = "CPU between 0.05 and 64."
+deploy_running = "A deploy is already running for this service."
+
+[env.error]
+key = "Invalid variable name: letters, digits and _ (cannot start with a digit)."
+too_large = "Value larger than {max} KB."
+null_byte = "Value contains a null character."
+reference = "Variable {key} references {ref}, which does not exist (or the project is not connected)."
+bulk_line = "Line {line} is invalid: use NAME=value."
+bulk_empty = "No variables in the pasted text."
+bulk_too_many = "At most {max} variables at once."
+
+[docker.error]
+not_managed = "A container with this name exists and was not created by Hangar; nothing was changed."
+
+[update]
+signed = "signature verified"
+safety = "Before switching, the panel database is copied. If the new version does not come up in 90 s, the previous one comes back by itself. Sites keep running."
+history = "History"
+history_empty = "No update applied here yet."
+version = "Version"
+result = "Result"
+when = "When"
+page_title = "Update · Hangar"
+title = "Hangar update"
+installed = "Installed version:"
+applying = "Applying the update…"
+applying_note = "The panel will restart. The stores stay online. This page reloads by itself."
+available = "Version {version} available"
+available_note = "You are on {current}. Only the panel restarts; if the new version does not come up, it is rolled back automatically."
+view_github = "View on GitHub"
+apply = "Update to {version}"
+sudo_label = "Confirm with your authenticator code to update"
+up_to_date = "All up to date"
+check_failed = "Could not check for versions right now: {error}"
+check_interval = "The panel checks for new versions every 6 hours."
+check_now = "Check now"
+
+[update.state]
+ok = "Applied"
+rolled_back = "Rolled back automatically"
+failed = "Failed"
+applying = "Applying"
+
+[update.error]
+check = "Could not check for versions: {error}"
+pending = "An update is already in progress."
+refused = "Update refused: {error}"
+not_stable = "The latest release is not stable."
+version_changed = "The available version is now {available}, not {requested}."
+manifest_version = "The signed manifest is for {manifest}, not {requested}."
+http = "Release lookup: {host} answered {status}."
+missing_asset = "Release {version} has no file {file}."
+
+[release.error]
+bad_signature = "Release signature does not match."
+not_newer = "The version is not newer than the installed one."
+not_in_manifest = "File {file} is not in the manifest."
+hash_mismatch = "The hash of {file} does not match the manifest."
+bad_version = "Invalid version \"{version}\" (expected vX.Y.Z)."
+
+[secrets.error]
+key_mode = "Master key {path} has mode {mode}: it must be 0400 or 0600."
+
+[config.error]
+allowed_port = "[alerts] allowed_ports: {value} is not a valid port (1 to 65535)."
+scan_hour = "scan.hour must be between 0 and 23 (got {value})."
+osv_api = "scan.osv_api must be an https URL (got {value})."
+catalog_url = "templates.catalog_url must be an https URL (got {value})."
+status_host = "status.hosts has an invalid value or one already used by the panel: {value}."
+read = "Could not read the configuration: {error}"
+parse = "Could not parse {file}: {error}"
+unknown_field = "Unknown field in {file}:\n{detail}"
+required = "{field} is required."
+listen_empty = "panel.listen needs at least one address."
+listen = "panel.listen \"{addr}\": {error}"
+listen_port = "port required"
+listen_all = "an empty host listens on every interface; give a loopback or private IP"
+listen_name = "use an IP, not a name"
+listen_public = "the panel only listens on loopback or a private IP; public exposure is Caddy's job"
+hosts_empty = "panel.hosts needs at least one host."
+host_blank = "panel.hosts does not accept an empty value."
+repo = "invalid update.repo: \"{value}\" (use owner/repository)."
+api_base = "update.api_base must be https: \"{value}\"."
+telegram_api = "alerts.telegram_api must be https: \"{value}\"."
+binary_path = "update.binary_path must be an absolute path."
+service = "invalid update.service: \"{value}\"."
+edge_subnet = "invalid edge.subnet: \"{value}\" (a private IPv4 network, at most /29)."
+edge_image = "invalid edge.image: \"{value}\"."
+edge_acme_ca = "edge.acme_ca must be an https URL: \"{value}\"."
+edge_acme_root = "edge.acme_ca_root only makes sense with edge.acme_ca."
+edge_public_ip = "invalid IP in edge.public_ips: \"{value}\"."
+edge_rate = "edge.max_new_certs_per_hour must be between 1 and 1000 (got {value})."
+edge_hooks_host = "edge.hooks_hostname must be a domain name in lowercase (got {value})."
+edge_hooks_disabled = "edge.hooks_hostname needs edge.enabled = true: Caddy is what makes it public."
+edge_base_domain = "edge.base_domain must be a domain name in lowercase (got {value})."
+edge_dns = "edge.dns_provider supports only \"cloudflare\" for now, and needs edge.base_domain and edge.dns_token (got {value})."
+edge_dns_image = "edge.dns_provider needs a Caddy image with the DNS module; the default ({image}) will not do. Build deploy/caddy and set edge.image."
+edge_dns_token = "edge.dns_token without edge.dns_provider does nothing. Set the provider or drop the token."
+
+[app.error]
+listen = "Could not listen on {addr}: {error}"
+foreign_owner = "data_dir {dir} belongs to another user (uid {uid}); run as that user (e.g. sudo -u hangar hangard)."
+token_read = "Could not read the GitHub token: {error}"
+token_mode = "GitHub token {path} has mode {mode}: use 0600."
+
+[audit.tamper]
+removed_or_reordered = "previous hash does not match (record removed or reordered)"
+content_changed = "content changed"
+
+[cli]
+error_prefix = "error:"
+flag_config = "configuration file"
+missing_command = "Missing command."
+missing_subcommand = "Missing subcommand."
+unknown_command = "Unknown command \"{command}\"."
+unknown_subcommand = "Unknown subcommand \"{command}\"."
+need_root = "Must run as root."
+audit_usage = "Usage: hangard audit verify"
+audit_ok = "Audit log intact: {n} records checked."
+audit_tampered = "Audit log tampered at record {id}: {reason}."
+usage = """
+Usage: hangard <command> [options]
+
+Commands:
+  serve          run the panel
+  user           create users, set up 2FA, unlock accounts
+  lockdown       lock and unlock the panel (panic button)
+  self-update    find, download and apply new Hangar versions
+  system         install the systemd units (used by the installer)
+  secrets        replace the master key (rotate-key) with the panel stopped
+  audit verify   check the audit log integrity
+  restore        bring the panel and the databases back from the backups (new server)
+  template       check, pack and sign service templates
+  version        print the version
+
+Common options:
+  -config path   configuration file (default /etc/hangar/hangar.toml)
+"""
+
+[cli.secrets]
+usage = """
+Usage: hangard secrets rotate-key [-config file] [-out file]
+
+Re-encrypts every secret in the database with a new master key. Run it as the
+hangar user with the panel stopped (systemctl stop hangard). The new key goes
+to data_dir/master.key.new; then, as root, put it in place of the old one
+(step by step in docs/24).
+"""
+flag_out = "where to write the new key (default: data_dir/master.key.new)"
+panel_running = "The panel is running. Stop it first: sudo systemctl stop hangard"
+out_exists = "{path} already exists: install or delete that key before creating another."
+rotated = """{n} secrets encrypted with the new key, written to {out}.
+Now, as root:
+  install -m 0400 -o hangar -g hangar {key} {key}.old
+  install -m 0400 -o hangar -g hangar {out} {key}
+  shred -u {out}
+  systemctl start hangard
+Keep the old key until a new panel backup is done: older backups hold the old key."""
+
+[cli.user]
+usage = """
+Usage: hangard user <subcommand> [options]
+
+Subcommands:
+  create   create a user and set up 2FA        (-email, -role, -no-2fa)
+  totp     set up 2FA again (lost phone)        (-email)
+  totp-off turn 2FA off for the account          (-email)
+  password reset the password (forgotten)        (-email)
+  unlock   unlock a locked account             (-email)
+"""
+flag_email = "user e-mail"
+flag_role = "role: owner, admin, operator or viewer"
+email_required = "-email is required."
+created = "User {email} created with role {role}."
+unlocked = "Account {email} unlocked."
+flag_no_2fa = "create the user without 2FA (they can turn it on later in My account)"
+no_2fa = "No 2FA: signing in asks only for the password, and the panel shows a banner until 2FA is turned on in My account."
+no_2fa_required = "Warning: this server requires 2FA (require_2fa); this user can only sign in after running: hangard user totp -email ..."
+password_reset = "Password for {email} changed. The account was unlocked and its open sessions ended."
+totp_off = "2FA turned off for {email}. Open sessions were closed."
+
+[cli.password]
+intro = "Password (at least {min} characters; a long phrase beats symbols):"
+prompt = "password:"
+repeat = "repeat:"
+mismatch = "passwords do not match"
+not_set = "Password not set."
+
+[cli.totp]
+scan = "Set up 2FA: scan the QR code with your authenticator app\n(Google Authenticator, 1Password, Bitwarden, Authy...).\n"
+manual = "No camera? Type the key in the app: {secret}"
+prompt = "6-digit code shown by the app:"
+mismatch = "Code does not match. Check that your phone's clock is right and try again."
+enabled = "2FA enabled. Recovery codes (each works ONCE):\n"
+keep_codes = "Keep them off this computer (paper, password manager). They will not be shown again."
+
+[cli.selfupdate]
+usage = """
+Usage: hangard self-update <subcommand> [-config path]
+
+Subcommands:
+  check   tell whether a new version exists
+  stage   download and verify the new version and leave the request (same as the button)
+  apply   apply the pending request (root; systemd calls it)
+"""
+up_to_date = "Hangar {version} is up to date."
+available = "New version: {version} (installed: {installed})"
+staged = "Version verified and request written; systemd applies it next."
+need_root = "apply must run as root (systemd calls hangar-updater.service)."
+nothing_pending = "No pending update."
+applied = "Hangar updated from {from} to {to}."
+
+[cli.template]
+usage = """
+Usage: hangard template <subcommand>
+
+Subcommands:
+  check <dir>...                     checks templates with the panel's own rules
+                                     (one template folder or a catalog of folders)
+  pack <catalog> [-key file] [-out dir]
+                                     builds catalog.tar.gz and catalog.tar.gz.sig (catalog CI);
+                                     without -key, the key comes from HANGAR_CATALOG_KEY
+  keygen                             generates the catalog key pair
+"""
+no_dir = "Give the templates directory."
+check_ok = "{n} templates checked, all valid."
+check_failed = "{bad} templates with problems ({ok} valid)."
+flag_key = "file with the private key (base64); default: the HANGAR_CATALOG_KEY variable"
+flag_out = "directory to write catalog.tar.gz and its signature to"
+bad_key = "Private key missing or invalid (base64 of an Ed25519 key)."
+key_mismatch = "This key does not match the catalog public key embedded in Hangar."
+packed = "Catalog written to {file} ({bytes} bytes) with its signature next to it."
+keygen = """Public key (paste into CatalogPublicKeyHex, internal/templates/remote.go):
+{public}
+
+Private key (HANGAR_CATALOG_KEY secret in the hangar-templates repository; keep it nowhere else):
+{private}"""
+
+[cli.system]
+usage = """
+Usage: hangard system install-units   (root)
+  write the systemd units and journald limit embedded in this binary
+"""
+written = "wrote {path}"
+
+[domain]
+edge_disabled = "The edge proxy (Caddy) is off: domains are saved but not served. Turn it on under [edge] in hangar.toml."
+need_port = "Set the service's internal port to receive domains."
+empty = "No fixed domains."
+hostname = "Domain"
+dns_hint = "Point DNS (A/AAAA) at this server first; HTTPS is automatic."
+add = "Add domain"
+remove = "Remove"
+remove_named = "Remove {host}"
+remove_sudo = "Confirm it's you to remove"
+fixed = "Fixed domain"
+https_auto = "Automatic HTTPS"
+cert_active = "HTTPS active"
+offline = "Off the air"
+offline_hint = "This domain's port is on the project network only, so it does not answer from outside. Make the port public or remove the domain."
+cert_pending = "Issuing certificate"
+cert_pending_hint = "The certificate is not out yet; meanwhile, visitors on http:// see the \"Activating HTTPS\" page. If it takes more than a few minutes, check that the domain's DNS points at this server."
+title = "Domains"
+certificate = "Certificate"
+wildcard = "Wildcard (all subdomains)"
+wildcard_hint = "Serves any name one level below the domain, such as shop1.example.com."
+preview = "Will be added:"
+wildcard_notice = "There is no wildcard certificate (it needs access to your DNS provider's API): each subdomain gets its own certificate on its first visit, which takes a few seconds longer, and counts toward the hourly cap on new names. It covers one level only: the bare domain and deeper names are added separately. Point a wildcard DNS record (*) at this server."
+wildcard_badge = "wildcard"
+wildcard_cert = "per subdomain, on demand"
+wildcard_cert_hint = "Each subdomain gets its own certificate on its first visit."
+
+endpoint_label = "Target port"
+[endpoint]
+section = "Service links"
+public = "Public"
+open = "Open"
+no_link = "No automatic link — set a base domain or the server's public IP."
+no_link_short = "No automatic link"
+sslip = "Auto link"
+link_off = "Auto link off"
+internal_hint = "Project network only"
+make_public = "Make public"
+admin_only = "Only admins can put a service on the internet."
+public_confirm = "Put {label} on the internet?"
+public_confirm_text = "Anyone with the link can open {label}. If it has no login of its own, prefer a domain with restricted access."
+public_confirm_ok = "Make public"
+internal_confirm = "Take {label} off the internet?"
+internal_confirm_text = "The automatic link stops opening; the project's other services still reach it on the internal network."
+internal_confirm_ok = "Take it off"
+sslip_confirm = "Turn on the automatic link of {label}?"
+sslip_confirm_text = "A new address starts opening this service on the internet."
+sslip_confirm_ok = "Turn on"
+bind_hint = "The domain makes this port public and takes the place of its automatic link."
+
+[endpoint.error]
+has_domains = { one = "Remove this port's domain before taking it off the internet.", other = "Remove this port's {n} domains before taking it off the internet." }
+
+[domain.error]
+hostname = "Invalid domain (e.g. shop.example.com)."
+reserved = "{domain} is an automatic link's address; pick another domain."
+no_port = "The service needs an internal port to receive domains."
+dynamic_taken = "Service {service} already takes dynamic domains; only one per server."
+edge_apply = "Saved, but Caddy rejected the configuration: {error}"
+
+[domain.dynamic]
+explain = "Any hostname that is not a fixed domain reaches this service. A certificate is issued only after the app confirms, through a signed call, that the hostname belongs to an active customer."
+check_path = "The app answers at"
+secret_env = "Signing secret, delivered on deploy as"
+elsewhere = "Already on for {service}."
+reveal = "Reveal secret"
+switch = "Accept customer domains"
+unlock = "Confirm identity to change"
+requests = "See certificate requests"
+secret_copy = "Copy the secret"
+rotate = "Change secret"
+rotate_hint = "Generates a new secret. The app only receives it on the next deploy; deploy right after."
+rotated = "Secret changed. Deploy so the app receives the new one."
+
+[domain.reason]
+fixed_domain = "fixed domain"
+wildcard_domain = "subdomain of a wildcard"
+app_authorized = "approved by the app"
+invalid_hostname = "invalid name"
+blocked = "blocked"
+no_dynamic_service = "no service with dynamic domains"
+rate_limited = "hourly cap on new domains"
+app_denied = "unknown to the app"
+app_error = "the app did not answer"
+dns_mismatch = "DNS does not point here"
+internal_error = "internal error"
+app_bad_signature = "the app rejected the signature (deploy so it gets the current secret)"
+
+[domains]
+subtitle = "service {service} takes the customer domains"
+reason_placeholder = "phishing"
+page_title = "Domains · Hangar"
+title = "Dynamic domains"
+no_dynamic = "No service takes dynamic domains. Turn it on in a service's Domains section."
+recent = "Recent certificate requests"
+recent_empty = "No requests yet."
+allowed = "Allowed"
+denied = "Denied"
+block = "Block"
+block_named = "Block {host}"
+blocked = "Blocked"
+blocked_empty = "No blocked domains."
+unblock = "Unblock"
+unblock_named = "Unblock {host}"
+reason = "Reason"
+configure = "Configure in the service"
+filter = "Filter"
+filter_all = "All"
+filter_deny = "Denied only"
+filter_allow = "Allowed only"
+decision = "Decision"
+count = "Times"
+last = "Last"
+since = "Since"
+
+[template]
+generated_hint = "Passwords are generated and stored encrypted; you never type one."
+
+[template.error]
+input = "Invalid value in \"{field}\"."
+
+[link]
+title = "Connected projects"
+hint = "Connected projects see each other by full container name (e.g. {project}_postgres), like Easypanel. Others do not."
+empty = "No connected projects."
+project = "Connect to project"
+connect = "Connect"
+disconnect = "Disconnect"
+disconnect_named = "Disconnect from {project}"
+connect_with = "Connect to"
+
+[export]
+title = "Offered to others"
+hint = "Use these values in other services with a reference such as {example}; it is resolved on every deploy."
+key = "Key"
+reference = "Reference"
+copy = "Copy {ref}"
+empty = "This service offers no values to others. Templates (Postgres, Redis) offer the ready internal URL."
+
+[backup]
+hint = "Runs pg_dump right now and downloads it in the browser, with no port opened."
+download = "Download backup"
+title = "Backup"
+format = ".dump file (pg_restore custom format)"
+
+[backup.error]
+not_ready = "Set up the recovery kit (confirmed) and a destination in Backups first."
+busy = "A backup or restore of this service is already running. Try again shortly."
+label = "Give the key a name (up to 60 characters)."
+public_key = "Invalid public key. Generate the kit again on this page."
+key_exists = "This key is already registered."
+code = "The code does not match this key. Use the kit generated for it."
+last_key = "This is the only confirmed key: generate and confirm another before removing it."
+endpoint = "Invalid or internal endpoint. Use the provider's https address."
+target_name = "Give the destination a name (letters, digits, spaces; up to 60)."
+bucket = "Invalid bucket name (3 to 63 lowercase letters, digits, dot or hyphen)."
+region = "Invalid region."
+prefix = "Invalid folder: use lowercase letters, digits, dot, hyphen and slashes."
+credentials = "Enter the access key and secret key."
+lock_mode = "Choose the lock mode."
+lock_days = "Lock days between 1 and 3650."
+no_object_lock = "The bucket did not accept the lock (Object Lock). Create a bucket with Object Lock on."
+cannot_write = "The credential cannot write to this bucket."
+cannot_read = "The credential writes but cannot read back: {error}"
+can_delete = "The credential can delete files. Create a write-and-read-only key: it is what protects the backups from ransomware."
+unreachable = "Could not talk to the bucket: {error}"
+schedule = "Invalid schedule."
+kit = "Select the hangar-kit.txt file."
+kit_passphrase = "The kit is protected: enter the right passphrase."
+wrong_key = "This kit does not open this service's backups."
+when = "Choose a moment in the past."
+no_base = "There is no base before that moment. Choose a later moment or a pg_dump."
+point = "Choose the restore point and destination."
+unsupported = "This service has no backup to download."
+not_running = "The service must be running to make the backup."
+
+[port]
+title_plural = "Published ports"
+title = "Ports"
+empty = "No published ports. Services in the project already reach each other on the internal network, with no port."
+host_port = "Server port"
+container_port = "Container port"
+protocol = "Protocol"
+access_label = "Who can connect"
+ips = "Allowed IPs"
+ips_placeholder = "200.1.2.3, 10.0.0.0/24"
+expires = "Closes by itself"
+expires_never = "Never"
+expires_1h = "In 1 hour"
+expires_24h = "In 24 hours"
+expires_7d = "In 7 days"
+open = "Open port"
+close = "Close"
+close_named = "Close port {port}"
+hint = "The site already answers on its domains (80 and 443). Open a port only for direct access, preferably limited by IP and with an expiry."
+database_warning = "A database open to any IP is scanned within minutes: prefer \"Only these IPs\" or \"Localhost only\" with an SSH tunnel."
+ssh_target = "user@server"
+ssh_command = "ssh -L {port}:127.0.0.1:{port} {target}"
+your_ip = "Your IP now: {ip}"
+recreate = "Opening the port recreates the container: a few seconds offline."
+any_warning = "Any IP on the internet will reach this port. A port open to everyone is scanned by bots within minutes: use it only if the service has a strong password, and prefer a short expiry."
+localhost_hint = "Only the server itself reaches the port. From your computer, use an SSH tunnel: ssh -L <port>:127.0.0.1:<port> {target}."
+
+[port.access]
+any = "Any IP"
+ips = "Only these IPs"
+localhost = "Only this server (localhost)"
+
+[port.error]
+host_port = "Invalid server port."
+container_port = "Invalid container port."
+reserved = "Port {port} is used by the server itself (SSH, HTTP, HTTPS or the panel)."
+protocol = "Invalid protocol."
+access = "Choose who can connect."
+expires = "Invalid expiry."
+no_firewall = "The firewall is not available; use \"Localhost only\"."
+ip = "Invalid IP: \"{value}\"."
+ips_count = "Give between 1 and 64 IPs or networks."
+in_use = "Port {port} is already used by another service."
+firewall = "Could not write the firewall rules: {error}"
+
+[ports]
+page_title = "Open ports · Hangar"
+title = "Open ports on the server"
+hint = "Every published port shows up here, with who can connect, so none is forgotten open."
+empty = "No open ports."
+firewall_pending = "The server is still applying the IP rules."
+firewall_error = "The server could not apply the IP rules: {error}"
+count = { one = "1 port", other = "{n} ports" }
+firewall_ok = "IP rules applied"
+firewall_ok_text = "Hangar's firewall sits in front of Docker since boot. Last applied: {when}."
+service = "Service"
+opened_by = "Opened by"
+system = "system"
+
+[account.totp]
+title = "Two-step verification (2FA)"
+on = "On"
+off = "Off"
+why = "With 2FA, a leaked password is not enough to sign in: the code from the phone is also needed. Recommended for any panel in production."
+step_scan = "Scan the QR code with an authenticator app (Google Authenticator, 1Password, Authy…)."
+qr_alt = "QR code to add Hangar to the authenticator app"
+manual = "No camera? Type this key in the app:"
+step_code = "6-digit code shown by the app"
+enable = "Turn on 2FA"
+enabled = "2FA is on. Keep the recovery codes below."
+recovery_intro = "Recovery codes: each works once, to sign in if you lose the phone. Keep them off the computer; they are not shown again."
+disable_label = "Current code from the app (or a recovery code)"
+disable_hint = "Without 2FA, signing in asks only for the password."
+disable = "Turn off 2FA"
+disabled = "2FA is off."
+required = "This server requires 2FA on every account (require_2fa in hangar.toml)."
+
+[account.totp.error]
+code = "Invalid code. Check the phone's clock and try the next code."
+already_on = "2FA is already on."
+required = "This server requires 2FA; it cannot be turned off."
+
+
+[tucano]
+show = "Show"
+hide = "Hide"
+invalid = "Invalid value"
+close = "Close"
+confirm = "Confirm"
+cancel = "Cancel"
+
+[deploy]
+log = "Deploy log"
+rollback = "Roll back to this version"
+rollback_short = "Roll back"
+rebuild = "Rebuild from scratch"
+rebuild_hint = "Builds again without cache and pulls the base images again"
+
+[deploy.phase]
+validate = "validating"
+restore = "restoring the previous version"
+clone = "fetching the code"
+build = "building"
+pull = "pulling image"
+predeploy = "pre-deploy"
+start = "starting"
+health = "waiting to be healthy"
+switch = "switching"
+
+[deploy.error]
+validate_timeout = "The validation time limit goes from 1 to {max} minutes."
+command = "Invalid command (unclosed quote or too long)."
+health_path = "The healthcheck path starts with / and has no spaces (e.g. /healthz)."
+rollback = "You can only roll back to one of the last 5 deploys that went live (not the current one)."
+
+[deploy.strategy]
+rolling_hint = "The new version starts next to the old one and only takes over after passing the healthcheck. If it fails, the old one stays live."
+recreate_hint = "This service has a volume or a published port: two at once would corrupt data or fight over the port, so the deploy stops the old one before starting the new (a few seconds offline)."
+
+[deploy.settings]
+validate = "Validation command"
+validate_placeholder = "python manage.py check --deploy"
+validate_timeout = "Limit (min)"
+validate_hint = "Optional. Runs inside the new version once it is healthy and before it goes live; if it fails, nothing changes and the current version stays."
+title = "Deploy"
+predeploy = "Pre-deploy command"
+predeploy_placeholder = "python manage.py migrate --noinput"
+predeploy_hint = "Runs once, with the new image, before switching. If it fails, the deploy stops and the current version stays."
+health_path = "Healthcheck path"
+health_placeholder = "/healthz"
+health_hint = "A GET on this path must answer below 400. Empty: uses the image healthcheck or checks the port."
+next_deploy = "Applies from the next deploy."
+save = "Save"
+
+[overview]
+vuln_critical = { one = "1 critical vulnerability with a fix available", other = "{n} critical vulnerabilities with a fix available" }
+vuln_security = { one = "1 pending security vulnerability", other = "{n} pending security vulnerabilities" }
+see_updates = "See updates"
+page_title = "Overview · Hangar"
+title = "Overview"
+period = "Period"
+memory = "Memory"
+disk = "Disk"
+network = "Network"
+now = "now"
+top = "Using the most"
+service = "Service"
+state = "State"
+activity = "Activity"
+cpus = "{n} vCPU"
+disk_note = "{used} of {total}"
+disk_images = "Images"
+disk_volumes = "Volumes"
+disk_containers = "Containers"
+disk_other = "System and other"
+disk_used = "In use"
+disk_free = "Free"
+net_peak = "peak ↓{down} ↑{up} {unit} in the period"
+uptime_days = { one = "up 1 day", other = "up {n} days" }
+uptime_hours = { one = "up 1 h", other = "up {n} h" }
+no_services = "No Hangar container is running right now."
+orphan = "not in the panel"
+orphan_hint = "Container of a service the panel no longer has. It stays in Docker until removed."
+activity_empty = "Nothing happened yet: deploys, restarts, opened ports and logins show up here."
+
+[period]
+1h = "1 h"
+24h = "24 h"
+7d = "7 d"
+90d = "90 d"
+
+[time]
+just_now = "just now"
+minutes_ago = { one = "1 min ago", other = "{n} min ago" }
+hours_ago = { one = "1 h ago", other = "{n} h ago" }
+days_ago = { one = "1 day ago", other = "{n} days ago" }
+
+[activity]
+deploy = "Deploy of {service} is live"
+deploy_failed = "Deploy of {service} failed"
+rollback = "{service} went back to an earlier version"
+start = "{service} started"
+stop = "{service} stopped"
+restart = "{service} restarted"
+service_create = "Service {service} created"
+service_delete = "Service {service} deleted"
+drift = "{service} differs from what the panel expects"
+project_create = "Project {project} created"
+project_delete = "Project {project} deleted"
+port_open = "Port {port} opened on {service}"
+port_close = "Port {port} closed on {service}"
+domain_add = "Domain {domain} added"
+domain_remove = "Domain {domain} removed"
+login = "Logged in to the panel"
+locked = "Account locked after wrong password attempts"
+update_ok = "Hangar updated to {version}"
+update_rolled_back = "Update to {version} rolled back"
+update_failed = "Update to {version} failed"
+
+[activity.drift_kind]
+orphan = "{service}: container of a service the panel no longer has"
+stopped = "{service} should be running and is stopped"
+missing = "{service}: the container is gone from Docker"
+
+[confirm.logout]
+title = "Log out?"
+text = "You will need to sign in again with your password (and 2FA, if set)."
+ok = "Log out"
+
+[confirm.session_end]
+title = "End this session?"
+text = "The device leaves the panel right away."
+ok = "End"
+
+[confirm.totp_disable]
+title = "Turn off 2FA?"
+text = "A leaked password becomes enough to sign in."
+ok = "Turn off"
+
+[confirm.block]
+title = "Block this domain?"
+text = "It gets no certificate until unblocked."
+ok = "Block"
+
+[confirm.unblock]
+title = "Unblock this domain?"
+text = "It may ask for a certificate again, if the app approves."
+ok = "Unblock"
+
+[confirm.port_close]
+title = "Close this port?"
+text = "Whoever connects through it from outside loses the connection."
+ok = "Close port"
+
+[confirm.env_delete]
+title = "Delete this variable?"
+text = "It becomes a pending change, applied by the next deploy."
+ok = "Delete"
+
+[confirm.domain_delete]
+title = "Remove this domain?"
+text = "The site stops answering on it."
+ok = "Remove"
+
+[confirm.dynamic]
+title = "Change customer domains?"
+text = "This changes which domains this service accepts."
+ok = "Confirm"
+
+[confirm.rollback]
+title = "Go back to this version?"
+text = "The chosen image goes live again with today's variables, with no downtime."
+ok = "Roll back"
+
+[confirm.unlink]
+title = "Disconnect the projects?"
+text = "Their services stop seeing each other on the network."
+ok = "Disconnect"
+
+[confirm.restart]
+title = "Restart the service?"
+text = "It is down for a few seconds."
+ok = "Restart"
+
+[confirm.stop]
+title = "Stop the service?"
+text = "It stays down until started again."
+ok = "Stop"
+
+[canvas]
+tidy = "Tidy up"
+tidy_hint = "Puts the cards back in the automatic layout"
+pista = "Runway"
+volume = "Data volume"
+summary = { one = "1 service · network {network}", other = "{n} services · network {network}" }
+settings = "Settings"
+new_service = "New service"
+empty = "No services yet. Start from a template (Postgres, Redis) or from an image."
+label = "The project's services and the connections between them"
+linked = "Connected projects: {projects}"
+internet = "Internet"
+domains = { one = "1 domain", other = "{n} domains" }
+customer_domains = "customer domains"
+deploying = "Deploy · {phase}"
+pending = "Changes to apply"
+zoom = "Canvas zoom"
+zoom_in = "Zoom in"
+zoom_out = "Zoom out"
+zoom_reset = "Actual size"
+zoom_fit = "Fit to screen"
+pending_count = { one = "1 service with pending changes", other = "{n} services with pending changes" }
+pending_view = "View"
+broken_refs = { one = "Broken reference in {keys}: the next deploy will fail.", other = "{n} variables with a broken reference ({keys}): the next deploy will fail." }
+
+[canvas.kind]
+app = "App"
+db = "Database"
+cache = "Cache"
+
+[canvas.menu]
+rollback = "Roll back…"
+port = "Open a port…"
+delete = "Delete service…"
+
+[canvas.connect]
+title = "Connect {from} → {to}"
+pick = "Which value will it use?"
+none = "This service exports no values. Use the service's variables to connect by hand."
+var = "Variable name"
+hint = "Saved as a pending change; applies on the next deploy."
+save = "Connect"
+
+[new_service]
+subtitle = "A name is enough: everything else starts with safe defaults."
+tab_compose = "Compose"
+name = "Name"
+address = "Internal address:"
+advanced = "Advanced options"
+advanced_hint = "port, memory, CPU…"
+create = "Create service"
+image_hint = "With its version (tag). Public images from Docker Hub, GHCR and other registries."
+port_auto = "automatic"
+port_expose = "Dockerfile EXPOSE or 8000"
+title = "New service in {project}"
+tab_template = "Template"
+tab_mine = "My repositories"
+tab_image = "Docker image"
+
+[project.danger]
+title = "Danger zone"
+hint = "Only a project without services can be deleted. Deleting needs your identity confirmed and the name typed."
+delete = "Delete project"
+
+[service.tab]
+backups = "Backups"
+variables = "Variables"
+logs = "Logs"
+metrics = "Metrics"
+settings = "Settings"
+overview = "Overview"
+network = "Network"
+
+[service.metrics]
+stopped = "The service is not running: no current values, only the history."
+hint = "CPU counts like docker stats: 1 CPU = one whole core. Memory leaves out the file cache the system hands back when it needs it."
+cpu_limit = "limit {cpus} CPU"
+mem_limit = "limit {limit}"
+cores = "{n} CPU"
+cpu_of = "{pct}% of {cpus} CPU"
+mem_of = "{pct}% of {limit}"
+disk_note = "in volumes"
+disk_none = "no volume"
+disk_pending = "measuring…"
+
+[menu]
+enable_2fa = "Turn on 2FA"
+recommended = "recommended"
+alerts = "Alerts"
+alerts_none = "No alerts"
+alerts_unread = "Alerts: new ones"
+alerts_recent = "Recent alerts"
+alerts_read = "Mark as read"
+alerts_all = "See all alerts"
+lock = "Lock panel"
+hello = "Hi,"
+open = "Open the account menu"
+
+[account.sessions]
+title = "Open sessions"
+device = "Device"
+last = "Last used"
+this = "this one"
+end = "End"
+ended = "Session ended."
+
+[domains.stat]
+certified = "With a certificate"
+certified_sub = "domains approved by the app"
+new = "New this hour"
+new_sub = "hourly cap; renewals do not count"
+denied = "Denied in the last 24 h"
+denied_sub = "mostly automated scans"
+
+
+[confirm.deploy]
+title = "Deploy {service}?"
+text = "A new version goes out with the pending changes, without taking the site down."
+ok = "Deploy"
+
+[palette]
+title = "Search or run"
+open = "Open the search for pages, projects and actions"
+placeholder = "Search pages, projects, services or actions…"
+results = "Results"
+loading = "Loading…"
+error = "Could not load the list. Close and open it again."
+hint_move = "move"
+hint_run = "open"
+hint_close = "close"
+service_tab = "{service} › {tab}"
+new_service = "New service in {project}"
+deploy = "Deploy {service}"
+restart = "Restart {service}"
+theme = "Switch theme: {theme}"
+empty = "Nothing found for this search."
+
+[palette.group]
+pages = "Pages"
+projects = "Projects"
+services = "Services"
+actions = "Actions"
+
+[pista]
+page_title = "Pista catalog · Hangar"
+title = "Pista catalog"
+subtitle = "The panel's tokens and components, as they are used"
+colors = "Colors"
+colors_hint = "Each swatch is painted by the Tailwind class that points at the token. Both themes side by side."
+typography = "Typography"
+sample = "The hangar shelters, the runway is where everything leaves."
+buttons = "Buttons"
+sizes = "Sizes"
+icon_button = "Icon-only button"
+badges = "Badges"
+alerts = "Alerts"
+forms = "Fields"
+feedback = "Confirmations and toasts"
+feedback_hint = "The buttons only open the example: nothing is sent or changed."
+dialogs = "Confirm dialog"
+toasts = "Toasts"
+tables = "Table"
+tables_hint = "Compact header, roomier rows"
+open = "Open"
+cards = "Card and empty state"
+card_text = "1 px border, 4 px radius and the header split off by a line."
+empty = "No services yet. Start from a template or an image."
+empty_action = "Create the first one"
+status = "Status indicators"
+status_hint = "State is never color alone: a square and a label."
+canvas = "Canvas cards"
+
+[pista.btn]
+primary = "Primary"
+outline = "Secondary"
+ghost = "Ghost"
+danger = "Danger"
+success = "Start"
+disabled = "Disabled"
+
+[pista.size]
+sm = "Small"
+md = "Default"
+lg = "Large"
+
+[pista.tone]
+default = "Default"
+info = "Info"
+success = "Success"
+warning = "Warning"
+danger = "Danger"
+
+[pista.alert]
+info = "Deploy in progress. The log shows up here as soon as it starts."
+success = "Backup finished and verified."
+warning = "Port 5433 is open to any IP."
+danger = "The healthcheck did not answer within 120 s. See the deploy log."
+
+[pista.toast]
+info = "Deploy started."
+success = "Variable saved."
+warning = "Service restarting."
+danger = "Could not connect to Docker."
+
+[pista.field]
+name = "Service name"
+name_placeholder = "web"
+name_hint = "Lowercase letters, digits and hyphens."
+search = "Search"
+select = "Protocol"
+invalid = "Field with an error"
+error = "This field is required."
+switch = "Accept customer domains"
+check = "Store as a secret"
+view = "Project view"
+
+[pista.view]
+canvas = "Canvas"
+list = "List"
+
+[pista.confirm]
+title = "Confirm this action?"
+text = "Catalog example: nothing happens when you confirm."
+ok = "Confirm"
+
+[pista.col]
+service = "Service"
+image = "Image"
+port = "Port"
+state = "State"
+updated = "Updated"
+
+[deps]
+page_title = "Updates · Hangar"
+title = "Updates and vulnerabilities"
+never = "never checked"
+last_run = "last check {when}"
+last_run_partial = "last check {when} · some parts could not be read"
+scan_now = "Check now"
+scanning = "Checking…"
+pending = "Pending"
+show_all = "Show all"
+empty = "Nothing pending: everything running has no known vulnerability and is up to date."
+never_scanned = "No check yet. It runs every day at 06:00, or click Check now."
+copy = "Copy"
+ignored_count = { one = "1 ignored item is hidden from the list.", other = "{n} ignored items are hidden from the list." }
+ignores = "Ignored"
+unignore = "Warn again"
+problems = "Could not read everything"
+problems_hint = "The inventory of these services is incomplete (image without find/cat, stopped container or registry unreachable). What could be read is still checked."
+
+[deps.col]
+level = "Level"
+where = "Where"
+package = "Package"
+version = "Version"
+advisory = "Advisory"
+action = "What to do"
+until = "Until"
+reason = "Reason"
+
+[deps.level]
+critical = "Critical"
+security = "Security"
+minor = "Patch/minor"
+major = "Major"
+
+[deps.level_hint]
+critical = "Critical/high CVE with a fix: warns right away"
+security = "Other CVEs: daily summary"
+minor = "Compatible new version: weekly summary"
+major = "Major version, may break: weekly summary"
+
+[deps.severity]
+critical = "critical severity"
+high = "high severity"
+medium = "medium severity"
+low = "low severity"
+unknown = "severity not rated"
+none = "no severity"
+
+[deps.kind]
+vuln = "Vulnerability"
+patch = "Patch release"
+minor = "Minor release"
+major = "Major release"
+
+[deps.target]
+edge = "server · Caddy"
+
+[deps.action]
+pypi = "Update it in requirements.txt/pyproject and deploy:"
+npm = "Update the package and deploy:"
+composer = "Update the package and deploy:"
+os = "Image system package: rebuild the image or use a newer base tag (fixed in {version})."
+image = "Change the image and deploy:"
+image_major = "Major version: read the migration guide and back up before switching to"
+no_fix = "No fixed version yet. Keep an eye on the advisory."
+
+[deps.ignore]
+button = "Ignore"
+title = "Ignore {package}?"
+text = "The item leaves the list and the warnings. The reason goes to the audit log."
+mode = "For how long"
+days = "For 30 days"
+version = "Until a version newer than {version} comes out"
+reason_placeholder = "E.g. updating in Saturday's maintenance window"
+until_version = "a version newer than {version}"
+until_date = "until {date}"
+
+[deps.flash]
+scan = "Check started. The page refreshes by itself."
+ignored = "Item ignored."
+unignored = "The item will be warned about again."
+
+[deps.error]
+not_found = "Item not found."
+reason = "Write the reason (3 to 300 characters)."
+ignore_mode = "Choose for how long to ignore it."
+
+[deps.notice]
+critical = { one = "Hangar — critical vulnerability", other = "Hangar — {n} critical vulnerabilities" }
+daily = { one = "Hangar — daily summary: 1 vulnerability", other = "Hangar — daily summary: {n} vulnerabilities" }
+weekly = { one = "Hangar — weekly summary: 1 update", other = "Hangar — weekly summary: {n} updates" }
+no_fix = "no fix yet"
+
+[status]
+page_title = "Server status"
+title = "Server status"
+updated = "updated at {time}"
+all_ok = "All systems running"
+stopped = { one = "1 service down", other = "{n} services down" }
+degraded = { one = "1 service degraded", other = "{n} services degraded" }
+uptime = "Uptime"
+alerts = "Active alerts"
+services = "Services"
+uptime_24h = "Up (24 h)"
+tv = "TV mode"
+footer = { one = "1 service on this link", other = "{n} services on this link" }
+generic_label = "Service {letter}"
+
+[status.state]
+running = "Running"
+degraded = "Degraded"
+stopped = "Down"
+
+[statuslink]
+page_title = "Status links · Hangar"
+title = "Status links"
+subtitle = "public pages, no login, only numbers and aliases"
+new = "New link"
+create = "Create link"
+list = "Active links"
+empty = "No links yet. Create one to watch the server from a phone or a wall screen."
+created_title = "Link created"
+created_text = "Copy it now: the address is shown only this once. If you lose it, revoke it and create another."
+url_page = "Page"
+url_tv = "TV mode"
+copy = "Copy"
+services_n = { one = "1 service", other = "{n} services" }
+ip_any = "any IP"
+ip_only = "only {ips}"
+expired = "Expired"
+expires_at = "expires {date}"
+never = "never expires"
+access_today = "{today} today · {total} total"
+never_opened = "never opened"
+revoke = "Revoke"
+revoke_named = "Revoke the link {name}"
+privacy = "The public page never shows container names, images, versions, domains or IPs. Revoking answers 404 right away."
+aliases = "Public aliases"
+aliases_hint = "How each service shows on links in Alias mode. Without one it shows as \"Service A\", \"Service B\"…"
+alias_placeholder = "E.g. Main store"
+alias_for = "Alias of {service}"
+save = "Save"
+no_services = "No services yet."
+services = "Services shown"
+name_placeholder = "E.g. Home monitor"
+name_hint = "Only you see this name, in the panel."
+naming_hint = "Alias: each service's public name. Generic: \"Service A\", \"Service B\". Hidden: server totals only."
+ips = "Restrict by IP (optional)"
+ips_hint = "Addresses or ranges separated by commas. Empty = any IP. Other IPs get 404."
+
+[statuslink.col]
+name = "Name"
+naming = "Names"
+restriction = "Access"
+expires = "Expiry"
+access = "Visits"
+last = "Last visit"
+alias = "Public alias"
+
+[statuslink.naming]
+alias = "Alias"
+generic = "Generic"
+hidden = "Hidden"
+
+[statuslink.expiry]
+never = "Never"
+24h = "24 hours"
+7d = "7 days"
+30d = "30 days"
+
+[statuslink.flash]
+revoked = "Link revoked: the address now answers 404."
+alias = "Alias saved."
+
+[statuslink.error]
+name = "Name the link (up to 60 characters)."
+naming = "Choose how services appear."
+expiry = "Choose a valid expiry."
+cidr = "Invalid IP or range (use 189.10.20.30 or 189.10.20.0/24; at most 20)."
+services = "Unknown service in the selection."
+alias = "The alias can have up to 40 characters."
+not_found = "Link not found or already revoked."
+
+[confirm.revoke_link]
+title = "Revoke this link?"
+text = "Anyone with the address gets 404 right away. It cannot be undone: create another link instead."
+ok = "Revoke"
+
+[confirm.unignore]
+title = "Warn again?"
+text = "This package's items come back to the list and the warnings."
+ok = "Warn again"
+
+[alert]
+resolved_title = "Back to normal · {title}"
+resolved_text = "The condition is back to normal."
+
+[alert.title]
+deps = "{title}"
+test = "Hangar test"
+container_down = "Container down: {service}"
+restart_loop = "Container restart loop: {service}"
+oom = "Out of memory (OOM): {service}"
+service_memory = "High memory: {service}"
+host_cpu = "High server CPU"
+host_memory = "High server memory"
+host_disk = "Server disk almost full"
+login_new_ip = "Login from a new IP"
+login_failures = "Repeated failed logins"
+account_locked = "Account locked"
+totp_disabled = "2FA turned off"
+sudo_action = "Sensitive action"
+user_created = "User created"
+port_public = "Port open to any IP"
+port_unknown = "Port open outside the panel"
+channel_added = "Alert channel added"
+update_applied = "Hangar updated"
+update_failed = "Hangar update rolled back"
+lockdown = "Panel locked"
+lockdown_released = "Panel unlocked"
+deploy_failed = "Deploy failed: {service}"
+
+[alert.text]
+deps = "{lines}\n\nDetails in the panel: {path}"
+test = "If you are reading this, the alert channel works."
+container_down = "Container {service} has been stopped for more than 30 s without anyone asking for it."
+restart_loop = "{service} restarted {count} times in the last {minutes} min."
+oom = "Container {service} was killed for lack of memory. Raise the limit or look for a leak."
+service_memory = "{service} has been using {pct}% of its memory limit (alert above {limit}%) for 5 min."
+host_cpu = "Server CPU has been at {pct}% (alert above {limit}%) for 5 min."
+host_memory = "Server memory has been at {pct}% (alert above {limit}%) for 5 min."
+host_disk = "The server disk is {pct}% full (alert above {limit}%)."
+login_new_ip = "{user} logged in from {ip}, an address this account had never used."
+login_failures = "Many failed logins from {ip}. Further attempts are being delayed."
+account_locked = "Account {user} was locked after 20 failed attempts (the last from {ip}). Unlock only on the server: hangard user unlock."
+totp_disabled = "Two-step verification was turned off for {user}."
+sudo_action = "{user} {action}: {target}."
+user_created = "Account {user} was created with the {role} role."
+port_public = "{user} opened port {port} of {service} to any IP."
+port_unknown = "Port {port} is open to the internet ({address}) and was not opened by Hangar. Check on the server: ss -ltnp"
+channel_added = "{user} added the channel {channel}. If it was not you, lock the panel."
+update_applied = "Hangar was updated from {from} to {to}."
+update_failed = "Version {to} did not come up and Hangar went back to {from}."
+lockdown = "Every session was closed and the panel only answers on the server itself (SSH tunnel). Sites stay up. To unlock: hangard lockdown off."
+lockdown_released = "The panel accepts access normally again."
+deploy_failed = "The deploy of {service} ({trigger}) failed at \"{phase}\": {reason}\n\n{previous}"
+
+[alert.previous]
+live = "The previous version is still live."
+restored = "The previous version is back live automatically."
+down = "The service is down: the previous version did not come back."
+none = "There was no previous version live."
+
+[alert.action]
+backup_key_add = "added a backup key"
+backup_key_confirm = "confirmed a backup key"
+backup_key_remove = "removed a backup key"
+backup_restore_start = "started a backup restore"
+backup_target_add = "added a backup destination"
+backup_target_remove = "removed a backup destination"
+backup_download_link = "created a backup download link"
+service_git_webhook = "changed the automatic Git deploy"
+status_link_create = "created a public status link"
+brand_save = "changed the brand of the error pages"
+service_volume_wipe = "deleted a disk and its data"
+service_terminal_open = "opened a service terminal"
+status_link_revoke = "revoked a public status link"
+secret_reveal = "revealed a secret"
+service_delete = "deleted a service"
+project_delete = "deleted a project"
+domain_dynamic_enable = "turned dynamic domains on"
+domain_dynamic_disable = "turned dynamic domains off"
+domain_dynamic_rotate_secret = "changed the domains signature secret"
+domain_add = "added a domain"
+domain_remove = "removed a domain"
+port_open = "opened a port on the server"
+service_endpoint_public = "put a service on the internet"
+service_endpoint_sslip_on = "turned on a service's automatic link"
+project_link = "connected two projects"
+service_backup_download = "downloaded a backup"
+system_update_request = "requested a Hangar update"
+alerts_channel_delete = "removed an alert channel"
+alerts_channel_toggle = "paused or resumed an alert channel"
+
+[alerts]
+page_title = "Alerts · Hangar"
+title = "Alerts and notifications"
+muted_until = "Server alerts muted until {time}"
+mute = "Mute"
+mute_for = "Mute for"
+mute_1h = "1 hour"
+mute_4h = "4 hours"
+mute_24h = "24 hours"
+unmute = "Unmute alerts"
+channels = "Channels"
+channels_hint = "Where alerts go. Security alerts reach every active channel, whatever level it is set to."
+channels_empty = "No channel set up: for now alerts only show here in the panel."
+new_channel = "New channel"
+active = "Active"
+paused = "Paused"
+test = "Test"
+test_named = "Test {name}"
+reveal = "Reveal secret"
+reveal_named = "Reveal the secret of {name}"
+pause = "Pause"
+pause_named = "Pause {name}"
+resume = "Resume"
+resume_named = "Resume {name}"
+delete = "Remove"
+delete_named = "Remove {name}"
+sudo_hint = "Confirm it's you to reveal, pause or remove"
+revealed = "Secret of {name}"
+revealed_hint = "Copy it now: once you leave the page it is hidden again."
+copy = "Copy"
+rules = "Server rules"
+rules_hint = "They apply to every service. Each problem is reported once, and again when it is back to normal."
+threshold_for = "Limit for {rule}"
+unit_restarts = "restarts in 5 min"
+save_rules = "Save rules"
+security = "Security alerts"
+security_hint = "Always on: they cannot be turned off or muted."
+security_badge = "security"
+history = "History"
+history_empty = "No alerts so far."
+muted = "muted"
+deliveries = "Deliveries"
+deliveries_empty = "No deliveries yet. Use \"Test\" on a channel to check it."
+
+[alerts.repeats]
+one = "+{n} repeat"
+other = "+{n} repeats"
+
+[alerts.new]
+telegram = "New Telegram channel"
+email = "New e-mail channel"
+webhook = "New webhook"
+
+[alerts.kind]
+telegram = "Telegram"
+email = "E-mail"
+webhook = "Webhook"
+
+[alerts.receives]
+info = "Everything"
+warning = "Warnings and critical"
+critical = "Critical only"
+
+[alerts.level]
+info = "info"
+warning = "warning"
+critical = "critical"
+
+[alerts.status]
+sent = "Sent"
+failed = "Failed"
+dropped = "Dropped"
+
+[alerts.channel]
+name = "Channel"
+target = "Destination"
+receives = "Receives"
+state = "State"
+
+[alerts.delivery]
+when = "When"
+channel = "Channel"
+alert = "Alert"
+status = "Result"
+attempts = "Attempts"
+error = "Error"
+
+[alerts.rule]
+container_down = "Container down"
+restart_loop = "Restart loop"
+oom = "Out of memory (OOM)"
+service_memory = "High memory in a service"
+host_cpu = "High server CPU"
+host_memory = "High server memory"
+host_disk = "Server disk"
+
+[alerts.rule_desc]
+container_down = "Stopped for more than 30 s without anyone asking (deploys and stops from the panel do not count)."
+restart_loop = "More restarts than the limit within 5 minutes."
+oom = "Docker killed the container for lack of memory."
+service_memory = "Usage above the service limit for 5 minutes."
+host_cpu = "Usage above the limit for 5 minutes."
+host_memory = "Usage above the limit for 5 minutes."
+host_disk = "Data disk usage above the limit."
+
+[alerts.form]
+name = "Name"
+receives = "Receives"
+bot_token = "Bot token"
+bot_token_hint = "On Telegram, talk to @BotFather, create a bot and paste its token here. It is stored encrypted."
+chat_id = "Chat ID"
+chat_id_hint = "Send the bot a message and find the id in getUpdates, or use @channel_name."
+host = "SMTP server"
+port = "Port"
+security = "Connection"
+security_starttls = "STARTTLS (port 587)"
+security_tls = "Direct TLS (port 465)"
+security_hint = "Always encrypted: a server without TLS is refused."
+username = "User"
+password = "Password"
+from = "Sender"
+to = "Recipients"
+to_hint = "Up to 5 addresses, separated by commas."
+url = "URL"
+url_hint = "HTTPS and a public address only. Receives a signed JSON."
+secret = "Signing secret"
+secret_hint = "Empty: Hangar generates one. Header X-Hangar-Signature = sha256=HMAC(secret, timestamp.body)."
+submit = "Add channel"
+
+[alerts.flash]
+channel-added = "Channel added. Use \"Test\" to check it."
+channel-deleted = "Channel removed."
+channel-paused = "Channel paused."
+channel-resumed = "Channel resumed."
+tested = "Test message sent."
+rules = "Rules saved."
+muted = "Server alerts muted."
+unmuted = "Server alerts back on."
+
+[alerts.error]
+channel_not_found = "Channel not found."
+name = "Give the channel a name of up to 60 characters."
+severity = "Choose what the channel receives."
+kind = "Unknown channel kind."
+bot_token = "Invalid bot token (format 123456:ABC…)."
+chat_id = "Invalid chat ID: use the number (e.g. -100123) or @channel_name."
+smtp_host = "Invalid SMTP server."
+smtp_port = "Invalid SMTP port."
+smtp_security = "Choose STARTTLS or direct TLS."
+smtp_auth = "Invalid SMTP user or password."
+from = "Invalid sender."
+to = "Enter 1 to 5 valid recipients."
+webhook_url = "Invalid URL: use https:// without user and password."
+webhook_private = "The webhook must point to a public address."
+webhook_secret = "The secret must have 16 to 256 characters."
+test_failed = "The test failed: {error}"
+rule = "Invalid rule."
+threshold = "Limit out of range ({min}–{max})."
+mute = "Invalid mute (24 hours at most)."
+
+[lock]
+banner = "Panel locked: it only answers on the server itself (SSH tunnel). Sites stay up."
+banner_cli = "To unlock, on the server:"
+login_notice = "The panel is locked and every session was closed. To unlock, on the server: hangard lockdown off."
+refused = "Panel locked. Use the server itself (SSH tunnel)."
+
+[confirm.lock]
+title = "Lock the panel?"
+text = "Every session ends, yours included, and the panel only answers on the server itself (SSH tunnel). Sites and containers stay up. Unlocking is only possible from the command line on the server."
+ok = "Lock now"
+
+[confirm.channel_delete]
+title = "Remove the channel?"
+text = "{name} stops receiving alerts. The other channels are told about the removal."
+ok = "Remove"
+
+[cli.lockdown]
+usage = """
+Usage: hangard lockdown [on|off|status] [-config path]
+
+  on (default)  lock the panel: close every session; only the server itself gets in
+  off           unlock
+  status        tell whether it is locked
+"""
+locked = "Panel locked. Sessions closed: {n}. Containers keep running."
+unlocked = "Panel unlocked."
+status_locked = "Locked since {time}."
+status_unlocked = "Unlocked."
+
+[git.error]
+url = "Invalid repository URL. Use HTTPS, with no user or password in it (e.g. https://github.com/owner/repo)."
+blocked_host = "This address points to an internal network and was blocked (SSRF protection)."
+branch = "Invalid branch name."
+path = "Invalid path: use a relative path inside the repository, without “..”."
+access = "Could not read the repository: check the URL and the token (it needs read access to the contents)."
+branch_missing = "That branch does not exist in the repository."
+empty = "The repository is empty."
+token = "Invalid token: paste only the token, without spaces."
+unreachable = "Could not reach the Git server: {error}"
+no_builder = "This server cannot build images (Docker without BuildKit or no builds folder)."
+subdir = "The folder {dir} does not exist in the repository."
+build_timeout = "The build took more than {minutes} minutes and was stopped."
+
+[git]
+title = "Repository"
+edit = "Edit"
+edit_title = "Service repository"
+copy = "Copy {what}"
+repo = "Repository (HTTPS)"
+repo_hint = "The GitHub, GitLab or Gitea address, as shown under “Code” → HTTPS."
+branch = "Branch"
+subdir = "Folder"
+subdir_placeholder = "repository root"
+subdir_root = "repository root"
+dockerfile = "Dockerfile"
+token = "Read token"
+token_none = "No token (public repository)"
+token_reveal = "Reveal"
+token_new = "New token"
+token_keep = "empty keeps the current token"
+token_save = "Test and save"
+build_hint = "Each deploy fetches the branch's latest commit, builds it with BuildKit and rolls the image out with the same zero-downtime switch. Service variables are not passed to the build."
+repo_change_hint = "Access is tested before saving. Pointing to another repository drops the saved token unless you enter a new one."
+
+[git.new]
+hint = "Hangar clones the branch, builds the Dockerfile and starts the service. Each push can become an automatic deploy later (Settings tab)."
+security = "Only HTTPS and public servers are accepted. The token is tested before saving, stored encrypted and masked in the build log."
+submit = "Create and deploy"
+
+[git.webhook]
+title = "Automatic deploys"
+on = "On"
+off = "Off"
+hint = "On every push to {branch}, GitHub notifies Hangar and the deploy starts by itself. The signature (HMAC) is checked, each delivery counts once and pushes to other branches are ignored."
+not_public = "GitHub must reach the panel: set edge.hooks_hostname in hangar.toml (a domain pointing to this server). Only the /hooks/git/ path becomes public."
+steps = "On GitHub: Settings → Webhooks → Add webhook, and paste:"
+url = "Payload URL"
+secret = "Secret"
+content_type = "Content type:"
+events = "Events: “Just the push event”."
+show = "Show URL and secret"
+enable = "Turn on automatic deploys"
+rotate = "Generate new"
+disable = "Turn off"
+created = "Webhook ready. Copy the URL and the secret into GitHub now."
+
+
+[confirm.git_webhook_rotate]
+title = "Generate a new URL?"
+text = "The current URL and secret stop working at once. Update the webhook on GitHub right after."
+ok = "Generate new"
+
+[confirm.git_webhook_off]
+title = "Turn automatic deploys off?"
+text = "GitHub's deliveries will be refused. The Deploy button keeps working."
+ok = "Turn off"
+
+# --- Backups (docs/09) -------------------------------------------------------
+
+[backups]
+page_title = "Backups · Hangar"
+title = "Backups"
+panel_now = "Back up the panel now"
+target_add = "Add destination"
+kit_generate = "Generate recovery kit"
+sudo_label = "Authenticator app code to change keys and destinations"
+status_running = "running"
+
+[backups.status]
+ok = "all up to date"
+warning = "attention"
+danger = "problem"
+setup = "set up"
+
+[backups.setup]
+title = "Set up backups"
+intro = "Backups are encrypted to your public key and go to a bucket with an immutability lock. The server can lock them away, but cannot open or delete them."
+kit = "1. Recovery kit"
+kit_text = "Generate the keys in the browser, download or print the kit and confirm you kept it. Only the public key reaches the server."
+target = "2. Destination with Object Lock"
+target_text = "An S3 bucket (B2, Wasabi, AWS, R2) with Object Lock and a credential that can only write and read. The panel tests it and refuses a credential that can delete."
+services = "3. Turn it on for the databases"
+services_text = "In each Postgres's Backups tab: a daily schedule and, to go back to any minute, continuous WAL."
+
+[backups.keys]
+title = "Recovery kit"
+hint = "Backups open with any of the confirmed keys"
+empty = "No key yet. Without the kit, no backup is made."
+label = "Name"
+public = "Public key"
+state = "Status"
+created = "Created"
+confirmed = "confirmed"
+pending = "waiting for confirmation"
+delete = "Remove the key {label}"
+confirm_file = "Select hangar-kit.txt (read only in the browser)"
+confirm_file_hint = "Or type the confirmation code printed in the kit."
+code = "Confirmation code"
+confirm = "Confirm I kept it"
+
+[backups.targets]
+title = "Destinations"
+hint = "Every backup goes to every destination"
+empty = "No destination. Backups need a bucket with Object Lock."
+name = "Name"
+where = "Endpoint / bucket / folder"
+lock = "Lock"
+lock_value = "{mode}, {days} days"
+check = "Last test"
+checked = "tested {when}"
+failed = "failed"
+primary = "primary"
+test = "Test"
+delete = "Remove the destination {name}"
+
+[backups.services]
+title = "Services"
+service = "Service"
+schedule = "Schedule"
+last = "Last backup"
+wal = "WAL"
+size = "Size"
+tested = "Tested"
+tested_yes = "tested"
+open = "Open"
+panel = "Hangar panel"
+none = "No database with automatic backups yet: create a Postgres from the template."
+off = "off"
+every = { one = "every {n} h, from {at}", other = "every {n} h, from {at}" }
+failed_at = "failed {when}"
+
+[backups.wal]
+waiting = "waiting"
+restart = "restart pending"
+failing = "archiving failing"
+late = { one = "late (1 file)", other = "late ({n} files)" }
+
+[backups.history]
+title = "History"
+empty = "No backup made yet."
+when = "When"
+what = "What"
+kind = "Kind"
+check = "Test"
+result = "Result"
+counts = "{tables} tables, {rows} rows"
+download = "Download (5-minute signed link)"
+
+[backups.kind]
+pg_dump = "pg_dump"
+pg_base = "WAL base"
+panel = "panel"
+
+[backups.trigger]
+schedule = "scheduled"
+manual = "manual"
+download = "download"
+pre_restore = "before restoring"
+wal_start = "WAL start"
+change = "panel change"
+
+[backups.class]
+daily = "daily"
+weekly = "weekly"
+monthly = "monthly"
+
+[backups.run_status]
+running = "running"
+ok = "ok"
+failed = "failed"
+
+[backups.warning]
+shrank = "shrank more than 50%"
+grew = "grew more than 3x"
+rows_dropped = "lost more than half its rows"
+
+[backups.alert]
+stale = "{label}: no successful backup in the last 26 h."
+failed = "{label}: the last backup failed ({error})."
+size = "{label}: the last backup {change}. It may be deleted data or data encrypted by ransomware; check it."
+wal_lag = "{label}: WAL is more than 5 min behind. {error}"
+wal_restart = "{label}: continuous WAL was turned on, but the database was not restarted yet (deploy it)."
+wal_failing = "{label}: PostgreSQL cannot archive its WAL (disk full?)."
+target_error = "Destination {label}: the last test failed ({error})."
+
+[backups.rules]
+title = "How to prepare the bucket"
+intro = "Old backups are cleaned up by the bucket's own lifecycle rules, per folder, not by the server (which is not allowed to delete). Set these rules at the provider:"
+folder = "Folder"
+what = "What it holds"
+days = "Keep (days)"
+credential_title = "Server credential: write and read only"
+credential = "Create an application key allowed to write (including the Object Lock retention), read and list. No deleting files or versions, no changing lifecycle rules, no turning the lock off. The panel tests this when the destination is saved."
+cofre = "On your computer, hangar-cofre applies the rules with your administrator credential (which never reaches the server):"
+
+[backups.rules.folders]
+diario = "daily pg_dumps"
+semanal = "the first pg_dump of each week"
+mensal = "the first pg_dump of each month"
+wal = "continuous WAL and bases (back to any minute)"
+painel = "the panel itself, with the master key"
+
+[kit]
+page_title = "Recovery kit · Hangar"
+title = "Recovery kit"
+subtitle = "the keys are generated in your browser"
+back = "Back to Backups"
+how_title = "The private key never leaves this browser"
+how = "The panel only receives the public key. Whoever has the kit can read the backups; without any key, nobody can, not even you. Generate two: yours and a spare (with a partner or in a safe)."
+sudo_title = "Confirm it's you"
+step1 = "1. Generate the keys"
+label = "Name of this key"
+label_hint = "Just for you to recognize it, e.g. Junior, Spare."
+default_label = "Main"
+spare_label = "Spare"
+generate = "Generate keys in the browser"
+step2 = "2. Keep the kit"
+save_text = "Download hangar-kit.txt and keep it off the server (password manager, USB stick). Print the paper version too and keep it somewhere physically safe."
+public = "Public key (goes to the panel)"
+download = "Download hangar-kit.txt"
+print = "Print the paper version"
+warning = "Once you leave this page the private key is gone. If you neither download nor print it, backups encrypted to this key cannot be opened."
+step3 = "3. Register the public key"
+saved = "I kept the kit somewhere safe, off the server."
+register_hint = "After registering, confirm it on the Backups page with the file or the code: only confirmed keys encrypt backups."
+register = "Register public key"
+error_crypto = "This browser cannot generate X25519 keys (WebCrypto). Use a current Chrome, Firefox or Safari."
+mismatch = "This kit belongs to another key."
+no_key = "No private key found in this file."
+file_ok = "Kit checked: code filled in."
+qr_label = "QR code of the private key"
+paper_title = "Hangar · Recovery kit"
+paper_text = "Keep this paper somewhere physically safe. It opens every Hangar backup."
+file_text = """Hangar · Recovery kit
+Name: {label}
+Generated: {date}
+Public key: {public}
+Confirmation code: {code}
+
+This is the key that opens your Hangar backups. Keep this file
+OFF the server (password manager, USB stick, paper in a safe).
+Whoever has this file can read the backups; without it nobody can, not even you.
+
+Open a backup on your computer:
+  hangar-cofre decrypt file.age -identity hangar-kit.txt
+  (or: age -d -i hangar-kit.txt file.age)
+Protect this file with a passphrase:
+  hangar-cofre kit protect hangar-kit.txt"""
+
+[target]
+page_title = "New destination · Backups · Hangar"
+title = "New backup destination"
+subtitle = "S3 bucket with Object Lock"
+how_title = "The panel tests before saving"
+how = "On save, the panel writes a locked test file, reads it back and tries to delete it. If the credential can delete, or the bucket has no Object Lock, the destination is refused. Create the bucket with Object Lock on (some providers only allow it at creation)."
+form_title = "Bucket details"
+name = "Name"
+name_placeholder = "Main B2"
+provider = "Provider"
+endpoint = "S3 endpoint"
+endpoint_hint = "https only. Internal addresses are refused (anti-SSRF)."
+region = "Region"
+bucket = "Bucket"
+prefix = "Folder in the bucket"
+prefix_hint = "Optional, to share a bucket between servers."
+access_key = "Access key"
+secret_key = "Secret key"
+credential_hint = "A write-and-read-only credential. Stored encrypted with the master key."
+lock_mode = "Lock mode"
+lock_compliance = "Compliance (nobody deletes, not even the account owner)"
+lock_governance = "Governance (only a special permission deletes)"
+lock_days = "Lock days"
+lock_days_hint = "Each file stays locked this long (at most its folder's time)."
+path_style = "Bucket in the URL path"
+path_style_hint = "Needed for MinIO and most S3-compatible services."
+save = "Test and save"
+
+[target.providers]
+b2 = "Backblaze B2"
+wasabi = "Wasabi"
+aws = "AWS S3"
+r2 = "Cloudflare R2"
+custom = "Other S3-compatible"
+
+[svcbackup]
+unsupported = "Automatic backups exist for PostgreSQL. App volumes come in a later stage."
+not_ready = "Automatic backups need a confirmed recovery kit and a destination."
+open_backups = "Open Backups"
+policy = "Automatic backup"
+on = "on"
+off = "off"
+run_now = "Back up now"
+enabled = "Back up this database"
+enabled_hint = "pg_dump tested in a throwaway Postgres before it is sent."
+every = "Frequency"
+every_hours = { one = "every hour", other = "every {n} hours" }
+at = "First time of the day"
+wal = "Continuous WAL (back to any minute)"
+wal_hint = "At most about 1 minute lost. The database must restart (deploy) for it to apply."
+next = "Next: {when}"
+save = "Save"
+wal_title = "Point-in-time recovery"
+window = "You can go back to any moment between {from} and {to}."
+window_none = "There is no base to go back to a minute yet. One is taken right after WAL starts working."
+last_base = "Last base: {when}"
+encrypted = "encrypted to your kit"
+download_hint = "Makes a pg_dump now, tests it, encrypts it to your public key and hands it over through a single-use link (5 min)."
+download_format = ".dump.age file: open it with hangar-cofre decrypt or age -d -i hangar-kit.txt."
+download_preparing = "Preparing: dump, test and encryption…"
+download_ready = "Download ({size})"
+download_expires = "The link is valid until {when} and works once."
+download_failed = "The download backup failed: {error}"
+restore_title = "Restore"
+restore_sudo = "needs the kit"
+restore_point = "Point"
+mode_pitr = "Exact moment (WAL)"
+at_moment = "Date and time"
+mode_dump = "A pg_dump"
+mode_dump_hint = "A full copy of a day, the most portable."
+dump_choice = "Backup"
+dump_label = "{when} · {class} · {size}"
+restore_dest = "Destination"
+dest_new = "New service"
+dest_new_hint = "Default: check it there, then switch the app's reference."
+new_name = "New service name"
+dest_overwrite = "Overwrite the current one"
+dest_overwrite_hint = "Backs up the current state first. If the restore fails, the data goes back as it was."
+confirm_name = "To overwrite, type {name}"
+kit = "Recovery kit"
+kit_hint = "The key goes only with this request, stays in memory during the restore and is dropped at the end."
+passphrase = "Kit passphrase"
+passphrase_hint = "Only if the kit was protected with hangar-cofre kit protect."
+restore = "Restore"
+history = "Backups of this service"
+restores = "Restores"
+restore_to = "to {when}"
+restore_from_dump = "from a pg_dump"
+
+[svcbackup.step]
+queued = "queued"
+pre_backup = "backing up the current state"
+create = "creating the new service"
+deploy = "starting the service"
+plan = "choosing base and WAL"
+stop = "stopping the database"
+stage = "downloading, checking and copying the data"
+recover = "replaying WAL up to the chosen moment"
+restore = "restoring the dump"
+done = "done"
+
+[flash.backups]
+key-added = "Public key registered. Now confirm it with the kit."
+key-confirmed = "Kit confirmed. This key now encrypts the backups."
+key-deleted = "Key removed."
+target-added = "Destination tested and saved: it writes with a lock and cannot delete."
+target-checked = "Destination tested: all good."
+target-deleted = "Destination removed (what is in the bucket stays there)."
+panel-queued = "Panel backup queued."
+
+[confirm.backup_key_delete]
+title = "Remove this key?"
+text = "New backups stop being encrypted to it. Old ones still open with its kit."
+ok = "Remove"
+
+[confirm.backup_target_delete]
+title = "Remove this destination?"
+text = "Backups stop going there. What is already in the bucket stays (and stays locked)."
+ok = "Remove"
+
+[confirm.restore]
+title = "Restore now?"
+text = "Overwriting replaces the database's data (after a backup of the current state). Into a new service, nothing changes in the original."
+ok = "Restore"
+
+[cli.restore]
+flag_cofre = "cofre.toml with endpoint, bucket and kit (the same as hangar-cofre)"
+flag_endpoint = "the bucket's S3 endpoint"
+flag_bucket = "bucket"
+flag_region = "region"
+flag_prefix = "folder in the bucket"
+flag_path_style = "bucket in the URL path (MinIO and most S3-compatible services)"
+flag_identity = "the recovery kit (hangar-kit.txt)"
+flag_at = "go back to this moment, \"2026-10-15 14:32\" (default: the newest)"
+flag_force = "move the current database aside instead of refusing"
+at = "Invalid moment: {value} (use \"2026-10-15 14:32\")."
+no_identity = "Give the kit with -identity (or identity in -cofre)."
+read_kit = "Could not read the kit: {error}"
+kit = "Invalid kit: {error}"
+passphrase = "Kit passphrase: "
+no_bucket = "Give the bucket (-cofre or -endpoint/-bucket) and the credential in HANGAR_RESTORE_ACCESS_KEY and HANGAR_RESTORE_SECRET_KEY."
+panel_running = "The panel is running. Stop it first: systemctl stop hangard"
+exists = "This server already has a panel database. Use -force to move it aside (nothing is deleted)."
+done = "Panel restored from {key} (made {when}, version {version})."
+aside = "Kept aside: {path}"
+config_copy = "Old configuration in {path}: compare it with the current one (IPs and paths may have changed)."
+next = """
+Next steps:
+  1. sudo -u hangar hangard restore databases -cofre cofre.toml
+     (brings each Postgres back to the last minute and starts the services)
+  2. systemctl start hangard
+  3. Point the domains' DNS to the new IP.
+"""
+databases_done = "Databases and services are back. Now: systemctl start hangard"
+databases_failed = "Some services did not come back: {error}"
+
+[recover]
+database = "Restoring {service}…"
+deploy = "Starting {service}…"
+failed = "{service} failed: {error}"
+
+[cofre]
+usage = """
+Usage: hangar-cofre <command> [options]
+
+Commands:
+  init                           write an example ~/.config/hangar-cofre/cofre.toml
+  sync FOLDER                    copy new backups from the bucket into the folder (never deletes)
+  list                           list the backups (in the bucket, or in -from FOLDER)
+  decrypt FILE [-o OUT]          decrypt a backup with your kit
+  restore-local PROJECT/SERVICE  bring the database up in the local Docker (-at "2026-10-15 14:32", -dump, -port)
+  test [PROJECT/SERVICE]         the drill: restore each database into a local Postgres and check it
+  kit check FILE                 show the kit's public key and code
+  kit protect FILE               protect the kit with a passphrase
+  setup-bucket                   apply the lifecycle rules (admin credential in
+                                 HANGAR_COFRE_ADMIN_ACCESS_KEY / HANGAR_COFRE_ADMIN_SECRET_KEY)
+
+Common options:
+  -config path     cofre.toml (default ~/.config/hangar-cofre/cofre.toml)
+  -identity path   the kit (hangar-kit.txt)
+  -from folder     read from a folder copied by sync, offline
+"""
+flag_config = "cofre.toml file"
+flag_identity = "the recovery kit (hangar-kit.txt)"
+flag_from = "read the backups from a folder copied by sync"
+flag_out = "output file"
+flag_at = "go back to this moment, \"2026-10-15 14:32\""
+flag_dump = "use the newest pg_dump instead of WAL"
+flag_port = "local port (127.0.0.1 only)"
+init_done = "Configuration written to {path}. Fill in the bucket and the read-only credential."
+passphrase_prompt = "Kit passphrase: "
+new_passphrase_prompt = "New passphrase (at least 12 characters): "
+repeat_passphrase_prompt = "Repeat the passphrase: "
+kit_key = "Public key {public} · code {code}"
+kit_protected = "Protected kit saved to {path}. Test it with hangar-cofre kit check before deleting the original."
+decrypted = "Decrypted to {path} ({size})."
+synced = "{new} new files ({size}), {skipped} already in {dir}."
+sync_file = "  ↓ {key}"
+list_empty = "No backup found."
+list_dumps = "{label}: {n} backups, newest {latest}"
+list_wal = "WAL from {from} to {to}"
+no_wal_using_dump = "No WAL base for that moment: using the newest pg_dump."
+staging = "Downloading base {base} and {wal} WAL files…"
+recovering = "Replaying WAL up to the chosen moment…"
+restoring_dump = "Restoring {key}…"
+testing = "Testing {label} ({key})…"
+restored_at = "{label} is in the local Docker, as it was at {at}."
+restored_end = "{label} is in the local Docker, up to the last minute available."
+restored_dump = "{label} is in the local Docker, from {key}."
+restored_connect = "Connect: docker exec -it {container} psql -U {user} -d {db}  (or 127.0.0.1:{port})"
+restored_password = "Password of this local database: {password}"
+restored_cleanup = "To remove it when done: docker rm -f -v {container} && docker volume rm {volume}"
+test_ok = "✓ {label}: {tables} tables, {rows} rows restored ({took})"
+test_panel_ok = "✓ panel: database, master key and manifest checked in {key} ({took})"
+test_failed = "✗ {label}: {error}"
+test_all_ok = "Drill done: everything opened with your kit."
+rule = "rule: {prefix} → {days} days"
+setup_done = "Bucket checked (Object Lock on) and lifecycle rules applied."
+
+[cofre.error]
+config_exists = "{path} already exists."
+no_identity = "Give the kit (-identity or identity in cofre.toml)."
+read_kit = "Could not read the kit {path}: {error}"
+kit = "Invalid kit: {error}"
+passphrase = "Wrong passphrase."
+passphrase_mismatch = "The passphrases do not match."
+passphrase_short = "The passphrase needs at least 12 characters."
+already_protected = "This kit is already protected."
+kit_usage = "Usage: hangar-cofre kit check|protect FILE"
+decrypt_usage = "Usage: hangar-cofre decrypt FILE [-o OUT]"
+sync_usage = "Usage: hangar-cofre sync FOLDER"
+restore_usage = "Usage: hangar-cofre restore-local PROJECT/SERVICE [-at \"2026-10-15 14:32\"]"
+wrong_key = "This kit does not open this file."
+no_bucket = "Set the bucket and the read-only credential in {path} (or HANGAR_COFRE_ACCESS_KEY / HANGAR_COFRE_SECRET_KEY)."
+at = "Invalid moment: {value} (use \"2026-10-15 14:32\")."
+test_failed = { one = "1 test failed.", other = "{n} tests failed." }
+admin_credentials = "Set endpoint and bucket in cofre.toml and the admin credential in HANGAR_COFRE_ADMIN_ACCESS_KEY / HANGAR_COFRE_ADMIN_SECRET_KEY."
+setup = "Could not prepare the bucket: {error}"
+
+[gitcred]
+page_title = "Git credentials · Hangar"
+title = "Git credentials"
+subtitle = "Tokens saved once and picked by the services that build from a repository."
+new = "New credential"
+list = "Credentials"
+privacy = "The token is encrypted and never shown again. To change it, paste a new one: every service using the credential switches to it at its next deploy."
+empty = "No credentials yet. Save your GitHub token here once and pick it when creating each service."
+never_used = "never"
+replace = "Replace token"
+replace_named = "Replace the token of {name}"
+delete = "Delete"
+delete_named = "Delete {name}"
+token_hint = "Use a read-only fine-grained token: Contents = Read-only on the repositories Hangar will clone."
+token_link = "Create on GitHub"
+new_server_hint = "Usable by every project on the server."
+new_project_hint = "Usable only by the services of project {project}."
+save = "Save credential"
+replace_hint = { one = "1 service uses this credential and clones with the new token from its next deploy.", other = "{n} services use this credential and clone with the new token from their next deploy." }
+project_title = "Project Git credentials"
+project_hint = { one = "Tokens only this project's services can use. They can also use 1 server credential.", other = "Tokens only this project's services can use. They can also use {n} server credentials." }
+server_link = "See server credentials"
+pick = "Git credential"
+pick_public = "None: public repository"
+pick_new = "Add a new token…"
+pick_hint = "The project's own come first, then the server's."
+own_token = "This service's own token"
+own_token_hint = "Saved before credentials existed. Switch to a credential so you don't paste it again for each service."
+change = "Change credential"
+change_hint = "Hangar tests access to the repository before saving. Applies from the next deploy."
+fail = "Couldn't reach GitHub right now. Try again."
+
+[gitcred.col]
+name = "Name"
+host = "Git server"
+scope = "Usable by"
+token = "Token"
+uses = "Services"
+last_used = "Last used"
+
+[gitcred.scope]
+server = "Server"
+server_long = "Every project"
+project = "Project {project}"
+this_project = "This project"
+
+[gitcred.flash]
+created = "Credential saved."
+replaced = "Token replaced. Services use the new one at their next deploy."
+deleted = "Credential deleted."
+
+[gitcred.error]
+name = "Give the credential a name of up to 60 characters."
+host = "Invalid Git server. Use just the address, like github.com."
+name_taken = "There is already a credential named {name} here."
+in_use = "This credential is used by {services}. Change those services' credential before deleting it."
+gone = "The chosen credential no longer exists or is not usable by this project."
+host_mismatch = "Credential {name} is for {host}, but the repository is on {repo}. Pick another credential."
+token_empty = "Paste the access token to check the account."
+token_invalid = "GitHub refused the token. Check that it can read the repositories' contents."
+github_unreachable = "Couldn't reach GitHub right now. Try again."
+
+[confirm.git_cred_delete]
+title = "Delete credential {name}?"
+text = "The token is removed from Hangar. It stays valid on GitHub: revoke it there too if you won't use it."
+ok = "Delete"
+
+[brand]
+page_title = "Brand · Hangar"
+title = "Brand"
+subtitle = "pages visitors see when a site cannot answer"
+hint = "These pages show on any site of the server, instead of a blank error. By default they are generic: no name, logo or contact. Fill in the identity only if you want it on all of them. They never show \"Hangar\", the server IP or container names."
+edge_off = "The domain proxy is off on this server. The brand is saved and applies once it is turned on."
+identity = "Identity"
+optional = "optional"
+name = "Name shown"
+name_placeholder = "Empty: the pages have no name"
+logo_light = "Logo (light theme)"
+logo_dark = "Logo (dark theme)"
+logo_hint = "PNG, JPEG or WebP up to 200 KB. SVG is not accepted: it can carry code and these pages open on the sites' domains."
+remove_logo = "Remove this logo"
+color = "Accent color"
+color_hint = "Buttons and progress bars."
+contact = "Support contact"
+contact_placeholder = "E-mail, phone or link. Empty: no contact line"
+theme = "Page theme"
+save = "Save"
+pages = "Pages"
+pages_hint = "click a page to see it full size"
+open_full = "Open {page} full size"
+custom_text = "Own text"
+default = "Default"
+edit = "Edit"
+view = "View"
+page_title_label = "Title"
+page_text_label = "Text"
+reset = "Back to default"
+
+[brand.themes]
+auto = "The visitor's"
+light = "Light"
+dark = "Dark"
+
+[brand.kind]
+down = "Down · 502"
+deploy = "Updating · deploy"
+timeout = "Timed out · 504"
+unknown = "Domain not configured"
+maint = "Maintenance"
+https = "Enabling HTTPS"
+
+[brand.when]
+down = "Shows when the site does not answer and no deploy is running. Reloads itself every 10 seconds."
+deploy = "Shows during a deploy, start or restart of the service. Reloads itself."
+timeout = "Shows when the site takes more than 100 seconds to start answering."
+unknown = "Shows when a domain points to this server but is not linked to any site."
+maint = "Shows when a service's maintenance mode is on."
+https = "Shows on the http:// address while the HTTPS certificate is being issued."
+
+[brand.flash]
+saved = "Brand saved. The pages already apply to every site."
+
+[brand.error]
+name = "The name can have up to 60 characters, on a single line."
+contact = "The contact can have up to 200 characters, on a single line."
+color = "Invalid color. Use the color picker."
+theme = "Invalid theme."
+logo = "Logo not accepted. Send PNG, JPEG or WebP."
+logo_size = "The logo can be up to 200 KB."
+logo_dimensions = "The logo can be up to 2048 × 2048 pixels."
+page = "Unknown page."
+too_long = "Too long: title up to 120 characters, text up to 600 and HTML up to 256 KB."
+write = "The brand was saved, but the pages could not be written for the proxy. See the panel log."
+
+[volume]
+title = "Disks"
+count = { one = "1 disk", other = "{n} disks" }
+hint = "What the app writes to a disk (uploads, generated files) stays there after every deploy. With a disk, a deploy stops the old container before starting the new one: a few seconds of the \"Updating\" page."
+empty = "No disks. Everything the app writes is lost at the next deploy."
+name = "Name"
+path = "Path in the container"
+docker = "Volume on the server"
+fixed = "from the template"
+add = "Add disk"
+detach = "Detach"
+wipe = "Delete disk and data"
+next_deploy = "New or detached disks apply from the next deploy."
+modal_text = "The app writes to that path on a volume that survives deploys."
+
+[volume.error]
+name = "Use a short lowercase name, like media (letters, numbers and hyphen)."
+path = "Use an absolute path inside the container, like /app/media."
+reserved = "{path} is a system folder of the container and cannot become a disk."
+too_many = "A service can have up to {n} disks."
+name_taken = "There is already a disk named {name}."
+overlap = "This path overlaps the disk at {path}."
+template = "The disks of a service created from a template belong to it and cannot be changed."
+in_use = "The disk is still in use. Detach it, deploy, then delete the data."
+
+[confirm.maintenance_on]
+title = "Put {name} under maintenance?"
+text = "Right away, every domain of the service shows the maintenance page instead of the site. The container keeps running and nothing is deleted."
+ok = "Turn maintenance on"
+
+[confirm.volume_remove]
+title = "Detach disk {name}?"
+text = "From the next deploy the app no longer sees these files. The data stays on the server and comes back if you add the disk again with the same name."
+ok = "Detach"
+
+[confirm.volume_wipe]
+title = "Delete disk {name} and its data?"
+text = "The files are deleted for good and cannot be recovered. If the app still uses the disk, detach it and deploy first."
+ok = "Delete for good"
+
+[terminal]
+title = "Terminal"
+reconnect = "Reconnect"
+connecting = "Connecting…"
+connected = "Connected"
+closed = "Session ended"
+sudo = "Opening the terminal of {service} asks you to confirm it is you: whoever has the terminal has access to everything in the container."
+not_running = "The service is not running. Start it or deploy to open the terminal."
+page_title = "Terminal · {service} · Hangar"
+close = "Close the terminal"
+audited = "session recorded in the audit log"
+sudo_expired = "The identity check expired. Close the terminal and open it again to confirm."
+shell = "Shell"
+clear = "Clear"
+saved = "Commands"
+run_named = "Run {name}"
+delete = "Delete"
+delete_named = "Delete the command {name}"
+save = "Save command"
+save_name = "Name"
+save_name_placeholder = "apply migrations"
+save_command = "Command"
+save_command_placeholder = "python manage.py migrate"
+note = "Session audited · closes after 20 min idle"
+save_short = "Save"
+suggested = "Suggested for this app"
+save_this = "Save this command"
+save_text = "It stays in this service's list. One click types and runs it in the open terminal."
+
+[terminal.error]
+shell = "Pick bash, sh or a command."
+command_empty = "Type the command."
+command_long = "The command can have up to {n} characters."
+command_line = "The command must fit on one line, without control characters."
+name = "Give the command a name of up to {n} characters."
+too_many = "A service can have up to {n} saved commands."
+
+[confirm.command_delete]
+title = "Delete the command {name}?"
+text = "It leaves this service's list. Nothing runs in the container."
+ok = "Delete"
+
+[compose]
+hint = "Paste a docker-compose.yml (or read the repository's) and see what will be created first. Nothing is created until you confirm."
+source = "Where the file comes from"
+source_paste = "Paste the file"
+source_git = "Read it from a Git repository (compose.yaml or docker-compose.yml at the root)"
+file = "docker-compose.yml"
+use_sample = "Use the model"
+placeholder = "services:\n  web:\n    image: nginx:1.29-alpine"
+limits = "Up to {kb} KB and {n} services."
+repo_hint = "Services with build: are built from this repository (the compose file's folder and Dockerfile)."
+security = "The file is read, never run. Server folders (bind mounts), privileged mode, the host network and published ports are not applied: the preview shows what is left out and why."
+analyze = "Analyze"
+preview = "Preview"
+count_create = { one = "1 service", other = "{n} services" }
+count_warn = { one = "1 warning", other = "{n} warnings" }
+count_skip = { one = "1 item left out", other = "{n} items left out" }
+port = "internal port {port}"
+blocked_hint = "Fix what is marked in red (in the file or the project) and analyze again."
+create = { one = "Create 1 service", other = "Create {n} services" }
+
+[compose.kind]
+template = "Template"
+image = "Image"
+git = "Build from the repository"
+skip = "Not created"
+
+[compose.error]
+too_large = "The file is over {max} KB."
+empty = "Paste the contents of the docker-compose.yml."
+yaml = "The file is not valid YAML: {error}"
+no_services = "There is no services: section in the file."
+too_many = "The file has {n} services; the limit is {max} per import."
+not_in_repo = "There is no compose.yaml or docker-compose.yml at the repository root."
+blocked = "The import has problems to fix (see the preview)."
+
+[compose.problem]
+name = "The name \"{name}\" cannot be an internal address: use letters and digits."
+same_slug = "\"{a}\" and \"{b}\" become the same internal address ({slug}). Rename one of them."
+taken = "This project already has a service {slug}."
+no_dockerfile = "The Dockerfile {path} is not in the repository."
+
+[compose.note]
+top_secrets = "The {key}: section is not imported: add the values as the service's secret variables."
+top_ignored = "Ignored in the file: {keys}."
+renamed = "\"{name}\" becomes {slug} (internal address). Variables using \"{name}\" as a host need updating."
+image_variable = "The image \"{image}\" depends on a variable of your computer; the Hangar does not read the server's environment."
+build_needs_repo_image = "build: ignored: without the repository, the Hangar uses the given image."
+build_needs_repo = "It has build:, but the file was pasted: use \"Read it from a Git repository\" to build from the code."
+no_image = "No image: and no build:: nothing to run."
+bad_image = "Invalid image: {image}."
+template_postgres = "Becomes the Hangar's PostgreSQL template: generated password, disk, healthcheck and backups."
+template_redis_cache = "Becomes the Hangar's Redis (cache) template: generated password, no persistence."
+template_redis_queue = "Becomes the Hangar's Redis (queues and sessions) template: generated password and data on disk."
+template_version = "Version {from} is replaced by the template's ({to})."
+template_keeps = "The template uses its own settings; ignored: {keys}."
+template_input = "{key} \"{value}\" is not accepted; \"{default}\" is used."
+template_password = "The file's password is not used: the Hangar generates a new one and wires the references."
+image = "Service from the image {image}."
+image_latest = "No pinned version (tag): prefer one, such as :1.29, so deploys are predictable."
+port_known = "Internal port {port} (this image's default)."
+port_expose = "Internal port {port}, read from the Dockerfile's EXPOSE."
+port = "Internal port {port}."
+ports = "Published ports ({ports}) are not opened. For outside access, use a domain or open the port under Network."
+depends_on = "Depends on {services} (informational only: databases start first)."
+refused = "Refused for safety: {key}."
+ignored = "Ignored: {keys}."
+unsupported = "{key}: is not supported and was ignored."
+env_file = "env_file: is not read: paste the variables in the Variables tab afterwards."
+healthcheck = "healthcheck: ignored: set the health path in the deploy settings."
+build_inline = "dockerfile_inline: is not supported."
+build_ignored = "From build, ignored: {keys}."
+build_remote = "Building another repository (a URL as context) is not supported."
+build_path = "Invalid build path, or outside the repository: {path}."
+build = "Built from the repository: {path}."
+env_too_many = "More than {max} variables: the rest was ignored."
+env_unset = "Left empty (they came from your computer): {keys}. Fill them in the Variables tab."
+env_invalid = "Invalid variable names, ignored: {keys}."
+command_variable = "The command uses a variable of your computer; it is left empty."
+command = "Command: {command}"
+docker_socket = "The Docker socket is never mounted into a service."
+volume_type = "Volume of type {type} at {path} ignored."
+volume_path = "Disk at {path} refused (a system path, or repeated)."
+volume_too_many = "More than {max} disks: the rest was ignored."
+volume = "Disk {name} at {path}."
+bind = "Server folders are not mounted (bind mounts): {mounts}. Use a disk or put the files in the image."
+replicas = "{n} replicas asked for: the Hangar runs one per service."
+memory = "Memory: {mb} MB."
+cpus = "CPU: {cpus}."
+limit_invalid = "{key} limit \"{value}\" is out of range: the default is used."
+reference = "{key} becomes {ref}."
+
+[confirm.rebuild]
+title = "Rebuild from scratch?"
+text = "The build runs again without cache and the base images are pulled again: it takes longer than a normal deploy. The current version stays live until the new one passes the checks."
+ok = "Rebuild"
+
+[confirm.secret_rotate]
+title = "Change the signature secret?"
+text = "A new secret is generated now and the current one stops working. The app only starts using the new one on the next deploy, so deploy right after."
+ok = "Change secret"
+
+[github.error]
+token = "GitHub refused this credential's token. It may have expired or been revoked: replace it in Git credentials."
+unreachable = "Could not reach GitHub right now. Try again in a moment."
+
+[catalog]
+missing_text = "Templates come from the community and anyone can send one."
+search = "Search templates: postgres, queue, s3…"
+count = "{n} templates"
+categories = "Categories"
+all = "All categories"
+empty = "No template by that name. Try another word or category."
+missing = "Missing one?"
+how_to_add = "Learn how to add your template"
+back = "Back to the list"
+new_in = "New {template} in {project}"
+community = "community"
+creates = "What will be created"
+image = "Image"
+disk = "Disk"
+limits = "Memory / CPU"
+health = "Healthcheck"
+health_yes = "configured"
+ports = "Open ports"
+ports_none = "none"
+links = "Access from outside"
+link_public = "public, with an automatic link"
+link_internal = "project network only"
+link_needs_sudo = "This template starts public when your password was confirmed moments ago. Without that it starts on the project network only, and you make it public in the Network tab."
+exports = "Other services can use"
+docs = "Documentation"
+
+[template.category]
+database = "Database"
+cache = "Cache"
+queue = "Queues"
+search = "Search"
+storage = "Files"
+automation = "Automation"
+monitoring = "Monitoring"
+admin = "Admin"
+other = "Other"
+
+[myrepos]
+new_cred = "New credential"
+no_cred = "Add a GitHub credential to see your repositories here. An account-wide token lists them all; a single-repository token lists just that one."
+add_cred = "Add credential"
+search = "Search my repositories"
+scope_hint = "The repositories this credential can see, most recent first."
+loading = "Fetching the repositories from GitHub…"
+empty = "This credential cannot see any repository."
+none_match = "No repository by that name."
+failed = "Could not list the repositories."
+private = "Private"
+public = "Public"
+count = "{n} repositories this credential can see, most recent first."
+manual = "Repository by URL"
+manual_public = "Use a repository address (URL)"
+url_title = "New service from a URL"
+url_hint = "Public repository, or one on GitLab, Gitea or elsewhere."
+new_from = "New service from the repository"
+in_repo = "In the repository"
+default_branch = "Default branch"
+pushed = "Last push"
+credential = "Credential"
+open_github = "Open on GitHub"
+branch_hint = "The repository's branches; the default one comes selected."

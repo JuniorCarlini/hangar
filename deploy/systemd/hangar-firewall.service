@@ -1,0 +1,19 @@
+# Applies the published-port IP restrictions written by the panel (docs/05).
+# Runs as root because it edits iptables; it validates the file again first.
+[Unit]
+Description=Hangar — aplica as regras de acesso das portas
+Documentation=https://github.com/JuniorCarlini/hangar/blob/main/docs/05-isolamento-e-recursos.md
+# Before Docker: at boot the restrictions are in place before any container
+# publishes its port (Docker keeps an existing DOCKER-USER chain).
+Before=docker.service
+After=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hangard system firewall-apply -config /etc/hangar/hangar.toml
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

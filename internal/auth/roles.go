@@ -1,0 +1,68 @@
+// Package auth handles users, passwords, 2FA, sessions and re-authentication
+// (sudo). Policy from [docs/04] and [docs/17 § 1.4].
+package auth
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/JuniorCarlini/hangar/internal/i18n"
+)
+
+// Role is a user's role. Order matters: a role covers every role before it.
+type Role int
+
+const (
+	RoleNone Role = iota // public routes only
+	RoleViewer
+	RoleOperator
+	RoleAdmin
+	RoleOwner
+)
+
+var roleNames = map[Role]string{
+	RoleNone:     "none",
+	RoleViewer:   "viewer",
+	RoleOperator: "operator",
+	RoleAdmin:    "admin",
+	RoleOwner:    "owner",
+}
+
+// String returns the name stored in the database.
+func (r Role) String() string {
+	if n, ok := roleNames[r]; ok {
+		return n
+	}
+	return fmt.Sprintf("Role(%d)", int(r))
+}
+
+// ParseRole converts the name from the database or the command line.
+func ParseRole(s string) (Role, error) {
+	for r, n := range roleNames {
+		if n == s && r != RoleNone {
+			return r, nil
+		}
+	}
+	return RoleNone, i18n.E("user.error.role_unknown", "role", s)
+}
+
+// Principal is the authenticated user of a request.
+type Principal struct {
+	UserID    string
+	Role      Role
+	SudoUntil time.Time
+	CSRFToken string
+	Email     string
+	// Name is the display name ("" = not set).
+	Name string
+	// Locale is the user's chosen language ("" = follow the browser).
+	Locale string
+	// Theme is "system", "dark" or "light".
+	Theme string
+	// HasTOTP tells whether the account has 2FA. Without it, sudo asks for
+	// the password and the panel shows a banner asking to turn 2FA on.
+	HasTOTP bool
+	// SessionToken is the cookie's clear-text token, needed to rotate the
+	// session on sudo and logout. It is never stored or logged.
+	SessionToken string
+}

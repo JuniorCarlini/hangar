@@ -1,0 +1,541 @@
+package views
+
+import (
+	"context"
+	"fmt"
+)
+
+// CanvasData is the project canvas: services as cards, references as lines.
+type CanvasData struct {
+	CSRF        string
+	Project     string
+	ProjectName string
+	Width       int
+	Height      int
+	Nodes       []CanvasNode
+	Edges       []CanvasEdge
+	Groups      []CanvasGroup
+	Internet    *CanvasBox
+	Deploying   bool
+	CanCreate   bool
+	CanOperate  bool
+	Error       string
+	Flash       string
+	Pending     []string // services with changes waiting for a deploy
+	New         *NewServiceData // the new-service dialog (nil without permission)
+}
+
+// CanvasNode is a service card.
+type CanvasNode struct {
+	Slug       string
+	Project    string
+	Image      string
+	Template   string
+	Kind       string // app, db or cache
+	Href       string
+	State      string
+	Phase      string
+	PortLabel  string
+	PortAccess string
+	Domain     string // first fixed domain ("" = none)
+	MoreHosts  int    // other fixed domains
+	Dynamic    bool   // takes the customers' domains
+	Maintenance bool  // visitors get the maintenance page
+	Volume     bool   // keeps data in a volume, shown under the card
+	VolumeLabel string // the disks' paths ("" = the database's "data volume")
+	Exports    string // space-separated keys others may reference
+	X, Y, W, H int
+	Delay      int
+	Progress   int
+	Selected   bool
+	External   bool
+	Pending    bool
+	Broken     string // why some of its references are broken ("" = none)
+}
+
+// CanvasEdge is a reference line (or internet traffic).
+type CanvasEdge struct {
+	D        string
+	Title    string
+	Len      int
+	Dashed   bool
+	Internet bool
+	From, To string // card keys, for redrawing while a card is dragged
+	Slot     int    // vertical offset at the target, in px
+}
+
+// CanvasGroup frames the services of connected projects.
+type CanvasGroup struct {
+	X, Y, W, H int
+	Label      string
+}
+
+// CanvasBox is the "Internet" entry.
+type CanvasBox struct {
+	X, Y, W, H int
+	Hosts      int
+	Dynamic    bool
+}
+
+func nodeClass(n CanvasNode) string {
+	c := "node hg-in d" + fmt.Sprint(n.Delay)
+	if n.Selected {
+		c += " is-selected"
+	}
+	if n.Pending {
+		c += " is-pending"
+	}
+	if n.External {
+		c += " is-external"
+	}
+	return c
+}
+
+func edgeClass(e CanvasEdge) string {
+	if e.Dashed {
+		return "edge-line is-dashed"
+	}
+	return "edge-line"
+}
+
+func portTone(access string) string {
+	switch access {
+	case "any":
+		return "tuc-badge is-warning"
+	case "ips":
+		return "tuc-badge is-success"
+	}
+	return "tuc-badge is-info"
+}
+
+func stateTone(state string) string {
+	switch state {
+	case "running":
+		return "node-state is-ok"
+	case "deploying", "restarting", "created":
+		return "node-state is-busy"
+	case "exited", "dead", "missing", "failed":
+		return "node-state is-bad"
+	}
+	return "node-state"
+}
+
+func sz(n int) string { return fmt.Sprint(n) }
+
+// ProjectCanvas is the project page: the canvas and, when a service is
+// selected, its panel.
+templ ProjectCanvas(d CanvasData, s *ServiceData) {
+	@shell(t(ctx, "canvas.pista") + " · " + d.ProjectName + " · Hangar") {
+		@pageHead(d.ProjectName, t(ctx, "canvas.pista")+" · "+t(ctx, "canvas.summary", "n", len(d.Nodes), "network", "hangar_"+d.Project)) {
+			@projectActions(d.Project, d.CanCreate, "canvas")
+		}
+		@errorAlert(d.Error)
+		<div class="canvas-area dots">
+			<div class="canvas-scroll">
+				if len(d.Nodes) == 0 {
+					<div class="canvas-empty">
+						@emptyState("workflow", t(ctx, "canvas.empty")) {
+						if d.CanCreate {
+							<a class="tuc-btn is-primary" href={ templ.SafeURL("/p/" + d.Project + "/new") } data-tuc-modal="#new-service">
+								@Icon("plus", "size-4")
+								{ t(ctx, "canvas.new_service") }
+							</a>
+						}
+						}
+					</div>
+				} else {
+					<div class="canvas-stage" id="canvas-stage">
+					<svg
+						class="canvas"
+						id="canvas"
+						width={ sz(d.Width) }
+						height={ sz(d.Height) }
+						viewBox={ "0 0 " + sz(d.Width) + " " + sz(d.Height) }
+						data-project={ d.Project }
+						data-csrf={ d.CSRF }
+						data-can-connect={ fmt.Sprint(d.CanOperate) }
+						data-deploying={ fmt.Sprint(d.Deploying) }
+						role="group"
+						aria-label={ t(ctx, "canvas.label") }
+					>
+						for _, g := range d.Groups {
+							<rect class="canvas-group hg-in" x={ sz(g.X) } y={ sz(g.Y) } width={ sz(g.W) } height={ sz(g.H) } rx="8"></rect>
+							<foreignObject x={ sz(g.X + 14) } y={ sz(g.Y + 8) } width={ sz(g.W - 28) } height="24">
+								<div class="canvas-group-label">{ t(ctx, "canvas.linked", "projects", g.Label) }</div>
+							</foreignObject>
+						}
+						if d.Internet != nil {
+							<foreignObject x={ sz(d.Internet.X) } y={ sz(d.Internet.Y) } width={ sz(d.Internet.W) } height={ sz(d.Internet.H) }>
+								<div class="node-internet hg-in d0">
+									<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"></path></svg>
+									<span>
+										<b>{ t(ctx, "canvas.internet") }</b>
+										<span class="text-xs text-muted">
+											{ t(ctx, "canvas.domains", "n", d.Internet.Hosts) }
+											if d.Internet.Dynamic {
+												{ " · " + t(ctx, "canvas.customer_domains") }
+											}
+										</span>
+									</span>
+								</div>
+							</foreignObject>
+						}
+						for _, e := range d.Edges {
+							<g class="edge" data-from={ e.From } data-to={ e.To } data-slot={ sz(e.Slot) } data-internet={ fmt.Sprint(e.Internet) }>
+								<path class={ edgeClass(e) } d={ e.D }></path>
+								<path class="edge-flow" d={ e.D }></path>
+								<path class="edge-hit" d={ e.D }><title>{ e.Title }</title></path>
+							</g>
+						}
+						<path class="drag-line" id="drag-line" d="M 0 0"></path>
+						for _, n := range d.Nodes {
+							<foreignObject class="node-fo" data-key={ nodeRef(d.Project, n) } data-h={ sz(n.H) } data-movable={ fmt.Sprint(d.CanOperate && !n.External) } x={ sz(n.X - cardPad) } y={ sz(n.Y - cardPad) } width={ sz(n.W + 2*cardPad) } height={ sz(n.H + 2*cardPad + volumeH(n)) }>
+								<div
+									class={ nodeClass(n) }
+									data-slug={ n.Slug }
+									data-ref={ nodeRef(d.Project, n) }
+									data-exports={ n.Exports }
+									if !n.External {
+										data-tuc-contextmenu={ "#menu-" + n.Slug }
+									}
+									tabindex="0"
+								>
+									<a class="node-link" href={ templ.SafeURL(n.Href) } draggable="false">
+										<span class="node-title">
+											<span class="node-icon">
+												@nodeIcon(n.Kind)
+											</span>
+											<span class="node-name">{ n.Slug }</span>
+											if n.Maintenance {
+												<span class="tuc-badge is-warning" title={ t(ctx, "service.maintenance.badge") } aria-label={ t(ctx, "service.maintenance.badge") }>
+													@Icon("wrench", "size-3")
+												</span>
+											}
+											if n.PortLabel != "" {
+												<span class={ portTone(n.PortAccess) + " ml-auto" }>{ n.PortLabel }</span>
+											}
+											if n.Broken != "" {
+												<span class="node-warn" title={ n.Broken } aria-label={ n.Broken } role="img">
+													@Icon("triangle-alert", "size-3.5")
+												</span>
+											}
+										</span>
+										if n.Domain != "" {
+											<span class="node-sub node-domain">
+												{ n.Domain }
+												if n.MoreHosts > 0 {
+													<span class="text-subtle">+{ sz(n.MoreHosts) }</span>
+												}
+											</span>
+										} else if n.Dynamic {
+											<span class="node-sub node-domain">{ t(ctx, "canvas.customer_domains") }</span>
+										} else {
+											<span class="node-sub">{ n.Image }</span>
+										}
+										if n.External {
+											<span class="node-state">{ n.Project }</span>
+										} else if n.State == "deploying" {
+											<span class={ stateTone(n.State) }><span class="node-dot hg-pulse"></span>{ t(ctx, "canvas.deploying", "phase", t(ctx, "deploy.phase." + phaseOr(n.Phase))) }</span>
+										} else if n.Pending {
+											<span class="node-state is-pending"><span class="node-dot"></span>{ t(ctx, "canvas.pending") }</span>
+										} else {
+											<span class={ stateTone(n.State) }><span class="node-dot"></span>{ t(ctx, "state." + n.State) }</span>
+										}
+										if n.State == "deploying" {
+											<span class="node-progress"><span class={ "node-progress-bar p" + fmt.Sprint(n.Progress) }></span></span>
+										}
+									</a>
+									if d.CanOperate && !n.External {
+										<span class="node-port" data-from={ n.Slug } aria-hidden="true"></span>
+									}
+								</div>
+								if n.Volume {
+									<div class={ "node-volume hg-in d" + fmt.Sprint(n.Delay) }>
+										@Icon("hard-drive", "size-3.5")
+										if n.VolumeLabel != "" {
+											<span class="truncate font-mono">{ n.VolumeLabel }</span>
+										} else {
+											<span>{ t(ctx, "canvas.volume") }</span>
+										}
+									</div>
+								}
+							</foreignObject>
+						}
+					</svg>
+					</div>
+				}
+			</div>
+			<div class="canvas-zoom" role="group" aria-label={ t(ctx, "canvas.zoom") }>
+				<button type="button" class="tuc-btn is-outline is-icon is-sm" data-zoom="out" aria-label={ t(ctx, "canvas.zoom_out") }>
+					@Icon("minus", "size-4")
+				</button>
+				<button type="button" class="tuc-btn is-outline is-sm tabular-nums" data-zoom="reset" aria-label={ t(ctx, "canvas.zoom_reset") }><span id="zoom-label">100%</span></button>
+				<button type="button" class="tuc-btn is-outline is-icon is-sm" data-zoom="in" aria-label={ t(ctx, "canvas.zoom_in") }>
+					@Icon("plus", "size-4")
+				</button>
+				<button type="button" class="tuc-btn is-outline is-icon is-sm" data-zoom="fit" aria-label={ t(ctx, "canvas.zoom_fit") }>
+					@Icon("maximize", "size-4")
+				</button>
+				if d.CanOperate {
+					<span class="mx-0.5 w-px self-stretch bg-border" aria-hidden="true"></span>
+					<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/tidy") } class="inline-flex">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<button type="submit" class="tuc-btn is-outline is-sm" title={ t(ctx, "canvas.tidy_hint") }>
+							@Icon("layout-grid", "size-4")
+							{ t(ctx, "canvas.tidy") }
+						</button>
+					</form>
+				}
+			</div>
+			if s != nil {
+				@servicePanel(*s)
+			}
+			if len(d.Pending) > 0 && d.CanOperate {
+				<div class="pending-bar" role="status">
+					<span class="pending-dot" aria-hidden="true"></span>
+					<span><b>{ t(ctx, "canvas.pending_count", "n", len(d.Pending)) }</b> <span class="font-mono text-xs text-muted">{ joinComma(d.Pending) }</span></span>
+					<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL("/p/" + d.Project + "/s/" + d.Pending[0] + "?tab=variables") }>
+						@Icon("eye", "size-4")
+						{ t(ctx, "canvas.pending_view") }
+					</a>
+					<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/deploy-pending") }>
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<button class="tuc-btn is-primary is-sm" type="submit">
+							@Icon("rocket", "size-4")
+							{ t(ctx, "service.apply_deploy") }
+						</button>
+					</form>
+				</div>
+			}
+		</div>
+		@toast("success", d.Flash)
+		for _, n := range d.Nodes {
+			if !n.External {
+				@nodeMenu(d, n)
+			}
+		}
+		if d.CanOperate {
+			@connectChooser(d)
+		}
+		<script src={ asset("canvas.js") } defer></script>
+		<script src={ asset("logs.js") } defer></script>
+		// Page-level, not in the Variables tab: a tab swapped in without a
+		// page load does not run the scripts inside it.
+		<script src={ asset("envimport.js") } defer></script>
+		if d.New != nil {
+			@newServiceDialog(*d.New)
+			<script src={ asset("newservice.js") } defer></script>
+			// The Git credential dialog the new-service dialog opens checks
+			// the GitHub account as the user types.
+			<script src={ asset("gitcred.js") } defer></script>
+		}
+	}
+}
+
+func joinComma(xs []string) string {
+	out := ""
+	for i, x := range xs {
+		if i > 0 {
+			out += ", "
+		}
+		out += x
+	}
+	return out
+}
+
+func phaseOr(p string) string {
+	if p == "" {
+		return "pull"
+	}
+	return p
+}
+
+func nodeRef(project string, n CanvasNode) string {
+	if n.External {
+		return n.Project + "." + n.Slug
+	}
+	return n.Slug
+}
+
+templ nodeIcon(kind string) {
+	switch kind {
+		case "db":
+			@Icon("database", "size-3.5")
+		case "cache":
+			@Icon("zap", "size-3.5")
+		default:
+			@Icon("app-window", "size-3.5")
+	}
+}
+
+templ nodeMenu(d CanvasData, n CanvasNode) {
+	<div class="tuc-dropdown" id={ "menu-" + n.Slug } hidden>
+		<div class="tuc-dropdown__label">{ d.Project }_{ n.Slug }</div>
+		if d.CanOperate {
+			<form method="post" action={ templ.SafeURL(n.Href + "/deploy") }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<button class="tuc-dropdown__item" type="submit"><span class="tuc-dropdown__text">{ t(ctx, "service.deploy") }</span></button>
+			</form>
+			<form data-confirm={ t(ctx, "confirm.restart.title") } data-confirm-text={ t(ctx, "confirm.restart.text") } data-confirm-ok={ t(ctx, "confirm.restart.ok") } data-tone="warning" method="post" action={ templ.SafeURL(n.Href + "/action") }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<input type="hidden" name="action" value="restart"/>
+				<button class="tuc-dropdown__item" type="submit"><span class="tuc-dropdown__text">{ t(ctx, "service.restart") }</span></button>
+			</form>
+		}
+		<a class="tuc-dropdown__item" href={ templ.SafeURL(n.Href + "?tab=logs") }><span class="tuc-dropdown__text">{ t(ctx, "service.tab.logs") }</span></a>
+		<a class="tuc-dropdown__item" href={ templ.SafeURL(n.Href + "?tab=overview") }><span class="tuc-dropdown__text">{ t(ctx, "canvas.menu.rollback") }</span></a>
+		<a class="tuc-dropdown__item" href={ templ.SafeURL(n.Href + "?tab=network") }><span class="tuc-dropdown__text">{ t(ctx, "canvas.menu.port") }</span></a>
+		<hr class="tuc-dropdown__separator"/>
+		<a class="tuc-dropdown__item is-danger" href={ templ.SafeURL(n.Href + "?tab=settings") }><span class="tuc-dropdown__text">{ t(ctx, "canvas.menu.delete") }</span></a>
+	</div>
+}
+
+// connectChooser is filled by canvas.js after a drag from one card's port
+// to another card: it posts a variable holding the reference.
+templ connectChooser(d CanvasData) {
+	<div
+		class="connect-chooser hg-pop"
+		id="connect-chooser"
+		hidden
+		role="dialog"
+		aria-labelledby="connect-title"
+		data-title={ t(ctx, "canvas.connect.title") }
+	>
+		<form method="post" id="connect-form">
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			<input type="hidden" name="value" id="connect-value"/>
+			<p class="connect-title" id="connect-title"></p>
+			<p class="text-xs text-muted">{ t(ctx, "canvas.connect.pick") }</p>
+			<p class="text-xs text-muted connect-none">{ t(ctx, "canvas.connect.none") }</p>
+			<div class="connect-options" id="connect-options"></div>
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="connect-key">{ t(ctx, "canvas.connect.var") }</label>
+				<input class="tuc-input font-mono text-[13px]" id="connect-key" name="key" required pattern="[A-Za-z_][A-Za-z0-9_]{0,127}"/>
+			</div>
+			<p class="tuc-hint">{ t(ctx, "canvas.connect.hint") }</p>
+			<div class="connect-actions">
+				<button class="tuc-btn is-ghost is-sm" type="button" id="connect-cancel">{ t(ctx, "tucano.cancel") }</button>
+				<button class="tuc-btn is-primary is-sm" type="submit">
+					@Icon("link", "size-4")
+					{ t(ctx, "canvas.connect.save") }
+				</button>
+			</div>
+		</form>
+	</div>
+}
+
+func tabClass(cur, tab string) string {
+	if cur == tab {
+		return "true"
+	}
+	return "false"
+}
+
+// ServiceTabs are the service panel's tabs, in order (the command palette
+// lists them too). Backups only shows on services that can be backed up
+// (databases): see ServiceTabsFor.
+var ServiceTabs = []string{"overview", "variables", "network", "logs", "settings", "backups"}
+
+// ServiceTabsFor is the tab list of one service.
+func ServiceTabsFor(canBackup bool) []string {
+	if canBackup {
+		return ServiceTabs
+	}
+	return ServiceTabs[:len(ServiceTabs)-1]
+}
+
+templ servicePanel(d ServiceData) {
+	// A Tucano drawer: it closes with the X, Escape or a click outside, and
+	// canvas.js takes the address back to the project.
+	<button type="button" hidden data-tuc-drawer="#svc-panel" id="svc-open"></button>
+	<dialog class="tuc-drawer is-right is-lg svc-drawer" id="svc-panel" data-open="true" data-project={ d.Project } aria-labelledby="svc-title">
+		<div class="tuc-drawer__panel">
+			<div class="svc-head">
+				<span class={ stateDot(d.State) } aria-hidden="true"></span>
+				<h2 id="svc-title">{ d.Slug }</h2>
+				<span class="font-mono text-xs text-muted">{ d.Project }_{ d.Slug }</span>
+				if d.Maintenance {
+					<a class="tuc-badge is-warning" href={ templ.SafeURL(d.base() + "?tab=settings#maintenance") }>
+						@Icon("wrench", "size-3")
+						{ t(ctx, "service.maintenance.badge") }
+					</a>
+				}
+				<span class="grow"></span>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-drawer__close" data-tuc-drawer-close aria-label={ t(ctx, "service.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<p class="svc-meta m-0 truncate text-xs text-muted">{ t(ctx, "service.summary", "image", d.Image, "port", d.Port, "memory", d.MemoryMB, "cpus", d.CPUs) }</p>
+			if d.CanOperate {
+				<div class="svc-actions">
+					@serviceActions(d)
+				</div>
+			}
+			<div class="tuc-tabs svc-tabs">
+				<div class="tuc-tabs__list" role="tablist" aria-label={ t(ctx, "service.tabs") }>
+					for _, tab := range ServiceTabsFor(d.CanBackup) {
+						<a class="tuc-tabs__tab" role="tab" aria-selected={ tabClass(d.Tab, tab) } href={ templ.SafeURL(d.base() + "?tab=" + tab) }>{ t(ctx, "service.tab." + tab) }</a>
+					}
+				</div>
+			</div>
+			<div class="tuc-drawer__body svc-body">
+				@errorAlert(d.Error)
+				if d.Flash != "" {
+					@toast("success", d.Flash)
+				}
+				switch d.Tab {
+					case "variables":
+						@tabVariables(d)
+						@tabConnection(d)
+					case "network":
+						@tabDomains(d)
+						@tabPorts(d)
+					case "logs":
+						@logsCard(d)
+					case "backups":
+						@tabBackups(d)
+					case "settings":
+						if d.Git != nil {
+							@gitCards(d)
+						}
+						@deploySettings(d)
+						@volumesCard(d)
+						@tabSettings(d)
+					default:
+						@pendingBanner(d)
+						@tabMetrics(d)
+						<section class={ cardClass }>
+							@cardHead(t(ctx, "service.deploys.title")) {
+								if len(d.Deploys) > 0 {
+									<span class="text-xs text-muted">{ t(ctx, "service.deploys.last", "n", len(d.Deploys)) }</span>
+								}
+							}
+							<div class={ cardBodyClass }>
+								@deploysTimeline(d)
+							</div>
+						</section>
+				}
+				@sudoDialog(d)
+				@terminalDialogs(d)
+			</div>
+		</div>
+	</dialog>
+}
+
+// cardPad is the room around a card inside its foreignObject, so its
+// shadow (larger while dragged) is not cut flat at the edges. The same
+// value is in canvas.js (PAD) and components.css (.node margin).
+const cardPad = 16
+
+// volumeH is the room the volume pill takes under a card.
+func volumeH(n CanvasNode) int {
+	if n.Volume {
+		return 36
+	}
+	return 0
+}
+
+// nodeKind is the card's first word: App, Banco or Cache.
+func nodeKind(ctx context.Context, n CanvasNode) string {
+	return t(ctx, "canvas.kind."+n.Kind)
+}

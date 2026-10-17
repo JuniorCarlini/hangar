@@ -1,0 +1,45 @@
+id = "rabbitmq"
+version = 2
+category = "queue"
+tags = ["amqp", "message-broker", "celery"]
+docs = "https://www.rabbitmq.com/docs"
+main = "rabbitmq"
+name = { en = "RabbitMQ", "pt-BR" = "RabbitMQ" }
+description = { en = "Message broker (AMQP) with the management interface. Generated password, persistent volume and healthcheck.", "pt-BR" = "Fila de mensagens (AMQP) com o painel de gestão. Senha gerada, volume persistente e healthcheck." }
+
+[variables.user]
+default = "app"
+pattern = '^[a-z_][a-z0-9_]{0,62}$'
+label = { en = "User", "pt-BR" = "Usuário" }
+
+[variables.password]
+generate = "secret"
+
+[[exports]]
+key = "AMQP_URL"
+value = "amqp://${user}:${password}@${service}:5672/"
+secret = true
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "5672"
+
+[[exports]]
+key = "USER"
+value = "${user}"
+
+[[exports]]
+key = "PASSWORD"
+value = "${password}"
+secret = true
+
+[[endpoints]]
+port = 15672
+label = { en = "Management", "pt-BR" = "Gestão" }
+# An admin screen starts on the project network only: make it public
+# in the Network tab, preferably with a restricted domain.
+public = false

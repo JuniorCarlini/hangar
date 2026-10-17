@@ -1,0 +1,164 @@
+package views
+
+
+// UpdateData feeds the update page.
+type UpdateData struct {
+	CSRF       string
+	Current    string
+	Available  string // empty = up to date
+	Notes      string
+	ReleaseURL string
+	CheckError string
+	Pending    bool // request written, waiting for the applier
+	SudoActive bool
+	Last       *UpdateStatus
+	Flash      string
+	FlashError bool
+}
+
+// UpdateStatus is the result of the last applied update.
+type UpdateStatus struct {
+	State   string
+	Version string
+	From    string
+	Message string
+	At      string
+}
+
+func stateClass(s string) string {
+	switch s {
+	case "ok":
+		return "tuc-badge is-success"
+	case "applying":
+		return "tuc-badge is-info"
+	}
+	return "tuc-badge is-danger"
+}
+
+// Update is the "Update Hangar" page.
+templ Update(d UpdateData) {
+	@shell(t(ctx, "update.page_title")) {
+		if d.Pending {
+			<meta http-equiv="refresh" content="5"/>
+		}
+		@pageHead(t(ctx, "update.title"), t(ctx, "update.installed")+" "+d.Current)
+		@pageBody() {
+			if d.Flash != "" {
+				if d.FlashError {
+					@errorAlert(d.Flash)
+				} else {
+					@toast("success", d.Flash)
+				}
+			}
+			if d.Pending {
+				<section class={ cardClass }>
+					@cardHead(t(ctx, "update.applying")) {
+						<span class="tuc-spinner" aria-hidden="true"></span>
+					}
+					<div class={ cardBodyClass }>
+						@notice("info", "info", t(ctx, "update.applying_note"))
+					</div>
+				</section>
+			} else if d.Available != "" {
+				<section class={ cardClass }>
+					@cardHead(t(ctx, "update.available", "version", d.Available)) {
+						if d.ReleaseURL != "" {
+							<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(d.ReleaseURL) } rel="noopener noreferrer" target="_blank">
+								@Icon("external-link", "size-3.5")
+								{ t(ctx, "update.view_github") }
+							</a>
+						}
+					}
+					<div class={ cardBodyClass }>
+						<div class="flex flex-wrap gap-1.5">
+							<span class="tuc-badge is-success">
+								@Icon("check", "size-3")
+								{ t(ctx, "update.signed") }
+							</span>
+							<span class="tuc-badge">{ t(ctx, "update.available_note", "current", d.Current) }</span>
+						</div>
+						if d.Notes != "" {
+							<pre class="m-0 max-h-[320px] overflow-auto rounded-sm border border-border bg-surface-2 p-3 font-mono text-xs whitespace-pre-wrap text-muted">{ d.Notes }</pre>
+						}
+						<div class="tuc-alert is-info">
+							@Icon("shield", "size-4")
+							<div class="tuc-alert__body"><p>{ t(ctx, "update.safety") }</p></div>
+						</div>
+						if d.SudoActive {
+							<div class="flex flex-wrap justify-end gap-2">
+								<form method="post" action="/update/check">
+									<input type="hidden" name="csrf" value={ d.CSRF }/>
+									<button class="tuc-btn is-outline" type="submit">
+										@Icon("refresh-cw", "size-3.5")
+										{ t(ctx, "update.check_now") }
+									</button>
+								</form>
+								<form method="post" action="/update">
+									<input type="hidden" name="csrf" value={ d.CSRF }/>
+									<input type="hidden" name="version" value={ d.Available }/>
+									<button class="tuc-btn is-primary" type="submit">
+										@Icon("download", "size-3.5")
+										{ t(ctx, "update.apply", "version", d.Available) }
+									</button>
+								</form>
+							</div>
+						} else {
+							@sudoForm(d.CSRF, "/update", t(ctx, "update.sudo_label"))
+						}
+					</div>
+				</section>
+			} else {
+				<section class={ cardClass }>
+					@cardHead(t(ctx, "update.up_to_date")) {
+						<form method="post" action="/update/check">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<button class="tuc-btn is-outline is-sm" type="submit">
+								@Icon("refresh-cw", "size-3.5")
+								{ t(ctx, "update.check_now") }
+							</button>
+						</form>
+					}
+					<div class={ cardBodyClass }>
+						<div class="flex items-center gap-2">
+							<span class="tuc-badge is-success">
+								@Icon("check", "size-3")
+								{ d.Current }
+							</span>
+							if d.CheckError != "" {
+								<span class="text-[13px] text-muted">{ t(ctx, "update.check_failed", "error", d.CheckError) }</span>
+							} else {
+								<span class="text-[13px] text-muted">{ t(ctx, "update.check_interval") }</span>
+							}
+						</div>
+					</div>
+				</section>
+			}
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "update.history"))
+				<div class={ cardBodyClass }>
+					if d.Last == nil {
+						@emptyState("clock", t(ctx, "update.history_empty"))
+					} else {
+						<div class="tuc-table-wrap">
+							<table class="tuc-table is-compact w-full">
+								<thead><tr><th>{ t(ctx, "update.version") }</th><th>{ t(ctx, "update.result") }</th><th>{ t(ctx, "update.when") }</th></tr></thead>
+								<tbody>
+									<tr>
+										<td class="font-mono">{ d.Last.From } → { d.Last.Version }</td>
+										<td>
+											<span class={ stateClass(d.Last.State) }>{ t(ctx, "update.state." + d.Last.State) }</span>
+											if d.Last.Message != "" {
+												<span class="ml-2 text-xs text-muted">{ d.Last.Message }</span>
+											}
+										</td>
+										<td class="text-muted">{ d.Last.At }</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					}
+				</div>
+			</section>
+		}
+	}
+}

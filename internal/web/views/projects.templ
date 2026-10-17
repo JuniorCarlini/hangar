@@ -1,0 +1,718 @@
+package views
+
+import "fmt"
+
+// ServiceRow is a service on the project page.
+type ServiceRow struct {
+	Slug  string
+	Image string
+	State string
+}
+
+// ProjectData feeds the project page.
+type ProjectData struct {
+	CSRF       string
+	Slug       string
+	Name       string
+	CanCreate  bool
+	Services   []ServiceRow
+	Error      string
+	Linked     []string
+	Linkable   []string
+	SudoActive bool
+	Flash      string
+	// Git credentials: the project's own (settings), how many server-wide
+	// ones it can also use, and what the new-service form can pick.
+	GitCreds     []GitCredRow
+	ServerCreds  int
+	CredOpen     bool
+}
+
+// Place is where a new service lands on the canvas and the service a line
+// was dragged from (that one gets connected to the new service).
+type Place struct {
+	From string
+	X, Y int
+	Set  bool
+}
+
+// placeFields carries the place through a new-service form. The fields are
+// always there: dragging a line to empty space fills them in before the
+// dialog opens (assets/newservice.js); empty ones are ignored.
+templ placeFields(p Place) {
+	<input type="hidden" name="from" value={ p.From } data-place="from"/>
+	<input type="hidden" name="x" value={ placeCoord(p, p.X) } data-place="x"/>
+	<input type="hidden" name="y" value={ placeCoord(p, p.Y) } data-place="y"/>
+}
+
+func placeCoord(p Place, v int) string {
+	if !p.Set {
+		return ""
+	}
+	return fmt.Sprint(v)
+}
+
+// ServiceForm keeps the form values after an error (never the Git token).
+type ServiceForm struct {
+	Name       string
+	Slug       string
+	Image      string
+	Port       string
+	MemoryMB   string
+	CPUs       string
+	Repo       string
+	Branch     string
+	Subdir     string
+	Dockerfile string
+	Credential string // the picked credential id, "" or "new"
+}
+
+func stateDot(state string) string {
+	switch state {
+	case "running":
+		return "size-2 shrink-0 rounded-xs bg-success"
+	case "deploying", "restarting", "created":
+		return "size-2 shrink-0 rounded-xs bg-info"
+	case "exited", "dead", "missing", "failed":
+		return "size-2 shrink-0 rounded-xs bg-danger"
+	}
+	return "size-2 shrink-0 rounded-xs bg-subtle"
+}
+
+// projectActions are the project's buttons in the top bar.
+templ projectActions(project string, canCreate bool, view string) {
+	if view != "canvas" {
+		<a class="tuc-btn is-outline" href={ templ.SafeURL("/p/" + project) }>
+			@Icon("workflow", "size-3.5")
+			{ t(ctx, "project.back_canvas") }
+		</a>
+	}
+	<a class={ "tuc-btn is-outline" + currentIf(view == "settings") } href={ templ.SafeURL("/p/" + project + "/settings") }>
+		@Icon("settings", "size-3.5")
+		{ t(ctx, "canvas.settings") }
+	</a>
+	if canCreate {
+		// On the canvas the dialog is on the page; elsewhere the link opens
+		// the canvas with it open.
+		if view == "canvas" {
+			<a class="tuc-btn is-primary" href={ templ.SafeURL("/p/" + project + "/new") } data-tuc-modal="#new-service">
+				@Icon("plus", "size-3.5")
+				{ t(ctx, "canvas.new_service") }
+			</a>
+		} else {
+			<a class="tuc-btn is-primary" href={ templ.SafeURL("/p/" + project + "/new") }>
+				@Icon("plus", "size-3.5")
+				{ t(ctx, "canvas.new_service") }
+			</a>
+		}
+	}
+}
+
+func ariaPage(b bool) string {
+	if b {
+		return "page"
+	}
+	return "false"
+}
+
+// projectHead is the project's top bar.
+templ projectHead(d ProjectData, view string) {
+	@pageHead(d.Name, t(ctx, "project.network", "name", "hangar_"+d.Slug)) {
+		@projectActions(d.Slug, d.CanCreate, view)
+	}
+}
+
+func currentIf(b bool) string {
+	if b {
+		return " is-current"
+	}
+	return ""
+}
+
+// ProjectSettings holds connected projects, the network and the danger zone.
+templ ProjectSettings(d ProjectData) {
+	@shell(t(ctx, "canvas.settings") + " · " + d.Name + " · Hangar") {
+		@projectHead(d, "settings")
+		@pageBody() {
+			if !d.CredOpen {
+				@errorAlert(d.Error)
+			}
+			@toast("success", d.Flash)
+			@projectLinks(d)
+			@projectGitCreds(d)
+			if d.CanCreate {
+				@dangerZone(t(ctx, "project.danger.title"), t(ctx, "project.danger.hint")) {
+					<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteProjectModal(d.SudoActive) } disabled?={ len(d.Services) > 0 }>
+						@Icon("trash", "size-3.5")
+						{ t(ctx, "project.danger.delete") }…
+					</button>
+				}
+				@sudoModal(d.CSRF, "/p/"+d.Slug+"/settings", d.SudoActive)
+			}
+			if d.CanCreate && d.SudoActive {
+				<dialog class="tuc-modal is-md is-danger" id="delete-project" aria-labelledby="delete-project-title" data-open={ fmt.Sprint(d.Error != "") }>
+					<div class="tuc-modal__panel">
+						<div class="tuc-modal__header">
+							<h2 class="tuc-modal__title" id="delete-project-title">{ t(ctx, "project.danger.delete") } { d.Slug }</h2>
+							<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+								@Icon("x", "size-4")
+							</button>
+						</div>
+						<div class="tuc-modal__body">
+							<form method="post" action={ templ.SafeURL("/p/" + d.Slug + "/delete") } class="flex flex-col gap-3">
+								<input type="hidden" name="csrf" value={ d.CSRF }/>
+								<div class="flex flex-col gap-1.5">
+									<label class="tuc-label" for="confirm">{ t(ctx, "service.danger.type_name") } <span class="font-mono">{ d.Slug }</span></label>
+									<input class="tuc-input font-mono" id="confirm" name="confirm" required autocomplete="off"/>
+								</div>
+								<div class="flex justify-end gap-2">
+									<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+									<button class="tuc-btn is-danger" type="submit">
+										@Icon("trash", "size-3.5")
+										{ t(ctx, "project.danger.delete") }
+									</button>
+								</div>
+							</form>
+						</div>
+					</div>
+				</dialog>
+			}
+		}
+	}
+}
+
+// DeployRow is a deploy in the history.
+type DeployRow struct {
+	ID          string
+	Status      string
+	Phase       string
+	Image       string
+	Trigger     string
+	When        string
+	Error       string
+	Log         string
+	Ref         string // short pinned image (digest or ID)
+	CanRollback bool
+	// Commit and CommitMessage: what a build from Git deployed.
+	Commit        string
+	CommitMessage string
+}
+
+// EnvRow is a variable in the table.
+type EnvRow struct {
+	Key      string
+	Value    string
+	Secret   bool
+	Revealed bool
+}
+
+// RefWarning is a reference in the variables that the next deploy cannot
+// resolve.
+type RefWarning struct {
+	Key       string // the variable holding it
+	Project   string // the referenced project ("" = this one)
+	Service   string
+	TargetKey string
+	Problem   string // project, service or key (projects.RefProblem)
+}
+
+// EnvSuggest is the "Suggested variables" card: keys the repository's
+// example file (File, e.g. .env.example) lists that the service lacks.
+type EnvSuggest struct {
+	File string
+	Vars []SuggestedVar
+}
+
+// SuggestedVar is one suggested key; Example is empty when the file had
+// none or it looked like a secret.
+type SuggestedVar struct {
+	Key     string
+	Example string
+}
+
+// ServiceData feeds the service page.
+type ServiceData struct {
+	Validate        string // command run in the new container before it takes over
+	ValidateMinutes string
+	Volumes     []VolumeRow // disks: what survives deploys
+	CSRF        string
+	Project     string
+	ProjectName string
+	Slug        string
+	Image       string
+	Port        int64
+	MemoryMB    int64
+	CPUs        string
+	State       string
+	Health      string
+	Restarts    int
+	OOMKilled   bool
+	Pending     bool
+	Deploying   bool
+	Deploys     []DeployRow
+	Env         []EnvRow
+	RefWarnings []RefWarning // broken references in Env
+	EnvSuggest  *EnvSuggest  // nil when the repository suggests nothing new
+	Domains     DomainsSection
+	Exports     []ExportRow
+	CanBackup   bool
+	Stateful    bool
+	Maintenance bool // visitors get the maintenance page instead of the app
+	Ports       []PortRow
+	ServerHint  string
+	Strategy    string
+	ClientIP    string // shown as "your IP" when opening a port
+	Tab         string
+	// OpenTerminal opens the terminal modal on load (back from sudo).
+	OpenTerminal bool
+	Metrics     ServiceMetrics // filled only on the metrics tab
+	Backups     ServiceBackups // filled only on the backups tab
+	PreDeploy   string
+	HealthPath  string
+	Git         *GitView // nil for a service that runs an image
+	CanOperate  bool
+	CanAdmin    bool
+	SudoActive  bool
+	Error       string
+	Flash       string
+}
+
+func (d ServiceData) base() string { return "/p/" + d.Project + "/s/" + d.Slug }
+
+// ExportRow is a connection value other services can reference.
+type ExportRow struct {
+	Key      string
+	Value    string
+	Secret   bool
+	Revealed bool
+}
+
+// PortRow is a published port.
+type PortRow struct {
+	ID            string
+	HostPort      int64
+	ContainerPort int64
+	Protocol      string
+	Access        string
+	IPs           string
+	Expires       string
+}
+
+// DomainsSection is the "Domains" card of a service.
+type DomainsSection struct {
+	EdgeEnabled bool
+	Fixed       []DomainRow
+	// Endpoints are the service's web ports and their automatic links (docs/28).
+	Endpoints []EndpointRow
+	// NoAutoLink: a public endpoint would have an automatic link, but the
+	// server has neither a base domain nor a public IP to build it.
+	NoAutoLink bool
+	Dynamic   bool
+	// DynamicElsewhere names the service that already takes customer domains.
+	DynamicElsewhere string
+	CheckPath        string
+	CheckSecret      string // only right after a sudo reveal
+}
+
+// EndpointRow is one web endpoint of a service, with its automatic link.
+type EndpointRow struct {
+	ID           string
+	Label        string
+	Port         int
+	Public       bool
+	SslipEnabled bool
+	// AutoHost is the automatic link's hostname ("" when the server has no
+	// base domain nor public IP to build one, or the edge is off).
+	AutoHost string
+	Cert     string // the automatic link's certificate (CertificateState)
+}
+
+// DomainRow is a fixed domain.
+type DomainRow struct {
+	ID       string
+	Hostname string
+	Cert     string // projects.CertActive, CertPending or "" (unknown)
+	Offline  bool   // on an internal port: not served
+}
+
+func deployBadge(status string) string {
+	switch status {
+	case "live":
+		return "tuc-badge is-success"
+	case "running":
+		return "tuc-badge is-info"
+	case "failed":
+		return "tuc-badge is-danger"
+	}
+	return "tuc-badge"
+}
+
+// Service is a service's page.
+templ serviceActions(d ServiceData) {
+	if d.CanOperate {
+		<form method="post" action={ templ.SafeURL(d.base() + "/deploy") }>
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			<button class="tuc-btn is-primary w-full" type="submit">
+				@Icon("rocket", "size-4")
+				{ t(ctx, "service.deploy") }
+			</button>
+		</form>
+		<form data-confirm={ t(ctx, "confirm.restart.title") } data-confirm-text={ t(ctx, "confirm.restart.text") } data-confirm-ok={ t(ctx, "confirm.restart.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/action") }>
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			<input type="hidden" name="action" value="restart"/>
+			<button class="tuc-btn is-outline w-full" type="submit">
+				@Icon("rotate-ccw", "size-4")
+				{ t(ctx, "service.restart_long") }
+			</button>
+		</form>
+		if d.State == "running" {
+			<form data-confirm={ t(ctx, "confirm.stop.title") } data-confirm-text={ t(ctx, "confirm.stop.text") } data-confirm-ok={ t(ctx, "confirm.stop.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/action") }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<input type="hidden" name="action" value="stop"/>
+				<button class="tuc-btn is-danger w-full" type="submit">
+					@Icon("square", "size-4")
+					{ t(ctx, "service.stop_long") }
+				</button>
+			</form>
+		} else {
+			<form method="post" action={ templ.SafeURL(d.base() + "/action") }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<input type="hidden" name="action" value="start"/>
+				<button class="tuc-btn is-success w-full" type="submit">
+					@Icon("play", "size-4")
+					{ t(ctx, "service.start_long") }
+				</button>
+			</form>
+		}
+	}
+	if d.CanAdmin {
+		// The terminal opens in a large modal (terminalDialogs); without
+		// sudo the button asks for it first, then the page comes back with
+		// the terminal open.
+		<div class="flex min-w-0">
+			if d.State != "running" {
+				<button type="button" class="tuc-btn is-outline w-full" disabled title={ t(ctx, "terminal.not_running") }>
+					@Icon("square-terminal", "size-4")
+					{ t(ctx, "terminal.title") }
+				</button>
+			} else if d.SudoActive {
+				<button type="button" class="tuc-btn is-outline w-full" data-tuc-modal="#terminal-modal">
+					@Icon("square-terminal", "size-4")
+					{ t(ctx, "terminal.title") }
+				</button>
+			} else {
+				<button type="button" class="tuc-btn is-outline w-full" data-tuc-modal="#terminal-sudo">
+					@Icon("square-terminal", "size-4")
+					{ t(ctx, "terminal.title") }
+				</button>
+			}
+		</div>
+	}
+}
+
+templ serviceStats(d ServiceData) {
+	<div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
+		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0"><span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.state") }</span><span class="flex items-center gap-1.5 truncate">{ t(ctx, "state." + d.State) }</span></div>
+		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0"><span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.image") }</span><span class="flex items-center gap-1.5 truncate font-mono text-[13px]">{ d.Image }</span></div>
+		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0"><span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.limits") }</span><span class="flex items-center gap-1.5 truncate">{ t(ctx, "service.stat.limits_value", "memory", d.MemoryMB, "cpus", d.CPUs) }</span></div>
+		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0">
+			<span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.restarts") }</span>
+			<span class="flex items-center gap-1.5 truncate">
+				{ fmt.Sprint(d.Restarts) }
+				if d.OOMKilled {
+					<span class="tuc-badge is-danger">{ t(ctx, "service.stat.oom") }</span>
+				}
+			</span>
+		</div>
+	</div>
+}
+
+templ logsCard(d ServiceData) {
+	<section class={ cardClass + " overflow-hidden" } data-expandable>
+		<div class={ cardHeadClass }>
+			<h2 class="m-0 text-sm leading-5 font-semibold">{ t(ctx, "service.tab.logs") }</h2>
+			<span class="size-2 shrink-0 rounded-xs bg-success" aria-hidden="true" id="log-dot"></span>
+			<span class="text-xs text-muted" id="log-status">{ t(ctx, "service.logs.connecting") }</span>
+			<span class="grow"></span>
+			if d.CanOperate {
+				<button class="tuc-btn is-outline is-sm" type="button" id="log-mark" data-url={ d.base() + "/logs/mark" } data-csrf={ d.CSRF } title={ t(ctx, "service.logs.mark_hint") }>
+					@Icon("separator-horizontal", "size-3.5")
+					{ t(ctx, "service.logs.mark") }
+				</button>
+			}
+			<button class="tuc-btn is-outline is-sm" type="button" id="log-pause">
+				<span data-icon-pause>
+					@Icon("pause", "size-3.5")
+				</span>
+				<span class="hidden" data-icon-play>
+					@Icon("play", "size-3.5")
+				</span>
+				<span data-label>{ t(ctx, "service.logs.pause") }</span>
+			</button>
+			@expandButton()
+		</div>
+		<div
+			class="logs"
+			id="logs"
+			data-src={ d.base() + "/logs" }
+			data-live={ t(ctx, "service.logs.live") }
+			data-reconnecting={ t(ctx, "service.logs.reconnecting") }
+			data-ended={ t(ctx, "service.logs.ended") }
+			data-pause={ t(ctx, "service.logs.pause") }
+			data-resume={ t(ctx, "service.logs.resume") }
+			data-mark-label={ t(ctx, "service.logs.mark_line") }
+			role="log"
+			aria-live="off"
+			tabindex="0"
+		></div>
+	</section>
+}
+
+templ deploysTimeline(d ServiceData) {
+	if len(d.Deploys) == 0 {
+		@emptyState("rocket", t(ctx, "service.deploys.empty"))
+	}
+	<ol class="tuc-timeline">
+		for _, dp := range d.Deploys {
+			<li class={ "tuc-timeline__item " + timelineTone(dp.Status) }>
+				<div class="tuc-timeline__head timeline-head">
+					<p class="tuc-timeline__title">{ t(ctx, "deploy.status." + dp.Status) }</p>
+					if dp.Status == "running" && dp.Phase != "" {
+						<span class="tuc-badge is-info"><span class="tuc-spinner"></span>{ t(ctx, "deploy.phase." + dp.Phase) }</span>
+					}
+					<span class="tuc-timeline__time">{ t(ctx, "deploy.trigger." + dp.Trigger) } · { dp.When }</span>
+					if dp.CanRollback && d.CanOperate {
+						<form data-confirm={ t(ctx, "confirm.rollback.title") } data-confirm-text={ t(ctx, "confirm.rollback.text") } data-confirm-ok={ t(ctx, "confirm.rollback.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/rollback") } class="row-end flex">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="deploy" value={ dp.ID }/>
+							<button class="tuc-btn is-outline is-sm" type="submit" title={ t(ctx, "deploy.rollback") } aria-label={ t(ctx, "deploy.rollback") }>
+								@Icon("undo-2", "size-3.5")
+								{ t(ctx, "deploy.rollback_short") }
+							</button>
+						</form>
+					}
+				</div>
+				<div class="tuc-timeline__body">
+					<span class="font-mono text-xs timeline-image">
+						{ dp.Image }
+						if dp.Ref != "" {
+							<span class="text-muted">{ " · " + dp.Ref }</span>
+						}
+					</span>
+					if dp.Commit != "" {
+						<span class="flex min-w-0 items-center gap-1.5 text-xs">
+							@Icon("git-branch", "size-3.5 text-muted")
+							<code class="font-mono">{ dp.Commit }</code>
+							<span class="truncate text-muted">{ dp.CommitMessage }</span>
+						</span>
+					}
+					if dp.Error != "" {
+						<p class="text-xs text-danger">{ dp.Error }</p>
+					}
+					if dp.Log != "" {
+						<details class="deploy-log">
+							<summary class="text-xs text-muted">{ t(ctx, "deploy.log") }</summary>
+							<pre class="font-mono text-xs">{ dp.Log }</pre>
+						</details>
+					}
+				</div>
+			</li>
+		}
+	</ol>
+}
+
+func timelineTone(status string) string {
+	switch status {
+	case "live":
+		return "is-success is-filled"
+	case "running":
+		return "is-info is-filled"
+	case "failed":
+		return "is-danger is-filled"
+	}
+	return "is-accent"
+}
+
+templ sudoForm(csrf, next, label string) {
+	@sudoFormID("sudo-code", csrf, next, label)
+}
+
+// sudoFormID is sudoForm with its own field id, for a second sudo form on
+// the same page.
+templ sudoFormID(id, csrf, next, label string) {
+	<form method="post" action="/sudo" class="sudo">
+		<input type="hidden" name="csrf" value={ csrf }/>
+		<input type="hidden" name="next" value={ next }/>
+		if noTOTP(ctx) {
+			<label class="tuc-label" for={ id }>{ t(ctx, "sudo.password_label") }</label>
+			<input class="tuc-input" id={ id } name="code" type="password" autocomplete="current-password" required data-tuc-reveal/>
+			<div class="flex justify-end">
+				<button class="tuc-btn is-primary" type="submit">
+					@Icon("shield-check", "size-4")
+					{ t(ctx, "sudo.confirm") }
+				</button>
+			</div>
+		} else {
+			<label class="tuc-label" for={ id }>{ label }</label>
+			<input class="tuc-input input-code-sm" id={ id } name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="17" required/>
+			<div class="flex justify-end">
+				<button class="tuc-btn is-primary" type="submit">
+					@Icon("shield-check", "size-4")
+					{ t(ctx, "sudo.confirm") }
+				</button>
+			</div>
+		}
+	</form>
+}
+
+templ projectLinks(d ProjectData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "link.title"))
+		<div class={ cardBodyClass }>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "link.hint", "project", d.Slug) }</p>
+			if len(d.Linked) > 0 {
+				<div class="tuc-table-wrap">
+					<table class="tuc-table is-compact w-full">
+						<thead><tr><th>{ t(ctx, "link.project") }</th><th class="tuc-table__actions"></th></tr></thead>
+						<tbody>
+							for _, l := range d.Linked {
+								<tr>
+									<td><a class="font-mono" href={ templ.SafeURL("/p/" + l) }>{ l }</a></td>
+									<td class="tuc-table__actions">
+										if d.CanCreate {
+											<form data-confirm={ t(ctx, "confirm.unlink.title") } data-confirm-text={ t(ctx, "confirm.unlink.text") } data-confirm-ok={ t(ctx, "confirm.unlink.ok") } data-tone="warning" method="post" action={ templ.SafeURL("/p/" + d.Slug + "/links/delete") }>
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="other" value={ l }/>
+												<button class="tuc-btn is-outline is-sm" type="submit" aria-label={ t(ctx, "link.disconnect_named", "project", l) }>
+													@Icon("unlink", "size-3.5")
+													{ t(ctx, "link.disconnect") }
+												</button>
+											</form>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			} else {
+				@emptyState("link", t(ctx, "link.empty"))
+			}
+			if d.CanCreate && len(d.Linkable) > 0 && !d.SudoActive {
+				<div>
+					@sudoButton(t(ctx, "link.connect"))
+				</div>
+			} else if d.CanCreate && len(d.Linkable) > 0 {
+				<form method="post" action={ templ.SafeURL("/p/" + d.Slug + "/links") } class="flex flex-wrap items-end gap-2">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="flex min-w-0 flex-[1_1_220px] flex-col gap-1.5">
+						<label class="tuc-label" for="other">{ t(ctx, "link.connect_with") }</label>
+						<select class="tuc-input" id="other" name="other" data-tuc-select data-clearable="false">
+							for _, l := range d.Linkable {
+								<option value={ l }>{ l }</option>
+							}
+						</select>
+					</div>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("link", "size-3.5")
+						{ t(ctx, "link.connect") }
+					</button>
+				</form>
+			}
+		</div>
+	</section>
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "project.network_title"))
+		<div class={ cardBodyClass }>
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3 text-[13px]">
+				<div class="flex flex-col gap-1"><span class="tuc-label">{ t(ctx, "project.network_name") }</span><span class="font-mono">hangar_{ d.Slug }</span></div>
+				<div class="flex flex-col gap-1">
+					<span class="tuc-label">{ t(ctx, "project.network_names") }</span>
+					<span class="font-mono">
+						for i, sv := range d.Services {
+							if i > 0 {
+								{ ", " }
+							}
+							{ sv.Slug }
+						}
+					</span>
+					<span class="tuc-hint">{ t(ctx, "project.network_hint", "example", d.Slug+"_web") }</span>
+				</div>
+			</div>
+		</div>
+	</section>
+}
+
+// TemplateInput is one field of a template form.
+type TemplateInput struct {
+	Key     string
+	Label   string
+	Pattern string
+	Value   string
+}
+
+// refOf is how another service references this value.
+func refOf(service, key string) string { return "${{" + service + "." + key + "}}" }
+
+func portValue(p int64) string {
+	if p == 0 {
+		return ""
+	}
+	return fmt.Sprint(p)
+}
+
+templ deploySettings(d ServiceData) {
+	<section class={ cardClass } id="deploy-settings">
+		@cardHead(t(ctx, "deploy.settings.title")) {
+			if d.CanOperate {
+				<form class="inline-flex" data-confirm={ t(ctx, "confirm.rebuild.title") } data-confirm-text={ t(ctx, "confirm.rebuild.text") } data-confirm-ok={ t(ctx, "confirm.rebuild.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/rebuild") }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<button class="tuc-btn is-outline is-sm" type="submit" title={ t(ctx, "deploy.rebuild_hint") }>
+						@Icon("hammer", "size-3.5")
+						{ t(ctx, "deploy.rebuild") }
+					</button>
+				</form>
+			}
+		}
+		<div class={ cardBodyClass }>
+			if d.Strategy == "rolling" {
+				@notice("success", "shield-check", t(ctx, "deploy.strategy.rolling_hint"))
+			} else {
+				@notice("warning", "triangle-alert", t(ctx, "deploy.strategy.recreate_hint"))
+			}
+			if d.CanAdmin {
+				<form method="post" action={ templ.SafeURL(d.base() + "/deploy-settings") } class="flex flex-col gap-3">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="predeploy">{ t(ctx, "deploy.settings.predeploy") }</label>
+						<input class="tuc-input font-mono text-[13px]" id="predeploy" name="predeploy" value={ d.PreDeploy } placeholder={ t(ctx, "deploy.settings.predeploy_placeholder") } autocomplete="off"/>
+						<p class="tuc-hint">{ t(ctx, "deploy.settings.predeploy_hint") }</p>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="health_path">{ t(ctx, "deploy.settings.health_path") }</label>
+						<input class="tuc-input font-mono text-[13px]" id="health_path" name="health_path" value={ d.HealthPath } placeholder={ t(ctx, "deploy.settings.health_placeholder") } autocomplete="off"/>
+						<p class="tuc-hint">{ t(ctx, "deploy.settings.health_hint") }</p>
+					</div>
+					<div class="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="validate">{ t(ctx, "deploy.settings.validate") }</label>
+							<input class="tuc-input font-mono text-[13px]" id="validate" name="validate" value={ d.Validate } placeholder={ t(ctx, "deploy.settings.validate_placeholder") } autocomplete="off"/>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="validate_timeout">{ t(ctx, "deploy.settings.validate_timeout") }</label>
+							<input class="tuc-input font-mono text-[13px]" id="validate_timeout" name="validate_timeout" inputmode="numeric" maxlength="2" pattern="[1-9][0-9]?" value={ d.ValidateMinutes } placeholder="5"/>
+						</div>
+					</div>
+					<p class="tuc-hint m-0 -mt-1">{ t(ctx, "deploy.settings.validate_hint") }</p>
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<span class="tuc-hint">{ t(ctx, "deploy.settings.next_deploy") }</span>
+						<button class="tuc-btn is-outline" type="submit">
+							@Icon("save", "size-4")
+							{ t(ctx, "deploy.settings.save") }
+						</button>
+					</div>
+				</form>
+			}
+		</div>
+	</section>
+}

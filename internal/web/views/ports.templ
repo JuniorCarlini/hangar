@@ -1,0 +1,97 @@
+package views
+
+// OpenPortsData is the "Open ports on the server" page.
+type OpenPortsData struct {
+	CSRF            string
+	Ports           []OpenPortRow
+	FirewallPending bool
+	FirewallError   string
+	FirewallAt      string
+	CanAdmin        bool
+	Flash           string
+}
+
+// OpenPortRow is a published port with its owner.
+type OpenPortRow struct {
+	ID            string
+	Project       string
+	Service       string
+	HostPort      int64
+	ContainerPort int64
+	Protocol      string
+	Access        string
+	IPs           string
+	Expires       string
+	Created       string
+	Owner         string
+}
+
+// OpenPorts lists every port published on the server, so none is forgotten.
+templ OpenPorts(d OpenPortsData) {
+	@shell(t(ctx, "ports.page_title")) {
+		@pageHead(t(ctx, "ports.title"), t(ctx, "ports.count", "n", len(d.Ports)))
+		@pageBody() {
+			@toast("success", d.Flash)
+			if d.FirewallError != "" {
+				@errorAlert(t(ctx, "ports.firewall_error", "error", d.FirewallError))
+			} else if d.FirewallPending {
+				<div class="tuc-alert is-warning" role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "ports.firewall_pending") }</p></div>
+				</div>
+			} else if d.FirewallAt != "" {
+				<div class="tuc-alert is-success" role="status">
+					@Icon("shield", "size-4")
+					<div class="tuc-alert__body"><p class="tuc-alert__title">{ t(ctx, "ports.firewall_ok") }</p><p>{ t(ctx, "ports.firewall_ok_text", "when", d.FirewallAt) }</p></div>
+				</div>
+			}
+			@notice("info", "eye", t(ctx, "ports.hint"))
+			if len(d.Ports) == 0 {
+				<section class={ cardClass }>
+					@emptyState("plug", t(ctx, "ports.empty"))
+				</section>
+			} else {
+				<div class="tuc-table-wrap rounded-md border border-border bg-surface">
+					<table class="tuc-table w-full">
+						<thead><tr><th>{ t(ctx, "port.title") }</th><th>{ t(ctx, "ports.service") }</th><th>{ t(ctx, "port.access_label") }</th><th>{ t(ctx, "port.expires") }</th><th>{ t(ctx, "ports.opened_by") }</th><th class="tuc-table__actions"></th></tr></thead>
+						<tbody>
+							for _, p := range d.Ports {
+								<tr>
+									<td class="font-mono">{ sz(int(p.HostPort)) }/{ p.Protocol }</td>
+									<td><a class="font-mono" href={ templ.SafeURL("/p/" + p.Project + "/s/" + p.Service + "?tab=ports") }>{ p.Project }_{ p.Service }:{ sz(int(p.ContainerPort)) }</a></td>
+									<td>
+										<span class={ portTone(p.Access) }>{ t(ctx, "port.access." + p.Access) }</span>
+										if p.IPs != "" {
+											<span class="font-mono text-xs text-muted">{ p.IPs }</span>
+										}
+									</td>
+									<td>
+										if p.Expires != "" {
+											{ p.Expires }
+										} else {
+											{ t(ctx, "port.expires_never") }
+										}
+									</td>
+									<td class="text-muted">{ p.Owner } · { p.Created }</td>
+									<td class="tuc-table__actions">
+										if d.CanAdmin {
+											<form data-confirm={ t(ctx, "confirm.port_close.title") } data-confirm-text={ t(ctx, "confirm.port_close.text") } data-confirm-ok={ t(ctx, "confirm.port_close.ok") } data-tone="danger" method="post" action={ templ.SafeURL("/p/" + p.Project + "/s/" + p.Service + "/ports/delete") }>
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="id" value={ p.ID }/>
+												<input type="hidden" name="back" value="ports"/>
+												<button class="tuc-btn is-outline is-sm" type="submit" aria-label={ t(ctx, "port.close_named", "port", p.HostPort) }>
+													@Icon("x", "size-3.5")
+													{ t(ctx, "port.close") }
+												</button>
+											</form>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		}
+	}
+}

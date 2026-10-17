@@ -1,0 +1,204 @@
+package views
+
+// AccountData feeds the "My account" page.
+type AccountData struct {
+	CSRF   string
+	Email  string
+	Name   string
+	Role   string
+	Locale string // "" = follow the browser
+	Theme  string
+	Flash  string
+	Error  string
+	TOTP     TOTPSection
+	Sessions []SessionRow
+}
+
+// SessionRow is an open session of the account.
+type SessionRow struct {
+	ID       string
+	Device   string
+	IP       string
+	LastSeen string
+	Current  bool
+}
+
+// TOTPSection is the 2FA card of "My account".
+type TOTPSection struct {
+	On       bool
+	Required bool
+	// Setup, when 2FA is off: a fresh secret, its QR code (PNG data URI) and
+	// the otpauth link (tapping it on the phone opens the authenticator).
+	Secret   string
+	QR       string
+	URI      string
+	Recovery []string // shown once, right after turning 2FA on
+}
+
+// Account is the "My account" page: language and theme.
+templ Account(d AccountData) {
+	@shell(t(ctx, "account.page_title")) {
+		@pageHead(t(ctx, "account.title"), d.Email+" · "+t(ctx, "role."+d.Role))
+		@pageBody() {
+			@errorAlert(d.Error)
+			if d.Flash != "" {
+				@toast("success", d.Flash)
+			}
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "account.preferences"))
+				<form method="post" action="/account/preferences" class={ cardBodyClass }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] items-start gap-3">
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="name">{ t(ctx, "account.name") }</label>
+							<input class="tuc-input" id="name" name="name" maxlength="60" autocomplete="name" value={ d.Name } placeholder={ t(ctx, "account.name_placeholder") }/>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="locale">{ t(ctx, "account.language") }</label>
+							<select class="tuc-input" id="locale" name="locale" data-tuc-select data-clearable="false">
+								<option value="auto" selected?={ d.Locale == "" }>{ t(ctx, "account.language_browser") }</option>
+								for _, l := range Locales() {
+									<option value={ l } selected?={ d.Locale == l }>{ t(ctx, "locale." + l) }</option>
+								}
+							</select>
+						</div>
+						<fieldset class="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
+							<legend class="tuc-label mb-1.5 p-0">{ t(ctx, "account.theme") }</legend>
+							<div class="tuc-btn-group is-segmented" role="group" aria-label={ t(ctx, "account.theme") }>
+								for _, th := range []string{"system", "dark", "light"} {
+									<label class="tuc-btn">
+										<input type="radio" class="tuc-btn__input" name="theme" value={ th } checked?={ d.Theme == th }/>
+										@Icon(ThemeIcon(th), "size-3.5")
+										{ t(ctx, "theme." + th) }
+									</label>
+								}
+							</div>
+						</fieldset>
+					</div>
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<span class="tuc-hint">{ t(ctx, "account.preferences_hint") }</span>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("save", "size-3.5")
+							{ t(ctx, "account.save") }
+						</button>
+					</div>
+				</form>
+			</section>
+			@totpCard(d)
+			@sessionsCard(d)
+		}
+	}
+}
+
+templ sessionsCard(d AccountData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "account.sessions.title"))
+		<div class={ cardBodyClass }>
+			<div class="tuc-table-wrap">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "account.sessions.device") }</th><th>IP</th><th>{ t(ctx, "account.sessions.last") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<tbody>
+						for _, ss := range d.Sessions {
+							<tr>
+								<td>
+									{ ss.Device }
+									if ss.Current {
+										<span class="tuc-badge is-success">{ t(ctx, "account.sessions.this") }</span>
+									}
+								</td>
+								<td class="font-mono">{ ss.IP }</td>
+								<td class="text-muted">{ ss.LastSeen }</td>
+								<td class="tuc-table__actions">
+									if !ss.Current {
+										<form data-confirm={ t(ctx, "confirm.session_end.title") } data-confirm-text={ t(ctx, "confirm.session_end.text") } data-confirm-ok={ t(ctx, "confirm.session_end.ok") } data-tone="danger" method="post" action="/account/sessions/end">
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<input type="hidden" name="id" value={ ss.ID }/>
+											<button class="tuc-btn is-outline is-sm" type="submit">
+												@Icon("log-out", "size-3.5")
+												{ t(ctx, "account.sessions.end") }
+											</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</section>
+}
+
+templ totpCard(d AccountData) {
+	<section class={ cardClass } id="totp">
+		@cardHead(t(ctx, "account.totp.title")) {
+			if d.TOTP.On {
+				<span class="tuc-badge is-success">{ t(ctx, "account.totp.on") }</span>
+			} else {
+				<span class="tuc-badge">{ t(ctx, "account.totp.off") }</span>
+			}
+		}
+		<div class={ cardBodyClass }>
+			if len(d.TOTP.Recovery) > 0 {
+				<div class="tuc-alert is-success" role="status">
+					@Icon("check", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "account.totp.recovery_intro") }</p></div>
+				</div>
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-1 font-mono text-[13px]">
+					for _, c := range d.TOTP.Recovery {
+						<span class="rounded-sm border border-border bg-surface-2 px-2.5 py-2 break-all select-all">{ c }</span>
+					}
+				</div>
+			}
+			if d.TOTP.On {
+				if d.TOTP.Required {
+					<p class="m-0 text-[13px] text-muted">{ t(ctx, "account.totp.required") }</p>
+				} else {
+					<form data-confirm={ t(ctx, "confirm.totp_disable.title") } data-confirm-text={ t(ctx, "confirm.totp_disable.text") } data-confirm-ok={ t(ctx, "confirm.totp_disable.ok") } data-tone="danger" method="post" action="/account/totp/disable" class="flex flex-wrap items-end gap-3">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="totp-off-code">{ t(ctx, "account.totp.disable_label") }</label>
+							<input class="tuc-input w-[220px] font-mono" id="totp-off-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="17" required/>
+						</div>
+						<button class="tuc-btn is-outline" type="submit">
+							@Icon("shield-off", "size-3.5")
+							{ t(ctx, "account.totp.disable") }
+						</button>
+						<span class="tuc-hint w-full">{ t(ctx, "account.totp.disable_hint") }</span>
+					</form>
+				}
+			} else {
+				@notice("info", "shield-check", t(ctx, "account.totp.why"))
+				<div class="flex flex-wrap items-start gap-5">
+					if d.TOTP.QR != "" {
+						<img class="size-[164px] rounded-sm bg-white p-2.5" src={ d.TOTP.QR } alt={ t(ctx, "account.totp.qr_alt") } width="164" height="164"/>
+					}
+					<form method="post" action="/account/totp/enable" class="flex flex-[1_1_280px] flex-col gap-3">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<input type="hidden" name="secret" value={ d.TOTP.Secret }/>
+						<p class="m-0 text-[13px]">1. { t(ctx, "account.totp.step_scan") }</p>
+						<div class="flex flex-col gap-1">
+							<span class="tuc-label">{ t(ctx, "account.totp.manual") }</span>
+							<span class="flex items-center gap-1.5">
+								<code class="rounded-sm border border-border bg-surface-2 px-2 py-1 font-mono text-[13px] break-all select-all">{ d.TOTP.Secret }</code>
+								<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ d.TOTP.Secret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") }>
+									@Icon("copy", "size-3.5")
+								</button>
+							</span>
+						</div>
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="totp-code">2. { t(ctx, "account.totp.step_code") }</label>
+							<input class="tuc-input w-40 text-center font-mono text-lg tracking-[.3em]" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required/>
+						</div>
+						<div>
+							<button class="tuc-btn is-primary" type="submit">
+								@Icon("shield-check", "size-3.5")
+								{ t(ctx, "account.totp.enable") }
+							</button>
+						</div>
+					</form>
+				</div>
+			}
+		</div>
+	</section>
+}

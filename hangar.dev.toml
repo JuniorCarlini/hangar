@@ -1,0 +1,10 @@
+# Local development configuration. In production the file lives at
+# /etc/hangar/hangar.toml, created by the installer.
+
+# Relative to this file.
+data_dir = ".data"
+master_key_file = ".data/master.key"
+
+[panel]
+listen = ["127.0.0.1:7710"]
+hosts  = ["127.0.0.1:7710", "localhost:7710"]

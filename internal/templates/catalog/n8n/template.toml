@@ -1,0 +1,31 @@
+id = "n8n"
+version = 1
+category = "automation"
+tags = ["workflow", "automation", "low-code"]
+docs = "https://docs.n8n.io/hosting/"
+main = "n8n"
+name = { en = "n8n", "pt-BR" = "n8n" }
+description = { en = "Workflow automation with its own PostgreSQL. Generated encryption key and password; add a domain to open the editor.", "pt-BR" = "Automação de fluxos com PostgreSQL próprio. Chave de cifra e senha geradas; adicione um domínio para abrir o editor." }
+
+[variables.db_password]
+generate = "secret"
+
+[variables.encryption_key]
+generate = "secret"
+
+[[exports]]
+key = "URL"
+value = "http://${service}:5678"
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "5678"
+
+[[endpoints]]
+port = 5678
+label = { en = "Editor", "pt-BR" = "Editor" }
+public = true

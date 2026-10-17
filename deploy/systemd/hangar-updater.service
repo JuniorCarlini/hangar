@@ -1,0 +1,13 @@
+# Applies the update staged by the panel (docs/21). Runs as root because it
+# swaps the binary in /usr/local/bin; it verifies the signature again first.
+[Unit]
+Description=Hangar — aplica atualização do painel
+Documentation=https://github.com/JuniorCarlini/hangar/blob/main/docs/21-atualizacao-do-painel.md
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hangard self-update apply -config /etc/hangar/hangar.toml
+TimeoutStartSec=300
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes

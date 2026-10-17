@@ -1,0 +1,143 @@
+package views
+
+templ layout(title string) {
+	<!DOCTYPE html>
+	<html
+		lang={ lang(ctx) }
+		{ themeAttrs(ctx)... }
+		data-tuc-show={ t(ctx, "tucano.show") }
+		data-tuc-hide={ t(ctx, "tucano.hide") }
+		data-tuc-invalid={ t(ctx, "tucano.invalid") }
+		data-tuc-close={ t(ctx, "tucano.close") }
+		data-tuc-confirm={ t(ctx, "tucano.confirm") }
+		data-tuc-cancel={ t(ctx, "tucano.cancel") }
+	>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="referrer" content="no-referrer"/>
+			<meta name="color-scheme" content="dark light"/>
+			<title>{ title }</title>
+			<link rel="icon" type="image/svg+xml" href={ asset("favicon.svg") }/>
+			<link rel="stylesheet" href={ asset("app.css") }/>
+			<script src={ asset("vt.js") }></script>
+			<script src={ asset("vendor/tucano/tucano.min.js") } defer></script>
+			<script src={ asset("tucano-texts.js") } defer></script>
+			<script src={ asset("ui.js") } defer></script>
+			<script src={ asset("palette.js") } defer></script>
+		</head>
+		<body>
+			{ children... }
+		</body>
+	</html>
+}
+
+templ brand(step string) {
+	<div class="flex items-center gap-2.5">
+		<div class="flex size-7 items-center justify-center rounded-md bg-accent text-on-accent">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 4v16M18 4v16M6 12h12"></path></svg>
+		</div>
+		<span class="text-base font-semibold tracking-tight">Hangar</span>
+		if step != "" {
+			<span class="ml-auto text-xs text-subtle">{ step }</span>
+		}
+	</div>
+}
+
+// toast shows a Tucano toast at the bottom center once the page loads; the
+// markup is the fallback text until then.
+templ toast(kind, msg string) {
+	if msg != "" {
+		<div class="toast-src" data-tuc-toast data-type={ kind } data-position="bottom-center" role="status">{ msg }</div>
+	}
+}
+
+templ errorAlert(msg string) {
+	if msg != "" {
+		<div class="tuc-alert is-danger" role="alert">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v5M12 16v.01"></path></svg>
+			<div class="tuc-alert__body"><p>{ msg }</p></div>
+		</div>
+	}
+}
+
+// languageSwitch lets visitors pick a language before logging in.
+templ languageSwitch() {
+	<nav class="flex justify-center gap-3 text-xs text-subtle [&_[aria-current]]:font-medium [&_[aria-current]]:text-fg" aria-label={ t(ctx, "common.language") }>
+		for _, l := range Locales() {
+			if l == lang(ctx) {
+				<span aria-current="true">{ t(ctx, "locale." + l) }</span>
+			} else {
+				<a href={ templ.SafeURL("/login?lang=" + l) } hreflang={ l }>{ t(ctx, "locale." + l) }</a>
+			}
+		}
+	</nav>
+}
+
+// Login is the first step: e-mail and password.
+templ Login(email, errMsg, notice string) {
+	@layout(t(ctx, "login.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<form class="flex w-full max-w-[380px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7" method="post" action="/login" autocomplete="on">
+				<input type="hidden" name="csrf" value={ loginCSRF(ctx) }/>
+				@brand("")
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "login.title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "login.subtitle") }</p>
+				</div>
+				@errorAlert(errMsg)
+				if notice != "" {
+					<div class="tuc-alert is-danger" role="status">
+						@Icon("lock", "size-4")
+						<div class="tuc-alert__body"><p>{ notice }</p></div>
+					</div>
+				}
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="email">{ t(ctx, "login.email") }</label>
+					<input class="tuc-input" id="email" name="email" type="email" autocomplete="username" required value={ email } autofocus?={ email == "" }/>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="password">{ t(ctx, "login.password") }</label>
+					<input class="tuc-input" id="password" name="password" type="password" autocomplete="current-password" required autofocus?={ email != "" } data-tuc-reveal/>
+				</div>
+				<button class="tuc-btn is-primary is-block" type="submit">
+					@Icon("arrow-right", "size-4")
+					{ t(ctx, "login.continue") }
+				</button>
+				<p class="tuc-hint">{ t(ctx, "login.no_reset") }</p>
+				@languageSwitch()
+			</form>
+		</main>
+	}
+}
+
+// TwoFactor is the second step: authenticator or recovery code.
+templ TwoFactor(errMsg string) {
+	@layout(t(ctx, "twofa.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<form class="flex w-full max-w-[380px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7" method="post" action="/login/2fa" autocomplete="off">
+				@brand(t(ctx, "login.step", "n", 2, "total", 2))
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "twofa.title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "twofa.subtitle") }</p>
+				</div>
+				@errorAlert(errMsg)
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="code">{ t(ctx, "twofa.code") }</label>
+					<input class="tuc-input input-code" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="17" required autofocus/>
+				</div>
+				<button class="tuc-btn is-primary is-block" type="submit">
+					@Icon("check", "size-4")
+					{ t(ctx, "twofa.submit") }
+				</button>
+				<div class="flex justify-between text-[13px]">
+					<span class="text-muted">{ t(ctx, "twofa.lost_phone") }</span>
+				</div>
+				<div class="tuc-alert is-info">
+					<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3Z"></path></svg>
+					<div class="tuc-alert__body"><p>{ t(ctx, "twofa.limit_note") }</p></div>
+				</div>
+			</form>
+		</main>
+	}
+}

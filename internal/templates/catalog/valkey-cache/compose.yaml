@@ -1,0 +1,30 @@
+services:
+  valkey:
+    image: valkey/valkey:9
+    # The password comes from the environment (never written in the command,
+    # which is stored in clear); the image entrypoint still drops to the valkey user.
+    command:
+      - sh
+      - -c
+      - "exec docker-entrypoint.sh valkey-server --requirepass \"$$VALKEY_PASSWORD\" --maxmemory 192mb --maxmemory-policy allkeys-lru --save \"\" --appendonly no --rename-command FLUSHALL '' --rename-command FLUSHDB '' --rename-command CONFIG '' --rename-command DEBUG ''"
+    environment:
+      VALKEY_PASSWORD: ${password}
+    volumes:
+      - data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli -a \"$$VALKEY_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+
+volumes:
+  data:

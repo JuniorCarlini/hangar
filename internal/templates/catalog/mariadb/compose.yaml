@@ -1,0 +1,34 @@
+services:
+  mariadb:
+    # 12.3 is the current long-term support release.
+    image: mariadb:12.3
+    # About 25% of the memory limit; adjust together with the limit.
+    command: ["mariadbd", "--innodb-buffer-pool-size=128M", "--max-connections=100"]
+    environment:
+      MARIADB_DATABASE: ${database}
+      MARIADB_USER: ${user}
+      MARIADB_PASSWORD: ${password}
+      MARIADB_ROOT_PASSWORD: ${root_password}
+      # Creates the local account the image's healthcheck.sh logs in with.
+      MARIADB_MYSQL_LOCALHOST_USER: "1"
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - data:/var/lib/mysql
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+    # The entrypoint fixes the data directory owner and drops to the mysql user.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+volumes:
+  data:

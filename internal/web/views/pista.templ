@@ -1,0 +1,365 @@
+package views
+
+// Pista is the living catalog of the design system (docs/18): tokens and
+// components exactly as the panel uses them, in the normal frame. Nothing
+// on it changes state: the dialog and toast buttons only open the demo.
+templ Pista() {
+	@shell(t(ctx, "pista.page_title")) {
+		@pageHead(t(ctx, "pista.title"), t(ctx, "pista.subtitle"))
+		@pageBody() {
+			@pistaColors()
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))] items-start gap-4">
+				@pistaTypography()
+				@pistaButtons()
+				@pistaBadges()
+				@pistaAlerts()
+				@pistaForms()
+				@pistaFeedback()
+			</div>
+			@pistaTable()
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))] items-start gap-4">
+				@pistaCards()
+				@pistaStatus()
+			</div>
+			@pistaCanvas()
+		}
+	}
+}
+
+// pistaSection is a catalog card with its title.
+templ pistaSection(id, title string) {
+	<section class={ cardClass } id={ id } aria-labelledby={ id + "-title" }>
+		<div class={ cardHeadClass }>
+			<h2 class="m-0 text-sm leading-5 font-semibold" id={ id + "-title" }>{ title }</h2>
+		</div>
+		<div class={ cardBodyClass }>
+			{ children... }
+		</div>
+	</section>
+}
+
+// pistaColors shows every color token in both themes side by side. Each
+// panel scopes the theme's variables (.theme-dark / .theme-light in
+// tokens.css), so the same bg-* classes paint the other theme's values.
+templ pistaColors() {
+	@pistaSection("pista-colors", t(ctx, "pista.colors")) {
+		<p class="m-0 text-[13px] text-muted">{ t(ctx, "pista.colors_hint") }</p>
+		<div class="grid grid-cols-[repeat(auto-fit,minmax(min(420px,100%),1fr))] items-start gap-4">
+			for _, th := range []string{"dark", "light"} {
+				<div class={ "theme-" + th + " flex flex-col gap-3 rounded-md border border-border bg-bg p-4 text-fg" } data-pista-theme={ th }>
+					<h3 class="m-0 flex items-center gap-2 text-[13px] font-semibold">
+						@Icon(ThemeIcon(th), "size-4")
+						{ t(ctx, "theme." + th) }
+					</h3>
+					<ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-2 p-0">
+						for _, s := range pistaSwatches {
+							<li class="flex items-center gap-2.5 rounded-sm border border-border bg-surface p-2">
+								<span class={ "size-8 shrink-0 rounded-sm border border-border-strong " + s.Class } aria-hidden="true"></span>
+								<span class="flex min-w-0 flex-col leading-tight">
+									<span class="truncate font-mono text-xs">{ "--p-" + s.Token }</span>
+									<span class="truncate font-mono text-[11px] text-subtle">{ s.Class }</span>
+								</span>
+							</li>
+						}
+					</ul>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ pistaTypography() {
+	@pistaSection("pista-type", t(ctx, "pista.typography")) {
+		<dl class="m-0 grid grid-cols-[110px_1fr] items-center gap-x-4 gap-y-3">
+			<dt class="font-mono text-xs text-subtle">{ "display" }</dt>
+			<dd class="m-0 text-2xl leading-8 font-semibold">{ t(ctx, "pista.sample") }</dd>
+			<dt class="font-mono text-xs text-subtle">{ "title" }</dt>
+			<dd class="m-0 text-base leading-6 font-semibold">{ t(ctx, "pista.sample") }</dd>
+			<dt class="font-mono text-xs text-subtle">{ "body" }</dt>
+			<dd class="m-0 text-sm">{ t(ctx, "pista.sample") }</dd>
+			<dt class="font-mono text-xs text-subtle">{ "body-strong" }</dt>
+			<dd class="m-0 text-sm font-medium">{ t(ctx, "pista.sample") }</dd>
+			<dt class="font-mono text-xs text-subtle">{ "small" }</dt>
+			<dd class="m-0 text-[13px] leading-[18px] text-muted">{ t(ctx, "pista.sample") }</dd>
+			<dt class="font-mono text-xs text-subtle">{ "caption" }</dt>
+			<dd class="m-0 text-xs font-medium tracking-[.02em] text-subtle uppercase">{ t(ctx, "pista.sample") }</dd>
+			<dt class="font-mono text-xs text-subtle">{ "mono" }</dt>
+			<dd class="m-0 font-mono text-[13px]">{ "hangard serve -config /etc/hangar/hangar.toml" }</dd>
+			<dt class="font-mono text-xs text-subtle">{ "tabular" }</dt>
+			<dd class="m-0 text-sm tabular-nums">{ "1.024 · 98,6% · 12:04:51" }</dd>
+		</dl>
+	}
+}
+
+templ pistaButtons() {
+	@pistaSection("pista-buttons", t(ctx, "pista.buttons")) {
+		<div class="flex flex-wrap items-center gap-2">
+			<button type="button" class="tuc-btn is-primary">
+				@Icon("rocket", "size-4")
+				{ t(ctx, "pista.btn.primary") }
+			</button>
+			<button type="button" class="tuc-btn is-outline">
+				@Icon("refresh-cw", "size-4")
+				{ t(ctx, "pista.btn.outline") }
+			</button>
+			<button type="button" class="tuc-btn is-ghost">
+				@Icon("copy", "size-4")
+				{ t(ctx, "pista.btn.ghost") }
+			</button>
+			<button type="button" class="tuc-btn is-danger">
+				@Icon("trash", "size-4")
+				{ t(ctx, "pista.btn.danger") }
+			</button>
+			<button type="button" class="tuc-btn is-success">
+				@Icon("play", "size-4")
+				{ t(ctx, "pista.btn.success") }
+			</button>
+			<button type="button" class="tuc-btn is-outline" disabled>
+				@Icon("lock", "size-4")
+				{ t(ctx, "pista.btn.disabled") }
+			</button>
+		</div>
+		<h3 class="m-0 text-xs font-medium tracking-[.02em] text-subtle uppercase">{ t(ctx, "pista.sizes") }</h3>
+		<div class="flex flex-wrap items-center gap-2">
+			<button type="button" class="tuc-btn is-outline is-sm">
+				@Icon("plus", "size-3.5")
+				{ t(ctx, "pista.size.sm") }
+			</button>
+			<button type="button" class="tuc-btn is-outline">
+				@Icon("plus", "size-4")
+				{ t(ctx, "pista.size.md") }
+			</button>
+			<button type="button" class="tuc-btn is-outline is-lg">
+				@Icon("plus", "size-4")
+				{ t(ctx, "pista.size.lg") }
+			</button>
+			<button type="button" class="tuc-btn is-outline is-icon is-sm" aria-label={ t(ctx, "pista.icon_button") }>
+				@Icon("settings", "size-3.5")
+			</button>
+			<button type="button" class="tuc-btn is-outline is-icon" aria-label={ t(ctx, "pista.icon_button") }>
+				@Icon("settings", "size-4")
+			</button>
+			<button type="button" class="tuc-btn is-ghost is-icon" aria-label={ t(ctx, "pista.icon_button") }>
+				@Icon("x", "size-4")
+			</button>
+		</div>
+	}
+}
+
+templ pistaBadges() {
+	@pistaSection("pista-badges", t(ctx, "pista.badges")) {
+		<div class="flex flex-wrap items-center gap-2">
+			<span class="tuc-badge">{ t(ctx, "pista.tone.default") }</span>
+			for _, tone := range pistaTones {
+				<span class={ "tuc-badge is-" + tone }>{ t(ctx, "pista.tone." + tone) }</span>
+			}
+		</div>
+		<div class="flex flex-wrap items-center gap-2">
+			for i, tone := range pistaTones {
+				<span class={ "tuc-badge is-plain is-" + tone }>{ sz(i + 1) }</span>
+			}
+			<span class="tuc-badge is-warning font-mono">{ "5433" }</span>
+		</div>
+	}
+}
+
+templ pistaAlerts() {
+	@pistaSection("pista-alerts", t(ctx, "pista.alerts")) {
+		<div class="pista-stack flex flex-col gap-2">
+			for _, tone := range pistaTones {
+				<div class={ "tuc-alert is-" + tone } role="status">
+					@Icon(pistaToneIcon(tone), "size-4")
+					<div class="tuc-alert__body">
+						<p class="tuc-alert__title">{ t(ctx, "pista.tone." + tone) }</p>
+						<p>{ t(ctx, "pista.alert." + tone) }</p>
+					</div>
+				</div>
+			}
+		</div>
+	}
+}
+
+templ pistaForms() {
+	@pistaSection("pista-forms", t(ctx, "pista.forms")) {
+		<div class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="pista-name">{ t(ctx, "pista.field.name") }</label>
+				<input class="tuc-input font-mono" id="pista-name" placeholder={ t(ctx, "pista.field.name_placeholder") }/>
+				<span class="tuc-hint">{ t(ctx, "pista.field.name_hint") }</span>
+			</div>
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="pista-search">{ t(ctx, "pista.field.search") }</label>
+				<div class="tuc-input-group">
+					@Icon("search", "size-4")
+					<input class="tuc-input" id="pista-search" type="search" placeholder={ t(ctx, "nav.search") }/>
+				</div>
+			</div>
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="pista-select">{ t(ctx, "pista.field.select") }</label>
+				<select class="tuc-input" id="pista-select" data-tuc-select data-clearable="false">
+					<option value="tcp">TCP</option>
+					<option value="udp">UDP</option>
+				</select>
+			</div>
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="pista-invalid">{ t(ctx, "pista.field.invalid") }</label>
+				<input class="tuc-input" id="pista-invalid" aria-invalid="true" aria-describedby="pista-invalid-error"/>
+				<span class="tuc-error" id="pista-invalid-error">{ t(ctx, "pista.field.error") }</span>
+			</div>
+		</div>
+		<div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+			<label class="tuc-choice">
+				<input type="checkbox" role="switch" class="tuc-switch" checked/>
+				{ t(ctx, "pista.field.switch") }
+			</label>
+			<label class="tuc-choice">
+				<input type="checkbox" class="tuc-check" checked/>
+				{ t(ctx, "pista.field.check") }
+			</label>
+			<div class="tuc-btn-group is-segmented" role="radiogroup" aria-label={ t(ctx, "pista.field.view") }>
+				<label class="tuc-btn is-sm">
+					<input type="radio" class="tuc-btn__input" name="pista-view" checked/>
+					@Icon("workflow", "size-3.5")
+					{ t(ctx, "pista.view.canvas") }
+				</label>
+				<label class="tuc-btn is-sm">
+					<input type="radio" class="tuc-btn__input" name="pista-view"/>
+					@Icon("list", "size-3.5")
+					{ t(ctx, "pista.view.list") }
+				</label>
+			</div>
+		</div>
+	}
+}
+
+// pistaFeedback holds the confirm dialog tones and the toasts. The buttons
+// carry the texts in data-*; ui.js opens the demo (nothing is submitted).
+templ pistaFeedback() {
+	@pistaSection("pista-feedback", t(ctx, "pista.feedback")) {
+		<p class="m-0 text-[13px] text-muted">{ t(ctx, "pista.feedback_hint") }</p>
+		<h3 class="m-0 text-xs font-medium tracking-[.02em] text-subtle uppercase">{ t(ctx, "pista.dialogs") }</h3>
+		<div class="flex flex-wrap items-center gap-2">
+			for _, tone := range []string{"default", "success", "warning", "danger"} {
+				<button
+					type="button"
+					class="tuc-btn is-outline"
+					data-demo-confirm={ t(ctx, "pista.confirm.title") }
+					data-confirm-text={ t(ctx, "pista.confirm.text") }
+					data-confirm-ok={ t(ctx, "pista.confirm.ok") }
+					data-tone={ tone }
+				>
+					{ t(ctx, "pista.tone." + tone) }
+				</button>
+			}
+		</div>
+		<h3 class="m-0 text-xs font-medium tracking-[.02em] text-subtle uppercase">{ t(ctx, "pista.toasts") }</h3>
+		<div class="flex flex-wrap items-center gap-2">
+			for _, tone := range pistaTones {
+				<button type="button" class="tuc-btn is-outline" data-demo-toast={ t(ctx, "pista.toast." + tone) } data-type={ tone }>
+					@Icon(pistaToneIcon(tone), "size-4")
+					{ t(ctx, "pista.tone." + tone) }
+				</button>
+			}
+		</div>
+	}
+}
+
+templ pistaTable() {
+	<section class={ cardClass } id="pista-table">
+		@cardHead(t(ctx, "pista.tables")) {
+			<span class="text-xs text-muted">{ t(ctx, "pista.tables_hint") }</span>
+		}
+		<div class="tuc-table-wrap">
+			<table class="tuc-table w-full">
+				<thead>
+					<tr>
+						<th>{ t(ctx, "pista.col.service") }</th>
+						<th>{ t(ctx, "pista.col.image") }</th>
+						<th>{ t(ctx, "pista.col.port") }</th>
+						<th>{ t(ctx, "pista.col.state") }</th>
+						<th class="is-number">{ t(ctx, "pista.col.updated") }</th>
+						<th class="tuc-table__actions"></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, r := range pistaRows {
+						<tr>
+							<td class="font-medium">{ r.Service }</td>
+							<td class="font-mono text-xs text-muted">{ r.Image }</td>
+							<td class="font-mono text-xs">{ r.Port }</td>
+							<td><span class={ stateTone(r.State) }><span class="node-dot"></span>{ t(ctx, "state." + r.State) }</span></td>
+							<td class="is-number text-muted tabular-nums">{ r.When }</td>
+							<td class="tuc-table__actions">
+								<button type="button" class="tuc-btn is-outline is-sm">
+									@Icon("external-link", "size-3.5")
+									{ t(ctx, "pista.open") }
+								</button>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</section>
+}
+
+templ pistaCards() {
+	<section class={ cardClass } id="pista-cards">
+		@cardHead(t(ctx, "pista.cards")) {
+			<button type="button" class="tuc-btn is-ghost is-icon is-sm" aria-label={ t(ctx, "pista.icon_button") }>
+				@Icon("settings", "size-3.5")
+			</button>
+		}
+		<div class={ cardBodyClass }>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "pista.card_text") }</p>
+			<div class="rounded-md border border-dashed border-border-strong">
+				@emptyState("box", t(ctx, "pista.empty")) {
+					<button type="button" class="tuc-btn is-primary">
+						@Icon("plus", "size-4")
+						{ t(ctx, "pista.empty_action") }
+					</button>
+				}
+			</div>
+		</div>
+	</section>
+}
+
+templ pistaStatus() {
+	@pistaSection("pista-status", t(ctx, "pista.status")) {
+		<p class="m-0 text-[13px] text-muted">{ t(ctx, "pista.status_hint") }</p>
+		<ul class="m-0 flex list-none flex-col gap-2.5 p-0">
+			for _, s := range []string{"running", "deploying", "restarting", "exited", "unknown"} {
+				<li><span class={ stateTone(s) + " text-[13px]" }><span class="node-dot"></span>{ t(ctx, "state." + s) }</span></li>
+			}
+		</ul>
+	}
+}
+
+// pistaCanvas shows the canvas card look on the dotted background.
+templ pistaCanvas() {
+	@pistaSection("pista-canvas", t(ctx, "pista.canvas")) {
+		<div class="dots flex flex-wrap gap-4 rounded-md border border-border p-6">
+			for _, n := range pistaNodes {
+				<div class="w-[240px]">
+					<div class={ pistaNodeClass(n) } tabindex="0">
+						<span class="node-link">
+							<span class="node-title">
+								<span class="node-icon">
+									@nodeIcon(n.Kind)
+								</span>
+								<span class="node-name">{ n.Slug }</span>
+							</span>
+							<span class="node-sub">{ t(ctx, "canvas.kind." + n.Kind) } · { n.Image }</span>
+							if n.State == "deploying" {
+								<span class={ stateTone(n.State) }><span class="node-dot hg-pulse"></span>{ t(ctx, "canvas.deploying", "phase", t(ctx, "deploy.phase.start")) }</span>
+								<span class="node-progress"><span class="node-progress-bar is-demo"></span></span>
+							} else {
+								<span class={ stateTone(n.State) }><span class="node-dot"></span>{ t(ctx, "state." + n.State) }</span>
+							}
+						</span>
+					</div>
+				</div>
+			}
+		</div>
+	}
+}

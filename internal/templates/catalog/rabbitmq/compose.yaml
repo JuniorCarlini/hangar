@@ -1,0 +1,27 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${user}
+      RABBITMQ_DEFAULT_PASS: ${password}
+    volumes:
+      - data:/var/lib/rabbitmq
+    # The management interface; apps use AMQP on port 5672 inside the network.
+    expose:
+      - "15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 5
+    # The entrypoint fixes the data directory owner and drops to the rabbitmq user.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+
+volumes:
+  data:

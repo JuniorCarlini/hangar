@@ -1,0 +1,222 @@
+package views
+
+import (
+	"sort"
+	"strconv"
+)
+
+// PublicStatusData feeds the public status page (docs/15). It is built only
+// from a statuspage.Public snapshot: public labels, states and numbers.
+type PublicStatusData struct {
+	Token    string
+	TV       bool
+	Period   string
+	Periods  []string
+	CPU      string
+	Mem      string
+	Disk     string
+	CPUHist  []int
+	MemHist  []int
+	NetDown  string
+	NetUp    string
+	NetUnit  string
+	Uptime   string
+	Alerts   int
+	Updated  string
+	Services []PublicServiceRow
+	Stopped  int
+	Degraded int
+}
+
+// PublicServiceRow is a service under its public label.
+type PublicServiceRow struct {
+	Label  string
+	State  string // running, degraded, stopped
+	CPU    string
+	CPUBar int
+	Mem    string
+	Net    string
+	Uptime string
+}
+
+// SortPublicServices orders the busiest first.
+func SortPublicServices(rows []PublicServiceRow) {
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].CPUBar > rows[j].CPUBar })
+}
+
+func publicTone(state string) string {
+	switch state {
+	case "running":
+		return "success"
+	case "degraded":
+		return "warning"
+	}
+	return "danger"
+}
+
+func (d PublicStatusData) href(period string) string {
+	u := "/s/" + d.Token + "?period=" + period
+	if d.TV {
+		u += "&tv=1"
+	}
+	return u
+}
+
+// publicLayout is the page skeleton of the status links: the panel's
+// stylesheet and nothing else (no scripts, no cookies). It refreshes itself:
+// every 30 s in TV mode, every minute otherwise.
+templ publicLayout(title string, tv bool) {
+	<!DOCTYPE html>
+	<html
+		lang={ lang(ctx) }
+		if tv {
+			data-theme="dark"
+		}
+	>
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="referrer" content="no-referrer"/>
+			<meta name="robots" content="noindex, nofollow"/>
+			<meta name="color-scheme" content="dark light"/>
+			if tv {
+				<meta http-equiv="refresh" content="30"/>
+			} else {
+				<meta http-equiv="refresh" content="60"/>
+			}
+			<title>{ title }</title>
+			<link rel="icon" type="image/svg+xml" href={ asset("favicon.svg") }/>
+			<link rel="stylesheet" href={ asset("app.css") }/>
+		</head>
+		<body class="bg-bg text-fg">
+			{ children... }
+		</body>
+	</html>
+}
+
+templ publicCard(label, value, note string, tv bool) {
+	<div class="flex flex-col gap-2 rounded-sm border border-border bg-surface p-4">
+		<span class="text-[11px] font-medium tracking-[.04em] text-subtle uppercase">{ label }</span>
+		if tv {
+			<span class="text-5xl leading-[56px] font-semibold tabular-nums">{ value }</span>
+		} else {
+			<span class="text-[26px] leading-8 font-medium tabular-nums">{ value }</span>
+		}
+		if note != "" {
+			<span class="text-xs text-muted">{ note }</span>
+		}
+		{ children... }
+	</div>
+}
+
+// PublicStatus is the page behind a status link.
+templ PublicStatus(d PublicStatusData) {
+	@publicLayout(t(ctx, "status.page_title"), d.TV) {
+		<main class={ "flex w-full flex-col gap-4 p-4 sm:p-6", templ.KV("text-lg", d.TV) }>
+			<header class="flex flex-wrap items-center gap-3">
+				@brand("")
+				<span class="text-sm text-muted">{ t(ctx, "status.title") }</span>
+				<span class="grow"></span>
+				<span class="text-xs text-muted">{ t(ctx, "status.updated", "time", d.Updated) }</span>
+			</header>
+			if d.Stopped > 0 {
+				<div class="tuc-alert is-danger" role="status">
+					@Icon("circle-x", "size-4")
+					<div class="tuc-alert__body"><p class="tuc-alert__title">{ t(ctx, "status.stopped", "n", d.Stopped) }</p></div>
+				</div>
+			} else if d.Degraded > 0 {
+				<div class="tuc-alert is-warning" role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p class="tuc-alert__title">{ t(ctx, "status.degraded", "n", d.Degraded) }</p></div>
+				</div>
+			} else {
+				<div class="tuc-alert is-success" role="status">
+					@Icon("circle-check", "size-4")
+					<div class="tuc-alert__body"><p class="tuc-alert__title">{ t(ctx, "status.all_ok") }</p></div>
+				</div>
+			}
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(150px,100%),1fr))] gap-3">
+				@publicCard("CPU", d.CPU+"%", "", d.TV) {
+					@spark(d.CPUHist, "")
+				}
+				@publicCard(t(ctx, "overview.memory"), d.Mem+"%", "", d.TV) {
+					@spark(d.MemHist, "")
+				}
+				@publicCard(t(ctx, "overview.disk"), d.Disk+"%", "", d.TV)
+				@publicCard(t(ctx, "overview.network"), "↓"+d.NetDown+" ↑"+d.NetUp, d.NetUnit, d.TV)
+				@publicCard(t(ctx, "status.uptime"), d.Uptime, "", d.TV)
+				@publicCard(t(ctx, "status.alerts"), strconv.Itoa(d.Alerts), "", d.TV)
+			</div>
+			if !d.TV {
+				<nav class="flex gap-1.5 self-start" aria-label={ t(ctx, "overview.period") }>
+					for _, p := range d.Periods {
+						if p == d.Period {
+							<a class="tuc-btn is-sm is-outline" aria-current="page" href={ templ.SafeURL(d.href(p)) }>{ t(ctx, "period." + p) }</a>
+						} else {
+							<a class="tuc-btn is-sm is-ghost" href={ templ.SafeURL(d.href(p)) }>{ t(ctx, "period." + p) }</a>
+						}
+					}
+				</nav>
+			}
+			if len(d.Services) > 0 {
+				<section class="min-w-0 overflow-x-auto rounded-sm border border-border bg-surface" aria-label={ t(ctx, "status.services") }>
+					<div class="flex h-11 items-center border-b border-border px-3.5">
+						<h2 class="m-0 text-sm font-semibold">{ t(ctx, "status.services") }</h2>
+					</div>
+					<table class={ "tuc-table w-full min-w-[560px]", templ.KV("is-compact", !d.TV) }>
+						<thead>
+							<tr>
+								<th>{ t(ctx, "overview.service") }</th>
+								<th>{ t(ctx, "overview.state") }</th>
+								<th class="w-[170px]">CPU</th>
+								<th class="is-number">{ t(ctx, "overview.memory") }</th>
+								<th class="is-number">{ t(ctx, "overview.network") }</th>
+								<th class="is-number">{ t(ctx, "status.uptime_24h") }</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, s := range d.Services {
+								<tr>
+									<td class="font-medium">{ s.Label }</td>
+									<td>
+										<span class={ "inline-flex items-center gap-1.5 " + toneText(publicTone(s.State)) }>
+											<span class={ "size-[7px] rounded-[1px] " + toneBg(publicTone(s.State)) }></span>
+											{ t(ctx, "status.state." + s.State) }
+										</span>
+									</td>
+									<td>
+										<div class="flex items-center gap-2">
+											<div class="h-1 grow bg-surface-2"><div class={ "bar-fill h-1 " + toneBg(level(s.CPUBar)) + " " + pctWidth(s.CPUBar) }></div></div>
+											<span class="w-[52px] text-right tabular-nums">{ s.CPU }</span>
+										</div>
+									</td>
+									<td class="is-number">{ s.Mem }</td>
+									<td class="is-number whitespace-nowrap">{ s.Net }</td>
+									<td class="is-number">{ s.Uptime }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</section>
+			}
+			if !d.TV {
+				<footer class="flex flex-wrap items-center gap-4 text-xs text-subtle">
+					<a class="inline-flex items-center gap-1.5 text-muted hover:text-fg" href={ templ.SafeURL("/s/" + d.Token + "?tv=1") }>
+						@Icon("monitor", "size-3.5")
+						{ t(ctx, "status.tv") }
+					</a>
+					<a class="inline-flex items-center gap-1.5 text-muted hover:text-fg" href={ templ.SafeURL("/s/" + d.Token + ".json") }>
+						@Icon("braces", "size-3.5")
+						{ "JSON" }
+					</a>
+					<a class="inline-flex items-center gap-1.5 text-muted hover:text-fg" href={ templ.SafeURL("/s/" + d.Token + "/metrics") }>
+						@Icon("activity", "size-3.5")
+						{ "Prometheus" }
+					</a>
+					<span class="grow"></span>
+					<span>{ t(ctx, "status.footer", "n", len(d.Services)) }</span>
+				</footer>
+			}
+		</main>
+	}
+}

@@ -1,0 +1,75 @@
+# Modelo de docker-compose que o Hangar importa sem perder nada (docs/25).
+# Django + PostgreSQL + Redis + worker do Celery. Coloque na raiz do
+# repositório e use Novo serviço > Compose > Ler do repositório.
+#
+# - db e redis viram os templates do Hangar: senha gerada, backups e
+#   variáveis prontas (DATABASE_URL, REDIS_URL). A senha abaixo é só para
+#   rodar local: o Hangar gera outra e liga as referências sozinho.
+# - web e worker são construídos a partir deste repositório (build: .).
+# - ports só valem no seu computador: no Hangar, use um domínio ou abra em
+#   Rede. Pastas do computador (./algo:/caminho) não são montadas.
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: senha-local
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+  redis:
+    image: redis:8-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: gunicorn config.wsgi --bind 0.0.0.0:8000 --workers 3
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgres://app:senha-local@db:5432/app
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      DJANGO_SETTINGS_MODULE: config.settings
+      DJANGO_ALLOWED_HOSTS: "*"
+      SECRET_KEY: ${SECRET_KEY:-troque-esta-chave}
+    volumes:
+      - media:/app/media
+    depends_on:
+      - db
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1"
+
+  worker:
+    build: .
+    command: celery -A config worker --loglevel=info
+    environment:
+      DATABASE_URL: postgres://app:senha-local@db:5432/app
+      CELERY_BROKER_URL: redis://redis:6379/1
+      DJANGO_SETTINGS_MODULE: config.settings
+      SECRET_KEY: ${SECRET_KEY:-troque-esta-chave}
+    depends_on:
+      - db
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "0.5"
+
+volumes:
+  pgdata:
+  redisdata:
+  media:

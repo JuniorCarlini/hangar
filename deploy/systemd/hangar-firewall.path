@@ -1,0 +1,10 @@
+# Re-applies the port rules whenever the panel changes them.
+[Unit]
+Description=Hangar — espera mudanças nas regras das portas
+
+[Path]
+PathChanged=/var/lib/hangar/firewall/desired.json
+Unit=hangar-firewall.service
+
+[Install]
+WantedBy=multi-user.target

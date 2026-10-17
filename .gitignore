@@ -1,0 +1,34 @@
+# Binários
+/bin/
+
+# Dados locais do painel (banco, cópias, chaves de desenvolvimento)
+/.data/
+
+# Segredos nunca entram no repositório
+*.key
+*.pem
+.env
+.env.*
+hangar-kit*.txt
+
+# Sistema e editores
+.DS_Store
+.vscode/
+.idea/
+
+# Anotações pessoais do operador (VPS, IPs, contas, testes): ficam só na
+# máquina dele e nunca vão para o repositório público.
+/privado/
+
+# Configuração local do Claude Code
+.claude/
+CLAUDE.local.md
+
+# Python (laboratório)
+__pycache__/
+
+# Testes E2E (Playwright)
+/e2e/node_modules/
+/e2e/test-results/
+/e2e/playwright-report/
+/e2e/.auth/

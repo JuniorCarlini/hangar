@@ -1,0 +1,25 @@
+id = "uptime-kuma"
+version = 1
+category = "monitoring"
+tags = ["uptime", "status", "alerts"]
+docs = "https://github.com/louislam/uptime-kuma/wiki"
+main = "kuma"
+name = { en = "Uptime Kuma", "pt-BR" = "Uptime Kuma" }
+description = { en = "Watches your sites and APIs from outside and alerts when they go down. Add a domain and create the admin account right away.", "pt-BR" = "Vigia seus sites e APIs de fora e avisa quando caem. Adicione um domínio e crie a conta de administrador logo em seguida." }
+
+[[exports]]
+key = "URL"
+value = "http://${service}:3001"
+
+[[exports]]
+key = "HOST"
+value = "${service}"
+
+[[exports]]
+key = "PORT"
+value = "3001"
+
+[[endpoints]]
+port = 3001
+label = { en = "Dashboard", "pt-BR" = "Painel" }
+public = true

@@ -1,0 +1,362 @@
+package views
+
+import (
+	"fmt"
+	"strings"
+)
+
+// OverviewData feeds the server overview, built from the metrics collector
+// and the audit log.
+type OverviewData struct {
+	Host     string
+	Summary  string // "Debian 13 · 4 vCPU · 8 GB · ativo há 14 dias"
+	Period   string // 1h, 24h, 7d or 90d
+	Periods  []string
+	CPU      int
+	CPUNote  string
+	CPUHist  []int // percent per bar, oldest first; -1 = no data
+	Mem      int
+	MemNote  string
+	MemHist  []int
+	Disk     int
+	DiskNote string
+	DiskSegs []DiskSeg // the used part of the disk, by kind
+	DiskFree string
+	NetDown  string
+	NetUp    string
+	NetUnit  string
+	NetHist  []int // received + sent, relative to the busiest bar
+	NetNote  string
+	Services []OverviewService
+	// UpdateAvailable is a newer Hangar version ("" = none or not owner).
+	UpdateAvailable string
+	DockerDown      bool
+	// Open vulnerabilities from the dependency monitor (docs/14): always
+	// visible at the top (docs/17 § 3.2).
+	VulnCritical int
+	VulnSecurity int
+	Events          []OverviewEvent
+}
+
+// OverviewService is a row of "who is using the most".
+type OverviewService struct {
+	Name    string
+	Href    string // the service's page, "" for containers without one (Caddy)
+	// Orphan marks a container labelled with a project the panel no longer
+	// has (left behind by a deleted service): no page to link to.
+	Orphan  bool
+	CPU     int    // percent of the server
+	CPUText string
+	Mem     string
+	Net     string
+	State   string
+	Tone    string // success, info, warning, danger
+	// Sort keys for the table's column headers, as whole numbers (Tucano
+	// reads "0.2" as 2: it takes "." as a thousands separator).
+	CPUSort, MemSort, NetSort int64
+}
+
+// OverviewEvent is a line of recent activity.
+type OverviewEvent struct {
+	Text string
+	Meta string
+	Tone string
+}
+
+func toneBg(tone string) string {
+	switch tone {
+	case "info":
+		return "bg-info"
+	case "warning":
+		return "bg-warning"
+	case "danger":
+		return "bg-danger"
+	case "accent":
+		return "bg-accent-text"
+	}
+	return "bg-success"
+}
+
+func toneText(tone string) string {
+	switch tone {
+	case "info":
+		return "text-info"
+	case "warning":
+		return "text-warning"
+	case "danger":
+		return "text-danger"
+	}
+	return "text-success"
+}
+
+// level is how worried a usage percentage should make you: green while
+// there is room, amber getting full, red nearly full.
+func level(pct int) string {
+	switch {
+	case pct >= 90:
+		return "danger"
+	case pct >= 70:
+		return "warning"
+	}
+	return "success"
+}
+
+// lastLevel is the level of the newest bar of a history ("" with no data).
+func lastLevel(hist []int) string {
+	for i := len(hist) - 1; i >= 0; i-- {
+		if hist[i] >= 0 {
+			return level(hist[i])
+		}
+	}
+	return ""
+}
+
+// levelText colors a usage number by its level.
+func levelText(lvl string) string {
+	if lvl == "" {
+		return ""
+	}
+	return toneText(lvl)
+}
+
+func sparkFill(fill string, v int) string {
+	if fill != "" {
+		return fill
+	}
+	switch level(v) { // spelled out so Tailwind finds the classes
+	case "danger":
+		return "fill-danger"
+	case "warning":
+		return "fill-warning"
+	}
+	return "fill-success"
+}
+
+// barH is a spark bar's height in the 32-unit box (at least 1, so a quiet
+// moment still shows).
+func barH(v int) int { return max(1, v*32/100) }
+
+// spark draws a history as bars in an SVG (attributes, not inline styles:
+// the CSP forbids those). A negative value is a gap: no data for that bar.
+// An empty fill colors each bar by its level (for percentages of a limit).
+templ spark(hist []int, fill string) {
+	<svg class="spark h-8 w-full" viewBox={ fmt.Sprintf("0 0 %d 32", max(1, len(hist)*4)) } preserveAspectRatio="none" aria-hidden="true">
+		for i, v := range hist {
+			if v >= 0 {
+				<rect class={ sparkFill(fill, v) } x={ fmt.Sprint(i*4) } y={ fmt.Sprint(32 - barH(v)) } width="3" height={ fmt.Sprint(barH(v)) } opacity=".85"></rect>
+			}
+		}
+	</svg>
+}
+
+// DiskSeg is one kind of data in the disk bar; X and Width are in
+// thousandths of the disk.
+type DiskSeg struct {
+	Label, Size, Fill string
+	X, Width          float64
+}
+
+// diskBar is a storage bar like the macOS one: one strip filled by kind,
+// with a legend under it.
+templ diskBar(segs []DiskSeg, free string) {
+	<svg class="bar-fill h-2.5 w-full" viewBox="0 0 1000 10" preserveAspectRatio="none" aria-hidden="true">
+		<rect class="fill-surface-2" width="1000" height="10"></rect>
+		for _, s := range segs {
+			<rect class={ s.Fill } x={ fmt.Sprintf("%.1f", s.X) } width={ fmt.Sprintf("%.1f", s.Width) } height="10"></rect>
+		}
+	</svg>
+	<ul class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+		for _, s := range segs {
+			<li class="flex items-center gap-1.5">
+				<span class={ "size-2 rounded-[2px] " + strings.Replace(s.Fill, "fill-", "bg-", 1) }></span>
+				{ s.Label } <span class="text-fg tabular-nums">{ s.Size }</span>
+			</li>
+		}
+		if free != "" {
+			<li class="flex items-center gap-1.5">
+				<span class="size-2 rounded-[2px] border border-border bg-surface-2"></span>
+				{ t(ctx, "overview.disk_free") } <span class="text-fg tabular-nums">{ free }</span>
+			</li>
+		}
+	</ul>
+}
+
+// periodPicker switches the history window with a GET of the same page;
+// tab keeps the service drawer on its tab.
+templ periodPicker(action, current, tab string, periods []string) {
+	<form method="get" action={ templ.SafeURL(action) } class="contents" data-ajax-swap="#metrics-live">
+		if tab != "" {
+			<input type="hidden" name="tab" value={ tab }/>
+		}
+		<div class="tuc-btn-group is-segmented" role="radiogroup" aria-label={ t(ctx, "overview.period") }>
+			for _, p := range periods {
+				<label class="tuc-btn is-sm">
+					<input type="radio" class="tuc-btn__input" name="period" value={ p } checked?={ p == current } data-autosubmit/>
+					{ t(ctx, "period." + p) }
+				</label>
+			}
+		</div>
+	</form>
+}
+
+templ metricCard(label, note, value, lvl string) {
+	<div class="flex flex-col gap-2.5 rounded-sm border border-border bg-surface p-3.5">
+		<div class="flex justify-between gap-2 text-xs text-muted">
+			<span class="text-[11px] font-medium tracking-[.04em] text-subtle uppercase">{ label }</span>
+			<span class="truncate">{ note }</span>
+		</div>
+		<span class={ "text-[26px] leading-8 font-medium tabular-nums " + levelText(lvl) }>{ value }</span>
+		{ children... }
+	</div>
+}
+
+// netCard is the network card: received and sent now, the history and a note.
+templ netCard(label, note, down, up, unit string, hist []int, foot string) {
+	<div class="flex flex-col gap-2.5 rounded-sm border border-border bg-surface p-3.5">
+		<div class="flex justify-between gap-2 text-xs text-muted">
+			<span class="text-[11px] font-medium tracking-[.04em] text-subtle uppercase">{ label }</span>
+			<span class="truncate">{ note }</span>
+		</div>
+		<span class="text-[26px] leading-8 font-medium tabular-nums">↓{ down } <span class="text-muted">↑{ up }</span> <span class="text-[13px] text-muted">{ unit }</span></span>
+		@spark(hist, "fill-success")
+		<span class="text-xs text-muted">{ foot }</span>
+	</div>
+}
+
+// Overview is the server's overview page.
+templ Overview(d OverviewData) {
+	@shell(t(ctx, "overview.page_title")) {
+		@pageHead(t(ctx, "overview.title"), d.Host+" · "+d.Summary) {
+			@periodPicker("/", d.Period, "", d.Periods)
+		}
+		@pageBody() {
+			if d.DockerDown {
+				@errorAlert(t(ctx, "projects.docker_down"))
+			}
+			if d.UpdateAvailable != "" {
+				<div class="tuc-alert is-info" role="status">
+					@Icon("refresh-cw", "size-4")
+					<div class="tuc-alert__body">
+						<p class="tuc-alert__title">{ t(ctx, "projects.update_banner", "version", d.UpdateAvailable) }</p>
+						<p>{ t(ctx, "projects.update_text") }</p>
+					</div>
+					<div class="tuc-alert__actions">
+						<a class="tuc-btn is-outline is-sm" href="/update">
+							@Icon("refresh-cw", "size-3.5")
+							{ t(ctx, "projects.update_view") }
+						</a>
+					</div>
+				</div>
+			}
+			if d.VulnCritical > 0 || d.VulnSecurity > 0 {
+				<div class={ "tuc-alert", templ.KV("is-danger", d.VulnCritical > 0), templ.KV("is-warning", d.VulnCritical == 0) } role="alert">
+					@Icon("shield-alert", "size-4")
+					<div class="tuc-alert__body">
+						if d.VulnCritical > 0 {
+							<p class="tuc-alert__title">{ t(ctx, "overview.vuln_critical", "n", d.VulnCritical) }</p>
+						} else {
+							<p class="tuc-alert__title">{ t(ctx, "overview.vuln_security", "n", d.VulnSecurity) }</p>
+						}
+					</div>
+					<div class="tuc-alert__actions">
+						<a class="tuc-btn is-outline is-sm" href="/updates">
+							@Icon("shield", "size-3.5")
+							{ t(ctx, "overview.see_updates") }
+						</a>
+					</div>
+				</div>
+			}
+			// One gap everywhere: between the cards, between the cards and the
+			// row below, and between the two panels of that row.
+			<div id="metrics-live" class="flex flex-col gap-3">
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3">
+				@metricCard("CPU", d.CPUNote, fmt.Sprint(d.CPU)+"%", level(d.CPU)) {
+					@spark(d.CPUHist, "")
+				}
+				@metricCard(t(ctx, "overview.memory"), d.MemNote, fmt.Sprint(d.Mem)+"%", level(d.Mem)) {
+					@spark(d.MemHist, "")
+				}
+				@metricCard(t(ctx, "overview.disk"), d.DiskNote, fmt.Sprint(d.Disk)+"%", level(d.Disk)) {
+					@diskBar(d.DiskSegs, d.DiskFree)
+				}
+				@netCard(t(ctx, "overview.network"), t(ctx, "overview.now"), d.NetDown, d.NetUp, d.NetUnit, d.NetHist, d.NetNote)
+			</div>
+			<div class="flex flex-wrap items-start gap-3">
+				<section class="min-w-0 flex-[999_1_560px] overflow-x-auto rounded-sm border border-border bg-surface" aria-label={ t(ctx, "overview.top") }>
+					<div class="flex h-11 items-center gap-2 border-b border-border px-3.5">
+						<h2 class="m-0 text-sm font-semibold">{ t(ctx, "overview.top") }</h2>
+						<span class="grow"></span>
+					</div>
+					if len(d.Services) == 0 {
+						@emptyState("container", t(ctx, "overview.no_services"))
+					} else {
+						// Click a header to sort (Tucano, in the browser); it opens
+						// sorted by CPU, heaviest first.
+						<table class="tuc-table is-compact w-full min-w-[620px]" data-tuc-table data-sort-mode="client">
+							<thead>
+								<tr>
+									<th data-sort="text">{ t(ctx, "overview.service") }</th>
+									<th class="w-[170px]" data-sort="number" data-sort-initial="descending">CPU</th>
+									<th class="is-number" data-sort="number">{ t(ctx, "overview.memory") }</th>
+									<th class="is-number" data-sort="number">{ t(ctx, "overview.network") }</th>
+									<th data-sort="text">{ t(ctx, "overview.state") }</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, s := range d.Services {
+									<tr>
+										<td class="font-mono text-xs">
+											if s.Href != "" {
+												<a class="text-fg no-underline hover:text-accent-text hover:underline" href={ templ.SafeURL(s.Href) }>{ s.Name }</a>
+											} else {
+												{ s.Name }
+											}
+											if s.Orphan {
+												<span class="tuc-badge ml-1.5 font-sans" title={ t(ctx, "overview.orphan_hint") }>{ t(ctx, "overview.orphan") }</span>
+											}
+										</td>
+										<td data-sort-value={ fmt.Sprint(s.CPUSort) }>
+											<div class="flex items-center gap-2">
+												<div class="h-1 grow bg-surface-2"><div class={ "bar-fill h-1 " + toneBg(level(s.CPU)) + " " + pctWidth(s.CPU) }></div></div>
+												<span class="w-[44px] text-right tabular-nums">{ s.CPUText }</span>
+											</div>
+										</td>
+										<td class="is-number whitespace-nowrap text-muted" data-sort-value={ fmt.Sprint(s.MemSort) }>{ s.Mem }</td>
+										<td class="is-number whitespace-nowrap text-muted" data-sort-value={ fmt.Sprint(s.NetSort) }>{ s.Net }</td>
+										<td>
+											<span class={ "inline-flex items-center gap-1.5 text-xs " + toneText(s.Tone) }>
+												<span class={ "size-[7px] rounded-[1px] " + toneBg(s.Tone) }></span>
+												{ s.State }
+											</span>
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+				</section>
+				<section class="min-w-0 flex-[1_1_300px] rounded-sm border border-border bg-surface" aria-label={ t(ctx, "overview.activity") }>
+					<div class="flex h-11 items-center border-b border-border px-3.5">
+						<h2 class="m-0 text-sm font-semibold">{ t(ctx, "overview.activity") }</h2>
+					</div>
+					if len(d.Events) == 0 {
+						@emptyState("activity", t(ctx, "overview.activity_empty"))
+					} else {
+						<ol class="m-0 flex list-none flex-col px-3.5 pt-2 pb-3.5">
+							for _, e := range d.Events {
+								<li class="flex items-center gap-2.5 py-2">
+									<span class={ "size-[7px] shrink-0 rounded-[1px] " + toneBg(e.Tone) }></span>
+									<div class="flex min-w-0 flex-col gap-px">
+										<span class="text-[13px]">{ e.Text }</span>
+										<span class="text-xs text-muted">{ e.Meta }</span>
+									</div>
+								</li>
+							}
+						</ol>
+					}
+				</section>
+			</div>
+			</div>
+		}
+	}
+}

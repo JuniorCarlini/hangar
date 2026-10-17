@@ -1,0 +1,12 @@
+services:
+  adminer:
+    image: adminer:6-standalone
+    expose:
+      - "8080"
+    # Runs as the image's adminer user: no capability needed.
+    cap_add: []
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"

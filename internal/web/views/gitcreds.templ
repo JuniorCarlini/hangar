@@ -1,0 +1,327 @@
+package views
+
+import "fmt"
+
+// Git credentials: tokens saved once and picked by services, for the whole
+// server (the "Credenciais Git" page) or one project (its settings).
+
+func orDash(s string) string {
+	if s == "" {
+		return "—"
+	}
+	return s
+}
+
+// GitCredRow is a saved credential in a list (never its token).
+type GitCredRow struct {
+	ID       string
+	Name     string
+	Host     string
+	Hint     string // last characters of the token
+	Project  string // "" = server-wide
+	Uses     int
+	LastUsed string
+	Updated  string
+}
+
+// GitCredOption is a credential a service can pick.
+type GitCredOption struct {
+	ID      string
+	Name    string
+	Host    string
+	Project bool // the project's own
+}
+
+// GitCredsData feeds the server page.
+type GitCredsData struct {
+	CSRF  string
+	Creds []GitCredRow
+	Error string
+	Flash string
+	Open  bool // reopen the "new credential" dialog with the error
+}
+
+// GitCreds lists every credential and creates server-wide ones.
+templ GitCreds(d GitCredsData) {
+	@shell(t(ctx, "gitcred.page_title")) {
+		@pageHead(t(ctx, "gitcred.title"), t(ctx, "gitcred.subtitle")) {
+			<button type="button" class="tuc-btn is-primary" data-tuc-modal="#new-git-cred">
+				@Icon("plus", "size-3.5")
+				{ t(ctx, "gitcred.new") }
+			</button>
+		}
+		@pageBody() {
+			if !d.Open {
+				@errorAlert(d.Error)
+			}
+			@toast("success", d.Flash)
+			<div class="tuc-alert is-info">
+				@Icon("shield-check", "size-4")
+				<div class="tuc-alert__body"><p>{ t(ctx, "gitcred.privacy") }</p></div>
+			</div>
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "gitcred.list"))
+				<div class={ cardBodyClass }>
+					@gitCredTable(d.CSRF, d.Creds, "/git-credentials", true)
+				</div>
+			</section>
+			@gitCredNewDialog(d.CSRF, "/git-credentials", "", d.Open, d.Error)
+			<script src={ asset("gitcred.js") } defer></script>
+		}
+	}
+}
+
+// gitCredTable is the list with replace and delete; showScope adds the
+// "Servidor / projeto" column (the server page lists both kinds).
+templ gitCredTable(csrf string, rows []GitCredRow, back string, showScope bool) {
+	if len(rows) == 0 {
+		@emptyState("key-round", t(ctx, "gitcred.empty"))
+	} else {
+		<div class="tuc-table-wrap">
+			<table class="tuc-table is-compact w-full min-w-[680px]">
+				<thead>
+					<tr>
+						<th>{ t(ctx, "gitcred.col.name") }</th>
+						<th>{ t(ctx, "gitcred.col.host") }</th>
+						if showScope {
+							<th>{ t(ctx, "gitcred.col.scope") }</th>
+						}
+						<th>{ t(ctx, "gitcred.col.token") }</th>
+						<th class="is-number">{ t(ctx, "gitcred.col.uses") }</th>
+						<th>{ t(ctx, "gitcred.col.last_used") }</th>
+						<th class="tuc-table__actions"></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, c := range rows {
+						<tr>
+							<td class="font-medium">{ c.Name }</td>
+							<td class="font-mono text-xs">{ c.Host }</td>
+							if showScope {
+								<td>
+									if c.Project == "" {
+										<span class="tuc-badge is-info">{ t(ctx, "gitcred.scope.server") }</span>
+									} else {
+										<span class="tuc-badge">{ t(ctx, "gitcred.scope.project", "project", c.Project) }</span>
+									}
+								</td>
+							}
+							<td class="font-mono text-xs text-muted">
+								if c.Hint != "" {
+									{ "••••" + c.Hint }
+								} else {
+									{ "••••••••" }
+								}
+							</td>
+							<td class="is-number text-xs">{ fmt.Sprint(c.Uses) }</td>
+							<td class="text-xs text-muted">
+								if c.LastUsed != "" {
+									{ c.LastUsed }
+								} else {
+									{ t(ctx, "gitcred.never_used") }
+								}
+							</td>
+							<td class="tuc-table__actions">
+								<span class="inline-flex items-center gap-1.5 [&_form]:inline-flex">
+									<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal={ "#git-cred-replace-" + c.ID } aria-label={ t(ctx, "gitcred.replace_named", "name", c.Name) }>
+										@Icon("refresh-cw", "size-3.5")
+										{ t(ctx, "gitcred.replace") }
+									</button>
+									<form data-confirm={ t(ctx, "confirm.git_cred_delete.title", "name", c.Name) } data-confirm-text={ t(ctx, "confirm.git_cred_delete.text") } data-confirm-ok={ t(ctx, "confirm.git_cred_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL("/git-credentials/" + c.ID + "/delete") }>
+										<input type="hidden" name="csrf" value={ csrf }/>
+										<input type="hidden" name="back" value={ back }/>
+										<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" aria-label={ t(ctx, "gitcred.delete_named", "name", c.Name) } title={ t(ctx, "gitcred.delete") } disabled?={ c.Uses > 0 }>
+											@Icon("trash", "size-3.5")
+										</button>
+									</form>
+								</span>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		// The dialogs live outside the table (and its horizontal scroll), so
+		// the text wraps instead of overflowing when one opens.
+		for _, c := range rows {
+			@gitCredReplaceDialog(csrf, back, c)
+		}
+	}
+}
+
+// gitCredTokenHelp says how to make a read-only token on GitHub.
+templ gitCredTokenHelp() {
+	<span class="tuc-hint">
+		{ t(ctx, "gitcred.token_hint") }
+		<a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">{ t(ctx, "gitcred.token_link") }</a>
+	</span>
+}
+
+// gitCredNewDialog creates a credential; project "" makes a server-wide one.
+templ gitCredNewDialog(csrf, back, project string, open bool, errMsg string) {
+	<dialog class="tuc-modal is-md" id="new-git-cred" aria-labelledby="new-git-cred-title" data-open={ fmt.Sprint(open) }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="new-git-cred-title">{ t(ctx, "gitcred.new") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action="/git-credentials" class="tuc-modal__body flex flex-col gap-4" autocomplete="off" data-gc-check="/git-credentials/check" data-gc-fail={ t(ctx, "gitcred.fail") }>
+				<input type="hidden" name="csrf" value={ csrf }/>
+				<input type="hidden" name="back" value={ back }/>
+				<input type="hidden" name="project" value={ project }/>
+				if open {
+					@errorAlert(errMsg)
+				}
+				<p class="tuc-modal__text">
+					if project == "" {
+						{ t(ctx, "gitcred.new_server_hint") }
+					} else {
+						{ t(ctx, "gitcred.new_project_hint", "project", project) }
+					}
+				</p>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="gc-host">{ t(ctx, "gitcred.col.host") }</label>
+					<select class="tuc-input font-mono" id="gc-host" name="host" data-tuc-select>
+						<option value="github.com" selected>github.com</option>
+					</select>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="gc-token">{ t(ctx, "git.token") }</label>
+					<input class="tuc-input font-mono" id="gc-token" name="token" type="password" required autocomplete="off" maxlength="512" data-tuc-reveal/>
+					<div class="hidden flex items-center gap-3 rounded-md border border-success/50 bg-surface px-3.5 py-3" data-gc-profile role="status">
+						<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-success-soft text-success">
+							@Icon("circle-check", "size-5")
+						</span>
+						<span class="flex min-w-0 flex-col gap-0.5">
+							<b class="truncate text-sm font-semibold" data-gc-login></b>
+							<span class="truncate text-xs text-muted" data-gc-name></span>
+						</span>
+					</div>
+					<p class="hidden text-xs text-danger" data-gc-error></p>
+					@gitCredTokenHelp()
+				</div>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("save", "size-3.5")
+						{ t(ctx, "gitcred.save") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+templ gitCredReplaceDialog(csrf, back string, c GitCredRow) {
+	<dialog class="tuc-modal is-md" id={ "git-cred-replace-" + c.ID } aria-labelledby={ "git-cred-replace-title-" + c.ID }>
+		<div class="tuc-modal__panel text-left">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id={ "git-cred-replace-title-" + c.ID }>{ t(ctx, "gitcred.replace_named", "name", c.Name) }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action={ templ.SafeURL("/git-credentials/" + c.ID + "/token") } class="tuc-modal__body flex flex-col gap-4" autocomplete="off">
+				<input type="hidden" name="csrf" value={ csrf }/>
+				<input type="hidden" name="back" value={ back }/>
+				<p class="tuc-modal__text">{ t(ctx, "gitcred.replace_hint", "n", c.Uses) }</p>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for={ "gc-token-" + c.ID }>{ t(ctx, "git.token_new") }</label>
+					<input class="tuc-input font-mono" id={ "gc-token-" + c.ID } name="token" type="password" required autocomplete="off" maxlength="512" data-tuc-reveal/>
+					@gitCredTokenHelp()
+				</div>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("save", "size-3.5")
+						{ t(ctx, "gitcred.save") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+// projectGitCreds is the project's own credentials in its settings.
+templ projectGitCreds(d ProjectData) {
+	<section class={ cardClass } id="git-credentials">
+		@cardHead(t(ctx, "gitcred.project_title")) {
+			if d.CanCreate {
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#new-git-cred">
+					@Icon("plus", "size-3.5")
+					{ t(ctx, "gitcred.new") }
+				</button>
+			}
+		}
+		<div class={ cardBodyClass }>
+			<div class="tuc-alert is-info">
+				@Icon("key-round", "size-4")
+				<div class="tuc-alert__body">
+					<p>
+						{ t(ctx, "gitcred.project_hint", "n", d.ServerCreds) }
+						<a href="/git-credentials">{ t(ctx, "gitcred.server_link") }</a>
+					</p>
+				</div>
+			</div>
+			@gitCredTable(d.CSRF, d.GitCreds, "/p/"+d.Slug+"/settings", false)
+		</div>
+	</section>
+	if d.CanCreate {
+		@gitCredNewDialog(d.CSRF, "/p/"+d.Slug+"/settings", d.Slug, d.CredOpen, d.Error)
+		<script src={ asset("gitcred.js") } defer></script>
+	}
+}
+
+// gitCredPicker chooses how a service clones: a saved credential, none
+// (public repository) or a new token saved right there as a credential.
+templ gitCredPicker(prefix string, opts []GitCredOption, selected string) {
+	<div class="flex min-w-0 flex-col gap-1.5 col-span-full">
+		<label class="tuc-label" for={ prefix + "-credential" }>{ t(ctx, "gitcred.pick") }</label>
+		<select class="tuc-input" id={ prefix + "-credential" } name="credential" data-tuc-select>
+			for _, o := range opts {
+				<option value={ o.ID } selected?={ o.ID == selected }>
+					{ o.Name } · { o.Host } ·
+					if o.Project {
+						{ t(ctx, "gitcred.scope.this_project") }
+					} else {
+						{ t(ctx, "gitcred.scope.server") }
+					}
+				</option>
+			}
+			<option value="public" selected?={ selected == "" || selected == "public" }>{ t(ctx, "gitcred.pick_public") }</option>
+			<option value="new" selected?={ selected == "new" }>{ t(ctx, "gitcred.pick_new") }</option>
+		</select>
+		<span class="tuc-hint">
+			{ t(ctx, "gitcred.pick_hint") }
+			<a href="/git-credentials">{ t(ctx, "gitcred.server_link") }</a>
+		</span>
+	</div>
+	<div class="col-span-full flex min-w-0 flex-col gap-3 rounded-sm border border-border bg-surface-2 p-3" data-shown-when={ prefix + "-credential=new" }>
+		<div class="grid grid-cols-[repeat(auto-fit,minmax(min(180px,100%),1fr))] gap-3">
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for={ prefix + "-cred-name" }>{ t(ctx, "gitcred.col.name") }</label>
+				<input class="tuc-input" id={ prefix + "-cred-name" } name="cred_name" maxlength="60" value="GitHub" required/>
+			</div>
+			<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
+				<legend class="tuc-label mb-1.5">{ t(ctx, "gitcred.col.scope") }</legend>
+				<div class="flex flex-wrap gap-3">
+					<label class="tuc-choice">
+						<input type="radio" class="tuc-radio" name="cred_scope" value="server" checked/>
+						{ t(ctx, "gitcred.scope.server_long") }
+					</label>
+					<label class="tuc-choice">
+						<input type="radio" class="tuc-radio" name="cred_scope" value="project"/>
+						{ t(ctx, "gitcred.scope.this_project") }
+					</label>
+				</div>
+			</fieldset>
+		</div>
+		<div class="flex min-w-0 flex-col gap-1.5">
+			<label class="tuc-label" for={ prefix + "-token" }>{ t(ctx, "git.token") }</label>
+			<input class="tuc-input font-mono" id={ prefix + "-token" } name="token" type="password" autocomplete="off" maxlength="512" required data-tuc-reveal/>
+			@gitCredTokenHelp()
+		</div>
+	</div>
+}

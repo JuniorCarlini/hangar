@@ -1,0 +1,2599 @@
+# Textos em português do Brasil (idioma padrão). As chaves são as mesmas em
+# todos os idiomas; o CI falha se faltar alguma (docs/22).
+
+[common]
+expand = "Abrir em tela grande"
+language = "Idioma"
+copied = "Copiado"
+
+[locale]
+pt-BR = "Português (Brasil)"
+en = "English"
+
+[role]
+owner = "dono"
+admin = "admin"
+operator = "operador"
+viewer = "leitor"
+
+[theme]
+system = "Sistema"
+dark = "Escuro"
+light = "Claro"
+
+[nav]
+updates = "Atualizações"
+status_links = "Links de status"
+git_credentials = "Credenciais Git"
+brand = "Marca"
+ip_copy = "Copiar o IP do servidor ({ip})"
+ip_copied = "IP copiado"
+
+backups = "Backups"
+search_placeholder = "Buscar ou executar…"
+overview = "Visão geral"
+search = "Buscar…"
+account = "Minha conta"
+logout = "Sair da conta"
+domains = "Domínios dinâmicos"
+ports = "Portas abertas"
+alerts = "Alertas"
+menu = "Navegação"
+server = "Servidor"
+projects = "Projetos"
+section_access = "Acesso"
+section_ops = "Operação"
+section_system = "Sistema"
+new_project = "Novo projeto"
+update = "Atualizar Hangar"
+
+[error]
+internal = "Erro interno. Tente de novo."
+unauthenticated = "Não autenticado."
+forbidden = "Sem permissão."
+sudo_required = "Confirme com o código do autenticador para continuar."
+csrf = "Requisição recusada."
+bad_request = "Requisição inválida."
+not_found = "Não encontrado."
+exists = "Já existe um com esse nome."
+docker_unavailable = "O Docker não está disponível neste servidor."
+action_failed = "Não foi possível concluir: {error}"
+
+[login]
+page_title = "Entrar · Hangar"
+step = "Etapa {n} de {total}"
+title = "Entrar"
+subtitle = "Acesso restrito"
+email = "E-mail"
+password = "Senha"
+continue = "Continuar"
+no_reset = "Sem \"esqueci a senha\": a recuperação é feita com os códigos de recuperação ou pelo servidor."
+
+[login.error]
+bad_credentials = "E-mail ou senha incorretos, ou conta bloqueada."
+rate_limited = "Muitas tentativas. Tente de novo em {min} min."
+busy = "Muitas tentativas de login no momento. Tente em instantes."
+no_totp = "Esta conta ainda não tem 2FA. Configure no servidor com: hangard user totp -email {email}"
+form_expired = "O formulário expirou. Tente entrar de novo."
+expired = "A etapa de verificação expirou. Entre de novo."
+
+[twofa]
+page_title = "Verificação · Hangar"
+title = "Código do autenticador"
+subtitle = "Abra o app autenticador e digite os 6 números. Esta etapa expira em 5 minutos."
+code = "Código"
+submit = "Entrar"
+lost_phone = "Perdeu o celular? Use um código de recuperação no mesmo campo."
+limit_note = "Depois de 5 tentativas erradas, novas tentativas ficam bloqueadas por 15 minutos."
+
+[twofa.error]
+invalid = "Código incorreto ou já usado."
+
+[sudo]
+confirm = "Confirmar"
+password_label = "Confirme sua senha para continuar"
+title = "Confirme que é você"
+text = "Ações sensíveis pedem a confirmação de novo; ela vale por 5 minutos e fica registrada na auditoria."
+
+[password]
+too_short = "Senha fraca: use pelo menos {min} caracteres."
+too_long = "Senha muito longa: no máximo {max} caracteres."
+same_as_email = "Senha fraca: não pode ser igual ao e-mail."
+low_variety = "Senha fraca: use caracteres mais variados."
+common = "Senha fraca: é uma senha muito usada."
+
+[user.error]
+email_invalid = "E-mail inválido: {email}"
+email_taken = "Já existe usuário com este e-mail."
+role_required = "Papel obrigatório."
+role_unknown = "Papel desconhecido \"{role}\" (use owner, admin, operator ou viewer)."
+not_found = "Usuário {email} não existe."
+
+[account]
+page_title = "Minha conta · Hangar"
+title = "Minha conta"
+preferences = "Preferências"
+language = "Idioma"
+language_browser = "Seguir o navegador"
+theme = "Tema"
+preferences_hint = "Vale para todas as telas, em qualquer computador em que você entrar."
+save = "Salvar"
+saved = "Preferências salvas."
+name = "Seu nome"
+name_placeholder = "Como o painel te chama"
+
+[account.error]
+locale = "Idioma não suportado."
+theme = "Tema inválido."
+name = "Nome com até 60 caracteres, sem < ou >."
+
+[projects]
+update_text = "Assinada e conferida. A atualização leva menos de um minuto e volta sozinha se der errado."
+new = "Novo projeto"
+update_banner = "Hangar {version} disponível."
+update_view = "Ver atualização"
+docker_down = "Docker indisponível: o painel não conseguiu falar com o Docker; projetos e serviços ficam só para leitura."
+
+[projects.form]
+name = "Nome"
+name_placeholder = "Laboratório multidomínio"
+slug = "Nome técnico"
+slug_hint = "Vira o prefixo dos containers:"
+submit = "Criar projeto"
+
+[project]
+back_canvas = "Voltar ao canvas"
+network = "rede {name}"
+network_title = "Rede"
+network_name = "Rede do projeto"
+network_names = "Nomes internos"
+network_hint = "Dentro do projeto, cada serviço responde pelo nome curto (web) e pelo completo ({example})."
+
+[project.form]
+image = "Imagem"
+port = "Porta interna"
+memory = "Memória (MB)"
+cpus = "CPU"
+hint = "Nasce sem privilégios extras, com limites e sem porta aberta para fora."
+submit = "Criar e fazer deploy"
+number_invalid = "Número inválido em porta, memória ou CPU."
+
+[project.error]
+slug = "Nome técnico inválido: use letras minúsculas, números e hífen (2 a 32 caracteres)."
+name_too_long = "Nome muito longo (máximo {max})."
+has_services = "O projeto ainda tem serviços."
+reserved = "O nome \"{slug}\" é reservado pelo Hangar."
+link_self = "Um projeto não se conecta com ele mesmo."
+
+[state]
+running = "Rodando"
+deploying = "Deploy em andamento"
+restarting = "Reiniciando"
+exited = "Parado"
+dead = "Com falha"
+created = "Criado"
+paused = "Pausado"
+removing = "Removendo"
+missing = "Container ausente"
+failed = "Último deploy falhou"
+unknown = "Desconhecido"
+
+[deploy.status]
+live = "Ativo"
+running = "Em andamento"
+failed = "Falhou"
+superseded = "Substituído"
+
+[deploy.trigger]
+restore = "restauração"
+create = "criação"
+manual = "manual"
+webhook = "webhook"
+rollback = "volta de versão"
+ports = "portas"
+rebuild = "do zero (sem cache)"
+
+[flash]
+compose = "Serviços criados a partir do compose. Os deploys já começaram: os bancos primeiro."
+volume = "Disco adicionado. Vale a partir do próximo deploy."
+volume-removed = "Disco desligado. Vale a partir do próximo deploy."
+backup-policy = "Agenda de backup salva."
+backup-queued = "Backup na fila. Ele aparece no histórico ao terminar."
+backup-preparing = "Preparando o backup cifrado para baixar."
+restore-started = "Restauração iniciada. Acompanhe no histórico abaixo."
+deploy = "Deploy iniciado."
+env = "Variável salva. Faça deploy para aplicar."
+env-deleted = "Variável excluída. Faça deploy para aplicar."
+action = "Feito."
+domain = "Domínio adicionado. O certificado sai no primeiro acesso."
+domain-deleted = "Domínio removido."
+dynamic-on = "Domínios dinâmicos ligados. Faça deploy para a app receber o segredo."
+dynamic-off = "Domínios dinâmicos desligados."
+domains-blocked = "Domínio bloqueado."
+domains-unblocked = "Domínio desbloqueado."
+port = "Porta aberta. O serviço foi recriado para publicá-la."
+port-closed = "Porta fechada."
+rollback = "Voltando para a versão escolhida."
+deploy-settings = "Configurações de deploy salvas."
+git = "Repositório salvo. Vale a partir do próximo deploy."
+git-token = "Token salvo."
+webhook-off = "Deploy automático desligado."
+maintenance-on = "Modo manutenção ligado. Os visitantes já veem a página de manutenção."
+maintenance-off = "Modo manutenção desligado. O site voltou a responder."
+
+[service]
+restart_long = "Reiniciar serviço"
+stop_long = "Parar serviço"
+start_long = "Iniciar serviço"
+resources = "Recursos"
+deploy = "Fazer deploy"
+restart = "Reiniciar"
+pending = "Há alterações nas variáveis que ainda não foram aplicadas."
+apply_deploy = "Aplicar e fazer deploy"
+sudo_label = "Para revelar segredos ou apagar o serviço, confirme com o código do autenticador"
+close = "Fechar painel"
+tabs = "Seções do serviço"
+summary = "{image} · porta {port} · {memory} MB · {cpus} CPU"
+
+[service.stat]
+state = "Estado"
+image = "Imagem"
+limits = "Limites"
+limits_value = "{memory} MB · {cpus} CPU"
+restarts = "Reinícios"
+oom = "sem memória"
+
+[service.logs]
+mark = "Marcar"
+mark_hint = "Coloca um traço com a hora no log; fica salvo e aparece para quem abrir o log depois"
+mark_line = "marcação"
+connecting = "Conectando…"
+live = "Em tempo real"
+reconnecting = "Reconectando…"
+ended = "Transmissão encerrada"
+pause = "Pausar"
+resume = "Continuar"
+
+[service.deploys]
+empty = "Nenhum deploy ainda."
+title = "Deploys"
+last = { one = "o último", other = "últimos {n}" }
+
+[service.env]
+empty = "Nenhuma variável ainda. Adicione uma ou cole um .env."
+reveal = "Revelar"
+delete = "Excluir"
+delete_named = "Excluir {key}"
+name = "Nome"
+value = "Valor"
+value_placeholder = "o valor fica cifrado"
+save = "Salvar variável"
+revealed = "Valor revelado nesta tela; a visualização ficou registrada na auditoria."
+add = "Nova variável"
+bulk = "Arquivo .env"
+bulk_hint = "Edite ou cole um arquivo .env inteiro. Os segredos aparecem como comentário e não mudam, a menos que você os substitua. Salvar adiciona ou atualiza as variáveis; não remove."
+bulk_label = "Conteúdo do .env"
+bulk_placeholder = "DJANGO_DEBUG=0"
+bulk_save = "Salvar"
+copy = "Copiar"
+next_deploy = "Fica pendente e entra no próximo deploy."
+broken_title = { one = "1 referência quebrada", other = "{n} referências quebradas" }
+broken_hint = "O próximo deploy deste serviço vai falhar até a referência ser corrigida ou removida."
+
+[service.env.broken]
+service = "{key} aponta para o serviço {service}, que não existe neste projeto."
+service_in = "{key} aponta para o serviço {service}, que não existe no projeto {project}."
+key = "{key} aponta para {target} do serviço {service}, mas ele não oferece nem tem uma variável com esse nome."
+project = "{key} aponta para o projeto {project}, que não está conectado a este."
+
+[service.env.suggest]
+title = "Variáveis sugeridas"
+hint = "O arquivo {file} do repositório lista estas variáveis, que este serviço ainda não tem. Os valores são só exemplos: \"Adicionar\" abre o arquivo .env com elas no final para você revisar antes de salvar. Valores que parecem segredo não são copiados."
+example = "Exemplo"
+add = "Adicionar"
+dismiss = "Dispensar"
+comment = "Sugeridas pelo {file} do repositório"
+
+[service.maintenance]
+title = "Modo manutenção"
+hint = "Enquanto ligado, todos os domínios deste serviço mostram a página \"Em manutenção\" (503) em vez do site. O container continua rodando: dá para migrar o banco ou conferir algo com calma e desligar quando terminar. O texto da página fica em Marca."
+active = "Ligado: quem acessa os domínios deste serviço está vendo a página de manutenção."
+no_edge = "O proxy de borda está desligado neste servidor, então a página de manutenção não aparece em lugar nenhum."
+no_domains = "Este serviço ainda não tem domínio: a página de manutenção só aparece nos domínios dele."
+turn_on = "Ligar manutenção"
+turn_off = "Desligar manutenção"
+badge = "Em manutenção"
+
+[service.danger]
+title = "Zona de perigo"
+type_name = "Para apagar, digite"
+hint = "Remove o container e a configuração. Volumes não são apagados."
+delete = "Apagar serviço"
+name_mismatch = "O nome digitado não confere."
+
+[service.error]
+name = "Use um nome com pelo menos duas letras ou números."
+slug_taken = "Já existe um serviço com o endereço interno {slug} neste projeto. Escolha outro nome."
+slug = "Nome do serviço inválido: letras minúsculas, números e hífen."
+image = "Imagem inválida (ex.: nginx:1.29-alpine)."
+port = "Porta inválida."
+memory = "Memória entre 16 MB e 64 GB."
+cpus = "CPU entre 0,05 e 64."
+deploy_running = "Já há um deploy em andamento para este serviço."
+
+[env.error]
+key = "Nome de variável inválido: letras, números e _ (não pode começar com número)."
+too_large = "Valor maior que {max} KB."
+null_byte = "Valor com caractere nulo."
+reference = "A variável {key} referencia {ref}, que não existe (ou o projeto não está conectado)."
+bulk_line = "Linha {line} inválida: use NOME=valor."
+bulk_empty = "Nenhuma variável no texto colado."
+bulk_too_many = "No máximo {max} variáveis de uma vez."
+
+[docker.error]
+not_managed = "Já existe um container com este nome que não foi criado pelo Hangar; nada foi alterado."
+
+[update]
+signed = "assinatura conferida"
+safety = "Antes de trocar, o banco do painel é copiado. Se a versão nova não subir em 90 s, a anterior volta sozinha. Os sites não param."
+history = "Histórico"
+history_empty = "Nenhuma atualização aplicada por aqui ainda."
+version = "Versão"
+result = "Resultado"
+when = "Quando"
+page_title = "Atualização · Hangar"
+title = "Atualização do Hangar"
+installed = "Versão instalada:"
+applying = "Aplicando a atualização…"
+applying_note = "O painel vai reiniciar. As lojas continuam funcionando. Esta página recarrega sozinha."
+available = "Versão {version} disponível"
+available_note = "Você está na {current}. Só o painel reinicia; se a versão nova não subir, ela é desfeita sozinha."
+view_github = "Ver no GitHub"
+apply = "Atualizar para {version}"
+sudo_label = "Confirme com o código do autenticador para atualizar"
+up_to_date = "Tudo em dia"
+check_failed = "Não foi possível consultar versões agora: {error}"
+check_interval = "O painel consulta versões novas a cada 6 horas."
+check_now = "Verificar agora"
+
+[update.state]
+ok = "Aplicada"
+rolled_back = "Desfeita automaticamente"
+failed = "Falhou"
+applying = "Aplicando"
+
+[update.error]
+check = "Não foi possível consultar versões: {error}"
+pending = "Já existe uma atualização em andamento."
+refused = "Atualização recusada: {error}"
+not_stable = "A última release não é estável."
+version_changed = "A versão disponível agora é {available}, não {requested}."
+manifest_version = "O manifesto assinado é da versão {manifest}, não {requested}."
+http = "Consulta de releases: {host} respondeu {status}."
+missing_asset = "A release {version} não tem o arquivo {file}."
+
+[release.error]
+bad_signature = "Assinatura da release não confere."
+not_newer = "A versão não é mais nova que a instalada."
+not_in_manifest = "O arquivo {file} não está no manifesto."
+hash_mismatch = "O hash de {file} não confere com o manifesto."
+bad_version = "Versão inválida \"{version}\" (esperado vX.Y.Z)."
+
+[secrets.error]
+key_mode = "Chave mestra {path} com permissão {mode}: precisa ser 0400 ou 0600."
+
+[config.error]
+allowed_port = "[alerts] allowed_ports: {value} não é uma porta válida (1 a 65535)."
+scan_hour = "scan.hour precisa ficar entre 0 e 23 (veio {value})."
+osv_api = "scan.osv_api precisa ser uma URL https (veio {value})."
+catalog_url = "templates.catalog_url precisa ser uma URL https (veio {value})."
+status_host = "status.hosts tem um valor inválido ou repetido do painel: {value}."
+read = "Não foi possível ler a configuração: {error}"
+parse = "Não foi possível interpretar {file}: {error}"
+unknown_field = "Campo desconhecido em {file}:\n{detail}"
+required = "{field} é obrigatório."
+listen_empty = "panel.listen precisa de pelo menos um endereço."
+listen = "panel.listen \"{addr}\": {error}"
+listen_port = "porta obrigatória"
+listen_all = "host vazio escuta em todas as interfaces; informe um IP de loopback ou privado"
+listen_name = "use um IP, não um nome"
+listen_public = "o painel só escuta em loopback ou IP privado; a exposição pública é feita pelo Caddy"
+hosts_empty = "panel.hosts precisa de pelo menos um host."
+host_blank = "panel.hosts não aceita valor vazio."
+repo = "update.repo inválido: \"{value}\" (use dono/repositorio)."
+api_base = "update.api_base precisa ser https: \"{value}\"."
+telegram_api = "alerts.telegram_api precisa ser https: \"{value}\"."
+binary_path = "update.binary_path precisa ser caminho absoluto."
+service = "update.service inválido: \"{value}\"."
+edge_subnet = "edge.subnet inválida: \"{value}\" (uma rede IPv4 privada, no máximo /29)."
+edge_image = "edge.image inválida: \"{value}\"."
+edge_acme_ca = "edge.acme_ca precisa ser uma URL https: \"{value}\"."
+edge_acme_root = "edge.acme_ca_root só faz sentido junto com edge.acme_ca."
+edge_public_ip = "IP inválido em edge.public_ips: \"{value}\"."
+edge_rate = "edge.max_new_certs_per_hour precisa estar entre 1 e 1000 (veio {value})."
+edge_hooks_host = "edge.hooks_hostname precisa ser um domínio em minúsculas (veio {value})."
+edge_hooks_disabled = "edge.hooks_hostname exige edge.enabled = true: é o Caddy que deixa o caminho público."
+edge_base_domain = "edge.base_domain precisa ser um domínio em minúsculas (veio {value})."
+edge_dns = "edge.dns_provider só suporta \"cloudflare\" por ora, e exige edge.base_domain e edge.dns_token (veio {value})."
+edge_dns_image = "edge.dns_provider precisa de uma imagem do Caddy com o módulo de DNS; a padrão ({image}) não serve. Monte deploy/caddy e ponha em edge.image."
+edge_dns_token = "edge.dns_token sem edge.dns_provider não faz nada. Defina o provedor ou remova o token."
+
+[app.error]
+listen = "Não foi possível escutar em {addr}: {error}"
+foreign_owner = "data_dir {dir} pertence a outro usuário (uid {uid}); rode como ele (ex.: sudo -u hangar hangard)."
+token_read = "Não foi possível ler o token do GitHub: {error}"
+token_mode = "Token do GitHub {path} com permissão {mode}: use 0600."
+
+[audit.tamper]
+removed_or_reordered = "hash anterior não confere (registro removido ou reordenado)"
+content_changed = "conteúdo alterado"
+
+[cli]
+error_prefix = "erro:"
+flag_config = "arquivo de configuração"
+missing_command = "Informe um comando."
+missing_subcommand = "Informe o subcomando."
+unknown_command = "Comando desconhecido \"{command}\"."
+unknown_subcommand = "Subcomando desconhecido \"{command}\"."
+need_root = "Precisa rodar como root."
+audit_usage = "Uso: hangard audit verify"
+audit_ok = "Auditoria íntegra: {n} registros conferidos."
+audit_tampered = "Auditoria adulterada no registro {id}: {reason}."
+usage = """
+Uso: hangard <comando> [opções]
+
+Comandos:
+  serve          sobe o painel
+  user           cria usuários, configura 2FA, desbloqueia contas
+  lockdown       tranca e destranca o painel (botão de pânico)
+  self-update    procura, baixa e aplica versões novas do Hangar
+  system         instala as units do systemd (usado pelo instalador)
+  secrets        troca a chave mestra (rotate-key) com o painel parado
+  audit verify   confere a integridade do log de auditoria
+  restore        recupera o painel e os bancos a partir dos backups (servidor novo)
+  template       confere, empacota e assina templates de serviço
+  version        mostra a versão
+
+Opções comuns:
+  -config caminho   arquivo de configuração (padrão /etc/hangar/hangar.toml)
+"""
+
+[cli.secrets]
+usage = """
+Uso: hangard secrets rotate-key [-config arquivo] [-out arquivo]
+
+Cifra de novo todos os segredos do banco com uma chave mestra nova. Rode como
+o usuário hangar, com o painel parado (systemctl stop hangard). A chave nova
+vai para data_dir/master.key.new; depois, como root, coloque-a no lugar da
+antiga (passo a passo em docs/24).
+"""
+flag_out = "onde gravar a chave nova (padrão: data_dir/master.key.new)"
+panel_running = "O painel está rodando. Pare antes: sudo systemctl stop hangard"
+out_exists = "{path} já existe: instale ou apague essa chave antes de gerar outra."
+rotated = """{n} segredos cifrados com a chave nova, gravada em {out}.
+Agora, como root:
+  install -m 0400 -o hangar -g hangar {key} {key}.antiga
+  install -m 0400 -o hangar -g hangar {out} {key}
+  shred -u {out}
+  systemctl start hangard
+Guarde a chave antiga até um backup novo do painel ficar pronto: os backups antigos têm a chave antiga dentro."""
+
+[cli.user]
+usage = """
+Uso: hangard user <subcomando> [opções]
+
+Subcomandos:
+  create   cria um usuário e configura o 2FA      (-email, -role, -no-2fa)
+  totp     reconfigura o 2FA (celular perdido)    (-email)
+  totp-off desliga o 2FA da conta                (-email)
+  password troca a senha (esqueceu a senha)       (-email)
+  unlock   desbloqueia uma conta bloqueada       (-email)
+"""
+flag_email = "e-mail do usuário"
+flag_role = "papel: owner, admin, operator ou viewer"
+email_required = "-email é obrigatório."
+created = "Usuário {email} criado com papel {role}."
+unlocked = "Conta {email} desbloqueada."
+flag_no_2fa = "cria o usuário sem 2FA (ele pode ativar depois em Minha conta)"
+no_2fa = "Sem 2FA: o login pede só a senha, e o painel mostra um aviso até a 2FA ser ativada em Minha conta."
+no_2fa_required = "Atenção: este servidor exige 2FA (require_2fa); este usuário só entra depois de rodar: hangard user totp -email ..."
+password_reset = "Senha de {email} trocada. A conta foi desbloqueada e as sessões abertas, encerradas."
+totp_off = "2FA desligada para {email}. As sessões abertas foram encerradas."
+
+[cli.password]
+intro = "Senha (mínimo {min} caracteres; uma frase longa é melhor que símbolos):"
+prompt = "senha:"
+repeat = "repita:"
+mismatch = "as senhas não conferem"
+not_set = "Senha não definida."
+
+[cli.totp]
+scan = "Configure o 2FA: escaneie o QR code com o app autenticador\n(Google Authenticator, 1Password, Bitwarden, Authy...).\n"
+manual = "Sem câmera? Digite a chave no app: {secret}"
+prompt = "Código de 6 dígitos que o app mostra:"
+mismatch = "Código não confere. Confira se o relógio do celular está certo e tente de novo."
+enabled = "2FA ativado. Códigos de recuperação (cada um vale UMA vez):\n"
+keep_codes = "Guarde-os fora do computador (papel, cofre de senhas). Eles não serão mostrados de novo."
+
+[cli.selfupdate]
+usage = """
+Uso: hangard self-update <subcomando> [-config caminho]
+
+Subcomandos:
+  check   diz se há versão nova
+  stage   baixa e confere a versão nova e deixa o pedido (o mesmo que o botão)
+  apply   aplica o pedido pendente (root; o systemd chama sozinho)
+"""
+up_to_date = "Hangar {version} está em dia."
+available = "Versão nova: {version} (instalada: {installed})"
+staged = "Versão conferida e pedido gravado; o systemd aplica em seguida."
+need_root = "apply precisa rodar como root (o systemd chama hangar-updater.service)."
+nothing_pending = "Nenhuma atualização pendente."
+applied = "Hangar atualizado de {from} para {to}."
+
+[cli.template]
+usage = """
+Uso: hangard template <subcomando>
+
+Subcomandos:
+  check <pasta>...                   confere templates com as mesmas regras do painel
+                                     (uma pasta de template ou um catálogo de pastas)
+  pack <catálogo> [-key arquivo] [-out pasta]
+                                     gera catalog.tar.gz e catalog.tar.gz.sig (CI do catálogo);
+                                     sem -key, a chave vem de HANGAR_CATALOG_KEY
+  keygen                             gera o par de chaves do catálogo
+"""
+no_dir = "Informe a pasta dos templates."
+check_ok = "{n} templates conferidos, todos válidos."
+check_failed = "{bad} templates com problemas ({ok} válidos)."
+flag_key = "arquivo com a chave privada (base64); padrão: variável HANGAR_CATALOG_KEY"
+flag_out = "pasta onde gravar catalog.tar.gz e a assinatura"
+bad_key = "Chave privada ausente ou inválida (base64 de uma chave Ed25519)."
+key_mismatch = "Essa chave não corresponde à chave pública do catálogo embutida no Hangar."
+packed = "Catálogo gravado em {file} ({bytes} bytes) com a assinatura ao lado."
+keygen = """Chave pública (cole em CatalogPublicKeyHex, internal/templates/remote.go):
+{public}
+
+Chave privada (segredo HANGAR_CATALOG_KEY no repositório hangar-templates; não guarde em outro lugar):
+{private}"""
+
+[cli.system]
+usage = """
+Uso: hangard system install-units   (root)
+  grava as units do systemd e o limite do journald embutidos neste binário
+"""
+written = "gravado {path}"
+
+[domain]
+edge_disabled = "O proxy de borda (Caddy) está desligado: os domínios ficam salvos, mas não são servidos. Ligue em [edge] no hangar.toml."
+need_port = "Defina a porta interna do serviço para receber domínios."
+empty = "Nenhum domínio fixo."
+hostname = "Domínio"
+dns_hint = "Aponte o DNS (A/AAAA) para este servidor antes; o HTTPS é automático."
+add = "Adicionar domínio"
+remove = "Remover"
+remove_named = "Remover {host}"
+remove_sudo = "Confirme que é você para remover"
+fixed = "Domínio fixo"
+https_auto = "HTTPS automático"
+cert_active = "HTTPS ativo"
+cert_pending = "Emitindo certificado"
+offline = "Fora do ar"
+offline_hint = "A porta deste domínio está só na rede do projeto, então ele não responde de fora. Torne a porta pública ou remova o domínio."
+cert_pending_hint = "O certificado ainda não saiu; enquanto isso, quem abre por http:// vê a página \"Ativando HTTPS\". Se passar de alguns minutos, confira se o DNS do domínio aponta para este servidor."
+title = "Domínios"
+certificate = "Certificado"
+wildcard = "Coringa (todos os subdomínios)"
+wildcard_hint = "Atende qualquer nome um nível abaixo do domínio, como loja1.exemplo.com.br."
+preview = "Será cadastrado:"
+wildcard_notice = "Não há certificado coringa (ele exige acesso à API do seu DNS): cada subdomínio recebe o próprio certificado na primeira visita, que leva alguns segundos a mais, e conta no limite de nomes novos por hora. Cobre um nível só: o domínio sem prefixo e nomes mais fundos são cadastrados à parte. Aponte um registro DNS coringa (*) para este servidor."
+wildcard_badge = "coringa"
+wildcard_cert = "por subdomínio, sob demanda"
+wildcard_cert_hint = "Cada subdomínio recebe o próprio certificado na primeira visita."
+
+endpoint_label = "Porta de destino"
+[endpoint]
+section = "Links do serviço"
+public = "Público"
+open = "Abrir"
+no_link = "Sem link automático — configure um domínio base ou IP público do servidor."
+no_link_short = "Sem link automático"
+sslip = "Link automático"
+link_off = "Link automático desligado"
+internal_hint = "Só na rede do projeto"
+make_public = "Tornar público"
+admin_only = "Só administradores colocam um serviço na internet."
+public_confirm = "Colocar {label} na internet?"
+public_confirm_text = "Qualquer pessoa com o link passa a abrir {label}. Se ele não tiver login próprio, prefira um domínio com acesso restrito."
+public_confirm_ok = "Tornar público"
+internal_confirm = "Tirar {label} da internet?"
+internal_confirm_text = "O link automático deixa de abrir; os outros serviços do projeto continuam alcançando pela rede interna."
+internal_confirm_ok = "Tirar da internet"
+sslip_confirm = "Ligar o link automático de {label}?"
+sslip_confirm_text = "Um endereço novo passa a abrir este serviço na internet."
+sslip_confirm_ok = "Ligar"
+bind_hint = "O domínio torna essa porta pública e ocupa o lugar do link automático dela."
+
+[endpoint.error]
+has_domains = { one = "Remova o domínio desta porta antes de tirá-la da internet.", other = "Remova os {n} domínios desta porta antes de tirá-la da internet." }
+
+[domain.error]
+hostname = "Domínio inválido (ex.: loja.exemplo.com.br)."
+no_port = "O serviço precisa de uma porta interna para receber domínios."
+reserved = "{domain} é o endereço de um link automático; escolha outro domínio."
+dynamic_taken = "O serviço {service} já recebe os domínios dinâmicos; só um por servidor."
+edge_apply = "Salvo, mas o Caddy recusou a configuração: {error}"
+
+[domain.dynamic]
+explain = "Qualquer domínio que não seja fixo cai neste serviço. O certificado só é emitido depois que a app confirma, por uma chamada assinada, que o domínio pertence a um cliente ativo."
+check_path = "A app responde em"
+secret_env = "Segredo da assinatura, entregue no deploy em"
+elsewhere = "Já ligado em {service}."
+reveal = "Revelar segredo"
+switch = "Aceitar domínios dos clientes"
+unlock = "Confirmar identidade para mudar"
+requests = "Ver pedidos de certificado"
+secret_copy = "Copiar o segredo"
+rotate = "Trocar segredo"
+rotate_hint = "Gera um segredo novo. A app só recebe ele no próximo deploy; faça o deploy em seguida."
+rotated = "Segredo trocado. Faça o deploy para a app receber o novo."
+
+[domain.reason]
+fixed_domain = "domínio fixo"
+wildcard_domain = "subdomínio de um coringa"
+app_authorized = "aprovado pela app"
+invalid_hostname = "nome inválido"
+blocked = "bloqueado"
+no_dynamic_service = "nenhum serviço com domínios dinâmicos"
+rate_limited = "limite de novos domínios por hora"
+app_denied = "a app não reconhece"
+app_error = "a app não respondeu"
+dns_mismatch = "DNS não aponta para cá"
+internal_error = "erro interno"
+app_bad_signature = "a app recusou a assinatura (faça deploy para ela receber o segredo atual)"
+
+[domains]
+subtitle = "serviço {service} recebe os domínios dos clientes"
+reason_placeholder = "phishing"
+page_title = "Domínios · Hangar"
+title = "Domínios dinâmicos"
+no_dynamic = "Nenhum serviço recebe domínios dinâmicos. Ligue na seção Domínios de um serviço."
+recent = "Pedidos de certificado recentes"
+recent_empty = "Nenhum pedido ainda."
+allowed = "Liberado"
+denied = "Negado"
+block = "Bloquear"
+block_named = "Bloquear {host}"
+blocked = "Bloqueados"
+blocked_empty = "Nenhum domínio bloqueado."
+unblock = "Desbloquear"
+unblock_named = "Desbloquear {host}"
+reason = "Motivo"
+configure = "Configurar no serviço"
+filter = "Filtrar"
+filter_all = "Todos"
+filter_deny = "Só negados"
+filter_allow = "Só liberados"
+decision = "Decisão"
+count = "Vezes"
+last = "Último"
+since = "Desde"
+
+[template]
+generated_hint = "As senhas são geradas e guardadas cifradas; você não precisa digitar nenhuma."
+
+[template.error]
+input = "Valor inválido em \"{field}\"."
+
+[link]
+title = "Projetos conectados"
+hint = "Projetos conectados se enxergam pelo nome completo do container (ex.: {project}_postgres), como no Easypanel. Os outros não."
+empty = "Nenhum projeto conectado."
+project = "Conectar com o projeto"
+connect = "Conectar"
+disconnect = "Desconectar"
+disconnect_named = "Desconectar de {project}"
+connect_with = "Conectar com"
+
+[export]
+title = "Oferece aos outros"
+hint = "Use estes valores em outros serviços com uma referência, como {example}; ela é resolvida a cada deploy."
+key = "Chave"
+reference = "Referência"
+copy = "Copiar {ref}"
+empty = "Este serviço não oferece valores para outros. Modelos (Postgres, Redis) oferecem a URL interna pronta."
+
+[backup]
+hint = "Gera um pg_dump na hora e baixa pelo navegador, sem abrir porta."
+download = "Baixar backup"
+title = "Backup"
+format = "Arquivo .dump (formato custom do pg_restore)"
+
+[backup.error]
+not_ready = "Configure o kit de recuperação (confirmado) e um destino em Backups primeiro."
+busy = "Já há um backup ou restauração deste serviço em andamento. Tente de novo em instantes."
+label = "Dê um nome à chave (até 60 caracteres)."
+public_key = "Chave pública inválida. Gere o kit de novo nesta página."
+key_exists = "Esta chave já está registrada."
+code = "O código não confere com esta chave. Use o kit gerado para ela."
+last_key = "Esta é a única chave confirmada: gere e confirme outra antes de removê-la."
+endpoint = "Endpoint inválido ou interno. Use o endereço https do provedor."
+target_name = "Dê um nome ao destino (letras, números, espaços; até 60)."
+bucket = "Nome de bucket inválido (3 a 63 letras minúsculas, números, ponto ou hífen)."
+region = "Região inválida."
+prefix = "Pasta inválida: use letras minúsculas, números, ponto, hífen e barras."
+credentials = "Informe access key e secret key."
+lock_mode = "Escolha o modo da trava."
+lock_days = "Dias de trava entre 1 e 3650."
+no_object_lock = "O bucket não aceitou a trava (Object Lock). Crie um bucket com Object Lock ligado."
+cannot_write = "A credencial não consegue gravar neste bucket."
+cannot_read = "A credencial grava mas não consegue ler de volta: {error}"
+can_delete = "A credencial consegue apagar arquivos (delete). Crie uma chave só de gravar e ler: é ela que protege os backups de ransomware."
+unreachable = "Não deu para falar com o bucket: {error}"
+schedule = "Agenda inválida."
+kit = "Selecione o arquivo hangar-kit.txt."
+kit_passphrase = "O kit é protegido: informe a frase-senha certa."
+wrong_key = "Este kit não abre os backups deste serviço."
+when = "Escolha um momento no passado."
+no_base = "Não há base anterior a esse momento. Escolha um momento mais recente ou um pg_dump."
+point = "Escolha o ponto e o destino da restauração."
+unsupported = "Este serviço não tem backup para baixar."
+not_running = "O serviço precisa estar rodando para gerar o backup."
+
+[port]
+title_plural = "Portas publicadas"
+title = "Portas"
+empty = "Nenhuma porta publicada. Serviços do projeto já se enxergam pela rede interna, sem porta."
+host_port = "Porta no servidor"
+container_port = "Porta do container"
+protocol = "Protocolo"
+access_label = "Quem pode acessar"
+ips = "IPs liberados"
+ips_placeholder = "200.1.2.3, 10.0.0.0/24"
+expires = "Fecha sozinha"
+expires_never = "Nunca"
+expires_1h = "Em 1 hora"
+expires_24h = "Em 24 horas"
+expires_7d = "Em 7 dias"
+open = "Abrir porta"
+close = "Fechar"
+close_named = "Fechar a porta {port}"
+hint = "O site já responde pelos domínios (80 e 443). Abra uma porta só para acesso direto, de preferência limitada por IP e com prazo."
+database_warning = "Banco exposto para qualquer IP vira alvo de varredura em minutos: prefira \"Somente estes IPs\" ou \"Só localhost\" com túnel SSH."
+ssh_target = "usuario@servidor"
+ssh_command = "ssh -L {port}:127.0.0.1:{port} {target}"
+your_ip = "Seu IP agora: {ip}"
+recreate = "Abrir a porta recria o container: alguns segundos fora do ar."
+any_warning = "Qualquer IP da internet vai alcançar esta porta. Porta aberta para todos é varrida por robôs em minutos: só use se o serviço tiver senha forte, e prefira um prazo curto."
+localhost_hint = "Só o próprio servidor alcança a porta. Do seu computador, use um túnel SSH: ssh -L <porta>:127.0.0.1:<porta> {target}."
+
+[port.access]
+any = "Qualquer IP"
+ips = "Somente estes IPs"
+localhost = "Só este servidor (localhost)"
+
+[port.error]
+host_port = "Porta do servidor inválida."
+container_port = "Porta do container inválida."
+reserved = "A porta {port} é usada pelo próprio servidor (SSH, HTTP, HTTPS ou o painel)."
+protocol = "Protocolo inválido."
+access = "Escolha quem pode acessar."
+expires = "Prazo inválido."
+no_firewall = "O firewall não está disponível; use \"Só localhost\"."
+ip = "IP inválido: \"{value}\"."
+ips_count = "Informe de 1 a 64 IPs ou redes."
+in_use = "A porta {port} já está em uso por outro serviço."
+firewall = "Não foi possível gravar as regras do firewall: {error}"
+
+[ports]
+page_title = "Portas abertas · Hangar"
+title = "Portas abertas no servidor"
+hint = "Toda porta publicada aparece aqui, com quem pode acessar, para nenhuma ficar esquecida aberta."
+empty = "Nenhuma porta aberta."
+firewall_pending = "As regras de IP ainda estão sendo aplicadas pelo servidor."
+firewall_error = "O servidor não conseguiu aplicar as regras de IP: {error}"
+count = { one = "1 porta", other = "{n} portas" }
+firewall_ok = "Regras de IP aplicadas"
+firewall_ok_text = "O firewall do Hangar está na frente do Docker desde o boot. Última aplicação: {when}."
+service = "Serviço"
+opened_by = "Aberta por"
+system = "sistema"
+
+[account.totp]
+title = "Verificação em duas etapas (2FA)"
+on = "Ativada"
+off = "Desativada"
+why = "Com 2FA, uma senha vazada não basta para entrar: também é preciso o código do celular. Recomendado para qualquer painel em produção."
+step_scan = "Escaneie o QR code com o app autenticador (Google Authenticator, 1Password, Authy…)."
+qr_alt = "QR code para cadastrar o Hangar no app autenticador"
+manual = "Sem câmera? Digite a chave no app:"
+step_code = "Código de 6 dígitos que o app mostra"
+enable = "Ativar 2FA"
+enabled = "2FA ativada. Guarde os códigos de recuperação abaixo."
+recovery_intro = "Códigos de recuperação: cada um vale uma vez, para entrar se você perder o celular. Guarde fora do computador; eles não aparecem de novo."
+disable_label = "Código atual do app (ou um código de recuperação)"
+disable_hint = "Sem 2FA, o login pede só a senha."
+disable = "Desativar 2FA"
+disabled = "2FA desativada."
+required = "Este servidor exige 2FA para todas as contas (require_2fa no hangar.toml)."
+
+[account.totp.error]
+code = "Código inválido. Confira o horário do celular e tente o código seguinte."
+already_on = "A 2FA já está ativada."
+required = "Este servidor exige 2FA; ela não pode ser desativada."
+
+
+[tucano]
+show = "Mostrar"
+hide = "Ocultar"
+invalid = "Valor inválido"
+close = "Fechar"
+confirm = "Confirmar"
+cancel = "Cancelar"
+
+[deploy]
+log = "Log do deploy"
+rollback = "Voltar para esta versão"
+rollback_short = "Voltar"
+rebuild = "Reconstruir do zero"
+rebuild_hint = "Faz o build de novo sem cache e baixa de novo as imagens base"
+
+[deploy.phase]
+clone = "baixando o código"
+build = "fazendo build"
+pull = "baixando imagem"
+predeploy = "pré-deploy"
+start = "subindo"
+health = "esperando ficar saudável"
+validate = "validando"
+switch = "trocando"
+restore = "voltando a versão anterior"
+
+[deploy.error]
+command = "Comando inválido (aspas sem fechar ou longo demais)."
+health_path = "O caminho do healthcheck começa com / e não tem espaços (ex.: /healthz)."
+rollback = "Só dá para voltar para um dos últimos 5 deploys que ficaram ativos (e não o atual)."
+validate_timeout = "O tempo limite da validação vai de 1 a {max} minutos."
+
+[deploy.strategy]
+rolling_hint = "A versão nova sobe ao lado da antiga e só assume depois de passar no healthcheck. Se falhar, a antiga continua rodando."
+recreate_hint = "Este serviço tem volume ou porta publicada: dois ao mesmo tempo corromperiam os dados ou brigariam pela porta, então o deploy para o antigo antes de subir o novo (alguns segundos fora do ar)."
+
+[deploy.settings]
+validate = "Comando de validação"
+validate_placeholder = "python manage.py check --deploy"
+validate_timeout = "Limite (min)"
+validate_hint = "Opcional. Roda dentro da versão nova depois que ela fica saudável e antes de ir ao ar; se falhar, nada muda e a versão atual continua."
+title = "Deploy"
+predeploy = "Comando pré-deploy"
+predeploy_placeholder = "python manage.py migrate --noinput"
+predeploy_hint = "Roda uma vez, com a imagem nova, antes da troca. Se falhar, o deploy para e a versão atual continua."
+health_path = "Caminho do healthcheck"
+health_placeholder = "/healthz"
+health_hint = "GET nesse caminho tem que responder abaixo de 400. Vazio: usa o healthcheck da imagem ou testa a porta."
+next_deploy = "Vale a partir do próximo deploy."
+save = "Salvar"
+
+[overview]
+vuln_critical = { one = "1 vulnerabilidade crítica com correção disponível", other = "{n} vulnerabilidades críticas com correção disponível" }
+vuln_security = { one = "1 vulnerabilidade de segurança pendente", other = "{n} vulnerabilidades de segurança pendentes" }
+see_updates = "Ver atualizações"
+page_title = "Visão geral · Hangar"
+title = "Visão geral"
+period = "Período"
+memory = "Memória"
+disk = "Disco"
+network = "Rede"
+now = "agora"
+top = "Quem está consumindo mais"
+service = "Serviço"
+state = "Estado"
+activity = "Atividade"
+cpus = "{n} vCPU"
+disk_note = "{used} de {total}"
+disk_images = "Imagens"
+disk_volumes = "Volumes"
+disk_containers = "Containers"
+disk_other = "Sistema e outros"
+disk_used = "Em uso"
+disk_free = "Livre"
+net_peak = "pico ↓{down} ↑{up} {unit} no período"
+uptime_days = { one = "ativo há 1 dia", other = "ativo há {n} dias" }
+uptime_hours = { one = "ativo há 1 h", other = "ativo há {n} h" }
+no_services = "Nenhum container do Hangar rodando agora."
+orphan = "fora do painel"
+orphan_hint = "Container de um serviço que não existe mais no painel. Ele continua no Docker até ser removido."
+activity_empty = "Nada aconteceu ainda: deploys, reinícios, portas abertas e logins aparecem aqui."
+
+[period]
+1h = "1 h"
+24h = "24 h"
+7d = "7 d"
+90d = "90 d"
+
+[time]
+just_now = "agora há pouco"
+minutes_ago = { one = "há 1 min", other = "há {n} min" }
+hours_ago = { one = "há 1 h", other = "há {n} h" }
+days_ago = { one = "há 1 dia", other = "há {n} dias" }
+
+[activity]
+deploy = "Deploy de {service} no ar"
+deploy_failed = "Deploy de {service} falhou"
+rollback = "{service} voltou para uma versão anterior"
+start = "{service} iniciado"
+stop = "{service} parado"
+restart = "{service} reiniciado"
+service_create = "Serviço {service} criado"
+service_delete = "Serviço {service} apagado"
+drift = "{service} está diferente do que o painel espera"
+project_create = "Projeto {project} criado"
+project_delete = "Projeto {project} apagado"
+port_open = "Porta {port} aberta em {service}"
+port_close = "Porta {port} fechada em {service}"
+domain_add = "Domínio {domain} adicionado"
+domain_remove = "Domínio {domain} removido"
+login = "Login no painel"
+locked = "Conta bloqueada por tentativas de senha erradas"
+update_ok = "Hangar atualizado para {version}"
+update_rolled_back = "Atualização para {version} desfeita"
+update_failed = "Atualização para {version} falhou"
+
+[activity.drift_kind]
+orphan = "{service}: container de um serviço que não existe mais no painel"
+stopped = "{service} deveria estar rodando e está parado"
+missing = "{service}: o container sumiu do Docker"
+
+[confirm.logout]
+title = "Sair da conta?"
+text = "Você vai precisar entrar de novo com senha (e 2FA, se tiver)."
+ok = "Sair"
+
+[confirm.session_end]
+title = "Encerrar esta sessão?"
+text = "O dispositivo sai do painel na hora."
+ok = "Encerrar"
+
+[confirm.totp_disable]
+title = "Desativar a 2FA?"
+text = "Uma senha vazada passa a bastar para entrar no painel."
+ok = "Desativar"
+
+[confirm.block]
+title = "Bloquear este domínio?"
+text = "Ele deixa de receber certificado até ser desbloqueado."
+ok = "Bloquear"
+
+[confirm.unblock]
+title = "Desbloquear este domínio?"
+text = "Ele volta a poder pedir certificado, se a app aprovar."
+ok = "Desbloquear"
+
+[confirm.port_close]
+title = "Fechar esta porta?"
+text = "Quem acessa de fora por ela perde a conexão."
+ok = "Fechar porta"
+
+[confirm.env_delete]
+title = "Apagar esta variável?"
+text = "Entra como alteração pendente e vale no próximo deploy."
+ok = "Apagar"
+
+[confirm.domain_delete]
+title = "Remover este domínio?"
+text = "O site deixa de responder por ele."
+ok = "Remover"
+
+[confirm.dynamic]
+title = "Mudar os domínios dos clientes?"
+text = "Isso muda quais domínios este serviço aceita."
+ok = "Confirmar"
+
+[confirm.rollback]
+title = "Voltar para esta versão?"
+text = "A imagem escolhida volta ao ar com as variáveis de hoje, sem derrubar o site."
+ok = "Voltar versão"
+
+[confirm.unlink]
+title = "Desconectar os projetos?"
+text = "Os serviços deixam de se enxergar pela rede."
+ok = "Desconectar"
+
+[confirm.restart]
+title = "Reiniciar o serviço?"
+text = "Ele fica fora por alguns segundos."
+ok = "Reiniciar"
+
+[confirm.stop]
+title = "Parar o serviço?"
+text = "Ele sai do ar até ser iniciado de novo."
+ok = "Parar"
+
+[canvas]
+tidy = "Organizar"
+tidy_hint = "Volta os cards para o arranjo automático"
+pista = "Pista"
+volume = "Volume de dados"
+summary = { one = "1 serviço · rede {network}", other = "{n} serviços · rede {network}" }
+settings = "Configurações"
+new_service = "Novo serviço"
+empty = "Nenhum serviço ainda. Comece por um template (Postgres, Redis) ou por uma imagem."
+label = "Serviços do projeto e as ligações entre eles"
+linked = "Projetos conectados: {projects}"
+internet = "Internet"
+domains = { one = "1 domínio", other = "{n} domínios" }
+customer_domains = "domínios dos clientes"
+deploying = "Deploy · {phase}"
+pending = "Alterações para aplicar"
+zoom = "Zoom do canvas"
+zoom_in = "Aproximar"
+zoom_out = "Afastar"
+zoom_reset = "Tamanho original"
+zoom_fit = "Ajustar à tela"
+pending_count = { one = "1 serviço com alterações pendentes", other = "{n} serviços com alterações pendentes" }
+pending_view = "Ver"
+broken_refs = { one = "Referência quebrada em {keys}: o próximo deploy vai falhar.", other = "{n} variáveis com referência quebrada ({keys}): o próximo deploy vai falhar." }
+
+[canvas.kind]
+app = "App"
+db = "Banco"
+cache = "Cache"
+
+[canvas.menu]
+rollback = "Voltar versão…"
+port = "Abrir porta…"
+delete = "Apagar serviço…"
+
+[canvas.connect]
+title = "Ligar {from} → {to}"
+pick = "Qual valor ele vai usar?"
+none = "Este serviço não exporta valores. Use as variáveis do serviço para ligar à mão."
+var = "Nome da variável"
+hint = "Entra como alteração pendente; vale no próximo deploy."
+save = "Ligar"
+
+[new_service]
+subtitle = "Um nome basta: o resto já vem com padrões seguros."
+tab_compose = "Compose"
+name = "Nome"
+address = "Endereço interno:"
+advanced = "Opções avançadas"
+advanced_hint = "porta, memória, CPU…"
+create = "Criar serviço"
+image_hint = "Com a versão (tag). Imagens públicas do Docker Hub, GHCR e outros registros."
+port_auto = "automática"
+port_expose = "EXPOSE do Dockerfile ou 8000"
+title = "Novo serviço em {project}"
+tab_template = "Template"
+tab_mine = "Meus repositórios"
+tab_image = "Imagem Docker"
+
+[project.danger]
+title = "Zona de perigo"
+hint = "Só dá para apagar um projeto sem serviços. Apagar exige confirmar sua identidade e digitar o nome."
+delete = "Apagar projeto"
+
+[service.tab]
+backups = "Backups"
+variables = "Variáveis"
+logs = "Logs"
+metrics = "Métricas"
+settings = "Configurações"
+overview = "Visão"
+network = "Rede"
+
+[service.metrics]
+stopped = "O serviço não está rodando: sem valores agora, só o histórico."
+hint = "CPU conta como o docker stats: 1 CPU = um núcleo inteiro. A memória não inclui o cache de arquivos que o sistema devolve quando precisa."
+cpu_limit = "limite {cpus} CPU"
+mem_limit = "limite {limit}"
+cores = "{n} CPU"
+cpu_of = "{pct}% de {cpus} CPU"
+mem_of = "{pct}% de {limit}"
+disk_note = "em volumes"
+disk_none = "sem volume"
+disk_pending = "medindo…"
+
+[menu]
+enable_2fa = "Ativar 2FA"
+recommended = "recomendado"
+alerts = "Alertas"
+alerts_none = "Nenhum alerta"
+alerts_unread = "Alertas: há novos"
+alerts_recent = "Alertas recentes"
+alerts_read = "Marcar como lidos"
+alerts_all = "Ver todos os alertas"
+lock = "Trancar painel"
+hello = "Olá,"
+open = "Abrir o menu da conta"
+
+[account.sessions]
+title = "Sessões abertas"
+device = "Dispositivo"
+last = "Último uso"
+this = "esta"
+end = "Encerrar"
+ended = "Sessão encerrada."
+
+[domains.stat]
+certified = "Com certificado"
+certified_sub = "domínios aprovados pela app"
+new = "Novos nesta hora"
+new_sub = "teto por hora; renovações não contam"
+denied = "Negados nas últimas 24 h"
+denied_sub = "quase sempre varredura automática"
+
+
+[confirm.deploy]
+title = "Fazer deploy de {service}?"
+text = "Sai uma versão nova com as alterações pendentes, sem derrubar o site."
+ok = "Fazer deploy"
+
+[palette]
+title = "Buscar ou executar"
+open = "Abrir a busca de páginas, projetos e ações"
+placeholder = "Buscar páginas, projetos, serviços ou ações…"
+results = "Resultados"
+loading = "Carregando…"
+error = "Não deu para carregar a lista. Feche e abra de novo."
+hint_move = "navegar"
+hint_run = "abrir"
+hint_close = "fechar"
+service_tab = "{service} › {tab}"
+new_service = "Novo serviço em {project}"
+deploy = "Fazer deploy de {service}"
+restart = "Reiniciar {service}"
+theme = "Trocar tema: {theme}"
+empty = "Nada encontrado para essa busca."
+
+[palette.group]
+pages = "Páginas"
+projects = "Projetos"
+services = "Serviços"
+actions = "Ações"
+
+[pista]
+page_title = "Catálogo do Pista · Hangar"
+title = "Catálogo do Pista"
+subtitle = "Tokens e componentes do painel, do jeito que são usados"
+colors = "Cores"
+colors_hint = "Cada amostra é pintada pela classe do Tailwind que aponta para o token. Os dois temas lado a lado."
+typography = "Tipografia"
+sample = "O hangar abriga, a pista é por onde tudo sai."
+buttons = "Botões"
+sizes = "Tamanhos"
+icon_button = "Botão só com ícone"
+badges = "Etiquetas"
+alerts = "Avisos"
+forms = "Campos"
+feedback = "Confirmações e toasts"
+feedback_hint = "Os botões só abrem o exemplo: nada é enviado nem alterado."
+dialogs = "Diálogo de confirmação"
+toasts = "Toasts"
+tables = "Tabela"
+tables_hint = "Cabeçalho compacto, linhas com mais respiro"
+open = "Abrir"
+cards = "Cartão e estado vazio"
+card_text = "Borda de 1 px, raio de 4 px e o cabeçalho separado por uma linha."
+empty = "Nenhum serviço ainda. Comece por um template ou por uma imagem."
+empty_action = "Criar o primeiro"
+status = "Indicadores de estado"
+status_hint = "Estado nunca só por cor: quadradinho e texto."
+canvas = "Cartões do canvas"
+
+[pista.btn]
+primary = "Primário"
+outline = "Secundário"
+ghost = "Fantasma"
+danger = "Perigo"
+success = "Iniciar"
+disabled = "Desativado"
+
+[pista.size]
+sm = "Pequeno"
+md = "Padrão"
+lg = "Grande"
+
+[pista.tone]
+default = "Padrão"
+info = "Informação"
+success = "Sucesso"
+warning = "Atenção"
+danger = "Perigo"
+
+[pista.alert]
+info = "Deploy em andamento. O log aparece aqui assim que começar."
+success = "Backup concluído e conferido."
+warning = "A porta 5433 está aberta para qualquer IP."
+danger = "O healthcheck não respondeu em 120 s. Veja o log do deploy."
+
+[pista.toast]
+info = "Deploy iniciado."
+success = "Variável salva."
+warning = "Serviço reiniciando."
+danger = "Não foi possível conectar ao Docker."
+
+[pista.field]
+name = "Nome do serviço"
+name_placeholder = "web"
+name_hint = "Letras minúsculas, números e hífen."
+search = "Busca"
+select = "Protocolo"
+invalid = "Campo com erro"
+error = "Este campo é obrigatório."
+switch = "Aceitar domínios dos clientes"
+check = "Guardar como segredo"
+view = "Visão do projeto"
+
+[pista.view]
+canvas = "Canvas"
+list = "Lista"
+
+[pista.confirm]
+title = "Confirmar esta ação?"
+text = "Exemplo do catálogo: nada acontece ao confirmar."
+ok = "Confirmar"
+
+[pista.col]
+service = "Serviço"
+image = "Imagem"
+port = "Porta"
+state = "Estado"
+updated = "Atualizado"
+
+[deps]
+page_title = "Atualizações · Hangar"
+title = "Atualizações e vulnerabilidades"
+never = "nenhuma verificação ainda"
+last_run = "última verificação: {when}"
+last_run_partial = "última verificação: {when} · com partes que não puderam ser lidas"
+scan_now = "Verificar agora"
+scanning = "Verificando…"
+pending = "Pendências"
+show_all = "Mostrar tudo"
+empty = "Nada pendente: tudo o que roda está sem vulnerabilidade conhecida e na versão mais nova."
+never_scanned = "Nenhuma verificação ainda. A verificação roda todo dia às 06:00, ou clique em Verificar agora."
+copy = "Copiar"
+ignored_count = { one = "1 item ignorado não aparece na lista.", other = "{n} itens ignorados não aparecem na lista." }
+ignores = "Ignorados"
+unignore = "Voltar a avisar"
+problems = "Não foi possível ler tudo"
+problems_hint = "Nestes serviços o inventário ficou incompleto (imagem sem find/cat, container parado ou registro fora do ar). O que foi lido continua sendo verificado."
+
+[deps.col]
+level = "Nível"
+where = "Onde"
+package = "Pacote"
+version = "Versão"
+advisory = "Aviso"
+action = "O que fazer"
+until = "Até"
+reason = "Motivo"
+
+[deps.level]
+critical = "Crítico"
+security = "Segurança"
+minor = "Patch/minor"
+major = "Major"
+
+[deps.level_hint]
+critical = "CVE crítica/alta com correção: avisa na hora"
+security = "Outras CVEs: resumo diário"
+minor = "Versão nova compatível: resumo semanal"
+major = "Versão major, pode quebrar: resumo semanal"
+
+[deps.severity]
+critical = "gravidade crítica"
+high = "gravidade alta"
+medium = "gravidade média"
+low = "gravidade baixa"
+unknown = "gravidade não informada"
+none = "sem gravidade"
+
+[deps.kind]
+vuln = "Vulnerabilidade"
+patch = "Correção (patch)"
+minor = "Versão nova (minor)"
+major = "Versão major"
+
+[deps.target]
+edge = "servidor · Caddy"
+
+[deps.action]
+pypi = "Atualize no requirements.txt/pyproject e faça deploy:"
+npm = "Atualize o pacote e faça deploy:"
+composer = "Atualize o pacote e faça deploy:"
+os = "Pacote do sistema da imagem: reconstrua a imagem ou use uma tag mais nova da base (corrigido em {version})."
+image = "Troque a imagem e faça deploy:"
+image_major = "Versão major: leia o guia de migração e faça backup antes de trocar para"
+no_fix = "Ainda não há versão corrigida. Acompanhe o aviso."
+
+[deps.ignore]
+button = "Ignorar"
+title = "Ignorar {package}?"
+text = "O item sai da lista e dos avisos. O motivo fica no registro de auditoria."
+mode = "Por quanto tempo"
+days = "Por 30 dias"
+version = "Até sair uma versão mais nova que {version}"
+reason_placeholder = "Ex.: atualizo na janela de manutenção de sábado"
+until_version = "versão mais nova que {version}"
+until_date = "até {date}"
+
+[deps.flash]
+scan = "Verificação iniciada. A página atualiza sozinha."
+ignored = "Item ignorado."
+unignored = "O item volta a ser avisado."
+
+[deps.error]
+not_found = "Item não encontrado."
+reason = "Escreva o motivo (de 3 a 300 caracteres)."
+ignore_mode = "Escolha por quanto tempo ignorar."
+
+[deps.notice]
+critical = { one = "Hangar — vulnerabilidade crítica", other = "Hangar — {n} vulnerabilidades críticas" }
+daily = { one = "Hangar — resumo diário: 1 vulnerabilidade", other = "Hangar — resumo diário: {n} vulnerabilidades" }
+weekly = { one = "Hangar — resumo semanal: 1 atualização", other = "Hangar — resumo semanal: {n} atualizações" }
+no_fix = "sem correção ainda"
+
+[status]
+page_title = "Status do servidor"
+title = "Status do servidor"
+updated = "atualizado às {time}"
+all_ok = "Tudo funcionando"
+stopped = { one = "1 serviço parado", other = "{n} serviços parados" }
+degraded = { one = "1 serviço com problema", other = "{n} serviços com problema" }
+uptime = "Ligado há"
+alerts = "Alertas ativos"
+services = "Serviços"
+uptime_24h = "No ar (24 h)"
+tv = "Modo TV"
+footer = { one = "1 serviço neste link", other = "{n} serviços neste link" }
+generic_label = "Serviço {letter}"
+
+[status.state]
+running = "Rodando"
+degraded = "Com problema"
+stopped = "Parado"
+
+[statuslink]
+page_title = "Links de status · Hangar"
+title = "Links de status"
+subtitle = "páginas públicas, sem login, só com números e apelidos"
+new = "Novo link"
+create = "Criar link"
+list = "Links ativos"
+empty = "Nenhum link ainda. Crie um para ver o servidor do celular ou de um monitor na parede."
+created_title = "Link criado"
+created_text = "Copie agora: o endereço aparece só esta vez. Se perder, revogue e crie outro."
+url_page = "Página"
+url_tv = "Modo TV"
+copy = "Copiar"
+services_n = { one = "1 serviço", other = "{n} serviços" }
+ip_any = "qualquer IP"
+ip_only = "só {ips}"
+expired = "Expirado"
+expires_at = "expira {date}"
+never = "nunca expira"
+access_today = "{today} hoje · {total} no total"
+never_opened = "nunca aberto"
+revoke = "Revogar"
+revoke_named = "Revogar o link {name}"
+privacy = "A página pública nunca mostra nomes de container, imagens, versões, domínios nem IPs. Revogar responde 404 na hora."
+aliases = "Apelidos públicos"
+aliases_hint = "Como cada serviço aparece nos links no modo Apelido. Sem apelido, ele aparece como \"Serviço A\", \"Serviço B\"…"
+alias_placeholder = "Ex.: Loja principal"
+alias_for = "Apelido de {service}"
+save = "Salvar"
+no_services = "Nenhum serviço ainda."
+services = "Serviços que aparecem"
+name_placeholder = "Ex.: Monitor de casa"
+name_hint = "Só você vê este nome, no painel."
+naming_hint = "Apelido: o nome público de cada serviço. Genérico: \"Serviço A\", \"Serviço B\". Oculto: só os totais do servidor."
+ips = "Restringir por IP (opcional)"
+ips_hint = "Endereços ou faixas separados por vírgula. Vazio = qualquer IP. Outros IPs recebem 404."
+
+[statuslink.col]
+name = "Nome"
+naming = "Nomes"
+restriction = "Acesso"
+expires = "Expiração"
+access = "Acessos"
+last = "Último acesso"
+alias = "Apelido público"
+
+[statuslink.naming]
+alias = "Apelido"
+generic = "Genérico"
+hidden = "Oculto"
+
+[statuslink.expiry]
+never = "Nunca"
+24h = "24 horas"
+7d = "7 dias"
+30d = "30 dias"
+
+[statuslink.flash]
+revoked = "Link revogado: o endereço agora responde 404."
+alias = "Apelido salvo."
+
+[statuslink.error]
+name = "Dê um nome ao link (até 60 caracteres)."
+naming = "Escolha como os serviços aparecem."
+expiry = "Escolha uma expiração válida."
+cidr = "IP ou faixa inválida (use 189.10.20.30 ou 189.10.20.0/24; no máximo 20)."
+services = "Serviço desconhecido na seleção."
+alias = "O apelido pode ter até 40 caracteres."
+not_found = "Link não encontrado ou já revogado."
+
+[confirm.revoke_link]
+title = "Revogar este link?"
+text = "Quem tiver o endereço passa a receber 404 na hora. Não dá para desfazer: para voltar, crie outro link."
+ok = "Revogar"
+
+[confirm.unignore]
+title = "Voltar a avisar?"
+text = "Os itens deste pacote voltam para a lista e para os avisos."
+ok = "Voltar a avisar"
+
+[alert]
+resolved_title = "Normalizado · {title}"
+resolved_text = "A condição voltou ao normal."
+
+[alert.title]
+deps = "{title}"
+test = "Teste do Hangar"
+container_down = "Container fora do ar: {service}"
+restart_loop = "Container reiniciando em loop: {service}"
+oom = "Memória esgotada (OOM): {service}"
+service_memory = "Memória alta: {service}"
+host_cpu = "CPU do servidor alta"
+host_memory = "Memória do servidor alta"
+host_disk = "Disco do servidor quase cheio"
+login_new_ip = "Login de IP novo"
+login_failures = "Tentativas de login em série"
+account_locked = "Conta bloqueada"
+totp_disabled = "2FA desligada"
+sudo_action = "Ação sensível"
+user_created = "Usuário criado"
+port_public = "Porta aberta para qualquer IP"
+port_unknown = "Porta aberta fora do painel"
+channel_added = "Canal de alerta adicionado"
+update_applied = "Hangar atualizado"
+update_failed = "Atualização do Hangar desfeita"
+lockdown = "Painel trancado"
+lockdown_released = "Painel destrancado"
+deploy_failed = "Deploy falhou: {service}"
+
+[alert.text]
+deps = "{lines}\n\nDetalhes no painel: {path}"
+test = "Se você está lendo isto, o canal de alertas funciona."
+container_down = "O container {service} está parado há mais de 30 s sem que ninguém tenha pedido."
+restart_loop = "{service} reiniciou {count} vezes nos últimos {minutes} min."
+oom = "O container {service} foi encerrado por falta de memória. Aumente o limite ou procure um vazamento."
+service_memory = "{service} está usando {pct}% do limite de memória (alerta acima de {limit}%) há 5 min."
+host_cpu = "A CPU do servidor está em {pct}% (alerta acima de {limit}%) há 5 min."
+host_memory = "A memória do servidor está em {pct}% (alerta acima de {limit}%) há 5 min."
+host_disk = "O disco do servidor está {pct}% ocupado (alerta acima de {limit}%)."
+login_new_ip = "{user} entrou no painel a partir de {ip}, um endereço que essa conta nunca tinha usado."
+login_failures = "Muitas tentativas de login erradas a partir de {ip}. As próximas estão sendo atrasadas."
+account_locked = "A conta {user} foi bloqueada depois de 20 tentativas erradas (a última de {ip}). Desbloqueio só pelo servidor: hangard user unlock."
+totp_disabled = "A verificação em duas etapas da conta {user} foi desligada."
+sudo_action = "{user} {action}: {target}."
+user_created = "A conta {user} foi criada com o papel {role}."
+port_public = "{user} abriu a porta {port} de {service} para qualquer IP."
+port_unknown = "A porta {port} está aberta para a internet ({address}) e não foi aberta pelo Hangar. Confira no servidor: ss -ltnp"
+channel_added = "{user} adicionou o canal {channel}. Se não foi você, tranque o painel."
+update_applied = "O Hangar foi atualizado de {from} para {to}."
+update_failed = "A versão {to} não subiu e o Hangar voltou para {from}."
+lockdown = "Todas as sessões foram encerradas e o painel só responde pelo próprio servidor (túnel SSH). Os sites continuam no ar. Para destrancar: hangard lockdown off."
+lockdown_released = "O painel voltou a aceitar acessos normalmente."
+deploy_failed = "O deploy de {service} ({trigger}) falhou na etapa \"{phase}\": {reason}\n\n{previous}"
+
+[alert.previous]
+live = "A versão anterior continua no ar."
+restored = "A versão anterior voltou ao ar automaticamente."
+down = "O serviço ficou fora do ar: a versão anterior não voltou."
+none = "Não havia versão anterior no ar."
+
+[alert.action]
+backup_key_add = "adicionou uma chave de backup"
+backup_key_confirm = "confirmou uma chave de backup"
+backup_key_remove = "removeu uma chave de backup"
+backup_restore_start = "iniciou uma restauração de backup"
+backup_target_add = "adicionou um destino de backup"
+backup_target_remove = "removeu um destino de backup"
+backup_download_link = "gerou um link de download de backup"
+service_git_webhook = "mudou o deploy automático por Git"
+status_link_create = "criou um link público de status"
+brand_save = "mudou a marca das páginas de erro"
+service_volume_wipe = "apagou um disco e os dados"
+service_terminal_open = "abriu o terminal de um serviço"
+status_link_revoke = "revogou um link público de status"
+secret_reveal = "revelou um segredo"
+service_delete = "apagou um serviço"
+project_delete = "apagou um projeto"
+domain_dynamic_enable = "ligou os domínios dinâmicos"
+domain_dynamic_disable = "desligou os domínios dinâmicos"
+domain_dynamic_rotate_secret = "trocou o segredo da assinatura dos domínios"
+domain_add = "adicionou um domínio"
+domain_remove = "removeu um domínio"
+port_open = "abriu uma porta no servidor"
+service_endpoint_public = "colocou um serviço na internet"
+service_endpoint_sslip_on = "ligou o link automático de um serviço"
+project_link = "conectou dois projetos"
+service_backup_download = "baixou um backup"
+system_update_request = "pediu uma atualização do Hangar"
+alerts_channel_delete = "removeu um canal de alerta"
+alerts_channel_toggle = "pausou ou retomou um canal de alerta"
+
+[alerts]
+page_title = "Alertas · Hangar"
+title = "Alertas e notificações"
+muted_until = "Alertas do servidor silenciados até {time}"
+mute = "Silenciar"
+mute_for = "Silenciar por"
+mute_1h = "1 hora"
+mute_4h = "4 horas"
+mute_24h = "24 horas"
+unmute = "Reativar alertas"
+channels = "Canais"
+channels_hint = "Para onde os alertas vão. Alertas de segurança chegam em todos os canais ativos, qualquer que seja o nível escolhido."
+channels_empty = "Nenhum canal configurado: por enquanto os alertas ficam só aqui no painel."
+new_channel = "Novo canal"
+active = "Ativo"
+paused = "Pausado"
+test = "Testar"
+test_named = "Testar {name}"
+reveal = "Revelar segredo"
+reveal_named = "Revelar o segredo de {name}"
+pause = "Pausar"
+pause_named = "Pausar {name}"
+resume = "Retomar"
+resume_named = "Retomar {name}"
+delete = "Remover"
+delete_named = "Remover {name}"
+sudo_hint = "Confirme que é você para revelar, pausar ou remover"
+revealed = "Segredo de {name}"
+revealed_hint = "Copie agora: ao sair da página ele volta a ficar oculto."
+copy = "Copiar"
+rules = "Regras do servidor"
+rules_hint = "Valem para todos os serviços. Cada problema é avisado uma vez e de novo quando volta ao normal."
+threshold_for = "Limite de {rule}"
+unit_restarts = "reinícios em 5 min"
+save_rules = "Salvar regras"
+security = "Alertas de segurança"
+security_hint = "Sempre ligados: não podem ser desativados nem silenciados."
+security_badge = "segurança"
+history = "Histórico"
+history_empty = "Nenhum alerta até agora."
+muted = "silenciado"
+deliveries = "Entregas"
+deliveries_empty = "Nenhuma entrega ainda. Use \"Testar\" num canal para conferir."
+
+[alerts.repeats]
+one = "+{n} repetição"
+other = "+{n} repetições"
+
+[alerts.new]
+telegram = "Novo canal do Telegram"
+email = "Novo canal de e-mail"
+webhook = "Novo webhook"
+
+[alerts.kind]
+telegram = "Telegram"
+email = "E-mail"
+webhook = "Webhook"
+
+[alerts.receives]
+info = "Tudo"
+warning = "Avisos e críticos"
+critical = "Só críticos"
+
+[alerts.level]
+info = "info"
+warning = "aviso"
+critical = "crítico"
+
+[alerts.status]
+sent = "Enviado"
+failed = "Falhou"
+dropped = "Descartado"
+
+[alerts.channel]
+name = "Canal"
+target = "Destino"
+receives = "Recebe"
+state = "Estado"
+
+[alerts.delivery]
+when = "Quando"
+channel = "Canal"
+alert = "Alerta"
+status = "Resultado"
+attempts = "Tentativas"
+error = "Erro"
+
+[alerts.rule]
+container_down = "Container caiu"
+restart_loop = "Loop de reinício"
+oom = "Memória esgotada (OOM)"
+service_memory = "Memória alta num serviço"
+host_cpu = "CPU do servidor alta"
+host_memory = "Memória do servidor alta"
+host_disk = "Disco do servidor"
+
+[alerts.rule_desc]
+container_down = "Parado por mais de 30 s sem ninguém ter pedido (deploys e paradas pelo painel não contam)."
+restart_loop = "Mais reinícios que o limite em 5 minutos."
+oom = "O Docker encerrou o container por falta de memória."
+service_memory = "Uso acima do limite do serviço por 5 minutos."
+host_cpu = "Uso acima do limite por 5 minutos."
+host_memory = "Uso acima do limite por 5 minutos."
+host_disk = "Ocupação do disco de dados acima do limite."
+
+[alerts.form]
+name = "Nome"
+receives = "Recebe"
+bot_token = "Token do bot"
+bot_token_hint = "No Telegram, fale com o @BotFather, crie um bot e cole aqui o token. Fica cifrado no servidor."
+chat_id = "Chat ID"
+chat_id_hint = "Mande uma mensagem para o bot e veja o id em getUpdates, ou use @nome_do_canal."
+host = "Servidor SMTP"
+port = "Porta"
+security = "Conexão"
+security_starttls = "STARTTLS (porta 587)"
+security_tls = "TLS direto (porta 465)"
+security_hint = "Sempre cifrada: servidor sem TLS é recusado."
+username = "Usuário"
+password = "Senha"
+from = "Remetente"
+to = "Destinatários"
+to_hint = "Até 5 endereços, separados por vírgula."
+url = "URL"
+url_hint = "Só HTTPS e endereço público. Recebe um JSON assinado."
+secret = "Segredo de assinatura"
+secret_hint = "Vazio: o Hangar gera um. Cabeçalho X-Hangar-Signature = sha256=HMAC(segredo, timestamp.corpo)."
+submit = "Adicionar canal"
+
+[alerts.flash]
+channel-added = "Canal adicionado. Use \"Testar\" para conferir."
+channel-deleted = "Canal removido."
+channel-paused = "Canal pausado."
+channel-resumed = "Canal retomado."
+tested = "Mensagem de teste enviada."
+rules = "Regras salvas."
+muted = "Alertas do servidor silenciados."
+unmuted = "Alertas do servidor reativados."
+
+[alerts.error]
+channel_not_found = "Canal não encontrado."
+name = "Dê um nome de até 60 caracteres ao canal."
+severity = "Escolha o que o canal recebe."
+kind = "Tipo de canal desconhecido."
+bot_token = "Token do bot inválido (formato 123456:ABC…)."
+chat_id = "Chat ID inválido: use o número (ex.: -100123) ou @nome_do_canal."
+smtp_host = "Servidor SMTP inválido."
+smtp_port = "Porta SMTP inválida."
+smtp_security = "Escolha STARTTLS ou TLS direto."
+smtp_auth = "Usuário ou senha SMTP inválidos."
+from = "Remetente inválido."
+to = "Informe de 1 a 5 destinatários válidos."
+webhook_url = "URL inválida: use https:// sem usuário e senha."
+webhook_private = "O webhook precisa apontar para um endereço público."
+webhook_secret = "O segredo precisa ter de 16 a 256 caracteres."
+test_failed = "O teste falhou: {error}"
+rule = "Regra inválida."
+threshold = "Limite fora da faixa ({min}–{max})."
+mute = "Silêncio inválido (no máximo 24 horas)."
+
+[lock]
+banner = "Painel trancado: só responde pelo próprio servidor (túnel SSH). Os sites continuam no ar."
+banner_cli = "Para destrancar, no servidor:"
+login_notice = "O painel está trancado e todas as sessões foram encerradas. Para destrancar, no servidor: hangard lockdown off."
+refused = "Painel trancado. Acesse pelo próprio servidor (túnel SSH)."
+
+[confirm.lock]
+title = "Trancar o painel?"
+text = "Todas as sessões caem, inclusive a sua, e o painel passa a responder só pelo próprio servidor (túnel SSH). Os sites e containers continuam no ar. Destrancar só pela linha de comando no servidor."
+ok = "Trancar agora"
+
+[confirm.channel_delete]
+title = "Remover o canal?"
+text = "{name} deixa de receber alertas. Os outros canais são avisados da remoção."
+ok = "Remover"
+
+[cli.lockdown]
+usage = """
+Uso: hangard lockdown [on|off|status] [-config caminho]
+
+  on (padrão)  tranca o painel: encerra todas as sessões; só o próprio servidor acessa
+  off          destranca
+  status       diz se está trancado
+"""
+locked = "Painel trancado. Sessões encerradas: {n}. Os containers continuam rodando."
+unlocked = "Painel destrancado."
+status_locked = "Trancado desde {time}."
+status_unlocked = "Destrancado."
+
+[git.error]
+url = "Endereço do repositório inválido. Use HTTPS, sem usuário nem senha no endereço (ex.: https://github.com/dono/repositorio)."
+blocked_host = "Esse endereço aponta para a rede interna e foi bloqueado (proteção contra SSRF)."
+branch = "Nome de branch inválido."
+path = "Caminho inválido: use um caminho relativo dentro do repositório, sem “..”."
+access = "Não deu para ler o repositório: confira o endereço e o token (ele precisa de permissão de leitura do conteúdo)."
+branch_missing = "Esse branch não existe no repositório."
+empty = "O repositório está vazio."
+token = "Token inválido: cole só o token, sem espaços."
+unreachable = "Não deu para falar com o servidor Git: {error}"
+no_builder = "Este servidor não consegue fazer build (Docker sem BuildKit ou sem a pasta de builds)."
+subdir = "A pasta {dir} não existe no repositório."
+build_timeout = "O build passou de {minutes} minutos e foi interrompido."
+
+[git]
+title = "Repositório"
+edit = "Editar"
+edit_title = "Repositório do serviço"
+copy = "Copiar {what}"
+repo = "Repositório (HTTPS)"
+repo_hint = "O endereço do GitHub, GitLab ou Gitea, como aparece no botão “Code” → HTTPS."
+branch = "Branch"
+subdir = "Pasta"
+subdir_placeholder = "raiz do repositório"
+subdir_root = "raiz do repositório"
+dockerfile = "Dockerfile"
+token = "Token de leitura"
+token_none = "Sem token (repositório público)"
+token_reveal = "Revelar"
+token_new = "Token novo"
+token_keep = "vazio mantém o token atual"
+token_save = "Testar e salvar"
+build_hint = "Cada deploy baixa o último commit do branch, faz o build com BuildKit e sobe a imagem com a mesma troca sem downtime. As variáveis do serviço não entram no build."
+repo_change_hint = "O acesso é testado antes de salvar. Trocar de repositório apaga o token salvo, a não ser que você informe um novo."
+
+[git.new]
+hint = "O Hangar clona o branch, faz o build do Dockerfile e sobe o serviço. Cada push pode virar um deploy automático depois (aba Configurações)."
+security = "O endereço só aceita HTTPS e servidores públicos. O token é testado antes de salvar, fica cifrado e é mascarado no log do build."
+submit = "Criar e fazer deploy"
+
+[git.webhook]
+title = "Deploy automático"
+on = "Ligado"
+off = "Desligado"
+hint = "A cada push no branch {branch}, o GitHub avisa o Hangar e o deploy começa sozinho. A assinatura (HMAC) é conferida, cada aviso só vale uma vez e pushes em outros branches são ignorados."
+not_public = "O GitHub precisa alcançar o painel: configure edge.hooks_hostname no hangar.toml (um domínio que aponte para este servidor). Só o caminho /hooks/git/ fica público."
+steps = "No GitHub: Settings → Webhooks → Add webhook, e cole:"
+url = "Payload URL"
+secret = "Secret"
+content_type = "Content type:"
+events = "Eventos: “Just the push event”."
+show = "Mostrar URL e segredo"
+enable = "Ligar deploy automático"
+rotate = "Gerar novo"
+disable = "Desligar"
+created = "Webhook pronto. Copie a URL e o segredo agora para o GitHub."
+
+
+[confirm.git_webhook_rotate]
+title = "Gerar uma URL nova?"
+text = "A URL e o segredo atuais param de funcionar na hora. Atualize o webhook no GitHub em seguida."
+ok = "Gerar nova"
+
+[confirm.git_webhook_off]
+title = "Desligar o deploy automático?"
+text = "Os avisos do GitHub passam a ser recusados. O botão Deploy continua funcionando."
+ok = "Desligar"
+
+# --- Backups (docs/09) -------------------------------------------------------
+
+[backups]
+page_title = "Backups · Hangar"
+title = "Backups"
+panel_now = "Backup do painel agora"
+target_add = "Adicionar destino"
+kit_generate = "Gerar kit de recuperação"
+sudo_label = "Código do app autenticador para mexer em chaves e destinos"
+status_running = "em andamento"
+
+[backups.status]
+ok = "tudo em dia"
+warning = "atenção"
+danger = "problema"
+setup = "configurar"
+
+[backups.setup]
+title = "Configurar backups"
+intro = "Os backups são cifrados para a sua chave pública e vão para um bucket com trava de imutabilidade. O servidor consegue trancar, mas não consegue abrir nem apagar."
+kit = "1. Kit de recuperação"
+kit_text = "Gere as chaves no navegador, baixe ou imprima o kit e confirme que guardou. Só a chave pública vem para o servidor."
+target = "2. Destino com Object Lock"
+target_text = "Um bucket S3 (B2, Wasabi, AWS, R2) com Object Lock e uma credencial que só grava e lê. O painel testa e recusa credencial que consegue apagar."
+services = "3. Ligar nos bancos"
+services_text = "Na aba Backups de cada Postgres: agenda diária e, se quiser voltar a qualquer minuto, o WAL contínuo."
+
+[backups.keys]
+title = "Kit de recuperação"
+hint = "Os backups abrem com qualquer uma das chaves confirmadas"
+empty = "Nenhuma chave ainda. Sem o kit, nenhum backup é feito."
+label = "Nome"
+public = "Chave pública"
+state = "Situação"
+created = "Criada em"
+confirmed = "confirmada"
+pending = "aguardando confirmação"
+delete = "Remover a chave {label}"
+confirm_file = "Selecione o hangar-kit.txt (lido só no navegador)"
+confirm_file_hint = "Ou digite o código de confirmação que está no kit."
+code = "Código de confirmação"
+confirm = "Confirmar que guardei"
+
+[backups.targets]
+title = "Destinos"
+hint = "Cada backup vai para todos os destinos"
+empty = "Nenhum destino. Os backups precisam de um bucket com Object Lock."
+name = "Nome"
+where = "Endpoint / bucket / pasta"
+lock = "Trava"
+lock_value = "{mode}, {days} dias"
+check = "Último teste"
+checked = "testado em {when}"
+failed = "falhou"
+primary = "principal"
+test = "Testar"
+delete = "Remover o destino {name}"
+
+[backups.services]
+title = "Serviços"
+service = "Serviço"
+schedule = "Agenda"
+last = "Último backup"
+wal = "WAL"
+size = "Tamanho"
+tested = "Testado"
+tested_yes = "testado"
+open = "Abrir"
+panel = "Painel Hangar"
+none = "Nenhum banco com backup automático ainda: crie um Postgres pelo template."
+off = "desligado"
+every = { one = "a cada {n} h, desde {at}", other = "a cada {n} h, desde {at}" }
+failed_at = "falhou {when}"
+
+[backups.wal]
+waiting = "aguardando"
+restart = "falta reiniciar"
+failing = "arquivamento falhando"
+late = { one = "atrasado (1 arquivo)", other = "atrasado ({n} arquivos)" }
+
+[backups.history]
+title = "Histórico"
+empty = "Nenhum backup feito ainda."
+when = "Quando"
+what = "O quê"
+kind = "Tipo"
+check = "Teste"
+result = "Resultado"
+counts = "{tables} tabelas, {rows} linhas"
+download = "Baixar (link assinado de 5 min)"
+
+[backups.kind]
+pg_dump = "pg_dump"
+pg_base = "base do WAL"
+panel = "painel"
+
+[backups.trigger]
+schedule = "agendado"
+manual = "manual"
+download = "download"
+pre_restore = "antes de restaurar"
+wal_start = "início do WAL"
+change = "mudança no painel"
+
+[backups.class]
+daily = "diário"
+weekly = "semanal"
+monthly = "mensal"
+
+[backups.run_status]
+running = "em andamento"
+ok = "ok"
+failed = "falhou"
+
+[backups.warning]
+shrank = "encolheu mais de 50%"
+grew = "cresceu mais de 3x"
+rows_dropped = "perdeu mais da metade das linhas"
+
+[backups.alert]
+stale = "{label}: nenhum backup com sucesso nas últimas 26 h."
+failed = "{label}: o último backup falhou ({error})."
+size = "{label}: o último backup {change}. Pode ser dado apagado ou cifrado por ransomware; confira."
+wal_lag = "{label}: o WAL está atrasado mais de 5 min. {error}"
+wal_restart = "{label}: o WAL contínuo foi ligado, mas o banco ainda não foi reiniciado (faça deploy)."
+wal_failing = "{label}: o Postgres não está conseguindo arquivar o WAL (disco cheio?)."
+target_error = "Destino {label}: o último teste falhou ({error})."
+
+[backups.rules]
+title = "Como preparar o bucket"
+intro = "A limpeza dos backups antigos é feita pelas regras de ciclo de vida do próprio bucket, por pasta, e não pelo servidor (que não tem permissão de apagar). Configure estas regras no provedor:"
+folder = "Pasta"
+what = "O que guarda"
+days = "Manter (dias)"
+credential_title = "Credencial do servidor: só gravar e ler"
+credential = "Crie uma chave de aplicação com permissão de gravar (inclusive a retenção do Object Lock), ler e listar. Nada de apagar arquivos ou versões, mudar ciclo de vida ou desligar a trava. O painel testa isso ao salvar o destino."
+cofre = "No seu computador, o hangar-cofre aplica as regras com a sua credencial de administrador (que nunca vem para o servidor):"
+
+[backups.rules.folders]
+diario = "pg_dump diários"
+semanal = "o primeiro pg_dump de cada semana"
+mensal = "o primeiro pg_dump de cada mês"
+wal = "WAL contínuo e bases (voltar a qualquer minuto)"
+painel = "o próprio painel, com a chave mestra"
+
+[kit]
+page_title = "Kit de recuperação · Hangar"
+title = "Kit de recuperação"
+subtitle = "as chaves são geradas no seu navegador"
+back = "Voltar para Backups"
+how_title = "A chave privada nunca sai deste navegador"
+how = "O painel só recebe a chave pública. Quem tiver o kit lê os backups; sem nenhuma chave, ninguém lê, nem você. Gere duas: a sua e uma reserva (com um sócio ou num cofre)."
+sudo_title = "Confirme que é você"
+step1 = "1. Gerar as chaves"
+label = "Nome desta chave"
+label_hint = "Só para você reconhecer, ex.: Junior, Reserva."
+default_label = "Principal"
+spare_label = "Reserva"
+generate = "Gerar chaves no navegador"
+step2 = "2. Guardar o kit"
+save_text = "Baixe o hangar-kit.txt e guarde fora do servidor (gerenciador de senhas, pendrive). Imprima também a versão em papel e guarde num lugar físico seguro."
+public = "Chave pública (vai para o painel)"
+download = "Baixar hangar-kit.txt"
+print = "Imprimir versão em papel"
+warning = "Depois de sair desta página a chave privada some. Se você não baixar nem imprimir, os backups feitos com esta chave não terão como ser abertos."
+step3 = "3. Registrar a chave pública"
+saved = "Guardei o kit em lugar seguro, fora do servidor."
+register_hint = "Depois de registrar, confirme na tela de Backups com o arquivo ou o código: só chaves confirmadas cifram backups."
+register = "Registrar chave pública"
+error_crypto = "Este navegador não gera chaves X25519 (WebCrypto). Use uma versão atual do Chrome, Firefox ou Safari."
+mismatch = "Este kit não é o desta chave."
+no_key = "Não achei uma chave privada neste arquivo."
+file_ok = "Kit conferido: código preenchido."
+qr_label = "QR code da chave privada"
+paper_title = "Hangar · Kit de recuperação"
+paper_text = "Guarde este papel num lugar físico seguro. Ele abre todos os backups do Hangar."
+file_text = """Hangar · Kit de recuperação
+Nome: {label}
+Gerado em: {date}
+Chave pública: {public}
+Código de confirmação: {code}
+
+Esta é a chave que abre os backups do seu Hangar. Guarde este arquivo
+FORA do servidor (gerenciador de senhas, pendrive, papel num cofre).
+Quem tiver este arquivo lê os backups; sem ele, ninguém lê, nem você.
+
+Abrir um backup no seu computador:
+  hangar-cofre decrypt arquivo.age -identity hangar-kit.txt
+  (ou: age -d -i hangar-kit.txt arquivo.age)
+Proteger este arquivo com uma frase-senha:
+  hangar-cofre kit protect hangar-kit.txt"""
+
+[target]
+page_title = "Novo destino · Backups · Hangar"
+title = "Novo destino de backup"
+subtitle = "bucket S3 com Object Lock"
+how_title = "O painel testa antes de salvar"
+how = "Ao salvar, o painel grava um arquivo de teste com trava, lê de volta e tenta apagar. Se a credencial conseguir apagar, ou o bucket não tiver Object Lock, o destino é recusado. Crie o bucket com Object Lock ligado (só dá para ligar na criação, em alguns provedores)."
+form_title = "Dados do bucket"
+name = "Nome"
+name_placeholder = "B2 principal"
+provider = "Provedor"
+endpoint = "Endpoint S3"
+endpoint_hint = "Só https. Endereços internos são recusados (anti-SSRF)."
+region = "Região"
+bucket = "Bucket"
+prefix = "Pasta no bucket"
+prefix_hint = "Opcional, para dividir um bucket entre servidores."
+access_key = "Access key"
+secret_key = "Secret key"
+credential_hint = "Credencial só de gravar e ler. Fica cifrada com a chave mestra."
+lock_mode = "Modo da trava"
+lock_compliance = "Compliance (ninguém apaga, nem o dono da conta)"
+lock_governance = "Governance (só uma permissão especial apaga)"
+lock_days = "Dias de trava"
+lock_days_hint = "Cada arquivo fica travado este tempo (no máximo o tempo da pasta)."
+path_style = "Bucket no caminho da URL"
+path_style_hint = "Necessário para MinIO e a maioria dos S3 compatíveis."
+save = "Testar e salvar"
+
+[target.providers]
+b2 = "Backblaze B2"
+wasabi = "Wasabi"
+aws = "AWS S3"
+r2 = "Cloudflare R2"
+custom = "Outro S3 compatível"
+
+[svcbackup]
+unsupported = "Backup automático existe para PostgreSQL. Volumes de apps entram numa próxima etapa."
+not_ready = "Os backups automáticos precisam do kit de recuperação confirmado e de um destino."
+open_backups = "Abrir Backups"
+policy = "Backup automático"
+on = "ligado"
+off = "desligado"
+run_now = "Fazer backup agora"
+enabled = "Fazer backup deste banco"
+enabled_hint = "pg_dump testado num Postgres descartável antes de ser enviado."
+every = "Frequência"
+every_hours = { one = "a cada hora", other = "a cada {n} horas" }
+at = "Primeiro horário do dia"
+wal = "WAL contínuo (voltar a qualquer minuto)"
+wal_hint = "Perda máxima de cerca de 1 minuto. Precisa reiniciar o banco (deploy) para valer."
+next = "Próximo: {when}"
+save = "Salvar"
+wal_title = "Recuperação até o minuto"
+window = "Dá para voltar a qualquer momento entre {from} e {to}."
+window_none = "Ainda não há base para voltar a um minuto. Ela é feita logo depois que o WAL começa a funcionar."
+last_base = "Última base: {when}"
+encrypted = "cifrado com o seu kit"
+download_hint = "Gera um pg_dump na hora, testa, cifra com a sua chave pública e entrega por um link de uso único (5 min)."
+download_format = "Arquivo .dump.age: abra com hangar-cofre decrypt ou age -d -i hangar-kit.txt."
+download_preparing = "Preparando: dump, teste e cifra…"
+download_ready = "Baixar ({size})"
+download_expires = "O link vale até {when} e funciona uma vez."
+download_failed = "O backup para baixar falhou: {error}"
+restore_title = "Restaurar"
+restore_sudo = "pede o kit"
+restore_point = "Ponto"
+mode_pitr = "Momento exato (WAL)"
+at_moment = "Data e hora"
+mode_dump = "Um pg_dump"
+mode_dump_hint = "Cópia completa de um dia, a mais portátil."
+dump_choice = "Backup"
+dump_label = "{when} · {class} · {size}"
+restore_dest = "Destino"
+dest_new = "Serviço novo"
+dest_new_hint = "Padrão: confira lá e depois troque a referência do app."
+new_name = "Nome do serviço novo"
+dest_overwrite = "Sobrescrever o atual"
+dest_overwrite_hint = "Faz um backup do estado atual antes. Se a restauração falhar, os dados voltam como estavam."
+confirm_name = "Para sobrescrever, digite {name}"
+kit = "Kit de recuperação"
+kit_hint = "A chave vai só nesta requisição, fica na memória durante a restauração e é descartada no fim."
+passphrase = "Frase-senha do kit"
+passphrase_hint = "Só se o kit foi protegido com hangar-cofre kit protect."
+restore = "Restaurar"
+history = "Backups deste serviço"
+restores = "Restaurações"
+restore_to = "até {when}"
+restore_from_dump = "de um pg_dump"
+
+[svcbackup.step]
+queued = "na fila"
+pre_backup = "fazendo backup do estado atual"
+create = "criando o serviço novo"
+deploy = "subindo o serviço"
+plan = "escolhendo base e WAL"
+stop = "parando o banco"
+stage = "baixando, conferindo e copiando os dados"
+recover = "aplicando o WAL até o momento escolhido"
+restore = "restaurando o dump"
+done = "concluído"
+
+[flash.backups]
+key-added = "Chave pública registrada. Agora confirme com o kit."
+key-confirmed = "Kit confirmado. Esta chave já cifra os backups."
+key-deleted = "Chave removida."
+target-added = "Destino testado e salvo: grava com trava e não consegue apagar."
+target-checked = "Destino testado: tudo certo."
+target-deleted = "Destino removido (o que está no bucket continua lá)."
+panel-queued = "Backup do painel na fila."
+
+[confirm.backup_key_delete]
+title = "Remover esta chave?"
+text = "Backups novos deixam de ser cifrados para ela. Os antigos continuam abrindo com o kit dela."
+ok = "Remover"
+
+[confirm.backup_target_delete]
+title = "Remover este destino?"
+text = "Os backups deixam de ir para lá. O que já está no bucket fica (e continua travado)."
+ok = "Remover"
+
+[confirm.restore]
+title = "Restaurar agora?"
+text = "Sobrescrever troca os dados do banco (depois de um backup do estado atual). Num serviço novo, nada muda no original."
+ok = "Restaurar"
+
+[cli.restore]
+flag_cofre = "cofre.toml com endpoint, bucket e kit (a mesma do hangar-cofre)"
+flag_endpoint = "endpoint S3 do bucket"
+flag_bucket = "bucket"
+flag_region = "região"
+flag_prefix = "pasta no bucket"
+flag_path_style = "bucket no caminho da URL (MinIO e a maioria dos S3 compatíveis)"
+flag_identity = "o kit de recuperação (hangar-kit.txt)"
+flag_at = "voltar até este momento, \"2026-10-15 14:32\" (padrão: o mais recente)"
+flag_force = "move o banco atual para o lado em vez de recusar"
+at = "Momento inválido: {value} (use \"2026-10-15 14:32\")."
+no_identity = "Informe o kit com -identity (ou identity no -cofre)."
+read_kit = "Não deu para ler o kit: {error}"
+kit = "Kit inválido: {error}"
+passphrase = "Frase-senha do kit: "
+no_bucket = "Informe o bucket (-cofre ou -endpoint/-bucket) e a credencial em HANGAR_RESTORE_ACCESS_KEY e HANGAR_RESTORE_SECRET_KEY."
+panel_running = "O painel está rodando. Pare antes: systemctl stop hangard"
+exists = "Este servidor já tem um banco do painel. Use -force para movê-lo para o lado (nada é apagado)."
+done = "Painel restaurado de {key} (feito em {when}, versão {version})."
+aside = "Guardado ao lado: {path}"
+config_copy = "Configuração antiga em {path}: compare com a atual (IPs e caminhos podem ter mudado)."
+next = """
+Próximos passos:
+  1. sudo -u hangar hangard restore databases -cofre cofre.toml
+     (traz cada Postgres até o último minuto e sobe os serviços)
+  2. systemctl start hangard
+  3. Aponte o DNS dos domínios para o IP novo.
+"""
+databases_done = "Bancos e serviços de volta. Agora: systemctl start hangard"
+databases_failed = "Alguns serviços não voltaram: {error}"
+
+[recover]
+database = "Restaurando {service}…"
+deploy = "Subindo {service}…"
+failed = "{service} falhou: {error}"
+
+[cofre]
+usage = """
+Uso: hangar-cofre <comando> [opções]
+
+Comandos:
+  init                           cria ~/.config/hangar-cofre/cofre.toml de exemplo
+  sync PASTA                     copia os backups novos do bucket para a pasta (nunca apaga)
+  list                           lista os backups (do bucket, ou de -from PASTA)
+  decrypt ARQUIVO [-o SAÍDA]     decifra um backup com o seu kit
+  restore-local PROJETO/SERVIÇO  sobe o banco no Docker local (-at "2026-10-15 14:32", -dump, -port)
+  test [PROJETO/SERVIÇO]         o simulado: restaura cada banco num Postgres local e confere
+  kit check ARQUIVO              mostra a chave pública e o código do kit
+  kit protect ARQUIVO            protege o kit com uma frase-senha
+  setup-bucket                   aplica as regras de ciclo de vida (credencial de admin em
+                                 HANGAR_COFRE_ADMIN_ACCESS_KEY / HANGAR_COFRE_ADMIN_SECRET_KEY)
+
+Opções comuns:
+  -config caminho     cofre.toml (padrão ~/.config/hangar-cofre/cofre.toml)
+  -identity caminho   o kit (hangar-kit.txt)
+  -from pasta         lê de uma pasta copiada pelo sync, sem internet
+"""
+flag_config = "arquivo cofre.toml"
+flag_identity = "o kit de recuperação (hangar-kit.txt)"
+flag_from = "lê os backups de uma pasta copiada pelo sync"
+flag_out = "arquivo de saída"
+flag_at = "voltar até este momento, \"2026-10-15 14:32\""
+flag_dump = "usar o pg_dump mais recente em vez do WAL"
+flag_port = "porta local (só 127.0.0.1)"
+init_done = "Configuração criada em {path}. Preencha o bucket e a credencial só leitura."
+passphrase_prompt = "Frase-senha do kit: "
+new_passphrase_prompt = "Nova frase-senha (mínimo 12 caracteres): "
+repeat_passphrase_prompt = "Repita a frase-senha: "
+kit_key = "Chave pública {public} · código {code}"
+kit_protected = "Kit protegido salvo em {path}. Teste com hangar-cofre kit check antes de apagar o original."
+decrypted = "Decifrado em {path} ({size})."
+synced = "{new} arquivos novos ({size}), {skipped} já estavam em {dir}."
+sync_file = "  ↓ {key}"
+list_empty = "Nenhum backup encontrado."
+list_dumps = "{label}: {n} backups, o mais recente em {latest}"
+list_wal = "WAL de {from} a {to}"
+no_wal_using_dump = "Sem base de WAL para esse momento: usando o pg_dump mais recente."
+staging = "Baixando a base {base} e {wal} arquivos de WAL…"
+recovering = "Aplicando o WAL até o momento escolhido…"
+restoring_dump = "Restaurando {key}…"
+testing = "Testando {label} ({key})…"
+restored_at = "{label} está no Docker local, como estava em {at}."
+restored_end = "{label} está no Docker local, até o último minuto disponível."
+restored_dump = "{label} está no Docker local, a partir de {key}."
+restored_connect = "Conecte: docker exec -it {container} psql -U {user} -d {db}  (ou 127.0.0.1:{port})"
+restored_password = "Senha deste banco local: {password}"
+restored_cleanup = "Para apagar quando terminar: docker rm -f -v {container} && docker volume rm {volume}"
+test_ok = "✓ {label}: {tables} tabelas, {rows} linhas restauradas ({took})"
+test_panel_ok = "✓ painel: banco, chave mestra e manifesto conferidos em {key} ({took})"
+test_failed = "✗ {label}: {error}"
+test_all_ok = "Simulado concluído: tudo abriu com o seu kit."
+rule = "regra: {prefix} → {days} dias"
+setup_done = "Bucket conferido (Object Lock ligado) e regras de ciclo de vida aplicadas."
+
+[cofre.error]
+config_exists = "{path} já existe."
+no_identity = "Informe o kit (-identity ou identity no cofre.toml)."
+read_kit = "Não deu para ler o kit {path}: {error}"
+kit = "Kit inválido: {error}"
+passphrase = "Frase-senha errada."
+passphrase_mismatch = "As frases-senha não conferem."
+passphrase_short = "A frase-senha precisa de pelo menos 12 caracteres."
+already_protected = "Este kit já está protegido."
+kit_usage = "Uso: hangar-cofre kit check|protect ARQUIVO"
+decrypt_usage = "Uso: hangar-cofre decrypt ARQUIVO [-o SAÍDA]"
+sync_usage = "Uso: hangar-cofre sync PASTA"
+restore_usage = "Uso: hangar-cofre restore-local PROJETO/SERVIÇO [-at \"2026-10-15 14:32\"]"
+wrong_key = "Este kit não abre este arquivo."
+no_bucket = "Configure o bucket e a credencial só leitura em {path} (ou HANGAR_COFRE_ACCESS_KEY / HANGAR_COFRE_SECRET_KEY)."
+at = "Momento inválido: {value} (use \"2026-10-15 14:32\")."
+test_failed = { one = "1 teste falhou.", other = "{n} testes falharam." }
+admin_credentials = "Informe endpoint e bucket no cofre.toml e a credencial de admin em HANGAR_COFRE_ADMIN_ACCESS_KEY / HANGAR_COFRE_ADMIN_SECRET_KEY."
+setup = "Não deu para preparar o bucket: {error}"
+
+[gitcred]
+page_title = "Credenciais Git · Hangar"
+title = "Credenciais Git"
+subtitle = "Tokens guardados uma vez e escolhidos pelos serviços que fazem build de repositório."
+new = "Nova credencial"
+list = "Credenciais"
+privacy = "O token fica cifrado e nunca é mostrado de novo. Para trocar, cole um novo: todos os serviços que usam a credencial passam a usar o novo no próximo deploy."
+empty = "Nenhuma credencial ainda. Guarde aqui o token do GitHub uma vez e escolha ele ao criar cada serviço."
+never_used = "nunca"
+replace = "Trocar token"
+replace_named = "Trocar o token de {name}"
+delete = "Apagar"
+delete_named = "Apagar {name}"
+token_hint = "Use um token fine-grained só de leitura: Contents = Read-only nos repositórios que o Hangar vai clonar."
+token_link = "Criar no GitHub"
+new_server_hint = "Vale para todos os projetos do servidor."
+new_project_hint = "Vale só para os serviços do projeto {project}."
+save = "Salvar credencial"
+replace_hint = { one = "1 serviço usa esta credencial e passa a clonar com o token novo no próximo deploy.", other = "{n} serviços usam esta credencial e passam a clonar com o token novo no próximo deploy." }
+project_title = "Credenciais Git do projeto"
+project_hint = { one = "Tokens que só os serviços deste projeto podem usar. Eles também podem usar 1 credencial do servidor.", other = "Tokens que só os serviços deste projeto podem usar. Eles também podem usar {n} credenciais do servidor." }
+server_link = "Ver credenciais do servidor"
+pick = "Credencial Git"
+pick_public = "Nenhuma: repositório público"
+pick_new = "Adicionar um token novo…"
+pick_hint = "As do projeto aparecem primeiro, depois as do servidor."
+own_token = "Token próprio deste serviço"
+own_token_hint = "Salvo antes das credenciais existirem. Troque por uma credencial para não ter que colar de novo em cada serviço."
+change = "Trocar credencial"
+change_hint = "O Hangar testa o acesso ao repositório antes de salvar. Vale a partir do próximo deploy."
+fail = "Não deu para falar com o GitHub agora. Tente de novo."
+
+[gitcred.col]
+name = "Nome"
+host = "Servidor Git"
+scope = "Vale para"
+token = "Token"
+uses = "Serviços"
+last_used = "Último uso"
+
+[gitcred.scope]
+server = "Servidor"
+server_long = "Todos os projetos"
+project = "Projeto {project}"
+this_project = "Este projeto"
+
+[gitcred.flash]
+created = "Credencial salva."
+replaced = "Token trocado. Os serviços usam o novo no próximo deploy."
+deleted = "Credencial apagada."
+
+[gitcred.error]
+name = "Dê um nome de até 60 caracteres para a credencial."
+host = "Servidor Git inválido. Use só o endereço, como github.com."
+name_taken = "Já existe uma credencial chamada {name} aqui."
+in_use = "Esta credencial está em uso por {services}. Troque a credencial desses serviços antes de apagar."
+gone = "A credencial escolhida não existe mais ou não vale para este projeto."
+host_mismatch = "A credencial {name} é para {host}, mas o repositório está em {repo}. Escolha outra credencial."
+token_empty = "Cole o token de acesso para validar a conta."
+token_invalid = "O GitHub recusou o token. Confira se ele tem leitura do conteúdo dos repositórios."
+github_unreachable = "Não deu para falar com o GitHub agora. Tente de novo."
+
+[confirm.git_cred_delete]
+title = "Apagar a credencial {name}?"
+text = "O token é apagado do Hangar. Ele continua válido no GitHub: revogue lá também se não for mais usar."
+ok = "Apagar"
+
+[brand]
+page_title = "Marca · Hangar"
+title = "Marca"
+subtitle = "páginas que os visitantes veem quando um site não responde"
+hint = "Essas páginas aparecem em qualquer site do servidor, no lugar de um erro em branco. Por padrão são genéricas: sem nome, logo nem contato. Preencha a identidade só se quiser que apareça em todas. Elas nunca mostram \"Hangar\", o IP do servidor nem nomes de containers."
+edge_off = "O proxy de domínios está desligado neste servidor. A marca fica salva e passa a valer quando ele for ligado."
+identity = "Identidade"
+optional = "opcional"
+name = "Nome que aparece"
+name_placeholder = "Vazio: as páginas ficam sem nome"
+logo_light = "Logo (tema claro)"
+logo_dark = "Logo (tema escuro)"
+logo_hint = "PNG, JPEG ou WebP até 200 KB. SVG não é aceito: ele pode carregar código e essas páginas abrem nos domínios dos sites."
+remove_logo = "Remover este logo"
+color = "Cor de destaque"
+color_hint = "Botões e barras de progresso."
+contact = "Contato de suporte"
+contact_placeholder = "E-mail, telefone ou link. Vazio: sem linha de contato"
+theme = "Tema das páginas"
+save = "Salvar"
+pages = "Páginas"
+pages_hint = "clique numa página para ver em tamanho real"
+open_full = "Abrir {page} em tamanho real"
+custom_text = "Texto próprio"
+default = "Padrão"
+edit = "Editar"
+view = "Ver"
+page_title_label = "Título"
+page_text_label = "Texto"
+reset = "Voltar ao padrão"
+
+[brand.themes]
+auto = "Do visitante"
+light = "Claro"
+dark = "Escuro"
+
+[brand.kind]
+down = "Fora do ar · 502"
+deploy = "Atualizando · deploy"
+timeout = "Tempo esgotado · 504"
+unknown = "Domínio não configurado"
+maint = "Manutenção"
+https = "Ativando HTTPS"
+
+[brand.when]
+down = "Aparece quando o site não responde e não há deploy em andamento. Recarrega sozinha a cada 10 segundos."
+deploy = "Aparece durante um deploy, um início ou um reinício do serviço. Recarrega sozinha."
+timeout = "Aparece quando o site leva mais de 100 segundos para começar a responder."
+unknown = "Aparece quando um domínio aponta para este servidor, mas não está ligado a nenhum site."
+maint = "Aparece quando o modo manutenção de um serviço está ligado."
+https = "Aparece no endereço http:// enquanto o certificado HTTPS está sendo emitido."
+
+[brand.flash]
+saved = "Marca salva. As páginas já valem em todos os sites."
+
+[brand.error]
+name = "O nome pode ter até 60 caracteres, numa linha só."
+contact = "O contato pode ter até 200 caracteres, numa linha só."
+color = "Cor inválida. Use o seletor de cor."
+theme = "Tema inválido."
+logo = "Logo não aceito. Envie PNG, JPEG ou WebP."
+logo_size = "O logo pode ter até 200 KB."
+logo_dimensions = "O logo pode ter até 2048 × 2048 pixels."
+page = "Página desconhecida."
+too_long = "O texto ficou grande demais: título até 120 caracteres, texto até 600 e HTML até 256 KB."
+write = "A marca foi salva, mas as páginas não puderam ser gravadas para o proxy. Veja o log do painel."
+
+[volume]
+title = "Discos"
+count = { one = "1 disco", other = "{n} discos" }
+hint = "O que o app grava num disco (uploads, arquivos gerados) continua lá depois de cada deploy. Com disco, o deploy para o container antigo antes de subir o novo: alguns segundos com a página \"Atualizando\"."
+empty = "Nenhum disco. Tudo o que o app grava se perde no próximo deploy."
+name = "Nome"
+path = "Caminho no container"
+docker = "Volume no servidor"
+fixed = "do modelo"
+add = "Adicionar disco"
+detach = "Desligar"
+wipe = "Apagar disco e dados"
+next_deploy = "Discos novos ou desligados valem a partir do próximo deploy."
+modal_text = "O app passa a gravar nesse caminho num volume que sobrevive aos deploys."
+
+[volume.error]
+name = "Use um nome curto em minúsculas, como media (letras, números e hífen)."
+path = "Use um caminho absoluto dentro do container, como /app/media."
+reserved = "{path} é uma pasta do sistema do container e não pode virar disco."
+too_many = "Um serviço pode ter até {n} discos."
+name_taken = "Já existe um disco chamado {name}."
+overlap = "Esse caminho se sobrepõe ao disco em {path}."
+template = "Os discos de um serviço criado por modelo são do modelo e não podem ser mudados."
+in_use = "O disco ainda está em uso. Desligue o disco, faça um deploy e depois apague os dados."
+
+[confirm.maintenance_on]
+title = "Colocar {name} em manutenção?"
+text = "Na hora, todos os domínios do serviço passam a mostrar a página de manutenção em vez do site. O container continua rodando e nada é apagado."
+ok = "Ligar manutenção"
+
+[confirm.volume_remove]
+title = "Desligar o disco {name}?"
+text = "A partir do próximo deploy o app não vê mais esses arquivos. Os dados continuam guardados no servidor e voltam se você adicionar o disco de novo com o mesmo nome."
+ok = "Desligar"
+
+[confirm.volume_wipe]
+title = "Apagar o disco {name} e os dados?"
+text = "Os arquivos são apagados de vez e não há como recuperar. Se o app ainda estiver usando o disco, desligue e faça um deploy antes."
+ok = "Apagar de vez"
+
+[terminal]
+title = "Terminal"
+reconnect = "Reconectar"
+connecting = "Conectando…"
+connected = "Conectado"
+closed = "Sessão encerrada"
+sudo = "Abrir o terminal de {service} pede que você confirme que é você: quem tem o terminal tem acesso a tudo dentro do container."
+not_running = "O serviço não está rodando. Inicie ou faça um deploy para abrir o terminal."
+page_title = "Terminal · {service} · Hangar"
+close = "Fechar o terminal"
+audited = "sessão registrada na auditoria"
+sudo_expired = "A confirmação de identidade expirou. Feche o terminal e abra de novo para confirmar."
+shell = "Shell"
+clear = "Limpar"
+saved = "Comandos"
+run_named = "Rodar {name}"
+delete = "Apagar"
+delete_named = "Apagar o comando {name}"
+save = "Salvar comando"
+save_name = "Nome"
+save_name_placeholder = "aplicar migrações"
+save_command = "Comando"
+save_command_placeholder = "python manage.py migrate"
+note = "Sessão auditada · fecha após 20 min sem uso"
+save_short = "Salvar"
+suggested = "Sugeridos para este app"
+save_this = "Salvar este comando"
+save_text = "Fica na lista deste serviço. Um clique digita e roda o comando no terminal aberto."
+
+[terminal.error]
+shell = "Escolha bash, sh ou um comando."
+command_empty = "Digite o comando."
+command_long = "O comando pode ter até {n} caracteres."
+command_line = "O comando precisa caber numa linha, sem caracteres de controle."
+name = "Dê ao comando um nome de até {n} caracteres."
+too_many = "Um serviço pode ter até {n} comandos salvos."
+
+[confirm.command_delete]
+title = "Apagar o comando {name}?"
+text = "Ele sai da lista deste serviço. Nada roda no container."
+ok = "Apagar"
+
+[compose]
+hint = "Cole um docker-compose.yml (ou leia o do repositório) e veja antes o que será criado. Nada é criado até você confirmar."
+source = "De onde vem o arquivo"
+source_paste = "Colar o arquivo"
+source_git = "Ler do repositório Git (compose.yaml ou docker-compose.yml na raiz)"
+file = "docker-compose.yml"
+use_sample = "Usar o modelo"
+placeholder = "services:\n  web:\n    image: nginx:1.29-alpine"
+limits = "Até {kb} KB e {n} serviços."
+repo_hint = "Serviços com build: são construídos a partir deste repositório (mesma pasta e Dockerfile do compose)."
+security = "O arquivo é lido, nunca executado. Pastas do servidor (bind mounts), modo privilegiado, rede do host e portas publicadas não são aplicados: a prévia mostra o que fica de fora e por quê."
+analyze = "Analisar"
+preview = "Prévia"
+count_create = { one = "1 serviço", other = "{n} serviços" }
+count_warn = { one = "1 aviso", other = "{n} avisos" }
+count_skip = { one = "1 item ignorado", other = "{n} itens ignorados" }
+port = "porta interna {port}"
+blocked_hint = "Corrija o que está marcado em vermelho (no arquivo ou no projeto) e analise de novo."
+create = { one = "Criar 1 serviço", other = "Criar {n} serviços" }
+
+[compose.kind]
+template = "Template"
+image = "Imagem"
+git = "Build do repositório"
+skip = "Não será criado"
+
+[compose.error]
+too_large = "O arquivo passa de {max} KB."
+empty = "Cole o conteúdo do docker-compose.yml."
+yaml = "O arquivo não é um YAML válido: {error}"
+no_services = "Não encontrei a seção services: no arquivo."
+too_many = "O arquivo tem {n} serviços; o limite é {max} por importação."
+not_in_repo = "Não há compose.yaml nem docker-compose.yml na raiz do repositório."
+blocked = "A importação tem problemas a corrigir (veja a prévia)."
+
+[compose.problem]
+name = "O nome \"{name}\" não serve como endereço interno: use letras e números."
+same_slug = "\"{a}\" e \"{b}\" viram o mesmo endereço interno ({slug}). Renomeie um deles."
+taken = "Já existe um serviço {slug} neste projeto."
+no_dockerfile = "O Dockerfile {path} não existe no repositório."
+
+[compose.note]
+top_secrets = "A seção {key}: não é importada: cadastre os valores como variáveis secretas do serviço."
+top_ignored = "Ignorado no arquivo: {keys}."
+renamed = "\"{name}\" vira {slug} (endereço interno). Variáveis que usam \"{name}\" como host precisam ser ajustadas."
+image_variable = "A imagem \"{image}\" depende de uma variável do computador; o Hangar não lê o ambiente do servidor."
+build_needs_repo_image = "build: ignorado: sem o repositório, o Hangar usa a imagem indicada."
+build_needs_repo = "Tem build:, mas o arquivo foi colado: use \"Ler do repositório Git\" para construir a partir do código."
+no_image = "Sem image: nem build:: não há o que rodar."
+bad_image = "Imagem inválida: {image}."
+template_postgres = "Vira o template PostgreSQL do Hangar: senha gerada, disco, healthcheck e backups."
+template_redis_cache = "Vira o template Redis (cache) do Hangar: senha gerada, sem persistência."
+template_redis_queue = "Vira o template Redis (filas e sessões) do Hangar: senha gerada e dados em disco."
+template_version = "A versão {from} é trocada pela do template ({to})."
+template_keeps = "O template usa a própria configuração; ignorado: {keys}."
+template_input = "{key} \"{value}\" não é aceito; fica \"{default}\"."
+template_password = "A senha do arquivo não é usada: o Hangar gera uma nova e liga as referências."
+image = "Serviço a partir da imagem {image}."
+image_latest = "Sem versão fixa (tag): prefira uma versão, como :1.29, para o deploy ser previsível."
+port_known = "Porta interna {port} (a padrão desta imagem)."
+port_expose = "Porta interna {port}, lida do EXPOSE do Dockerfile."
+port = "Porta interna {port}."
+ports = "Portas publicadas ({ports}) não são abertas. Para acesso de fora, use um domínio ou abra a porta em Rede."
+depends_on = "Depende de {services} (só informativo: os bancos sobem primeiro)."
+refused = "Recusado por segurança: {key}."
+ignored = "Ignorado: {keys}."
+unsupported = "{key}: não é suportado e foi ignorado."
+env_file = "env_file: não é lido: cole as variáveis na aba Variáveis depois."
+healthcheck = "healthcheck: ignorado: configure o caminho de saúde nas configurações de deploy."
+build_inline = "dockerfile_inline: não é suportado."
+build_ignored = "Do build, ignorado: {keys}."
+build_remote = "Build de outro repositório (URL no context) não é suportado."
+build_path = "Caminho de build inválido ou fora do repositório: {path}."
+build = "Build a partir do repositório: {path}."
+env_too_many = "Mais de {max} variáveis: o resto foi ignorado."
+env_unset = "Ficam vazias (vinham do computador): {keys}. Preencha na aba Variáveis."
+env_invalid = "Nomes de variável inválidos, ignorados: {keys}."
+command_variable = "O comando usa uma variável do computador; ela fica vazia."
+command = "Comando: {command}"
+docker_socket = "O socket do Docker não é montado em nenhum serviço."
+volume_type = "Volume do tipo {type} em {path} ignorado."
+volume_path = "Disco em {path} recusado (caminho do sistema ou repetido)."
+volume_too_many = "Mais de {max} discos: o resto foi ignorado."
+volume = "Disco {name} em {path}."
+bind = "Pastas do servidor não são montadas (bind mount): {mounts}. Use um disco ou ponha os arquivos na imagem."
+replicas = "{n} réplicas pedidas: o Hangar roda uma por serviço."
+memory = "Memória: {mb} MB."
+cpus = "CPU: {cpus}."
+limit_invalid = "Limite de {key} \"{value}\" fora do aceito: fica o padrão."
+reference = "{key} vira {ref}."
+
+[confirm.rebuild]
+title = "Reconstruir do zero?"
+text = "O build é refeito sem cache e as imagens base são baixadas de novo: demora mais que um deploy normal. A versão atual continua no ar até a nova passar nas verificações."
+ok = "Reconstruir"
+
+[confirm.secret_rotate]
+title = "Trocar o segredo da assinatura?"
+text = "Um segredo novo é gerado agora e o atual deixa de valer. A app só passa a usar o novo no próximo deploy, então faça o deploy em seguida."
+ok = "Trocar segredo"
+
+[github.error]
+token = "O GitHub recusou o token desta credencial. Ele pode ter expirado ou sido revogado: troque em Credenciais Git."
+unreachable = "Não foi possível falar com o GitHub agora. Tente de novo em instantes."
+
+[catalog]
+missing_text = "Os templates vêm da comunidade e qualquer pessoa pode enviar um."
+search = "Buscar template: postgres, fila, s3…"
+count = "{n} templates"
+categories = "Categorias"
+all = "Todas as categorias"
+empty = "Nenhum template com esse nome. Tente outra palavra ou outra categoria."
+missing = "Falta algum?"
+how_to_add = "Saiba como adicionar o seu template"
+back = "Voltar à lista"
+new_in = "Novo {template} em {project}"
+community = "comunidade"
+creates = "O que será criado"
+image = "Imagem"
+disk = "Disco"
+limits = "Memória / CPU"
+health = "Healthcheck"
+health_yes = "configurado"
+ports = "Portas abertas"
+ports_none = "nenhuma"
+links = "Acesso de fora"
+link_public = "público, com link automático"
+link_internal = "só na rede do projeto"
+link_needs_sudo = "Este template nasce público quando sua senha foi confirmada há pouco. Sem isso, ele começa só na rede do projeto e você o torna público na aba Rede."
+exports = "Outros serviços podem usar"
+docs = "Documentação"
+
+[template.category]
+database = "Banco"
+cache = "Cache"
+queue = "Filas"
+search = "Busca"
+storage = "Arquivos"
+automation = "Automação"
+monitoring = "Monitoramento"
+admin = "Admin"
+other = "Outros"
+
+[myrepos]
+new_cred = "Nova credencial"
+no_cred = "Adicione uma credencial do GitHub para ver aqui os seus repositórios. Token da conta inteira lista todos; token de um repositório lista só ele."
+add_cred = "Adicionar credencial"
+search = "Buscar nos meus repositórios"
+scope_hint = "Os repositórios que esta credencial enxerga, os mais recentes primeiro."
+loading = "Buscando os repositórios no GitHub…"
+empty = "Esta credencial não enxerga nenhum repositório."
+none_match = "Nenhum repositório com esse nome."
+failed = "Não foi possível listar os repositórios."
+private = "Privado"
+public = "Público"
+count = "{n} repositórios que esta credencial enxerga, os mais recentes primeiro."
+manual = "Repositório por URL"
+manual_public = "Usar o endereço de um repositório (URL)"
+url_title = "Novo serviço a partir de uma URL"
+url_hint = "Repositório público, do GitLab, do Gitea ou de outro lugar."
+new_from = "Novo serviço a partir do repositório"
+in_repo = "No repositório"
+default_branch = "Branch padrão"
+pushed = "Último push"
+credential = "Credencial"
+open_github = "Abrir no GitHub"
+branch_hint = "Os branches do repositório; o padrão já vem escolhido."
