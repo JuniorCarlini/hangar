@@ -26,7 +26,7 @@ templ tabMetrics(d ServiceData) {
 		@cardHead(t(ctx, "service.tab.metrics")) {
 			@periodPicker(d.base(), d.Metrics.Period, "overview", d.Metrics.Periods)
 		}
-		<div id="metrics-live" class={ cardBodyClass }>
+		<div id="metrics-live" class={ cardBodyClass } data-refresh="10" data-live>
 			if !d.Metrics.Running {
 				<p class="m-0 text-[13px] text-muted">{ t(ctx, "service.metrics.stopped") }</p>
 			}

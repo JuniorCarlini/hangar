@@ -268,8 +268,10 @@ templ Overview(d OverviewData) {
 			}
 			// One gap everywhere: between the cards, between the cards and the
 			// row below, and between the two panels of that row.
-			<div id="metrics-live" class="flex flex-col gap-3">
-			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3">
+			// The numbers refresh by themselves (data-refresh, ui.js): the
+			// cards always, the table only while the visitor keeps its order.
+			<div id="metrics-live" class="flex flex-col gap-3" data-refresh="10">
+			<div id="metrics-cards" class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3" data-live>
 				@metricCard("CPU", d.CPUNote, fmt.Sprint(d.CPU)+"%", level(d.CPU)) {
 					@spark(d.CPUHist, "")
 				}
@@ -282,7 +284,7 @@ templ Overview(d OverviewData) {
 				@netCard(t(ctx, "overview.network"), t(ctx, "overview.now"), d.NetDown, d.NetUp, d.NetUnit, d.NetHist, d.NetNote)
 			</div>
 			<div class="flex flex-wrap items-start gap-3">
-				<section class="min-w-0 flex-[999_1_560px] overflow-x-auto rounded-sm border border-border bg-surface" aria-label={ t(ctx, "overview.top") }>
+				<section id="metrics-top" class="min-w-0 flex-[999_1_560px] overflow-x-auto rounded-sm border border-border bg-surface" aria-label={ t(ctx, "overview.top") } data-live>
 					<div class="flex h-11 items-center gap-2 border-b border-border px-3.5">
 						<h2 class="m-0 text-sm font-semibold">{ t(ctx, "overview.top") }</h2>
 						<span class="grow"></span>

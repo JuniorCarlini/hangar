@@ -256,6 +256,42 @@
     }
   }
   function markSortedSoon() { setTimeout(function () { markSorted(document); }, 0); }
+
+  // Live numbers: a [data-refresh="N"] page fetches itself again every N
+  // seconds while the tab is visible and swaps each [data-live] part (by
+  // id), without replaying the charts' entry animation. A table the
+  // visitor sorted by another column is left alone, so the order they chose
+  // does not jump back.
+  function userSorted(part) {
+    var init = part.querySelector('th[data-sort-initial]');
+    var on = part.querySelector('th[aria-sort]:not([aria-sort="none"])');
+    return !!(init && on && (on !== init || on.getAttribute('aria-sort') !== init.getAttribute('data-sort-initial')));
+  }
+  function refreshLive() {
+    var region = document.querySelector('[data-refresh]');
+    if (!region || document.hidden) return;
+    fetch(location.href, { headers: { Accept: 'text/html' } })
+      .then(function (r) { if (!r.ok) throw 0; return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var parts = document.querySelectorAll('[data-live]');
+        for (var i = 0; i < parts.length; i++) {
+          var cur = parts[i];
+          var next = cur.id && doc.getElementById(cur.id);
+          if (!next || userSorted(cur)) continue;
+          next.classList.add('no-anim');
+          cur.replaceWith(next);
+          if (window.Tucano && Tucano.init) Tucano.init(next);
+          markSorted(next);
+        }
+      })
+      .catch(function () {});
+  }
+  (function () {
+    var region = document.querySelector('[data-refresh]');
+    var secs = region ? parseInt(region.getAttribute('data-refresh'), 10) : 0;
+    if (secs >= 5) setInterval(refreshLive, secs * 1000);
+  })();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', markSortedSoon);
   } else {
