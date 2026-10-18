@@ -110,7 +110,7 @@ func TestRedisCommandIsUnchanged(t *testing.T) {
 	if s.Health.Test[1] != `redis-cli -a "$REDIS_PASSWORD" --no-auth-warning ping | grep -q PONG` {
 		t.Errorf("healthcheck = %q", s.Health.Test)
 	}
-	if !slices.Equal(s.CapAdd, []string{"CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"}) {
+	if !slices.Equal(s.CapAdd, []string{"CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "SETPCAP"}) {
 		t.Errorf("caps = %v", s.CapAdd)
 	}
 }

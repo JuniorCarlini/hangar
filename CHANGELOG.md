@@ -12,6 +12,17 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.6] - 2026-10-18
+
+### Corrigido
+
+- **Redis reiniciando sem parar**: a imagem `redis:8` passou a trocar de
+  usuário com `setpriv`, que precisa de uma permissão a mais (`SETPCAP`). Os
+  templates Redis (cache e filas) agora dão essa permissão, e os Redis já
+  criados são corrigidos na atualização: basta clicar em **Deploy** no
+  serviço. O Redis continua rodando como usuário comum e sem nenhuma
+  permissão especial depois de iniciar.
+
 ## [0.5.5] - 2026-10-18
 
 ### Melhorado

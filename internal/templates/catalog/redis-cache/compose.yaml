@@ -19,7 +19,7 @@ services:
       timeout: 3s
       start_period: 10s
       retries: 5
-    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID, SETPCAP]
     deploy:
       resources:
         limits:
