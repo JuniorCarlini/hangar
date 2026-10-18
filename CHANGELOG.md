@@ -12,6 +12,21 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.11] - 2026-10-18
+
+### Melhorado
+
+- **Vulnerabilidades em todas as linguagens**: o painel passa a analisar a
+  imagem de cada serviço com o OSV-SCALIBR (do Google, a mesma equipe do
+  OSV.dev). Além de Python, npm e PHP, agora entram Go (inclusive direto do
+  binário), Java/Kotlin, Rust, Ruby, .NET, yarn, pnpm, bun, Dart, Elixir e
+  outras, e os pacotes de Red Hat, Rocky, Arch e mais sistemas.
+- **A borda (Caddy) também é verificada**: as bibliotecas Go do proxy que
+  protege todos os sites passam a gerar aviso quando tiverem falha.
+- A análise lê a imagem, não o container em execução; continua saindo do
+  servidor só o nome e a versão de cada pacote. Imagens acima de 3 GB, ou sem
+  espaço em disco suficiente, usam o método anterior.
+
 ## [0.5.10] - 2026-10-18
 
 ### Melhorado
