@@ -460,6 +460,8 @@ bulk_too_many = "No máximo {max} variáveis de uma vez."
 not_managed = "Já existe um container com este nome que não foi criado pelo Hangar; nada foi alterado."
 
 [update]
+waiting = "Esta tela se atualiza sozinha quando a versão nova estiver no ar."
+slow = "Está demorando mais que o normal. Recarregue a página; se continuar assim, veja no servidor: journalctl -u hangar-updater -n 50"
 signed = "assinatura conferida"
 safety = "Antes de trocar, o banco do painel é copiado. Se a versão nova não subir em 90 s, a anterior volta sozinha. Os sites não param."
 history = "Histórico"

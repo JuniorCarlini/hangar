@@ -41,7 +41,9 @@ func (h *handlers) renderUpdate(w http.ResponseWriter, r *http.Request, status i
 	}
 	// The status file only holds the last apply; every finished one is in
 	// the audit log (recorded when the new version starts).
+	d.Busy = d.Pending
 	if st, err := update.ReadStatus(h.updateDir); err == nil && st != nil && st.State == "applying" {
+		d.Busy = true
 		d.History = append(d.History, views.UpdateStatus{
 			State: st.State, Version: st.Version, From: st.From, Message: st.Message,
 			At: st.At.Local().Format("02/01/2006 15:04"),

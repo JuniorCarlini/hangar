@@ -10,6 +10,9 @@ type UpdateData struct {
 	ReleaseURL string
 	CheckError string
 	Pending    bool // request written, waiting for the applier
+	// Busy: an update was requested or is being applied; the page waits
+	// for the new version (ui.js) instead of offering another one.
+	Busy bool
 	SudoActive bool
 	// History is every update applied here, newest first (an update still
 	// being applied comes first).
@@ -40,9 +43,6 @@ func stateClass(s string) string {
 // Update is the "Update Hangar" page.
 templ Update(d UpdateData) {
 	@shell(t(ctx, "update.page_title")) {
-		if d.Pending {
-			<meta http-equiv="refresh" content="5"/>
-		}
 		@pageHead(t(ctx, "update.title"), t(ctx, "update.installed")+" "+d.Current)
 		@pageBody() {
 			if d.Flash != "" {
@@ -52,13 +52,16 @@ templ Update(d UpdateData) {
 					@toast("success", d.Flash)
 				}
 			}
-			if d.Pending {
-				<section class={ cardClass }>
+			if d.Busy {
+				// ui.js polls this page while the panel restarts and reloads
+				// it once the new version answers (data-update-wait gone).
+				<section class={ cardClass } data-update-wait data-update-slow={ t(ctx, "update.slow") }>
 					@cardHead(t(ctx, "update.applying")) {
 						<span class="tuc-spinner" aria-hidden="true"></span>
 					}
 					<div class={ cardBodyClass }>
 						@notice("info", "info", t(ctx, "update.applying_note"))
+						<p class="m-0 text-[13px] text-muted" data-update-msg aria-live="polite">{ t(ctx, "update.waiting") }</p>
 					</div>
 				</section>
 			} else if d.Available != "" {

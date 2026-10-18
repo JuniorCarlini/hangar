@@ -460,6 +460,8 @@ bulk_too_many = "At most {max} variables at once."
 not_managed = "A container with this name exists and was not created by Hangar; nothing was changed."
 
 [update]
+waiting = "This page refreshes by itself once the new version is up."
+slow = "This is taking longer than usual. Reload the page; if it stays like this, check on the server: journalctl -u hangar-updater -n 50"
 signed = "signature verified"
 safety = "Before switching, the panel database is copied. If the new version does not come up in 90 s, the previous one comes back by itself. Sites keep running."
 history = "History"

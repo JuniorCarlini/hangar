@@ -298,3 +298,31 @@
     markSortedSoon();
   }
 })();
+
+// While an update is applied the panel restarts: the page asks for itself
+// every 2 s, ignoring the errors of the restart, and reloads once the answer
+// no longer says "waiting" (the new version is up, or the old one came
+// back). After 5 minutes it says so instead of waiting forever.
+(function () {
+  var box = document.querySelector('[data-update-wait]');
+  if (!box) return;
+  var started = Date.now();
+  function tick() {
+    if (Date.now() - started > 5 * 60 * 1000) {
+      var msg = box.querySelector('[data-update-msg]');
+      if (msg) msg.textContent = box.getAttribute('data-update-slow');
+      return;
+    }
+    fetch('/update', { headers: { Accept: 'text/html' }, cache: 'no-store', credentials: 'same-origin' })
+      .then(function (r) {
+        if (!r.ok) throw 0;
+        return r.text();
+      })
+      .then(function (html) {
+        if (html.indexOf('data-update-wait') < 0) { location.reload(); return; }
+        setTimeout(tick, 2000);
+      })
+      .catch(function () { setTimeout(tick, 2000); });
+  }
+  setTimeout(tick, 2000);
+})();
