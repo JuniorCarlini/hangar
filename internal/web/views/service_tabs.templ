@@ -507,6 +507,42 @@ templ tabPorts(d ServiceData) {
 
 // certBadge is a host's certificate state: issued, being issued, or (state
 // unknown, e.g. the edge cannot read its storage) the plain promise.
+// siteURL is where "open" takes the operator: https once the certificate
+// exists; before that http, where the edge shows the "activating HTTPS"
+// page and moves on to https by itself (an https visit would only get the
+// browser's connection error).
+func siteURL(host, cert string) string {
+	if cert == "pending" {
+		return "http://" + host
+	}
+	return "https://" + host
+}
+
+// certRefresh makes the domains card refresh itself every 5 s while a
+// certificate is pending.
+func certRefresh(d ServiceData) templ.Attributes {
+	if certPending(d) {
+		return templ.Attributes{"data-refresh": "5"}
+	}
+	return templ.Attributes{}
+}
+
+// certPending reports whether a link or domain of the service is still
+// waiting for its certificate.
+func certPending(d ServiceData) bool {
+	for _, e := range d.Domains.Endpoints {
+		if e.Cert == "pending" {
+			return true
+		}
+	}
+	for _, dm := range d.Domains.Fixed {
+		if dm.Cert == "pending" {
+			return true
+		}
+	}
+	return false
+}
+
 templ certBadge(state string) {
 	if state == "active" {
 		<span class="tuc-badge is-success">{ t(ctx, "domain.cert_active") }</span>
@@ -521,7 +557,9 @@ templ certBadge(state string) {
 // (wildcards included) and, below them, whether this service takes the
 // customers' own domains.
 templ tabDomains(d ServiceData) {
-	<section class={ cardClass } id="domains">
+	// While a certificate is being issued the card refreshes itself (ui.js,
+	// data-refresh/data-live) until it shows "HTTPS ativo".
+	<section class={ cardClass } id="domains" data-live { certRefresh(d)... }>
 		@cardHead(t(ctx, "domain.title")) {
 			if d.Port != 0 || len(d.Domains.Endpoints) > 0 {
 				if d.CanAdmin && d.SudoActive {
@@ -563,7 +601,7 @@ templ tabDomains(d ServiceData) {
 									</span>
 									if e.Public && e.SslipEnabled && e.AutoHost != "" {
 										<span class="flex flex-wrap items-center gap-2">
-											<a class="font-mono text-xs text-accent-text break-all hover:underline" href={ templ.SafeURL("https://" + e.AutoHost) } target="_blank" rel="noopener">{ e.AutoHost }</a>
+											<a class="font-mono text-xs text-accent-text break-all hover:underline" href={ templ.SafeURL(siteURL(e.AutoHost, e.Cert)) } target="_blank" rel="noopener">{ e.AutoHost }</a>
 											@certBadge(e.Cert)
 										</span>
 									} else if e.Public && e.SslipEnabled {
@@ -579,7 +617,7 @@ templ tabDomains(d ServiceData) {
 										<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ "https://" + e.AutoHost } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "export.copy") }>
 											@Icon("copy", "size-3.5")
 										</button>
-										<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL("https://" + e.AutoHost) } target="_blank" rel="noopener" aria-label={ t(ctx, "endpoint.open") } title={ t(ctx, "endpoint.open") }>
+										<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL(siteURL(e.AutoHost, e.Cert)) } target="_blank" rel="noopener" aria-label={ t(ctx, "endpoint.open") } title={ t(ctx, "endpoint.open") }>
 											@Icon("external-link", "size-3.5")
 										</a>
 									</div>

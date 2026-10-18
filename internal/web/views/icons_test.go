@@ -32,3 +32,24 @@ func TestIconsExist(t *testing.T) {
 		}
 	}
 }
+
+// Before its certificate exists a link opens over http (the edge's
+// "activating HTTPS" page, which moves on by itself); the card refreshes
+// itself until then.
+func TestPendingLinksOpenOverHTTP(t *testing.T) {
+	if got := siteURL("lab-web.203-0-113-10.sslip.io", "pending"); got != "http://lab-web.203-0-113-10.sslip.io" {
+		t.Errorf("pending: %s", got)
+	}
+	if got := siteURL("lab-web.203-0-113-10.sslip.io", "active"); got != "https://lab-web.203-0-113-10.sslip.io" {
+		t.Errorf("active: %s", got)
+	}
+	d := ServiceData{}
+	d.Domains.Endpoints = []EndpointRow{{Cert: "active"}}
+	if len(certRefresh(d)) != 0 {
+		t.Error("nothing pending: no refresh")
+	}
+	d.Domains.Endpoints = append(d.Domains.Endpoints, EndpointRow{Cert: "pending"})
+	if certRefresh(d)["data-refresh"] != "5" {
+		t.Error("a pending certificate must refresh the card")
+	}
+}
