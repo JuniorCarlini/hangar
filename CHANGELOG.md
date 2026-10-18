@@ -12,6 +12,38 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.10] - 2026-10-18
+
+### Melhorado
+
+- **O painel não depende mais de SSH para se recuperar**:
+  - As permissões da configuração, da chave mestra e da pasta de dados são
+    conferidas e corrigidas a cada início do painel.
+  - Se o Docker ou o proxy de borda (Caddy) não subirem no boot, o painel
+    tenta de novo sozinho e confere o Caddy a cada minuto.
+  - O Caddy só guarda como configuração de boot uma que ele aceitou; se a
+    completa for recusada, ele sobe com a última boa ou com uma mínima que
+    serve o painel.
+  - O certificado do próprio painel nunca depende do token do DNS.
+  - As regras de firewall do painel são reaplicadas a cada 3 minutos.
+  - A porta 7702 do painel fica reservada.
+- **Atualização mais segura**: antes de parar o painel, ela confere se a
+  versão nova consegue ler a configuração e se há espaço em disco; se não,
+  nem começa. Na volta automática, espera a versão anterior subir de verdade.
+  Cópias antigas do banco são apagadas (ficam as 3 mais novas).
+- **Bloqueio por senha errada é temporário**: 15 minutos, dobrando até 24 h.
+  Quem digita a senha certa vê até quando a conta está bloqueada, e as
+  sessões já abertas continuam valendo.
+- **Modal "Adicionar domínio" mais simples**: "Normal", "Coringa limitado"
+  (até 50 novos por semana, sem token) e "Coringa ilimitado" (com o token do
+  DNS), cada um explicado em uma frase.
+
+### Corrigido
+
+- O modo "Coringa ilimitado" é recusado com uma mensagem clara se o proxy de
+  borda não tiver o módulo de DNS, e desfaz o que salvou se o domínio não
+  puder ser adicionado.
+
 ## [0.5.9] - 2026-10-18
 
 ### Novo
