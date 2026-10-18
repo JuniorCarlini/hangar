@@ -287,7 +287,7 @@ As 34 brechas do modelo de ameaça e as proteções de cada tela estão em
 ### Requisitos
 
 - **Go 1.27.2** (o `go.mod` manda; `templ`, `govulncheck` e afins vêm por `go tool`)
-- [just](https://just.systems), **golangci-lint v2** (o CI usa v2.14.0) e
+- [just](https://just.systems), **golangci-lint v2** (o CI usa v2.15.0) e
   **sqlc** (o CI usa 1.31.1)
 - **Docker** para os testes de integração e para rodar serviços localmente
 - **Node LTS** só para os testes E2E (Playwright)
