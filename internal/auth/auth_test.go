@@ -631,3 +631,19 @@ func TestArgonPoolBoundsConcurrency(t *testing.T) {
 	}
 	close(release)
 }
+
+// TestLockKeepsSessionsThatAlreadyLoggedIn: wrong passwords from someone else
+// lock new logins only; the owner's open browsers stay logged in.
+func TestLockKeepsSessionsThatAlreadyLoggedIn(t *testing.T) {
+	f := newFixture(t)
+	_, secret := f.userWithTOTP(t, "dono@hangar.dev", RoleOwner)
+	token := f.login(t, "dono@hangar.dev", secret)
+	f.failLogins(t, "dono@hangar.dev", LockAfter)
+	if f.lockedFor(t, "dono@hangar.dev") == 0 {
+		t.Fatal("the account did not lock")
+	}
+	p, err := f.svc.Authenticate(context.Background(), token)
+	if err != nil || p == nil {
+		t.Fatalf("the open session ended with the lock: %v %v", p, err)
+	}
+}

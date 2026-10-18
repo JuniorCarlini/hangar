@@ -521,8 +521,10 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 		return nil, err
 	}
 	now := s.now()
-	_, locked := s.lockedUntil(sess.LockedUntil)
-	if sess.Stage != "active" || locked ||
+	// A lock stops new logins only (password guessing). Sessions that
+	// already passed every factor stay: otherwise anyone who knows the
+	// owner's email could log them out of every browser, again and again.
+	if sess.Stage != "active" ||
 		now.Unix() >= sess.ExpiresAt || now.Sub(time.Unix(sess.LastSeenAt, 0)) >= SessionIdle {
 		if sess.Stage == "active" {
 			_ = s.q.DeleteSession(ctx, sess.IDHash)
