@@ -1,12 +1,14 @@
 package web
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/auth"
 )
 
@@ -106,5 +108,26 @@ func TestIgnoreFindingNeedsOperatorAndReason(t *testing.T) {
 	rec = e2.do(req{method: "POST", target: "/updates/scan", form: url.Values{"csrf": {p2.CSRFToken}}, cookies: []*http.Cookie{c2}})
 	if rec.Code != http.StatusForbidden {
 		t.Errorf("viewer starts a scan: %d", rec.Code)
+	}
+}
+
+// The history lists every update applied, not only the last one.
+func TestUpdateHistoryListsEveryUpdate(t *testing.T) {
+	e := newEnv(t)
+	e.createUser(t, auth.RoleOwner)
+	session := e.login(t)
+	al := audit.New(e.st.DB)
+	for _, v := range [][2]string{{"v0.3.2", "v0.3.3"}, {"v0.3.3", "v0.4.0"}} {
+		if err := al.Record(context.Background(), audit.Entry{
+			Action: "system.update.ok", Outcome: audit.OK, TargetType: "hangar", TargetID: v[1],
+			Summary: map[string]any{"from": v[0], "to": v[1]},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	body := e.do(req{method: "GET", target: "/update", cookies: []*http.Cookie{session}}).Body.String()
+	first, second := strings.Index(body, "v0.3.3 → v0.4.0"), strings.Index(body, "v0.3.2 → v0.3.3")
+	if first < 0 || second < 0 || first > second {
+		t.Fatalf("history should list both updates, newest first (%d, %d)", first, second)
 	}
 }
