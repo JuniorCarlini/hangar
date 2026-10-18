@@ -15,7 +15,8 @@ type UpdatesData struct {
 	LastError    bool
 	Level        string // filter; "" = all
 	Counts       map[string]int
-	Findings     []FindingRow
+	Findings     []FindingRow // only the rows of Pager.Page
+	Pager        Pager
 	IgnoredCount int
 	Ignores      []IgnoreRow
 	Problems     []ScanProblem
@@ -240,6 +241,7 @@ templ Updates(d UpdatesData) {
 								</tbody>
 							</table>
 						</div>
+						@pagination(d.Pager)
 					}
 					if d.IgnoredCount > 0 {
 						<p class="m-0 text-xs text-muted">{ t(ctx, "deps.ignored_count", "n", d.IgnoredCount) }</p>
@@ -248,7 +250,7 @@ templ Updates(d UpdatesData) {
 			</section>
 			if d.CanOperate {
 				for _, f := range d.Findings {
-					@ignoreDialog(d.CSRF, f)
+					@ignoreDialog(d, f)
 				}
 			}
 			if len(d.Problems) > 0 {
@@ -314,7 +316,9 @@ templ Updates(d UpdatesData) {
 }
 
 // ignoreDialog asks why and for how long a finding is ignored.
-templ ignoreDialog(csrf string, f FindingRow) {
+// The form carries the filter and the page so the redirect comes back to
+// the same place.
+templ ignoreDialog(d UpdatesData, f FindingRow) {
 	<dialog class="tuc-modal is-md is-warning" id={ "ignore-" + f.ID } aria-labelledby={ "ignore-title-" + f.ID }>
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
@@ -324,8 +328,14 @@ templ ignoreDialog(csrf string, f FindingRow) {
 				</button>
 			</div>
 			<form method="post" action="/updates/ignore" class="tuc-modal__body flex flex-col gap-4">
-				<input type="hidden" name="csrf" value={ csrf }/>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
 				<input type="hidden" name="id" value={ f.ID }/>
+				if d.Level != "" {
+					<input type="hidden" name="level" value={ d.Level }/>
+				}
+				if d.Pager.Page > 1 {
+					<input type="hidden" name="page" value={ fmt.Sprint(d.Pager.Page) }/>
+				}
 				<p class="tuc-modal__text">{ t(ctx, "deps.ignore.text") }</p>
 				<fieldset class="flex flex-col gap-2 border-0 p-0">
 					<legend class="tuc-label mb-1.5">{ t(ctx, "deps.ignore.mode") }</legend>

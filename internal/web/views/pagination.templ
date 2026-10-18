@@ -1,0 +1,118 @@
+package views
+
+import (
+	"fmt"
+	"net/url"
+	"strconv"
+)
+
+// Pager is one page of a server-side paginated list. Links keep Query
+// (filters) and set "page".
+type Pager struct {
+	Path  string
+	Query url.Values
+	Page  int // 1-based, already clamped
+	Pages int
+	Total int
+	From  int // 1-based index of the first row shown
+	To    int // index of the last row shown
+}
+
+// NewPager clamps page into [1, pages] for total rows of perPage each.
+func NewPager(path string, query url.Values, page, total, perPage int) Pager {
+	pages := max(1, (total+perPage-1)/perPage)
+	page = min(max(page, 1), pages)
+	p := Pager{Path: path, Query: query, Page: page, Pages: pages, Total: total}
+	if total > 0 {
+		p.From = (page-1)*perPage + 1
+		p.To = min(page*perPage, total)
+	}
+	return p
+}
+
+// Offset and End bound the slice of rows on this page.
+func (p Pager) Offset() int { return max(p.From-1, 0) }
+func (p Pager) End() int    { return p.To }
+
+func (p Pager) href(page int) string {
+	q := url.Values{}
+	for k, v := range p.Query {
+		q[k] = v
+	}
+	q.Del("page")
+	if page > 1 {
+		q.Set("page", strconv.Itoa(page))
+	}
+	if s := q.Encode(); s != "" {
+		return p.Path + "?" + s
+	}
+	return p.Path
+}
+
+// items is the page window Tucano's pagination draws: the first and last
+// page, one on each side of the current, and 0 for a gap ("…"). A gap of a
+// single page shows that page instead.
+func (p Pager) items() []int {
+	var out []int
+	last := 0
+	for n := 1; n <= p.Pages; n++ {
+		if n != 1 && n != p.Pages && (n < p.Page-1 || n > p.Page+1) {
+			continue
+		}
+		switch {
+		case n-last == 2:
+			out = append(out, last+1)
+		case n-last > 2:
+			out = append(out, 0)
+		}
+		out = append(out, n)
+		last = n
+	}
+	return out
+}
+
+// pagination is Tucano's pagination (the markup its data-tuc-pagination
+// component builds) rendered on the server, with the "N–M of T" count. It
+// shows nothing for a single page.
+templ pagination(p Pager) {
+	if p.Pages > 1 {
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<span class="text-xs text-muted tabular-nums">{ t(ctx, "pagination.range", "from", p.From, "to", p.To, "total", p.Total) }</span>
+			<nav class="tuc-pagination" role="navigation" aria-label={ t(ctx, "pagination.label") }>
+				@pageEdge(p, p.Page-1, p.Page <= 1, t(ctx, "pagination.prev"), true)
+				for _, n := range p.items() {
+					if n == 0 {
+						<span class="tuc-pagination__gap" aria-hidden="true">…</span>
+					} else if n == p.Page {
+						<a class="tuc-btn is-outline" href={ templ.SafeURL(p.href(n)) } aria-current="page">{ fmt.Sprint(n) }</a>
+					} else {
+						<a class="tuc-btn is-ghost" href={ templ.SafeURL(p.href(n)) }>{ fmt.Sprint(n) }</a>
+					}
+				}
+				@pageEdge(p, p.Page+1, p.Page >= p.Pages, t(ctx, "pagination.next"), false)
+			</nav>
+		</div>
+	}
+}
+
+templ pageEdge(p Pager, page int, disabled bool, label string, prev bool) {
+	if disabled {
+		<span class="tuc-btn is-ghost tuc-pagination__edge is-disabled" aria-hidden="true" aria-disabled="true">
+			@pageEdgeContent(label, prev)
+		</span>
+	} else {
+		<a class="tuc-btn is-ghost tuc-pagination__edge" href={ templ.SafeURL(p.href(page)) } aria-label={ label }>
+			@pageEdgeContent(label, prev)
+		</a>
+	}
+}
+
+templ pageEdgeContent(label string, prev bool) {
+	if prev {
+		@Icon("chevron-left", "size-3.5")
+		<span class="tuc-pagination__word">{ label }</span>
+	} else {
+		<span class="tuc-pagination__word">{ label }</span>
+		@Icon("chevron-right", "size-3.5")
+	}
+}

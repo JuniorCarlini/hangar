@@ -953,6 +953,12 @@ already_on = "2FA is already on."
 required = "This server requires 2FA; it cannot be turned off."
 
 
+[pagination]
+label = "Pagination"
+prev = "Previous"
+next = "Next"
+range = "{from}–{to} of {total}"
+
 [tucano]
 show = "Show"
 hide = "Hide"

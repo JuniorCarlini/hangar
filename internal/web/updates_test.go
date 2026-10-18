@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -141,5 +142,76 @@ func TestUpdateHistoryListsEveryUpdate(t *testing.T) {
 	}
 	if !strings.Contains(body, "não subiu em 90 s") || strings.Count(body, "→") != 3 {
 		t.Error("the rollback reason should show, and a plain restart is not an update")
+	}
+}
+
+// The pending table shows 25 rows per page, most severe first; the cards
+// count every finding, out-of-range pages are clamped, and ignoring a row
+// returns to its page.
+func TestUpdatesPagination(t *testing.T) {
+	e := newEnv(t)
+	id := e.labService(t)
+	e.seedFindings(t, id)
+	for i := range 57 {
+		q := fmt.Sprintf(`INSERT INTO dependency_findings (id, service_id, target, ecosystem, package, current_version, latest_version, severity, level,
+			kind, first_seen_at, last_seen_at)
+		 VALUES ('dep_pkg%02d', '%s', '', 'image', 'pkg-%02d', '1.0', '1.1', 'none', 'minor', 'minor', 1, 1)`, i, id, i)
+		if _, err := e.st.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, p := e.session(t, auth.RoleOperator)
+	get := func(target string) string {
+		t.Helper()
+		rec := e.do(req{method: "GET", target: target, cookies: []*http.Cookie{c}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d", target, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	rows := func(body string) int { return strings.Count(body, `data-tuc-modal="#ignore-`) }
+
+	first := get("/updates")
+	if rows(first) != 25 || !strings.Contains(first, "1–25 de 60") || !strings.Contains(first, "django==5.2.7") {
+		t.Errorf("page 1: %d rows, range or most severe row missing", rows(first))
+	}
+	if !strings.Contains(first, `class="tuc-pagination"`) || !strings.Contains(first, `href="/updates?page=2"`) {
+		t.Error("page 1 without Tucano pagination")
+	}
+
+	second := get("/updates?page=2&ok=scan")
+	if rows(second) != 25 || !strings.Contains(second, "26–50 de 60") || strings.Contains(second, "django==") {
+		t.Errorf("page 2: %d rows or wrong slice", rows(second))
+	}
+	if !strings.Contains(second, `aria-current="page">2<`) || strings.Contains(second, "ok=scan&amp;page") {
+		t.Error("page 2 not current, or page links keep the flash")
+	}
+	if !strings.Contains(second, `name="page" value="2"`) {
+		t.Error("ignore form does not carry the page")
+	}
+	// The critical card still counts the finding on page 1.
+	if !regexp.MustCompile(`text-danger">1<`).MatchString(second) {
+		t.Error("summary cards count only the page")
+	}
+
+	for target, want := range map[string]string{"/updates?page=99": "51–60 de 60", "/updates?page=abc": "1–25 de 60", "/updates?page=-3": "1–25 de 60"} {
+		if body := get(target); !strings.Contains(body, want) {
+			t.Errorf("%s not clamped to %q", target, want)
+		}
+	}
+	if last := get("/updates?page=99"); rows(last) != 10 || !strings.Contains(last, "Caddy") {
+		t.Errorf("last page: %d rows, least severe row missing", rows(last))
+	}
+
+	// One page of results: no pagination at all.
+	if body := get("/updates?level=critical"); strings.Contains(body, "tuc-pagination") {
+		t.Error("pagination shown for a single page")
+	}
+
+	rec := e.do(req{method: "POST", target: "/updates/ignore", form: url.Values{
+		"csrf": {p.CSRFToken}, "id": {"dep_pkg30"}, "mode": {"days"}, "reason": {"sem pressa"}, "page": {"2"}, "level": {"minor"},
+	}, cookies: []*http.Cookie{c}})
+	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || loc != "/updates?level=minor&ok=ignored&page=2" {
+		t.Errorf("ignore redirect: %d %q", rec.Code, loc)
 	}
 }

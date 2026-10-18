@@ -3,6 +3,8 @@ package web
 import (
 	"context"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +15,10 @@ import (
 )
 
 // --- updates and vulnerabilities page (docs/14, docs/17 § 3.8) ---------------
+
+// findingsPerPage is how many pending findings one page of /updates shows:
+// a real server can have hundreds.
+const findingsPerPage = 25
 
 func (h *handlers) updatesPage(w http.ResponseWriter, r *http.Request) {
 	flash := ""
@@ -32,7 +38,7 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 	pr := PrincipalFrom(ctx)
 	d := views.UpdatesData{
 		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, Error: errMsg, Flash: flash,
-		Level: r.URL.Query().Get("level"), Counts: map[string]int{}, Running: h.deps.Running(),
+		Level: r.FormValue("level"), Counts: map[string]int{}, Running: h.deps.Running(),
 	}
 	if d.Level != "" && !validLevel(d.Level) {
 		d.Level = ""
@@ -47,6 +53,7 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 		if err != nil {
 			status, d.Error = userError(r, err)
 		}
+		var shown []deps.Finding
 		for _, f := range fs {
 			if f.Ignored {
 				d.IgnoredCount++
@@ -56,6 +63,12 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 			if d.Level != "" && f.Level != d.Level {
 				continue
 			}
+			shown = append(shown, f)
+		}
+		// The cards count everything; the table renders one page of it.
+		page, _ := strconv.Atoi(r.FormValue("page"))
+		d.Pager = views.NewPager("/updates", updatesQuery(d.Level), page, len(shown), findingsPerPage)
+		for _, f := range shown[d.Pager.Offset():d.Pager.End()] {
 			d.Findings = append(d.Findings, findingRow(ctx, f))
 		}
 		ign, err := h.deps.Ignores(ctx)
@@ -92,6 +105,16 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 		d.Problems = h.scanProblems(ctx, scans)
 	}
 	render(w, r, status, views.Updates(d))
+}
+
+// updatesQuery is the query that page links and redirects keep: the
+// level filter (the flash "ok" is shown once and dropped).
+func updatesQuery(level string) url.Values {
+	q := url.Values{}
+	if validLevel(level) {
+		q.Set("level", level)
+	}
+	return q
 }
 
 // targetLabel names server-level targets in the user's language; services
@@ -206,7 +229,14 @@ func (h *handlers) updatesIgnore(w http.ResponseWriter, r *http.Request) {
 		h.renderUpdates(w, r, code, msg, "")
 		return
 	}
-	redirectLocal(w, r, "/updates?ok=ignored")
+	// Back to the filter and page the finding was on (clamped on render
+	// if it was the last row of the last page).
+	q := updatesQuery(r.PostFormValue("level"))
+	q.Set("ok", "ignored")
+	if n, _ := strconv.Atoi(r.PostFormValue("page")); n > 1 {
+		q.Set("page", strconv.Itoa(n))
+	}
+	redirectLocal(w, r, "/updates?"+q.Encode())
 }
 
 func (h *handlers) updatesUnignore(w http.ResponseWriter, r *http.Request) {

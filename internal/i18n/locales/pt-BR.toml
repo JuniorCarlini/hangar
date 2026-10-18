@@ -953,6 +953,12 @@ already_on = "A 2FA já está ativada."
 required = "Este servidor exige 2FA; ela não pode ser desativada."
 
 
+[pagination]
+label = "Paginação"
+prev = "Anterior"
+next = "Próxima"
+range = "{from}–{to} de {total}"
+
 [tucano]
 show = "Mostrar"
 hide = "Ocultar"
