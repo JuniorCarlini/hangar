@@ -78,7 +78,7 @@ templ Update(d UpdateData) {
 							<span class="tuc-badge">{ t(ctx, "update.available_note", "current", d.Current) }</span>
 						</div>
 						if d.Notes != "" {
-							<pre class="m-0 max-h-[320px] overflow-auto rounded-sm border border-border bg-surface-2 p-3 font-mono text-xs whitespace-pre-wrap text-muted">{ d.Notes }</pre>
+							<div class="m-0 max-h-[320px] overflow-auto rounded-sm border border-border bg-surface-2 p-3 text-[13px] leading-relaxed whitespace-pre-wrap text-muted">{ plainNotes(d.Notes) }</div>
 						}
 						<div class="tuc-alert is-info">
 							@Icon("shield", "size-4")

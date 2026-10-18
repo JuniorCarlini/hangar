@@ -311,5 +311,6 @@ if [[ "$NEEDS_OWNER" == 1 ]]; then
   echo "  sudo systemctl restart hangard   (abre mais 30 minutos)"
   echo
 fi
-echo "Guarde uma cópia de /etc/hangar/master.key fora do servidor."
+echo "Depois, no painel: Backups -> Kit de recuperação. O kit guarda tudo,"
+echo "inclusive a chave mestra do servidor: não precisa copiar nada pelo SSH."
 echo "Atualizações: botão \"Atualização\" no painel, ou: sudo -u hangar hangard self-update stage -config /etc/hangar/hangar.toml"

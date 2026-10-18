@@ -13,7 +13,7 @@ APIs, bots), cada um isolado no seu projeto. Segurança vem fechada por padrão:
 o painel não escuta na internet, 2FA é exigida e toda ação fica numa
 auditoria encadeada.
 
-> Versão atual: **v0.3.3**. Projeto em desenvolvimento ativo: use, teste e
+> Versão atual: **v0.4.0**. Projeto em desenvolvimento ativo: use, teste e
 > reporte, mas leia as [notas de cada versão](CHANGELOG.md) antes de atualizar.
 
 ## Sumário
@@ -143,10 +143,10 @@ da 2FA no terminal, e também fecha a tela de primeiro acesso.
 
 Depois de entrar:
 
-- [ ] Copie `/etc/hangar/master.key` para fora do servidor. Sem ela, um backup
-      do painel não abre.
 - [ ] Gere o **Kit de recuperação** em Backups e cadastre um destino S3 com
-      Object Lock.
+      Object Lock. O backup do painel leva a chave mestra junto, trancada com
+      o kit: guardando o kit, não precisa copiar nada pelo SSH. A cada 5
+      meses o painel pede para você confirmar que o kit ainda está guardado.
 - [ ] Cadastre um canal de alerta (Telegram, e-mail ou webhook) e teste.
 - [ ] Faça o endurecimento do host que o instalador ainda não faz (SSH só por
       chave, firewall, `unattended-upgrades`, `chrony`):

@@ -47,6 +47,8 @@ type Nav struct {
 	CanCreate bool   // may create projects
 	// BackupAlerts counts backup problems (docs/09 alerts).
 	BackupAlerts int
+	// KitCheckDue asks the owner to confirm the recovery kit is still kept.
+	KitCheckDue bool
 	// NewProject is the "new project" dialog in the frame: open after
 	// ?new=1, or again with the error when creating failed.
 	NewProject NewProjectForm
@@ -231,4 +233,22 @@ func WithLoginCSRF(ctx context.Context, token string) context.Context {
 func loginCSRF(ctx context.Context) string {
 	v, _ := ctx.Value(loginCSRFKey{}).(string)
 	return v
+}
+
+// plainNotes turns the release notes (a CHANGELOG section in Markdown) into
+// plain text for the update page: no "**", "###" or list dashes.
+func plainNotes(s string) string {
+	lines := strings.Split(strings.ReplaceAll(strings.TrimSpace(s), "\r\n", "\n"), "\n")
+	for i, l := range lines {
+		l = strings.ReplaceAll(l, "**", "")
+		l = strings.ReplaceAll(l, "`", "")
+		switch {
+		case strings.HasPrefix(l, "### "):
+			l = strings.TrimPrefix(l, "### ")
+		case strings.HasPrefix(l, "- "):
+			l = "• " + strings.TrimPrefix(l, "- ")
+		}
+		lines[i] = l
+	}
+	return strings.Join(lines, "\n")
 }

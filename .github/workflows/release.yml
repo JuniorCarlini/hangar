@@ -44,4 +44,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
-        run: gh release create "$VERSION" dist/* --title "$VERSION" --generate-notes --verify-tag
+        # The notes are this version's section of CHANGELOG.md (written for
+        # whoever uses the panel, in Portuguese), shown on the update page.
+        run: |
+          awk -v h="## [${VERSION#v}]" 'index($0, h) == 1 { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Veja o CHANGELOG.md." > notes.md
+          gh release create "$VERSION" dist/* --title "$VERSION" --notes-file notes.md --verify-tag

@@ -332,20 +332,20 @@ func Update(d UpdateData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					if d.Notes != "" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<pre class=\"m-0 max-h-[320px] overflow-auto rounded-sm border border-border bg-surface-2 p-3 font-mono text-xs whitespace-pre-wrap text-muted\">")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<div class=\"m-0 max-h-[320px] overflow-auto rounded-sm border border-border bg-surface-2 p-3 text-[13px] leading-relaxed whitespace-pre-wrap text-muted\">")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 						var templ_7745c5c3_Var18 string
-						templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(d.Notes)
+						templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(plainNotes(d.Notes))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/update.templ`, Line: 81, Col: 159}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/update.templ`, Line: 81, Col: 181}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</pre>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</div>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
