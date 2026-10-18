@@ -280,7 +280,7 @@ extras numa instância existente).
   | MongoDB | `mongo:9.0` | database | 27017 |
   | n8n (+ PostgreSQL próprio) | `n8nio/n8n:2.43.7` | automation | 5678 |
   | Uptime Kuma | `louislam/uptime-kuma:2-rootless` | monitoring | 3001 |
-  | RustFS (S3) | `rustfs/rustfs:1.0.2` | storage | 9001 (console) |
+  | RustFS (S3) | `rustfs/rustfs:1.0.3` | storage | 9001 (console) |
   | pgAdmin | `dpage/pgadmin4:9.18` | admin | 5050 |
   | Adminer | `adminer:6-standalone` | admin | 8080 |
   | RabbitMQ | `rabbitmq:4.3-management-alpine` | queue | 15672 (gestão) |
