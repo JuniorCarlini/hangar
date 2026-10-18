@@ -387,14 +387,14 @@ templ serverFooter(n Nav) {
 			</button>
 		}
 		if n.IsOwner {
-			<a class="flex items-center justify-between gap-2 rounded-sm px-2 py-1 text-muted no-underline hover:bg-surface-2 hover:text-fg" href="/update">
-				<span class="truncate">Hangar { n.Version }</span>
+			<a class="flex items-center justify-center gap-2 rounded-sm px-2 py-1 text-muted no-underline hover:bg-surface-2 hover:text-fg" href="/update" title={ t(ctx, "nav.update") }>
+				<span class="font-mono">{ n.Version }</span>
 				if n.Update {
 					<span class="tuc-badge is-accent">{ t(ctx, "nav.new_version") }</span>
 				}
 			</a>
 		} else {
-			<span class="truncate px-2 py-1">Hangar { n.Version }</span>
+			<span class="px-2 py-1 text-center font-mono">{ n.Version }</span>
 		}
 	</div>
 }
