@@ -12,6 +12,13 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.4.4] - 2026-10-18
+
+### Corrigido
+
+- O **histórico de atualizações** mostrava só a última; agora lista todas
+  as atualizações feitas pelo painel, da mais nova para a mais antiga.
+
 ## [0.4.3] - 2026-10-18
 
 ### Corrigido
@@ -157,7 +164,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.3...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/JuniorCarlini/hangar/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/JuniorCarlini/hangar/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/JuniorCarlini/hangar/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/JuniorCarlini/hangar/compare/v0.4.0...v0.4.1
