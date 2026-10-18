@@ -277,7 +277,7 @@ func (h *handlers) servicePage(w http.ResponseWriter, r *http.Request) {
 // reaches the page directly).
 func flashFrom(r *http.Request) string {
 	switch ok := r.URL.Query().Get("ok"); ok {
-	case "deploy", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
+	case "deploy", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
 		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed":
 		return i18n.T(r.Context(), "flash."+ok)
 	}
@@ -356,6 +356,10 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		EdgeEnabled: h.projects.EdgeEnabled(), Dynamic: s.DynamicDomains == 1,
 		CheckPath: s.DomainCheckPath, CheckSecret: v.checkSecret,
 	}
+	if info, err := h.projects.EdgeDNSInfo(r.Context()); err == nil {
+		d.Domains.Base = views.EdgeBase{Domain: info.BaseDomain, Provider: info.Provider, Scaled: info.HasToken, FromConfig: info.FromConfig}
+	}
+	d.Domains.DNSProviders = edge.DNSProviders
 	d.CanBackup, d.Stateful = h.projects.CanDownloadBackup(s.Template), s.Stateful == 1
 	d.Maintenance = s.Maintenance == 1
 	d.ServerHint = i18n.T(r.Context(), "port.ssh_target")
@@ -387,7 +391,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 			// With the edge off nothing routes the link: showing it would
 			// promise an address that does not open.
 			if e.Public && d.Domains.EdgeEnabled {
-				host = edge.AutoHost(h.baseDomain, ip, e.HostLabel)
+				host = edge.AutoHost(h.projects.BaseDomain(), ip, e.HostLabel)
 				if host == "" && e.SslipEnabled {
 					d.Domains.NoAutoLink = true
 				} else if host != "" {
@@ -477,7 +481,7 @@ func inferTab(r *http.Request) string {
 	switch r.URL.Query().Get("ok") {
 	case "env", "env-deleted":
 		return "variables"
-	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "port", "port-closed":
+	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed":
 		return "network"
 	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "maintenance-on", "maintenance-off":
 		return "settings"

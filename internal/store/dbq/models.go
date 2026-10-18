@@ -211,6 +211,15 @@ type DomainBlocklist struct {
 	CreatedAt int64
 }
 
+type EdgeSetting struct {
+	ID          int64
+	BaseDomain  string
+	DnsProvider string
+	DnsTokenEnc []byte
+	UpdatedBy   sql.NullString
+	UpdatedAt   int64
+}
+
 type Endpoint struct {
 	ID           string
 	ServiceID    string

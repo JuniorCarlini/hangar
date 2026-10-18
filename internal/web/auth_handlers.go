@@ -64,7 +64,6 @@ type handlers struct {
 	errorPages func(map[string][]byte) error
 	brand      *errpages.Store
 	serverIP   string
-	baseDomain string
 	autoLinkIP string
 	auth       *auth.Service
 	updates    updates

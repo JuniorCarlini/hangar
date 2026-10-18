@@ -678,6 +678,7 @@ templ tabDomains(d ServiceData) {
 					</div>
 				}
 				@fixedDomains(d)
+				@scaledBase(d)
 				@dynamicDomains(d)
 			</div>
 		}
@@ -817,8 +818,87 @@ templ dynamicDomains(d ServiceData) {
 
 func isWildcard(host string) bool { return strings.HasPrefix(host, "*.") }
 
-// domainDialog adds a domain. "Wildcard" puts "*." in front of what was
-// typed, and the preview shows exactly what will be stored (ui.js).
+// scaledBase shows, on the service holding *.<base domain>, that its
+// subdomains share one DNS-01 certificate, and lets an admin replace the
+// provider token (never shown back).
+templ scaledBase(d ServiceData) {
+	if d.Domains.Base.Domain != "" && hasDomain(d, "*."+d.Domains.Base.Domain) {
+		<div class="flex flex-col gap-2 rounded-sm border border-border bg-surface-2 p-3">
+			<div class="flex items-center gap-2">
+				@Icon("chart-column", "size-4 text-primary")
+				<strong class="text-[13px] font-semibold">{ t(ctx, "domain.base_title") }</strong>
+			</div>
+			<span class="text-xs text-muted">{ t(ctx, "domain.base_text", "base", d.Domains.Base.Domain, "provider", dnsProviderName(d.Domains.Base.Provider)) }</span>
+			if d.Domains.Base.FromConfig {
+				<span class="tuc-hint">{ t(ctx, "domain.base_from_config") }</span>
+			} else if d.CanAdmin && d.SudoActive && d.Domains.Base.Scaled {
+				<form class="flex flex-wrap items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/domains/dns-token") } autocomplete="off">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input class="tuc-input min-w-0 flex-1 font-mono" type="password" name="dns_token" required autocomplete="off" aria-label={ t(ctx, "domain.dns_token") } placeholder={ t(ctx, "domain.dns_token_placeholder") }/>
+					<button class="tuc-btn is-outline is-sm" type="submit">
+						@Icon("refresh-cw", "size-3.5")
+						{ t(ctx, "domain.rotate_token") }
+					</button>
+				</form>
+				<span class="tuc-hint">{ t(ctx, "domain.rotate_token_hint") }</span>
+			}
+		</div>
+	}
+}
+
+func hasDomain(d ServiceData, host string) bool {
+	for _, dm := range d.Domains.Fixed {
+		if dm.Hostname == host {
+			return true
+		}
+	}
+	return false
+}
+
+// domainModeOption is one button of the add-domain "how it works" group.
+templ domainModeOption(value, label, tag string) {
+	<label class="tuc-btn h-auto flex-col gap-0.5 py-2">
+		<input type="radio" class="tuc-btn__input" name="mode" value={ value } checked?={ value == "normal" }/>
+		<span class="font-semibold">{ label }</span>
+		<span class="text-[11px] font-normal text-muted">{ tag }</span>
+	</label>
+}
+
+// dnsProviderName is how a DNS provider id reads on screen.
+func dnsProviderName(id string) string {
+	switch id {
+	case "cloudflare":
+		return "Cloudflare"
+	case "route53":
+		return "Route 53 (AWS)"
+	case "digitalocean":
+		return "DigitalOcean"
+	case "googleclouddns":
+		return "Google Cloud DNS"
+	}
+	return id
+}
+
+// domainModeCard explains one way a domain can work, in plain words.
+templ domainModeCard(icon, title, text, pill string) {
+	<div class="flex items-start gap-3 rounded-sm border border-border bg-surface-2 p-3">
+		<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-primary/15 text-primary">
+			@Icon(icon, "size-4")
+		</span>
+		<div class="flex min-w-0 flex-col gap-1">
+			<strong class="text-[13px] font-semibold">{ title }</strong>
+			<p class="m-0 text-xs leading-relaxed text-muted">{ text }</p>
+			if pill != "" {
+				<span class="tuc-badge is-success self-start">{ pill }</span>
+			}
+		</div>
+	</div>
+}
+
+// domainDialog adds a domain in one of three modes: normal (one hostname),
+// wildcard (*.domain, a certificate per subdomain on first visit) or scale
+// (*.domain under one DNS-01 certificate, with the DNS provider's token).
+// The preview shows exactly what will be stored (ui.js).
 templ domainDialog(d ServiceData) {
 	<dialog class="tuc-modal is-md" id="domain-new" aria-labelledby="domain-new-title">
 		<div class="tuc-modal__panel">
@@ -847,22 +927,64 @@ templ domainDialog(d ServiceData) {
 						<span class="tuc-hint">{ t(ctx, "endpoint.bind_hint") }</span>
 					</div>
 				}
-				<label class="tuc-choice is-end">
-					<span>
-						<strong class="font-semibold">{ t(ctx, "domain.wildcard") }</strong>
-						<span class="tuc-choice__hint">{ t(ctx, "domain.wildcard_hint") }</span>
-					</span>
-					<input type="checkbox" role="switch" class="tuc-switch" id="domain-wildcard" name="wildcard" value="1"/>
-				</label>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<span class="tuc-label" id="domain-mode-label">{ t(ctx, "domain.mode") }</span>
+					<div class="tuc-btn-group is-segmented w-full [&>.tuc-btn]:flex-1" role="radiogroup" aria-labelledby="domain-mode-label">
+						@domainModeOption("normal", t(ctx, "domain.mode_normal"), t(ctx, "domain.mode_normal_tag"))
+						@domainModeOption("wildcard", t(ctx, "domain.mode_wildcard"), t(ctx, "domain.mode_wildcard_tag"))
+						@domainModeOption("scale", t(ctx, "domain.mode_scale"), t(ctx, "domain.mode_scale_tag"))
+					</div>
+				</div>
+				<div data-shown-when="mode=normal">
+					@domainModeCard("globe", t(ctx, "domain.normal_title"), t(ctx, "domain.normal_text"), "")
+				</div>
+				<div data-shown-when="mode=wildcard" hidden>
+					@domainModeCard("asterisk", t(ctx, "domain.wildcard_title"), t(ctx, "domain.wildcard_text"), t(ctx, "domain.wildcard_pill"))
+				</div>
+				<div class="flex flex-col gap-3" data-shown-when="mode=scale" hidden>
+					@domainModeCard("chart-column", t(ctx, "domain.scale_title"), t(ctx, "domain.scale_text"), t(ctx, "domain.scale_pill"))
+					<div class="flex flex-col gap-3 rounded-sm border border-primary/40 bg-primary/5 p-3">
+						<div class="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-2 max-sm:grid-cols-1">
+							<select class="tuc-input" name="dns_provider" aria-label={ t(ctx, "domain.dns_provider") } data-tuc-select data-clearable="false">
+								for _, pv := range d.Domains.DNSProviders {
+									<option value={ pv } selected?={ pv == d.Domains.Base.Provider }>{ dnsProviderName(pv) }</option>
+								}
+							</select>
+							<input class="tuc-input font-mono" type="password" name="dns_token" autocomplete="off" aria-label={ t(ctx, "domain.dns_token") } placeholder={ t(ctx, "domain.dns_token_placeholder") }/>
+						</div>
+						if d.Domains.Base.Scaled {
+							<span class="tuc-hint">{ t(ctx, "domain.dns_token_keep") }</span>
+						}
+						<span class="flex items-center gap-1.5 text-xs text-muted">
+							@Icon("lock", "size-3.5 shrink-0 text-success")
+							{ t(ctx, "domain.dns_token_lock") }
+						</span>
+						<details class="text-xs">
+							<summary class="cursor-pointer font-semibold text-primary">{ t(ctx, "domain.dns_token_how") }</summary>
+							<ol class="mt-2 list-decimal pl-5 leading-relaxed text-muted">
+								<li>{ t(ctx, "domain.dns_token_how_1") }</li>
+								<li>{ t(ctx, "domain.dns_token_how_2") }</li>
+								<li>{ t(ctx, "domain.dns_token_how_3") }</li>
+							</ol>
+						</details>
+					</div>
+					if d.Domains.Base.Domain != "" {
+						<input type="hidden" name="replace_base" value="1"/>
+						@notice("warning", "triangle-alert", t(ctx, "domain.base_replace", "base", d.Domains.Base.Domain))
+					}
+				</div>
 				<div class="flex min-w-0 items-center gap-2 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[13px]">
 					<span class="shrink-0 text-muted">{ t(ctx, "domain.preview") }</span>
 					<code class="min-w-0 truncate font-mono" data-domain-preview data-empty="—">—</code>
 				</div>
-				<div data-shown-when="domain-wildcard=0">
+				<div data-shown-when="mode=normal">
 					@notice("info", "globe", t(ctx, "domain.dns_hint"))
 				</div>
-				<div data-shown-when="domain-wildcard=1" hidden>
-					@notice("warning", "asterisk", t(ctx, "domain.wildcard_notice"))
+				<div data-shown-when="mode=wildcard" hidden>
+					@notice("info", "globe", t(ctx, "domain.dns_wildcard"))
+				</div>
+				<div data-shown-when="mode=scale" hidden>
+					@notice("info", "globe", t(ctx, "domain.dns_scale"))
 				</div>
 				<div class="flex justify-end gap-2">
 					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>

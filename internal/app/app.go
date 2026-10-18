@@ -148,6 +148,10 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	tplReg := templates.NewRegistry(templates.Builtin())
 	pm.SetTemplates(tplReg)
 	pm.SetBaseDomain(cfg.Edge.BaseDomain)
+	// The base domain set from the panel (edge_settings) wins over hangar.toml.
+	if err := pm.LoadEdgeDNS(ctx); err != nil {
+		log.Warn("edge dns settings", "error", err)
+	}
 	tplSync, err := templates.NewSyncer(cfg.Templates.CatalogURL, filepath.Join(cfg.DataDir, "templates"), version, tplReg, log)
 	if err != nil {
 		return err
@@ -200,7 +204,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	if cfg.Edge.Enabled {
 		if n == nil {
 			log.Error("edge enabled but docker is unavailable; domains are not served")
-		} else if em, err := startEdge(ctx, cfg, core, n, hooks, panelHost, log); err != nil {
+		} else if em, err := startEdge(ctx, cfg, core, n, hooks, panelHost, pm, log); err != nil {
 			// The panel stays up so the problem can be seen and fixed.
 			log.Error("start edge proxy", "error", err)
 		} else {
@@ -453,7 +457,7 @@ func NewBackups(core *Core, pm *projects.Manager, cfg config.Config, version str
 
 // startEdge brings Caddy up with the domains in the database and starts the
 // endpoint that authorizes on-demand certificates.
-func startEdge(ctx context.Context, cfg config.Config, core *Core, n node.Node, hooks http.Handler, panelHost string, log *slog.Logger) (*edge.Manager, error) {
+func startEdge(ctx context.Context, cfg config.Config, core *Core, n node.Node, hooks http.Handler, panelHost string, dns edge.DNSSource, log *slog.Logger) (*edge.Manager, error) {
 	subnet, gw, caddyIP := cfg.Edge.EdgeAddrs()
 	uid, gid := os.Getuid(), os.Getgid()
 	if uid == 0 {
@@ -483,6 +487,9 @@ func startEdge(ctx context.Context, cfg config.Config, core *Core, n node.Node, 
 			return errpages.Render(b)
 		},
 	}, log)
+	// The base domain, DNS provider and token set from the panel win over
+	// hangar.toml; set before Start so the first config already has them.
+	em.SetDNSSource(dns)
 	startCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	if err := em.Start(startCtx, ctx); err != nil {

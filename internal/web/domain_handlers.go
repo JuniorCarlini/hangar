@@ -22,14 +22,38 @@ func (h *handlers) domainsDone(w http.ResponseWriter, r *http.Request, ok string
 }
 
 func (h *handlers) addDomain(w http.ResponseWriter, r *http.Request) {
-	// The form sends the hostname and a "wildcard" switch; "*." typed by
-	// hand counts as the switch too.
+	// "mode" is how the domain works: normal (one hostname), wildcard
+	// (*.domain, a certificate per subdomain on first visit) or scale
+	// (*.domain under one DNS-01 wildcard certificate, with the DNS
+	// provider's token). "*." typed by hand means wildcard. Forms from
+	// before the modes send wildcard=1.
 	host, wild := strings.CutPrefix(strings.TrimSpace(r.PostFormValue("hostname")), "*.")
-	if wild || r.PostFormValue("wildcard") == "1" {
-		host = "*." + host
+	mode := r.PostFormValue("mode")
+	if mode == "" && (wild || r.PostFormValue("wildcard") == "1") {
+		mode = "wildcard"
 	}
-	err := h.projects.AddDomain(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), host, r.PostFormValue("endpoint"))
+	ctx, project, service, endpoint := r.Context(), r.PathValue("project"), r.PathValue("service"), r.PostFormValue("endpoint")
+	var err error
+	switch mode {
+	case "scale":
+		err = h.projects.AddScaledDomain(ctx, actor(r), project, service, host, endpoint,
+			r.PostFormValue("dns_provider"), []byte(strings.TrimSpace(r.PostFormValue("dns_token"))), r.PostFormValue("replace_base") == "1")
+	case "wildcard":
+		err = h.projects.AddDomain(ctx, actor(r), project, service, "*."+host, endpoint)
+	default:
+		if wild {
+			host = "*." + host
+		}
+		err = h.projects.AddDomain(ctx, actor(r), project, service, host, endpoint)
+	}
 	h.domainsDone(w, r, "domain", err)
+}
+
+// rotateDNSToken replaces the DNS provider token of the base domain
+// (admin + sudo, like every edge setting).
+func (h *handlers) rotateDNSToken(w http.ResponseWriter, r *http.Request) {
+	err := h.projects.RotateEdgeDNSToken(r.Context(), actor(r), []byte(strings.TrimSpace(r.PostFormValue("dns_token"))))
+	h.domainsDone(w, r, "dns-token", err)
 }
 
 func (h *handlers) removeDomain(w http.ResponseWriter, r *http.Request) {

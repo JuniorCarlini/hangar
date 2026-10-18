@@ -175,7 +175,7 @@ func TestNetworkTabModals(t *testing.T) {
 	page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=network", cookies: []*http.Cookie{sc}}).Body.String()
 	for _, want := range []string{
 		`id="domains"`, `id="ports"`, `data-tuc-modal="#domain-new"`, `data-tuc-modal="#port-new"`,
-		`id="domain-wildcard" name="wildcard" value="1"`, `data-domain-preview`,
+		`name="mode" value="wildcard"`, `name="mode" value="scale"`, `name="dns_token"`, `data-shown-when="mode=scale"`, `data-domain-preview`,
 		`class="tuc-btn-group is-segmented port-access flex w-full"`,
 		`data-shown-when="access=ips"`, `data-shown-when="access=any"`,
 	} {

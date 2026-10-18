@@ -20,6 +20,7 @@ var SensitiveActions = []string{
 	"domain.dynamic.disable",
 	"domain.dynamic.rotate_secret",
 	"domain.add",
+	"edge.dns.set",
 	"domain.remove",
 	"port.open",
 	"service.endpoint.public",

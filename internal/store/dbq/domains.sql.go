@@ -233,6 +233,24 @@ func (q *Queries) GetDomainByHostname(ctx context.Context, hostname string) (Dom
 	return i, err
 }
 
+const getEdgeSettings = `-- name: GetEdgeSettings :one
+SELECT id, base_domain, dns_provider, dns_token_enc, updated_by, updated_at FROM edge_settings WHERE id = 1
+`
+
+func (q *Queries) GetEdgeSettings(ctx context.Context) (EdgeSetting, error) {
+	row := q.db.QueryRowContext(ctx, getEdgeSettings)
+	var i EdgeSetting
+	err := row.Scan(
+		&i.ID,
+		&i.BaseDomain,
+		&i.DnsProvider,
+		&i.DnsTokenEnc,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getServiceByID = `-- name: GetServiceByID :one
 SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance FROM services WHERE id = ?
 `
@@ -531,6 +549,34 @@ func (q *Queries) UnblockHostname(ctx context.Context, hostname string) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const upsertEdgeSettings = `-- name: UpsertEdgeSettings :exec
+INSERT INTO edge_settings (id, base_domain, dns_provider, dns_token_enc, updated_by, updated_at)
+VALUES (1, ?, ?, ?, ?, ?)
+ON CONFLICT (id) DO UPDATE SET
+    base_domain = excluded.base_domain, dns_provider = excluded.dns_provider,
+    dns_token_enc = excluded.dns_token_enc, updated_by = excluded.updated_by,
+    updated_at = excluded.updated_at
+`
+
+type UpsertEdgeSettingsParams struct {
+	BaseDomain  string
+	DnsProvider string
+	DnsTokenEnc []byte
+	UpdatedBy   sql.NullString
+	UpdatedAt   int64
+}
+
+func (q *Queries) UpsertEdgeSettings(ctx context.Context, arg UpsertEdgeSettingsParams) error {
+	_, err := q.db.ExecContext(ctx, upsertEdgeSettings,
+		arg.BaseDomain,
+		arg.DnsProvider,
+		arg.DnsTokenEnc,
+		arg.UpdatedBy,
+		arg.UpdatedAt,
+	)
+	return err
 }
 
 const wasAllowed = `-- name: WasAllowed :one

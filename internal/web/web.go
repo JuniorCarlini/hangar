@@ -93,7 +93,7 @@ func New(d Deps) (http.Handler, error) {
 	hs := &handlers{
 		auth: d.Auth, updates: d.Updates, updateDir: d.UpdateDir, panelURL: d.PanelURL, projects: d.Projects, metrics: d.Metrics, audit: d.Audit,
 		deps: d.Deps, status: d.Status, pub: newPublicStatus(d.Status), alerts: d.Alerts, lock: d.Lock, hooksBase: d.HooksBase, backups: d.Backups,
-		hookFails: newHookFails(), serverIP: d.ServerIP, baseDomain: d.BaseDomain, autoLinkIP: d.AutoLinkIP, errorPages: d.ErrorPages, brand: d.Brand,
+		hookFails: newHookFails(), serverIP: d.ServerIP, autoLinkIP: d.AutoLinkIP, errorPages: d.ErrorPages, brand: d.Brand,
 	}
 	if len(d.StatusHosts) > 0 {
 		hs.statusBase = "https://" + d.StatusHosts[0]
@@ -168,6 +168,7 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/delete", h.deleteService, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.delete", AuditByHandler: true})
 
 	rt.HandleFunc("POST "+svc+"/domains", h.addDomain, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "domain.add", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/dns-token", h.rotateDNSToken, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "edge.dns.set", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/domains/delete", h.removeDomain, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "domain.remove", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/domains/dynamic", h.dynamicDomains, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "domain.dynamic", AuditByHandler: true})
 	// Putting a port on the internet takes what adding a domain takes;

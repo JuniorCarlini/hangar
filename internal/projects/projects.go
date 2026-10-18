@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
@@ -75,10 +76,15 @@ type Manager struct {
 	// repos caches what each Git credential can list (github_repos.go).
 	reposMu sync.Mutex
 	repos   map[string]cachedRepos
-	// baseDomain is the edge's base domain (SetBaseDomain): automatic links
-	// live under it, so a custom domain must not take one of their names.
-	baseDomain string
-	panelHost  string
+	// cfgBase is the base domain from hangar.toml (SetBaseDomain); the one in
+	// effect (baseDomain()) is the panel's edge_settings when set, else this.
+	// Automatic links live under it, so a custom domain must not take one of
+	// their names.
+	cfgBase string
+	dbBase  atomic.Value // string, from edge_settings (edgedns.go)
+	// dnsCheck replaces edge.CheckDNSToken in tests.
+	dnsCheck  func(ctx context.Context, provider, zone string, token []byte) error
+	panelHost string
 	// templates is the service catalog (SetTemplates); the embedded one
 	// until the community catalog is wired in.
 	templates *templates.Registry
@@ -695,7 +701,7 @@ func (m *Manager) ListEnv(ctx context.Context, serviceID string) ([]EnvVar, erro
 
 // SetEnv creates or replaces a variable.
 // SetBaseDomain tells the manager the edge's base domain ("" = none).
-func (m *Manager) SetBaseDomain(d string) { m.baseDomain = strings.ToLower(strings.TrimSuffix(d, ".")) }
+func (m *Manager) SetBaseDomain(d string) { m.cfgBase = strings.ToLower(strings.TrimSuffix(d, ".")) }
 
 // SetPanelHost reserves the panel's public hostname: no service domain may
 // take it.

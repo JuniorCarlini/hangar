@@ -312,6 +312,20 @@ type DomainsSection struct {
 	DynamicElsewhere string
 	CheckPath        string
 	CheckSecret      string // only right after a sudo reveal
+	// Base is the edge's base domain ("Em escala" sets it from the panel).
+	Base EdgeBase
+	// DNSProviders are the providers "Em escala" can use.
+	DNSProviders []string
+}
+
+// EdgeBase is the base domain whose wildcard certificate comes by DNS-01.
+type EdgeBase struct {
+	Domain   string
+	Provider string
+	// Scaled: set from the panel, with a provider token.
+	Scaled bool
+	// FromConfig: comes from hangar.toml (read only here).
+	FromConfig bool
 }
 
 // EndpointRow is one web endpoint of a service, with its automatic link.

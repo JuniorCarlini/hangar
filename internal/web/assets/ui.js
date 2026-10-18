@@ -152,24 +152,27 @@
   // still toggles.
   document.addEventListener('tucano:change', syncShown);
   syncShown();
-  // The add-domain form previews what will be stored: "*." in front when
-  // "wildcard" is on. Typing "*." flips the switch instead, so the field
-  // always holds a plain hostname.
+  // The add-domain form previews what will be stored: "*." in front in the
+  // wildcard and scale modes. Typing "*." picks the wildcard mode instead,
+  // so the field always holds a plain hostname.
   function domainPreview() {
     document.querySelectorAll('[data-domain-preview]').forEach(function (out) {
       var f = out.closest('form');
       var host = f && f.querySelector('[name="hostname"]');
-      var wild = f && f.querySelector('[name="wildcard"]');
       if (!host) return;
-      if (/^\s*\*\./.test(host.value) && wild) {
+      var mode = f.querySelector('[name="mode"]:checked');
+      if (/^\s*\*\./.test(host.value)) {
         host.value = host.value.replace(/^\s*\*\./, '');
-        if (!wild.checked) {
+        var wild = f.querySelector('[name="mode"][value="wildcard"]');
+        if (wild && (!mode || mode.value === 'normal')) {
           wild.checked = true;
+          mode = wild;
           syncShown();
         }
       }
       var h = host.value.trim().toLowerCase().replace(/\.$/, '');
-      out.textContent = h ? (wild && wild.checked ? '*.' : '') + h : out.dataset.empty;
+      var star = mode && mode.value !== 'normal';
+      out.textContent = h ? (star ? '*.' : '') + h : out.dataset.empty;
     });
   }
   document.addEventListener('input', domainPreview);

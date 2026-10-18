@@ -122,8 +122,8 @@ func (m *Manager) AddDomain(ctx context.Context, a Actor, projectSlug, serviceSl
 	if m.panelHost != "" && (host == m.panelHost || (strings.HasPrefix(host, "*.") && strings.HasSuffix(m.panelHost, host[1:]) && !strings.Contains(strings.TrimSuffix(m.panelHost, host[1:]), "."))) {
 		return i18n.E("domain.error.reserved", "domain", host)
 	}
-	if m.baseDomain != "" {
-		if label, ok := strings.CutSuffix(strings.TrimPrefix(host, "*."), "."+m.baseDomain); ok && !strings.Contains(label, ".") {
+	if base := m.baseDomain(); base != "" {
+		if label, ok := strings.CutSuffix(strings.TrimPrefix(host, "*."), "."+base); ok && !strings.Contains(label, ".") {
 			if n, err := m.q.HostLabelTaken(ctx, label); err != nil {
 				return err
 			} else if n > 0 {

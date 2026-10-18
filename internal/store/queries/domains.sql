@@ -76,3 +76,14 @@ SELECT coalesce(sum(count), 0) FROM tls_ask_log WHERE decision = 'deny' AND hour
 
 -- name: RecentAsksByDecision :many
 SELECT * FROM tls_ask_log WHERE decision = ? ORDER BY last_at DESC LIMIT ?;
+
+-- name: GetEdgeSettings :one
+SELECT * FROM edge_settings WHERE id = 1;
+
+-- name: UpsertEdgeSettings :exec
+INSERT INTO edge_settings (id, base_domain, dns_provider, dns_token_enc, updated_by, updated_at)
+VALUES (1, ?, ?, ?, ?, ?)
+ON CONFLICT (id) DO UPDATE SET
+    base_domain = excluded.base_domain, dns_provider = excluded.dns_provider,
+    dns_token_enc = excluded.dns_token_enc, updated_by = excluded.updated_by,
+    updated_at = excluded.updated_at;
