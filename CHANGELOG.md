@@ -12,6 +12,29 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.7] - 2026-10-18
+
+### Melhorado
+
+- **Atualizações e vulnerabilidades com páginas**: a lista de pendências
+  mostra 25 itens por vez, com paginação no rodapé. Os cartões do topo
+  continuam contando tudo.
+
+### Corrigido
+
+- **Falsos "críticos" em imagens Debian e Alpine**: o painel oferecia a uma
+  imagem Debian 13 a correção que só existe no Debian 14 (e ao Alpine 3.23 a
+  do 3.24). Agora a correção sugerida é a da versão do sistema que roda no
+  container; quando ela ainda não existe, o aviso aparece como "Segurança",
+  sem correção, em vez de "Crítico". Clique em **Verificar agora** depois de
+  atualizar para refazer a lista.
+- **Prévia do compose escondida**: ao clicar em **Analisar**, a janela agora
+  rola até a prévia, que ficava abaixo do botão e parecia não ter aparecido.
+- **Convite repetido para o mesmo e-mail**: um convite novo substitui o que
+  estava aberto para o mesmo endereço, e criar a conta encerra os outros
+  links dela. Convites antigos que sobraram podem ser cancelados em
+  **Equipe**.
+
 ## [0.5.6] - 2026-10-18
 
 ### Corrigido
