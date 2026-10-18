@@ -327,9 +327,12 @@ templ accessFields(roles []string, role string, all bool, chosen []string, proje
 		</div>
 		<p class="tuc-hint" data-shown-when="scope=all">{ t(ctx, "team.scope_all_hint") }</p>
 		<div class="flex flex-col gap-2" data-shown-when="scope=some">
-			<p class="tuc-hint">{ t(ctx, "team.scope_some_hint") }</p>
 			if len(projects) == 0 {
-				<span class="text-xs text-muted">{ t(ctx, "team.no_projects_yet") }</span>
+				<div class="rounded-md border border-border bg-surface-2">
+					@emptyState("folder", t(ctx, "team.no_projects_yet"))
+				</div>
+			} else {
+				<p class="tuc-hint">{ t(ctx, "team.scope_some_hint") }</p>
 			}
 			<div class="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-2">
 				for _, p := range projects {
