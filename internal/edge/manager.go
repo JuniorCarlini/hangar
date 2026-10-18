@@ -93,7 +93,21 @@ type Manager struct {
 	// Caddy config-reject error can be redacted against the token actually in
 	// the config, not only the config-file one.
 	dnsToken string
+	// degraded says why Caddy is not running the full config ("" = it is):
+	// the last good one, or the minimal one, serves in the meantime. Under mu.
+	degraded string
+
+	// applyMu serializes build, load and saving the boot config, so an older
+	// config never overwrites a newer one on disk.
+	applyMu sync.Mutex
+	// loadWait bounds how long Start waits for Caddy to answer (0 = 30s;
+	// tests shorten it).
+	loadWait time.Duration
 }
+
+// errRejected marks a config Caddy answered and refused, as opposed to a
+// Caddy that did not answer at all.
+var errRejected = errors.New("caddy rejected the config")
 
 // SetDNSSource wires the panel's DNS settings (base domain, provider, token)
 // into the edge so the operator can configure the wildcard from the panel
@@ -142,9 +156,16 @@ func NewManager(q *dbq.Queries, n node.Node, auth *Authorizer, opts Options, log
 	}
 }
 
-// Start writes the bootstrap config, ensures the network and the Caddy
-// container, and starts the ask listener. It returns once Caddy has the
-// current config (bounded by ctx); the listener runs until life ends.
+// Start ensures the network and the Caddy container, starts the ask listener
+// and loads the current config. It returns once Caddy has a config (bounded
+// by ctx); the listener runs until life ends.
+//
+// bootstrap.json, the file Caddy boots from (the container restarts by
+// itself), only ever holds a config Caddy accepted: a rejected one there would
+// crash-loop Caddy on the next reboot and take every site and the panel down.
+// When the full config is rejected, Start still succeeds with the last good
+// config, or a minimal one that serves the panel and the error pages, and
+// Degraded says why.
 func (m *Manager) Start(ctx, life context.Context) error {
 	for _, d := range []string{m.opts.Spec.AdminDir, m.opts.Spec.DataDir, m.pagesDir(), m.stateDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
@@ -175,11 +196,9 @@ func (m *Manager) Start(ctx, life context.Context) error {
 			return err
 		}
 	}
-	cfg, err := m.build(ctx)
-	if err != nil {
-		return err
-	}
-	if err := writeFile(filepath.Join(m.opts.Spec.AdminDir, bootstrapFile), cfg); err != nil {
+	// A first start has no boot config yet: Caddy boots from the minimal one
+	// and gets the full one through the admin API below.
+	if err := m.ensureBootFile(); err != nil {
 		return err
 	}
 	if err := m.node.EnsureEdge(ctx, m.opts.Spec); err != nil {
@@ -198,26 +217,149 @@ func (m *Manager) Start(ctx, life context.Context) error {
 		MaxHeaderBytes:    8 << 10,
 	}
 	go func() { _ = srv.Serve(ln) }()
-	go func() {
-		<-life.Done()
-		_ = srv.Close()
-	}()
+	stop := context.AfterFunc(life, func() { _ = srv.Close() })
 	// Caddy may still be starting (or already running an older config): load
 	// the current one through the admin API.
-	return m.waitAndLoad(ctx, cfg)
+	if err := m.bringUp(ctx); err != nil {
+		// Free the ask port: the caller retries Start from scratch.
+		stop()
+		_ = srv.Close()
+		return err
+	}
+	return nil
 }
 
-// Apply rebuilds the config from the database and loads it into Caddy.
+// bringUp loads the full config, falling back to the last good one and then
+// to the minimal one when Caddy rejects it. It fails only when Caddy does not
+// answer or rejects even the minimal config.
+func (m *Manager) bringUp(ctx context.Context) error {
+	m.applyMu.Lock()
+	defer m.applyMu.Unlock()
+	full, err := m.build(ctx)
+	if err != nil {
+		return err
+	}
+	err = m.waitAndLoad(ctx, full)
+	if err == nil {
+		m.setDegraded("")
+		return m.saveBoot(full)
+	}
+	if !errors.Is(err, errRejected) {
+		// Caddy never answered. A boot config it cannot run (one written by
+		// an older Hangar before it was validated) crash-loops it: replace it
+		// with the minimal one, which the next restart picks up.
+		if merr := m.saveMinimalBoot(); merr != nil {
+			m.log.Error("write the minimal caddy boot config", "error", merr)
+		}
+		return err
+	}
+	reason := err.Error()
+	m.log.Error("caddy rejected the full config; serving the last good one", "error", err)
+	if last, rerr := os.ReadFile(m.bootPath()); rerr == nil {
+		lerr := m.load(ctx, last)
+		if lerr == nil {
+			m.setDegraded(reason)
+			return nil
+		}
+		m.log.Error("caddy rejected the last good config; serving the minimal one", "error", lerr)
+	}
+	minimal, err := m.minimal()
+	if err != nil {
+		return err
+	}
+	if err := m.load(ctx, minimal); err != nil {
+		return fmt.Errorf("minimal config: %w", err)
+	}
+	m.setDegraded(reason)
+	return m.saveBoot(minimal)
+}
+
+// Apply rebuilds the config from the database and loads it into Caddy. Only
+// a config Caddy accepted becomes its boot config; a rejected one leaves
+// Caddy (and the boot file) on the previous one.
 func (m *Manager) Apply(ctx context.Context) error {
+	m.applyMu.Lock()
+	defer m.applyMu.Unlock()
 	cfg, err := m.build(ctx)
 	if err != nil {
 		return err
 	}
-	if err := writeFile(filepath.Join(m.opts.Spec.AdminDir, bootstrapFile), cfg); err != nil {
+	m.auth.Forget()
+	if err := m.load(ctx, cfg); err != nil {
 		return err
 	}
-	m.auth.Forget()
-	return m.load(ctx, cfg)
+	m.setDegraded("")
+	return m.saveBoot(cfg)
+}
+
+// Check reports whether Caddy's admin API answers, which also means its
+// container is running.
+func (m *Manager) Check(ctx context.Context) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://caddy/config/", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := m.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("caddy admin: %w", err)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("caddy admin answered %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// Heal brings back a Caddy that stopped answering: the container is
+// recreated or started as needed, then the config is loaded again.
+func (m *Manager) Heal(ctx context.Context) error {
+	if err := m.node.EnsureEdge(ctx, m.opts.Spec); err != nil {
+		return fmt.Errorf("start caddy: %w", err)
+	}
+	return m.bringUp(ctx)
+}
+
+// Degraded says why Caddy is not serving the full config, "" when it is.
+func (m *Manager) Degraded() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.degraded
+}
+
+func (m *Manager) setDegraded(reason string) {
+	m.mu.Lock()
+	m.degraded = reason
+	m.mu.Unlock()
+}
+
+func (m *Manager) bootPath() string { return filepath.Join(m.opts.Spec.AdminDir, bootstrapFile) }
+
+// saveBoot makes cfg, which Caddy just accepted, its boot config (atomic
+// replace: a crash never leaves half a file).
+func (m *Manager) saveBoot(cfg []byte) error {
+	if err := writeFile(m.bootPath(), cfg); err != nil {
+		return fmt.Errorf("caddy boot config: %w", err)
+	}
+	return nil
+}
+
+// ensureBootFile writes the minimal boot config when there is none yet.
+func (m *Manager) ensureBootFile() error {
+	if _, err := os.Stat(m.bootPath()); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("caddy boot config: %w", err)
+	}
+	return m.saveMinimalBoot()
+}
+
+func (m *Manager) saveMinimalBoot() error {
+	cfg, err := m.minimal()
+	if err != nil {
+		return err
+	}
+	return m.saveBoot(cfg)
 }
 
 func (m *Manager) pagesDir() string { return filepath.Join(m.opts.Spec.AdminDir, "pages") }
@@ -273,7 +415,8 @@ func (m *Manager) HasCertificate(host string) bool {
 	m.mu.Lock()
 	base, wild := m.dnsBase, m.dnsWild
 	m.mu.Unlock()
-	if wild && coveredByBase(host, base) {
+	// The panel always has a certificate of its own (Route.OwnCert).
+	if wild && host != m.opts.PanelHost && coveredByBase(host, base) {
 		name := "wildcard_." + base
 		if matches, _ := filepath.Glob(filepath.Join(certs, "*", name, name+".crt")); len(matches) > 0 {
 			return true
@@ -282,31 +425,18 @@ func (m *Manager) HasCertificate(host string) bool {
 	return false
 }
 
-func (m *Manager) build(ctx context.Context) ([]byte, error) {
-	base, provider, token := m.resolveDNS(ctx)
-	m.mu.Lock()
-	m.dnsBase = base
-	m.dnsWild = base != "" && provider != "" && token != ""
-	m.dnsToken = token
-	m.mu.Unlock()
+// baseInput is what every config has: the admin socket, the ACME account
+// and the public panel. On its own it is the minimal config, which needs
+// nothing from the database or the DNS provider and so always loads.
+func (m *Manager) baseInput() ConfigInput {
 	in := ConfigInput{
 		AdminListen: "unix/" + caddyRunDir + "/" + adminSocket + "|0660",
 		AskURL:      "http://" + net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(AskPort)) + AskPath,
 		Email:       m.opts.Email,
 		ACMECA:      m.opts.ACMECA,
-		BaseDomain:  base,
-		DNSProvider: provider,
-		DNSToken:    token,
 	}
 	if m.opts.ACMECARoot != "" {
 		in.ACMECARoots = []string{caddyRunDir + "/" + caRootFile}
-	}
-	if m.opts.HooksHost != "" && m.opts.Hooks != nil {
-		in.Hooks = &Route{Hosts: []string{m.opts.HooksHost}, Upstream: net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(AskPort))}
-	}
-	rows, err := m.q.ListAllDomains(ctx)
-	if err != nil {
-		return nil, err
 	}
 	if m.opts.PanelHost != "" {
 		in.Fixed = append(in.Fixed, Route{
@@ -314,7 +444,30 @@ func (m *Manager) build(ctx context.Context) ([]byte, error) {
 			Upstream: net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(PanelPort)),
 			Key:      "hangar_panel",
 			Compress: true,
+			OwnCert:  true,
 		})
+	}
+	return in
+}
+
+// minimal is the fallback config: the panel and the error pages only.
+func (m *Manager) minimal() ([]byte, error) { return BuildConfig(m.baseInput()) }
+
+func (m *Manager) build(ctx context.Context) ([]byte, error) {
+	base, provider, token := m.resolveDNS(ctx)
+	m.mu.Lock()
+	m.dnsBase = base
+	m.dnsWild = base != "" && provider != "" && token != ""
+	m.dnsToken = token
+	m.mu.Unlock()
+	in := m.baseInput()
+	in.BaseDomain, in.DNSProvider, in.DNSToken = base, provider, token
+	if m.opts.HooksHost != "" && m.opts.Hooks != nil {
+		in.Hooks = &Route{Hosts: []string{m.opts.HooksHost}, Upstream: net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(AskPort))}
+	}
+	rows, err := m.q.ListAllDomains(ctx)
+	if err != nil {
+		return nil, err
 	}
 	byUpstream := map[string]*Route{}
 	for _, r := range rows {
@@ -373,10 +526,15 @@ func Upstream(project, service string, port int64) string {
 }
 
 func (m *Manager) waitAndLoad(ctx context.Context, cfg []byte) error {
-	deadline := time.Now().Add(30 * time.Second)
+	wait := m.loadWait
+	if wait == 0 {
+		wait = 30 * time.Second
+	}
+	deadline := time.Now().Add(wait)
 	for {
 		err := m.load(ctx, cfg)
-		if err == nil || time.Now().After(deadline) {
+		// A rejection will not change by asking again.
+		if err == nil || errors.Is(err, errRejected) || time.Now().After(deadline) {
 			return err
 		}
 		select {
@@ -406,7 +564,7 @@ func (m *Manager) load(ctx context.Context, cfg []byte) error {
 		// config file), held in m.dnsToken under the lock load() already holds,
 		// not only the config-file token (empty in the normal panel setup).
 		msg := redactConfigError(body, m.dnsToken, 8<<10)
-		return fmt.Errorf("caddy rejected the config (%d): %s", resp.StatusCode, msg)
+		return fmt.Errorf("%w (%d): %s", errRejected, resp.StatusCode, msg)
 	}
 	return nil
 }

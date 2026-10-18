@@ -21,6 +21,11 @@ type Route struct {
 	// Only the panel uses it: a canvas page is ~165 KB of HTML and ~20 KB
 	// compressed; the sites keep whatever their apps do.
 	Compress bool
+	// OwnCert keeps the hosts on a per-host HTTP-01 certificate even when the
+	// DNS-01 wildcard of the base domain would cover them. The panel uses
+	// it: a bad or revoked DNS token must never stop its certificate from
+	// renewing, or nobody could reach the panel to fix the token.
+	OwnCert bool
 }
 
 // Where the panel puts the error pages and the deploy markers, as Caddy
@@ -147,7 +152,7 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 				// wildcard certificate: it is left out of the per-host policy
 				// and skipped by automatic HTTPS, so Caddy never asks for a
 				// certificate of its own (no ACME rate-limit burn).
-				if dnsWildcard && coveredByBase(h, in.BaseDomain) {
+				if dnsWildcard && !r.OwnCert && coveredByBase(h, in.BaseDomain) {
 					baseCovered = append(baseCovered, h)
 					continue
 				}
@@ -241,7 +246,7 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 					// certificate yet.
 					"redirect": obj{
 						"listen": []string{":80"},
-						"routes": redirectRoutes(exactHosts(fixed), in.BaseDomain, dnsWildcard),
+						"routes": redirectRoutes(exactHosts(fixed), in.BaseDomain, baseCovered),
 					},
 				},
 			},
@@ -270,8 +275,9 @@ func exactHosts(fixed []Route) []string {
 // in Caddy's storage yet gets the "activating HTTPS" page (it reloads
 // itself, and lands on HTTPS once the certificate exists); every other
 // request is redirected to HTTPS. The check reads Caddy's storage on each
-// request, so no reload is needed when the certificate arrives.
-func redirectRoutes(pending []string, baseDomain string, dnsWildcard bool) []any {
+// request, so no reload is needed when the certificate arrives. covered are
+// the hosts served by the DNS-01 wildcard certificate.
+func redirectRoutes(pending []string, baseDomain string, covered []string) []any {
 	redirect := obj{"handle": []any{obj{
 		"handler":     "static_response",
 		"status_code": 308,
@@ -282,7 +288,7 @@ func redirectRoutes(pending []string, baseDomain string, dnsWildcard bool) []any
 	// own file.
 	var exact, wild []string
 	for _, h := range pending {
-		if dnsWildcard && coveredByBase(h, baseDomain) {
+		if slices.Contains(covered, h) {
 			wild = append(wild, h)
 		} else {
 			exact = append(exact, h)
@@ -363,10 +369,10 @@ func siteRoutes(in []Route) []Route {
 			}
 		}
 		if len(e) > 0 {
-			exact = append(exact, Route{Hosts: slices.Sorted(slices.Values(e)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance, Compress: r.Compress})
+			exact = append(exact, Route{Hosts: slices.Sorted(slices.Values(e)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance, Compress: r.Compress, OwnCert: r.OwnCert})
 		}
 		if len(w) > 0 {
-			wild = append(wild, Route{Hosts: slices.Sorted(slices.Values(w)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance, Compress: r.Compress})
+			wild = append(wild, Route{Hosts: slices.Sorted(slices.Values(w)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance, Compress: r.Compress, OwnCert: r.OwnCert})
 		}
 	}
 	byUpstream := func(a, b Route) int { return strings.Compare(a.Upstream, b.Upstream) }
