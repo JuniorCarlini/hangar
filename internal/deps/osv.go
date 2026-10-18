@@ -390,13 +390,22 @@ func samePackage(eco, name string, p Package) bool {
 
 var pypiSep = regexp.MustCompile(`[-_.]+`)
 
-// normalizeName applies the ecosystem's name rules (PEP 503 for PyPI).
+// normalizeName applies the ecosystem's name rules, so the same package
+// spelled two ways is recognised: PEP 503 for PyPI; case-insensitive names
+// for Packagist, NuGet, Hex and Maven ("group:artifact", which the purl
+// form lowercases); crates.io also treats "-" and "_" alike. Go module
+// paths, npm names (scoped or not), RubyGems and the distributions are
+// compared as they are.
 func normalizeName(eco, name string) string {
-	switch eco {
+	name = strings.TrimSpace(name)
+	base, _, _ := strings.Cut(eco, ":")
+	switch base {
 	case "PyPI":
 		return pypiSep.ReplaceAllString(strings.ToLower(name), "-")
-	case "Packagist":
+	case "Packagist", "NuGet", "Hex", "Maven":
 		return strings.ToLower(name)
+	case "crates.io":
+		return strings.ReplaceAll(strings.ToLower(name), "_", "-")
 	}
 	return name
 }

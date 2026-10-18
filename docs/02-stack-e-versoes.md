@@ -27,6 +27,7 @@
 | Criptografia de segredos | XChaCha20-Poly1305 (`golang.org/x/crypto`) | última | AEAD, nonce de 24 bytes aleatório seguro |
 | Logs do painel | `log/slog` (stdlib), JSON | stdlib | |
 | Config | TOML (`pelletier/go-toml/v2`) | última | |
+| Inventário de dependências | OSV-SCALIBR (`google/osv-scalibr`), só os extratores de pacotes | última | Lê a imagem de cada serviço em todas as linguagens (SO, PyPI, npm, Go, Maven, crates.io, RubyGems, NuGet, Packagist...). Ver [14](14-atualizacoes-de-dependencias.md) |
 
 ## Infra no servidor
 

@@ -7,7 +7,8 @@ import (
 )
 
 // CompareVersions orders two version strings well enough for the ecosystems
-// the monitor reads (semver, PEP 440 releases, Debian and Alpine versions):
+// the monitor reads (semver as npm, Go, crates.io and Packagist use it,
+// PEP 440 releases, Maven, RubyGems, Debian, Alpine and RPM versions):
 // an optional epoch ("1:"), then runs of digits compared as numbers and runs
 // of other characters compared as text. A pre-release marker ("rc", "a",
 // "beta", "~", "_alpha") sorts before the release it precedes. It returns -1,
@@ -90,7 +91,11 @@ func chunks(v string) []chunk {
 			for j < len(v) && v[j] >= 'a' && v[j] <= 'z' {
 				j++
 			}
-			out = append(out, chunk{text: v[i:j]})
+			// Maven: "5.3.0.RELEASE", "5.4.0.Final" and "1.0-ga" are the
+			// release itself.
+			if w := v[i:j]; !releaseWord[w] {
+				out = append(out, chunk{text: w})
+			}
 			i = j
 		case c == '~':
 			// Debian: "~" sorts before anything, even the end.
@@ -103,8 +108,16 @@ func chunks(v string) []chunk {
 	return out
 }
 
-// preRelease markers sort before the release.
-var preRelease = map[string]bool{"~": true, "a": true, "alpha": true, "b": true, "beta": true, "rc": true, "c": true, "pre": true, "preview": true, "dev": true}
+// preRelease markers sort before the release (Maven's "milestone", "cr" and
+// "snapshot" included).
+var preRelease = map[string]bool{
+	"~": true, "a": true, "alpha": true, "b": true, "beta": true, "rc": true, "c": true, "pre": true, "preview": true, "dev": true,
+	"milestone": true, "cr": true, "snapshot": true,
+}
+
+// releaseWord is a qualifier that means the plain release (Go's
+// "+incompatible" is build metadata, not a newer version).
+var releaseWord = map[string]bool{"final": true, "ga": true, "release": true, "incompatible": true}
 
 func (x chunk) cmp(y chunk) int {
 	switch {

@@ -89,14 +89,24 @@ servidor; e-mail recebe o resumo semanal completo).
 
 O que já funciona (pacote `internal/deps`, tela `/updates`):
 
-- **Inventário pelo container em produção**, não pelo repositório: o Hangar
-  roda comandos fixos de leitura (`cat`, `find`) dentro de cada serviço e lê
-  o banco de pacotes do SO (`/var/lib/dpkg/status` no Debian/Ubuntu,
-  `/lib/apk/db/installed` no Alpine), os `*.dist-info` do Python (a versão
-  realmente instalada, seja de `requirements.txt`, Poetry ou uv) e os
-  `package-lock.json`/`composer.lock` da aplicação. É o mesmo dado que o
-  Syft leria, sem uma dependência nova. Imagem sem `find`/`cat`
-  (distroless) aparece em "Não foi possível ler tudo".
+- **Inventário pela imagem em produção**, não pelo repositório: o Hangar
+  exporta do Docker a imagem que o container está rodando (pelo ID, não pela
+  tag), lê com o [OSV-SCALIBR](https://github.com/google/osv-scalibr) e
+  apaga o arquivo. Entram os pacotes do SO (dpkg, apk, rpm, chisel), o que
+  está instalado em cada linguagem (`*.dist-info` do Python, `node_modules`,
+  gems, jars Maven, `*.deps.json` do .NET), os lockfiles de Composer,
+  Bundler, Cargo, Pub e Mix, e os módulos compilados dentro de binários Go e
+  Rust. Só extratores de pacotes: nenhum detector de segredo, nada com rede,
+  nada executado da imagem. A imagem do Caddy também é lida.
+  - Limites (o painel roda com 384 MB de memória): uma imagem por vez, até
+    3 GB, 10 min por imagem, e só com o dobro do tamanho livre em disco.
+    Os arquivos temporários ficam em `<data_dir>/tmp` (o `/tmp` do serviço é
+    privado e pequeno). Imagem pulada ou que falha cai no método antigo, com
+    o motivo no log.
+  - Método antigo (reserva): comandos fixos de leitura (`cat`, `find`)
+    dentro do container, para o banco de pacotes do SO, `*.dist-info` e
+    `package-lock.json`/`composer.lock`. Imagem sem `find`/`cat`
+    (distroless) aparece em "Não foi possível ler tudo".
 - **OSV.dev em lote** (`/v1/querybatch` + `/v1/vulns/{id}`), cache de 6 h.
   Só nome, ecossistema e versão saem do servidor (há teste conferindo).
 - **Tags de imagem** pelo registry (Docker Hub e qualquer registry com a API
@@ -116,7 +126,6 @@ O que já funciona (pacote `internal/deps`, tela `/updates`):
   ligados, os resumos vão para o log (`dependency notice`); a Etapa 8 só
   precisa implementar `deps.Notifier` e chamar `Monitor.SetNotifier`.
 
-Ainda não: SBOM guardado por deploy (a checagem lê o container a cada
-varredura), varredura no build (não há build de Git ainda), módulos Go dentro
-de binários, infra do servidor (Docker Engine, kernel), botão "atualizar"
+Ainda não: SBOM guardado por deploy (a checagem lê a imagem a cada
+varredura), varredura no build (não há build de Git ainda), infra do servidor (Docker Engine, kernel), botão "atualizar"
 dos templates e o Pull Request automático.

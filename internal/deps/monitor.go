@@ -21,6 +21,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/ids"
+	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -71,10 +72,14 @@ func (l LogNotifier) Notify(_ context.Context, n Notice) error {
 type Options struct {
 	OSV      *OSV
 	Registry *Registry
-	// Exec reads the containers; nil (Docker unavailable) checks only the
-	// image tags.
+	// Images inventories the image each container runs (every language
+	// OSV-SCALIBR knows); nil falls back to Exec.
+	Images ImageInventory
+	// Exec reads the containers when their image cannot be scanned; nil
+	// with no Images (Docker unavailable) checks only the image tags.
 	Exec Execer
-	// EdgeImage is Caddy's image, checked for tag updates ("" = no edge).
+	// EdgeImage is Caddy's image, checked for tag updates and, with
+	// Images, inventoried ("" = no edge).
 	EdgeImage string
 	Notifier  Notifier
 	Audit     *audit.Logger
@@ -178,6 +183,12 @@ func (m *Monitor) ScanAsync(ctx context.Context) bool {
 // errBusy means another scan holds the lock.
 var errBusy = errors.New("a dependency scan is already running")
 
+// ImageInventory reads the packages of the image a container runs
+// (*ImageScanner).
+type ImageInventory interface {
+	ScanContainer(ctx context.Context, container string) ([]Package, error)
+}
+
 // target is one thing scanned: a service, or the edge image.
 type target struct {
 	serviceID string // "" for the edge
@@ -241,7 +252,8 @@ func (m *Monitor) scan(ctx context.Context) error {
 		targets = append(targets, target{name: EdgeTarget, image: m.o.EdgeImage})
 	}
 
-	// Inventory each target (one container at a time: exec is not free).
+	// Inventory each target, one at a time (an image scan holds the image
+	// on disk and a few dozen MB in memory).
 	type inv struct {
 		pkgs   []Package
 		invErr error
@@ -255,9 +267,7 @@ func (m *Monitor) scan(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if t.serviceID != "" && m.o.Exec != nil && t.running {
-			invs[i].pkgs, invs[i].invErr = Inventory(ctx, m.o.Exec, t.project, t.service)
-		}
+		invs[i].pkgs, invs[i].invErr = m.inventory(ctx, t)
 		invs[i].tags, invs[i].tagErr = m.o.Registry.Updates(ctx, t.image)
 		for _, p := range invs[i].pkgs {
 			if _, ok := index[queryKey(p)]; !ok {
@@ -331,6 +341,34 @@ func (m *Monitor) scan(ctx context.Context) error {
 	}
 	m.o.Log.Info("dependency scan finished", "targets", len(targets), "packages", len(all), "duration", m.now().Sub(start).Round(time.Millisecond))
 	return errors.Join(errs...)
+}
+
+// inventory reads a target's packages: from its image when it can be
+// scanned, else (services only) from the running container.
+func (m *Monitor) inventory(ctx context.Context, t target) ([]Package, error) {
+	if t.serviceID != "" && !t.running {
+		return nil, nil
+	}
+	container := node.EdgeContainer
+	if t.serviceID != "" {
+		container = node.ContainerName(t.project, t.service)
+	}
+	var imgErr error
+	if m.o.Images != nil {
+		pkgs, err := m.o.Images.ScanContainer(ctx, container)
+		if err == nil {
+			return pkgs, nil
+		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		imgErr = err
+		m.o.Log.Warn("dependency image scan failed, reading the container instead", "target", t.key(), "container", container, "reason", err)
+	}
+	if t.serviceID == "" || m.o.Exec == nil {
+		return nil, imgErr
+	}
+	return Inventory(ctx, m.o.Exec, t.project, t.service)
 }
 
 func (m *Monitor) store(ctx context.Context, obs []observation) error {

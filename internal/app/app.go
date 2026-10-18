@@ -238,18 +238,30 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// is always measured.
 	src, _ := n.(metrics.Source)
 	mc := metrics.New(st.DB, src, cfg.DataDir, log)
-	// The dependency monitor reads containers through the node (fixed
-	// cat/find commands); without Docker it only checks image tags.
-	var ex deps.Execer
+	// The dependency monitor scans the image each container runs (exported
+	// from Docker, read with OSV-SCALIBR) and falls back to reading the
+	// container through the node (fixed cat/find commands); without Docker
+	// it only checks image tags.
+	var (
+		ex   deps.Execer
+		imgs deps.ImageInventory
+	)
 	if n != nil {
 		ex = n
+		if di, ok := n.(deps.Images); ok {
+			if dir, err := scanTempDir(cfg.DataDir); err != nil {
+				log.Warn("dependency image scans disabled", "error", err)
+			} else {
+				imgs = &deps.ImageScanner{Images: di, Dir: dir}
+			}
+		}
 	}
 	edgeImage := ""
 	if cfg.Edge.Enabled {
 		edgeImage = cfg.Edge.Image
 	}
 	dm := deps.New(st.DB, deps.Options{
-		OSV: deps.NewOSV(cfg.Scan.OSVAPI, nil), Exec: ex, EdgeImage: edgeImage, Audit: al, Log: log,
+		OSV: deps.NewOSV(cfg.Scan.OSVAPI, nil), Images: imgs, Exec: ex, EdgeImage: edgeImage, Audit: al, Log: log,
 	})
 	sp := statuspage.New(st.DB, mc, al, log)
 	bm, err := NewBackups(core, pm, cfg, version, log)
@@ -622,4 +634,22 @@ func (n depsNotifier) Notify(ctx context.Context, x deps.Notice) error {
 		Params: map[string]string{"title": x.Title, "lines": strings.Join(x.Lines, "\n"), "path": x.Path},
 	})
 	return err
+}
+
+// Docker can export the images the dependency monitor scans.
+var _ deps.Images = (*docker.Local)(nil)
+
+// scanTempDir makes DataDir/tmp the process's TMPDIR. The image scans of the
+// dependency monitor unpack whole images there (OSV-SCALIBR writes its
+// layer file with os.CreateTemp): /tmp is private and small under systemd
+// (PrivateTmp, ProtectSystem=strict), the data dir is where the disk is.
+func scanTempDir(dataDir string) (string, error) {
+	dir := filepath.Join(dataDir, "tmp")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	if err := os.Setenv("TMPDIR", dir); err != nil {
+		return "", err
+	}
+	return dir, nil
 }

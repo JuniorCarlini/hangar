@@ -200,6 +200,23 @@ func actionFor(ctx context.Context, f deps.Finding) (text, code string) {
 		return i18n.T(ctx, "deps.action.npm"), "npm install " + f.Package + "@" + f.Suggested
 	case "Packagist":
 		return i18n.T(ctx, "deps.action.composer"), "composer require " + f.Package + ":^" + f.Suggested
+	case "Go":
+		if f.Package == "stdlib" { // the Go toolchain the binary was built with
+			return i18n.T(ctx, "deps.action.go_stdlib", "version", f.Suggested), ""
+		}
+		return i18n.T(ctx, "deps.action.go"), "go get " + f.Package + "@v" + strings.TrimPrefix(f.Suggested, "v")
+	case "Maven":
+		return i18n.T(ctx, "deps.action.maven"), f.Package + ":" + f.Suggested
+	case "crates.io":
+		return i18n.T(ctx, "deps.action.cargo"), "cargo update -p " + f.Package + " --precise " + f.Suggested
+	case "RubyGems":
+		return i18n.T(ctx, "deps.action.rubygems"), "gem \"" + f.Package + "\", \">= " + f.Suggested + "\""
+	case "NuGet":
+		return i18n.T(ctx, "deps.action.nuget"), "dotnet add package " + f.Package + " --version " + f.Suggested
+	case "Pub":
+		return i18n.T(ctx, "deps.action.pub"), f.Package + ": ^" + f.Suggested
+	case "Hex":
+		return i18n.T(ctx, "deps.action.hex"), "{:" + f.Package + ", \"~> " + f.Suggested + "\"}"
 	}
 	return i18n.T(ctx, "deps.action.os", "version", f.Suggested), ""
 }

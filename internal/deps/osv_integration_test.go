@@ -50,3 +50,53 @@ func TestRealRegistry(t *testing.T) {
 		t.Fatal("postgres:16.0 should have newer tags")
 	}
 }
+
+// TestRealOSVGoAndMaven checks name matching and fixed versions on real
+// records of the ecosystems the image scan brought: a Go module, Go's
+// standard library and a Maven artifact.
+func TestRealOSVGoAndMaven(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	pkgs := []Package{
+		{Ecosystem: "Go", Name: "golang.org/x/crypto", Version: "0.16.0"},
+		{Ecosystem: "Go", Name: "stdlib", Version: "1.24.6"},
+		{Ecosystem: "Maven", Name: "org.apache.logging.log4j:log4j-core", Version: "2.14.1"},
+	}
+	advs, err := NewOSV("", nil).Check(ctx, pkgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[int]struct{ alias, fixed string }{
+		0: {"CVE-2023-48795", "0.17.0"}, // Terrapin
+		2: {"CVE-2021-44228", "2.15.0"}, // Log4Shell
+	}
+	for i, p := range pkgs {
+		if len(advs[i]) == 0 {
+			t.Errorf("%s %s: no advisories", p.Name, p.Version)
+			continue
+		}
+		for _, a := range advs[i] {
+			if a.Fixed != "" && CompareVersions(a.Fixed, p.Version) <= 0 {
+				t.Errorf("%s %s: %s fixed in %q, not newer", p.Name, p.Version, a.ID, a.Fixed)
+			}
+		}
+		w, ok := want[i]
+		if !ok {
+			continue
+		}
+		found := false
+		for _, a := range advs[i] {
+			for _, al := range append(a.Aliases, a.ID) {
+				if al == w.alias {
+					found = true
+					if a.Fixed != w.fixed {
+						t.Errorf("%s %s: %s fixed = %q, want %q", p.Name, p.Version, a.ID, a.Fixed, w.fixed)
+					}
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s %s: %s not reported", p.Name, p.Version, w.alias)
+		}
+	}
+}
