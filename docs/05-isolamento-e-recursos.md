@@ -151,8 +151,11 @@ Caddy + `hangard` (padrão 512 MiB), que não pode ser alocada a serviços.
   andamento, o painel recusa antes de gravar.
 - **"Somente estes IPs" de verdade:** o painel (sem privilégio) grava o
   estado desejado em `/var/lib/hangar/firewall/desired.json`; a unit root
-  `hangar-firewall` (disparada por `hangar-firewall.path`) valida de novo e
-  carrega a chain `HANGAR-PORTS`, chamada pela `DOCKER-USER`. As regras só
+  `hangar-firewall` (disparada por `hangar-firewall.path` e, a cada 3 minutos,
+  por `hangar-firewall.timer`) valida de novo e carrega a chain
+  `HANGAR-PORTS`, chamada pela `DOCKER-USER`. Se outra coisa recarregar o
+  iptables depois (atualização automática, cloud-init), o timer refaz as
+  regras e o acesso do Caddy ao painel em até 3 minutos, sem SSH. As regras só
   pegam conexões que passaram por porta publicada (`ctstate DNAT` +
   `ctorigdstport`), então o tráfego entre containers nunca é afetado, e o
   loopback é sempre liberado. Roda **antes do Docker** no boot, para nenhum

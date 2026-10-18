@@ -1,0 +1,15 @@
+# Re-applies the rules every few minutes. Anything that reloads iptables
+# later (netfilter-persistent, unattended upgrades, cloud-init) wipes them
+# without touching desired.json; on images that reject new connections
+# (Oracle's) that cuts Caddy off from the panel. The apply is idempotent.
+[Unit]
+Description=Hangar — reaplica as regras de acesso das portas
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+AccuracySec=30s
+Unit=hangar-firewall.service
+
+[Install]
+WantedBy=timers.target

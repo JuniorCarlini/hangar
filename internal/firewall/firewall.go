@@ -260,31 +260,68 @@ func Apply(ctx context.Context, dir string) error {
 	return err
 }
 
+// runCmd runs one fixed iptables binary; a test seam.
+var runCmd = func(ctx context.Context, stdin string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec // fixed binaries, validated arguments
+	cmd.Stdin = strings.NewReader(stdin)
+	return cmd.CombinedOutput()
+}
+
+// applyFamily is safe to re-run at any time (the timer does): the restore
+// redeclares both chains, which recreates them when something deleted them
+// and refills them when something flushed them; the jumps are only added
+// when missing.
 func applyFamily(ctx context.Context, bin, restore string) error {
-	run := func(stdin string, args ...string) error {
-		cmd := exec.CommandContext(ctx, args[0], args[1:]...) //nolint:gosec // fixed binaries, validated arguments
-		cmd.Stdin = strings.NewReader(stdin)
-		out, err := cmd.CombinedOutput()
+	run := func(stdin string, args ...string) (string, error) {
+		out, err := runCmd(ctx, stdin, args...)
 		if err != nil {
-			return fmt.Errorf("%s: %w: %s", strings.Join(args, " "), err, bytes.TrimSpace(out))
+			return "", fmt.Errorf("%s: %w: %s", strings.Join(args, " "), err, bytes.TrimSpace(out))
 		}
-		return nil
+		return string(out), nil
 	}
-	if err := run(restore, bin+"-restore", "--noflush"); err != nil {
+	if _, err := run(restore, bin+"-restore", "--noflush"); err != nil {
 		return err
 	}
-	// First in INPUT, ahead of any reject rule of the provider's image.
-	if run("", bin, "-C", "INPUT", "-j", EdgeChain) != nil {
-		if err := run("", bin, "-I", "INPUT", "1", "-j", EdgeChain); err != nil {
+	if err := jumpFirst(run, bin, "INPUT", EdgeChain); err != nil {
+		return err
+	}
+	// Docker creates DOCKER-USER; create it if Docker has not run yet.
+	_, _ = run("", bin, "-N", "DOCKER-USER")
+	if _, err := run("", bin, "-C", "DOCKER-USER", "-j", Chain); err != nil {
+		_, err = run("", bin, "-I", "DOCKER-USER", "1", "-j", Chain)
+		return err
+	}
+	return nil
+}
+
+// jumpFirst makes the jump to target the first rule of chain, ahead of any
+// reject rule of the provider's image, even one inserted after ours.
+func jumpFirst(run func(string, ...string) (string, error), bin, chain, target string) error {
+	out, err := run("", bin, "-S", chain)
+	if err != nil {
+		return err
+	}
+	jump := "-A " + chain + " -j " + target
+	for line := range strings.SplitSeq(out, "\n") {
+		if line = strings.TrimSpace(line); strings.HasPrefix(line, "-A ") {
+			if line == jump {
+				return nil
+			}
+			break
+		}
+	}
+	// Drop the misplaced copies (bounded: a -D that does nothing must not
+	// loop forever).
+	for range 8 {
+		if _, err := run("", bin, "-C", chain, "-j", target); err != nil {
+			break
+		}
+		if _, err := run("", bin, "-D", chain, "-j", target); err != nil {
 			return err
 		}
 	}
-	// Docker creates DOCKER-USER; create it if Docker has not run yet.
-	_ = run("", bin, "-N", "DOCKER-USER")
-	if run("", bin, "-C", "DOCKER-USER", "-j", Chain) != nil {
-		return run("", bin, "-I", "DOCKER-USER", "1", "-j", Chain)
-	}
-	return nil
+	_, err = run("", bin, "-I", chain, "1", "-j", target)
+	return err
 }
 
 // ParseAllow parses "1.2.3.4" or "10.0.0.0/24".

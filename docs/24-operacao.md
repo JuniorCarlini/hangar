@@ -32,7 +32,7 @@ Convenções deste documento:
 |---|---|
 | `hangard` | o painel (usuário `hangar`, sem privilégio, sandbox) |
 | `hangar-updater.path` / `.service` | aplica atualizações assinadas (root, só isso) |
-| `hangar-firewall.path` / `.service` | aplica as regras de porta na chain `DOCKER-USER` (root, só isso) |
+| `hangar-firewall.path` / `.timer` / `.service` | aplica as regras de porta (`DOCKER-USER`) e o acesso do Caddy ao painel (`INPUT`) quando mudam e a cada 3 minutos (root, só isso) |
 
 Logs: `journalctl -u hangard -f` (JSON, uma linha por evento). O journald
 do Hangar tem limite próprio (`journald-hangar.conf`).

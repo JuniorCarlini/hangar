@@ -26,6 +26,7 @@ var unitTargets = map[string]string{
 	"hangar-updater.path":     "/etc/systemd/system/hangar-updater.path",
 	"hangar-firewall.service": "/etc/systemd/system/hangar-firewall.service",
 	"hangar-firewall.path":    "/etc/systemd/system/hangar-firewall.path",
+	"hangar-firewall.timer":   "/etc/systemd/system/hangar-firewall.timer",
 	"journald-hangar.conf":    "/etc/systemd/journald.conf.d/hangar.conf",
 }
 
@@ -59,13 +60,15 @@ func systemCmd(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		}
 		fmt.Fprintln(stdout, tr("cli.system.written", "path", dst))
 	}
-	// The firewall unit is new in v0.5.0: an update must turn it on, not only
-	// write it.
+	// The firewall units are not in every installed version: an update must
+	// turn them on, not only write them. The timer re-applies the rules after
+	// anything else reloads iptables (no SSH needed to bring the panel back).
 	for _, cmd := range [][]string{
 		{"systemctl", "daemon-reload"},
 		{"systemctl", "restart", "systemd-journald"},
 		{"systemctl", "enable", "--now", "hangar-firewall.path"},
 		{"systemctl", "enable", "hangar-firewall.service"},
+		{"systemctl", "enable", "--now", "hangar-firewall.timer"},
 	} {
 		if out, err := exec.CommandContext(ctx, cmd[0], cmd[1:]...).CombinedOutput(); err != nil { //nolint:gosec // fixed commands
 			return fmt.Errorf("%v: %w: %s", cmd, err, out)
