@@ -263,12 +263,32 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 .kit-qr-bg { fill: var(--p-paper); }
 .kit-qr-dark { fill: var(--p-ink); }
 @media print {
+  @page { size: A4; margin: 14mm; }
   body * { visibility: hidden; }
   .kit-paper, .kit-paper * { visibility: visible; }
-  .kit-paper { display: block; position: absolute; inset: 0; padding: 24px; background: var(--p-paper); color: var(--p-ink); font-family: var(--p-font); }
-  .kit-paper h1 { margin: 0 0 8px; font-size: 20px; }
-  .kit-paper p { margin: 0 0 16px; font-size: 13px; }
-  .kit-paper pre { margin: 16px 0 0; font-family: var(--p-mono); font-size: 11px; line-height: 15px; white-space: pre-wrap; word-break: break-all; }
+  .kit-paper { display: block; position: absolute; inset: 0; background: var(--p-paper); color: var(--p-ink); font-family: var(--p-font); font-size: 12px; line-height: 1.5; }
+  .kit-paper__head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 2px solid var(--p-ink); }
+  .kit-paper__brand { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
+  .kit-paper__logo { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 6px; background: var(--p-ink); color: var(--p-paper); }
+  .kit-paper__tag { padding: 3px 8px; border: 1.5px solid var(--p-ink); border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .kit-paper h1 { margin: 18px 0 4px; font-size: 22px; font-weight: 600; }
+  .kit-paper__lead { margin: 0 0 14px; font-size: 13px; }
+  .kit-paper__facts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; margin: 0 0 16px; border: 1px solid var(--p-ink); border-radius: 6px; }
+  .kit-paper__facts div { padding: 8px 10px; border-left: 1px solid var(--p-ink); }
+  .kit-paper__facts div:first-child { border-left: 0; }
+  .kit-paper__facts dt { font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .kit-paper__facts dd { margin: 2px 0 0; font-size: 13px; font-weight: 600; }
+  .kit-paper__key { display: flex; gap: 18px; align-items: flex-start; padding: 14px; border: 2px solid var(--p-ink); border-radius: 8px; break-inside: avoid; }
+  .kit-paper__key .kit-qr { width: 200px; height: 200px; flex: none; }
+  .kit-paper__secret { min-width: 0; flex: 1; }
+  .kit-paper__caption { margin: 0 0 4px; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .kit-paper__mono { margin: 0 0 12px; font-family: var(--p-mono); font-size: 13px; line-height: 1.7; word-break: break-all; }
+  .kit-paper__small { font-size: 10px; line-height: 1.5; }
+  .kit-paper__how { margin-top: 16px; break-inside: avoid; }
+  .kit-paper__how h2 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+  .kit-paper__how ol { margin: 0; padding-left: 18px; list-style: decimal; }
+  .kit-paper__how li { margin-bottom: 4px; }
+  .kit-paper__warn { margin-top: 16px; padding: 10px 12px; border: 1.5px solid var(--p-ink); border-left-width: 5px; font-weight: 600; }
 }
 
 /* ---------------------------------------------------------------- Icon hover */

@@ -248,6 +248,15 @@ if (typeof module !== 'undefined' && module.exports) {
       state.text = K.kitText(t.template, { label: label, date: date, public: state.public, code: state.code }, state.secret);
       $('#kit-public').textContent = state.public;
       $('#kit-paper-text').textContent = state.text;
+      $('#kit-paper-label').textContent = label;
+      $('#kit-paper-date').textContent = date;
+      $('#kit-paper-code').textContent = state.code;
+      $('#kit-paper-public').textContent = state.public;
+      // The prefix whole, then groups of four, so the key can be read and
+      // typed back by hand (the spaces are only for reading).
+      var pre = 'AGE-SECRET-KEY-1';
+      var sec = state.secret.indexOf(pre) === 0 ? state.secret.slice(pre.length) : state.secret;
+      $('#kit-paper-secret').textContent = (state.secret.indexOf(pre) === 0 ? pre + ' ' : '') + sec.replace(/(.{4})/g, '$1 ').trim();
       drawQR($('#kit-paper-qr'), state.secret);
       $('#kit-form-label').value = label;
       $('#kit-form-public').value = state.public;
@@ -298,7 +307,7 @@ if (typeof module !== 'undefined' && module.exports) {
   var reg = $('#kit-register');
   if (reg) reg.addEventListener('submit', function () {
     state = null;
-    $('#kit-paper-text').textContent = '';
+    ['#kit-paper-text', '#kit-paper-secret', '#kit-paper-code', '#kit-paper-public'].forEach(function (s) { $(s).textContent = ''; });
     $('#kit-paper-qr').replaceChildren();
   });
 

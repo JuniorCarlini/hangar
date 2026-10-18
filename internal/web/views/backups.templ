@@ -704,11 +704,41 @@ templ BackupKit(d KitData) {
 								</div>
 							</form>
 						</section>
+						// The printed sheet: filled by kit.js, only visible on print.
 						<div class="kit-paper" aria-hidden="true">
+							<header class="kit-paper__head">
+								<div class="kit-paper__brand">
+									<span class="kit-paper__logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 4v16M18 4v16M6 12h12"></path></svg></span>
+									<span>Hangar</span>
+								</div>
+								<span class="kit-paper__tag">{ t(ctx, "kit.paper_tag") }</span>
+							</header>
 							<h1>{ t(ctx, "kit.paper_title") }</h1>
-							<p>{ t(ctx, "kit.paper_text") }</p>
-							<div id="kit-paper-qr"></div>
-							<pre id="kit-paper-text"></pre>
+							<p class="kit-paper__lead">{ t(ctx, "kit.paper_text") }</p>
+							<dl class="kit-paper__facts">
+								<div><dt>{ t(ctx, "kit.paper_label") }</dt><dd id="kit-paper-label"></dd></div>
+								<div><dt>{ t(ctx, "kit.paper_date") }</dt><dd id="kit-paper-date"></dd></div>
+								<div><dt>{ t(ctx, "kit.paper_code") }</dt><dd id="kit-paper-code" class="kit-paper__mono"></dd></div>
+							</dl>
+							<section class="kit-paper__key">
+								<div id="kit-paper-qr"></div>
+								<div class="kit-paper__secret">
+									<p class="kit-paper__caption">{ t(ctx, "kit.paper_secret") }</p>
+									<p id="kit-paper-secret" class="kit-paper__mono"></p>
+									<p class="kit-paper__caption">{ t(ctx, "kit.paper_public") }</p>
+									<p id="kit-paper-public" class="kit-paper__mono kit-paper__small"></p>
+								</div>
+							</section>
+							<section class="kit-paper__how">
+								<h2>{ t(ctx, "kit.paper_how") }</h2>
+								<ol>
+									<li>{ t(ctx, "kit.paper_how1") }</li>
+									<li>{ t(ctx, "kit.paper_how2") }</li>
+									<li>{ t(ctx, "kit.paper_how3") }</li>
+								</ol>
+							</section>
+							<footer class="kit-paper__warn">{ t(ctx, "kit.paper_warn") }</footer>
+							<pre id="kit-paper-text" hidden></pre>
 						</div>
 					</div>
 				}

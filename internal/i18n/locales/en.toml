@@ -1997,6 +1997,19 @@ wal = "continuous WAL and bases (back to any minute)"
 painel = "the panel itself, with the master key"
 
 [kit]
+paper_title = "Recovery kit"
+paper_tag = "Confidential"
+paper_text = "This is the key that opens your Hangar backups. Keep this paper in a safe physical place, away from the computer."
+paper_label = "Key name"
+paper_date = "Generated on"
+paper_code = "Confirmation code"
+paper_secret = "Secret key (the spaces are only for easier reading)"
+paper_public = "Public key (to check)"
+paper_how = "How to use"
+paper_how1 = "Keep this paper and the hangar-kit.txt file in different places (for example, the paper at home and the file in a password manager)."
+paper_how2 = "The panel asks for a confirmation from time to time: choose the kit file or type the confirmation code above."
+paper_how3 = "To recover the backups on a new server, Hangar asks for this key: scan the QR code or type the secret key."
+paper_warn = "Whoever has this paper opens your backups. Do not photograph it, do not send it in a message and do not leave it in sight."
 page_title = "Recovery kit · Hangar"
 title = "Recovery kit"
 subtitle = "the keys are generated in your browser"
@@ -2025,8 +2038,6 @@ mismatch = "This kit belongs to another key."
 no_key = "No private key found in this file."
 file_ok = "Kit checked: code filled in."
 qr_label = "QR code of the private key"
-paper_title = "Hangar · Recovery kit"
-paper_text = "Keep this paper somewhere physically safe. It opens every Hangar backup."
 file_text = """Hangar · Recovery kit
 Name: {label}
 Generated: {date}

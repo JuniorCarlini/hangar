@@ -1997,6 +1997,19 @@ wal = "WAL contínuo e bases (voltar a qualquer minuto)"
 painel = "o próprio painel, com a chave mestra"
 
 [kit]
+paper_title = "Kit de recuperação"
+paper_tag = "Confidencial"
+paper_text = "Esta é a chave que abre os backups do seu Hangar. Guarde este papel num lugar físico seguro, longe do computador."
+paper_label = "Nome da chave"
+paper_date = "Gerada em"
+paper_code = "Código de confirmação"
+paper_secret = "Chave secreta (os espaços são só para facilitar a leitura)"
+paper_public = "Chave pública (para conferir)"
+paper_how = "Como usar"
+paper_how1 = "Guarde este papel e o arquivo hangar-kit.txt em lugares diferentes (por exemplo, o papel em casa e o arquivo no gerenciador de senhas)."
+paper_how2 = "O painel pede a confirmação de tempos em tempos: escolha o arquivo do kit ou digite o código de confirmação acima."
+paper_how3 = "Para recuperar os backups num servidor novo, o Hangar pede esta chave: leia o QR code ou digite a chave secreta."
+paper_warn = "Quem tiver este papel abre os seus backups. Não fotografe, não envie por mensagem e não deixe à vista."
 page_title = "Kit de recuperação · Hangar"
 title = "Kit de recuperação"
 subtitle = "as chaves são geradas no seu navegador"
@@ -2025,8 +2038,6 @@ mismatch = "Este kit não é o desta chave."
 no_key = "Não achei uma chave privada neste arquivo."
 file_ok = "Kit conferido: código preenchido."
 qr_label = "QR code da chave privada"
-paper_title = "Hangar · Kit de recuperação"
-paper_text = "Guarde este papel num lugar físico seguro. Ele abre todos os backups do Hangar."
 file_text = """Hangar · Kit de recuperação
 Nome: {label}
 Gerado em: {date}
