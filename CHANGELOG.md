@@ -12,6 +12,15 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.4.5] - 2026-10-18
+
+### Alterado
+
+- Para confirmar o Kit de recuperação e para restaurar um backup, o
+  arquivo do kit agora é escolhido numa área de arrastar e soltar (ou
+  clicar), com o nome do arquivo escolhido embaixo. Na confirmação, o
+  código se preenche sozinho logo abaixo.
+
 ## [0.4.4] - 2026-10-18
 
 ### Corrigido
@@ -164,7 +173,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.4...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/JuniorCarlini/hangar/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/JuniorCarlini/hangar/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/JuniorCarlini/hangar/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/JuniorCarlini/hangar/compare/v0.4.1...v0.4.2
