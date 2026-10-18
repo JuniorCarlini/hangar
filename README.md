@@ -13,7 +13,7 @@ APIs, bots), cada um isolado no seu projeto. Segurança vem fechada por padrão:
 o painel não escuta na internet, 2FA é exigida e toda ação fica numa
 auditoria encadeada.
 
-> Versão atual: **v0.5.4**. Projeto em desenvolvimento ativo: use, teste e
+> Versão atual: **v0.5.5**. Projeto em desenvolvimento ativo: use, teste e
 > reporte, mas leia as [notas de cada versão](CHANGELOG.md) antes de atualizar.
 
 ## Sumário
