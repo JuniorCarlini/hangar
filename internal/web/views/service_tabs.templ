@@ -825,7 +825,7 @@ templ scaledBase(d ServiceData) {
 	if d.Domains.Base.Domain != "" && hasDomain(d, "*."+d.Domains.Base.Domain) {
 		<div class="flex flex-col gap-2 rounded-sm border border-border bg-surface-2 p-3">
 			<div class="flex items-center gap-2">
-				@Icon("chart-column", "size-4 text-primary")
+				@Icon("chart-column", "size-4 text-accent-text")
 				<strong class="text-[13px] font-semibold">{ t(ctx, "domain.base_title") }</strong>
 			</div>
 			<span class="text-xs text-muted">{ t(ctx, "domain.base_text", "base", d.Domains.Base.Domain, "provider", dnsProviderName(d.Domains.Base.Provider)) }</span>
@@ -860,7 +860,7 @@ templ domainModeOption(value, label, tag string) {
 	<label class="tuc-btn h-auto flex-col gap-0.5 py-2">
 		<input type="radio" class="tuc-btn__input" name="mode" value={ value } checked?={ value == "normal" }/>
 		<span class="font-semibold">{ label }</span>
-		<span class="text-[11px] font-normal text-muted">{ tag }</span>
+		<span class="text-[11px] font-normal opacity-75">{ tag }</span>
 	</label>
 }
 
@@ -882,7 +882,7 @@ func dnsProviderName(id string) string {
 // domainModeCard explains one way a domain can work, in plain words.
 templ domainModeCard(icon, title, text, pill string) {
 	<div class="flex items-start gap-3 rounded-sm border border-border bg-surface-2 p-3">
-		<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-primary/15 text-primary">
+		<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
 			@Icon(icon, "size-4")
 		</span>
 		<div class="flex min-w-0 flex-col gap-1">
@@ -943,7 +943,7 @@ templ domainDialog(d ServiceData) {
 				</div>
 				<div class="flex flex-col gap-3" data-shown-when="mode=scale" hidden>
 					@domainModeCard("chart-column", t(ctx, "domain.scale_title"), t(ctx, "domain.scale_text"), t(ctx, "domain.scale_pill"))
-					<div class="flex flex-col gap-3 rounded-sm border border-primary/40 bg-primary/5 p-3">
+					<div class="flex flex-col gap-3 rounded-sm border border-accent bg-accent-soft p-3">
 						<div class="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-2 max-sm:grid-cols-1">
 							<select class="tuc-input" name="dns_provider" aria-label={ t(ctx, "domain.dns_provider") } data-tuc-select data-clearable="false">
 								for _, pv := range d.Domains.DNSProviders {
@@ -960,7 +960,7 @@ templ domainDialog(d ServiceData) {
 							{ t(ctx, "domain.dns_token_lock") }
 						</span>
 						<details class="text-xs">
-							<summary class="cursor-pointer font-semibold text-primary">{ t(ctx, "domain.dns_token_how") }</summary>
+							<summary class="cursor-pointer font-semibold text-accent-text">{ t(ctx, "domain.dns_token_how") }</summary>
 							<ol class="mt-2 list-decimal pl-5 leading-relaxed text-muted">
 								<li>{ t(ctx, "domain.dns_token_how_1") }</li>
 								<li>{ t(ctx, "domain.dns_token_how_2") }</li>
