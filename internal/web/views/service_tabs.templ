@@ -880,7 +880,7 @@ func dnsProviderName(id string) string {
 }
 
 // domainModeCard explains one way a domain can work, in plain words.
-templ domainModeCard(icon, title, text, pill string) {
+templ domainModeCard(icon, title, text string) {
 	<div class="flex items-start gap-3 rounded-sm border border-border bg-surface-2 p-3">
 		<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
 			@Icon(icon, "size-4")
@@ -888,9 +888,6 @@ templ domainModeCard(icon, title, text, pill string) {
 		<div class="flex min-w-0 flex-col gap-1">
 			<strong class="text-[13px] font-semibold">{ title }</strong>
 			<p class="m-0 text-xs leading-relaxed text-muted">{ text }</p>
-			if pill != "" {
-				<span class="tuc-badge is-success self-start">{ pill }</span>
-			}
 		</div>
 	</div>
 }
@@ -936,13 +933,13 @@ templ domainDialog(d ServiceData) {
 					</div>
 				</div>
 				<div data-shown-when="mode=normal">
-					@domainModeCard("globe", t(ctx, "domain.normal_title"), t(ctx, "domain.normal_text"), "")
+					@domainModeCard("globe", t(ctx, "domain.normal_title"), t(ctx, "domain.normal_text"))
 				</div>
 				<div data-shown-when="mode=wildcard" hidden>
-					@domainModeCard("asterisk", t(ctx, "domain.wildcard_title"), t(ctx, "domain.wildcard_text"), t(ctx, "domain.wildcard_pill"))
+					@domainModeCard("asterisk", t(ctx, "domain.wildcard_title"), t(ctx, "domain.wildcard_text"))
 				</div>
 				<div class="flex flex-col gap-3" data-shown-when="mode=scale" hidden>
-					@domainModeCard("chart-column", t(ctx, "domain.scale_title"), t(ctx, "domain.scale_text"), "")
+					@domainModeCard("chart-column", t(ctx, "domain.scale_title"), t(ctx, "domain.scale_text"))
 					<div class="flex flex-col gap-2">
 						<div class="flex flex-col gap-2">
 							<select class="tuc-input" name="dns_provider" aria-label={ t(ctx, "domain.dns_provider") } data-tuc-select data-clearable="false">
