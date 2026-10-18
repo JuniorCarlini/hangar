@@ -89,6 +89,10 @@ type Manager struct {
 	dns     DNSSource
 	dnsBase string
 	dnsWild bool
+	// dnsToken caches the resolved token (panel database or config file) so a
+	// Caddy config-reject error can be redacted against the token actually in
+	// the config, not only the config-file one.
+	dnsToken string
 }
 
 // SetDNSSource wires the panel's DNS settings (base domain, provider, token)
@@ -283,6 +287,7 @@ func (m *Manager) build(ctx context.Context) ([]byte, error) {
 	m.mu.Lock()
 	m.dnsBase = base
 	m.dnsWild = base != "" && provider != "" && token != ""
+	m.dnsToken = token
 	m.mu.Unlock()
 	in := ConfigInput{
 		AdminListen: "unix/" + caddyRunDir + "/" + adminSocket + "|0660",
@@ -397,7 +402,10 @@ func (m *Manager) load(ctx context.Context, cfg []byte) error {
 	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode != http.StatusOK {
-		msg := redactConfigError(body, m.opts.DNSToken, 8<<10)
+		// Redact the token that is actually in the config (panel database or
+		// config file), held in m.dnsToken under the lock load() already holds,
+		// not only the config-file token (empty in the normal panel setup).
+		msg := redactConfigError(body, m.dnsToken, 8<<10)
 		return fmt.Errorf("caddy rejected the config (%d): %s", resp.StatusCode, msg)
 	}
 	return nil

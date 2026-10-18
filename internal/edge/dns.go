@@ -67,35 +67,49 @@ func CheckDNSToken(ctx context.Context, provider, baseDomain string, token []byt
 // "loja.apps.x.com" is "x.com"). A zone-scoped "Edit zone DNS" token can both
 // read its zone and edit DNS, which is exactly what DNS-01 needs.
 func checkCloudflareToken(ctx context.Context, baseDomain string, token []byte) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, cloudflareAPI+"/zones?per_page=50&status=active", nil)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+string(token))
-	req.Header.Set("Accept", "application/json")
-	resp, err := dnsCheckClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("reaching the DNS provider: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		return ErrDNSTokenRejected
-	}
-	var out struct {
-		Success bool `json:"success"`
-		Result  []struct {
-			Name string `json:"name"`
-		} `json:"result"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
-		return fmt.Errorf("reading the DNS provider response: %w", err)
-	}
-	if !out.Success {
-		return ErrDNSTokenRejected
-	}
-	for _, z := range out.Result {
-		if baseDomain == z.Name || strings.HasSuffix(baseDomain, "."+z.Name) {
-			return nil
+	// A zone-scoped token usually sees one zone, but an account-wide token can
+	// span several pages; walk them (bounded) so a valid token is not refused
+	// for a zone that falls past the first page.
+	for page := 1; page <= 20; page++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+			fmt.Sprintf("%s/zones?status=active&per_page=50&page=%d", cloudflareAPI, page), nil)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", "Bearer "+string(token))
+		req.Header.Set("Accept", "application/json")
+		resp, err := dnsCheckClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("reaching the DNS provider: %w", err)
+		}
+		var out struct {
+			Success bool `json:"success"`
+			Result  []struct {
+				Name string `json:"name"`
+			} `json:"result"`
+			ResultInfo struct {
+				TotalPages int `json:"total_pages"`
+			} `json:"result_info"`
+		}
+		status := resp.StatusCode
+		derr := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out)
+		_ = resp.Body.Close()
+		if status == http.StatusUnauthorized || status == http.StatusForbidden {
+			return ErrDNSTokenRejected
+		}
+		if derr != nil {
+			return fmt.Errorf("reading the DNS provider response: %w", derr)
+		}
+		if !out.Success {
+			return ErrDNSTokenRejected
+		}
+		for _, z := range out.Result {
+			if baseDomain == z.Name || strings.HasSuffix(baseDomain, "."+z.Name) {
+				return nil
+			}
+		}
+		if len(out.Result) == 0 || page >= out.ResultInfo.TotalPages {
+			break
 		}
 	}
 	return fmt.Errorf("the token does not control the DNS zone for %q", baseDomain)

@@ -2,8 +2,12 @@ package edge
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,5 +55,34 @@ func TestRedactConfigError(t *testing.T) {
 	// No token configured: body passes through (trimmed, capped).
 	if got := redactConfigError([]byte("  plain error  "), "", 1024); string(got) != "plain error" {
 		t.Errorf("got %q", got)
+	}
+}
+
+// TestLoadRedactsResolvedToken guards the v0.5.9 path: the DNS token comes from
+// the panel database, so hangar.toml (m.opts.DNSToken) is empty. A Caddy
+// config-reject error quotes the config, which holds that token, so load() must
+// redact against the resolved token it cached (m.dnsToken), not the empty
+// config-file one, or the live token leaks into logs and the error page.
+func TestLoadRedactsResolvedToken(t *testing.T) {
+	const tok = "PANEL-CF-TOKEN-should-not-leak"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`loading config: "api_token": "` + tok + `" rejected`))
+	}))
+	defer srv.Close()
+	m := &Manager{
+		log:      slog.New(slog.NewTextHandler(io.Discard, nil)),
+		opts:     Options{}, // panel setup: no token in the config file
+		dnsToken: tok,       // the resolved token, as build() caches it
+		http: &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "tcp", srv.Listener.Addr().String())
+		}}},
+	}
+	err := m.load(context.Background(), []byte(`{}`))
+	if err == nil {
+		t.Fatal("expected the rejected config to return an error")
+	}
+	if strings.Contains(err.Error(), tok) {
+		t.Errorf("the panel DNS token leaked in the error: %v", err)
 	}
 }
