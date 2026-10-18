@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/update"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
@@ -49,18 +49,11 @@ func (h *handlers) renderUpdate(w http.ResponseWriter, r *http.Request, status i
 			At: st.At.Local().Format("02/01/2006 15:04"),
 		})
 	}
-	rows, err := h.audit.Recent(r.Context(), []string{"system.update.ok", "system.update.rolled_back", "system.update.failed"}, 50)
+	rows, err := h.audit.Recent(r.Context(), []string{"system.update.request", "system.start", "system.update.rolled_back", "system.update.failed"}, 500)
 	if err != nil {
 		loggerFrom(r.Context()).Error("update history", "error", err)
 	}
-	for _, row := range rows {
-		var s struct{ From, To, Message string }
-		_ = json.Unmarshal([]byte(row.SummaryJson), &s)
-		d.History = append(d.History, views.UpdateStatus{
-			State: strings.TrimPrefix(row.Action, "system.update."), Version: s.To, From: s.From, Message: s.Message,
-			At: auditTime(row.Ts),
-		})
-	}
+	d.History = append(d.History, updateHistory(rows)...)
 	render(w, r, status, views.Update(d))
 }
 
@@ -93,4 +86,56 @@ func auditTime(ts string) string {
 		return ""
 	}
 	return t.Local().Format("02/01/2006 15:04")
+}
+
+// updateHistory rebuilds the updates applied from the panel out of the
+// audit log, newest first: each update request, the version running before
+// it and the version that started after it (the same one = rolled back).
+// Updates installed from the command line have no request and are left
+// out. A rolled_back or failed record adds its reason.
+func updateHistory(rows []dbq.RecentActivityRow) []views.UpdateStatus {
+	var out []views.UpdateStatus
+	running, pending := "", -1
+	for i := len(rows) - 1; i >= 0; i-- { // oldest first
+		row := rows[i]
+		var sum struct{ Version, To, Message string }
+		_ = json.Unmarshal([]byte(row.SummaryJson), &sum)
+		switch row.Action {
+		case "system.update.rolled_back", "system.update.failed":
+			// Recorded once the old version is back: it names the
+			// version that was tried and why it was undone.
+			if n := len(out); n > 0 && out[n-1].State == "rolled_back" {
+				out[n-1].Version, out[n-1].Message = sum.To, sum.Message
+				if row.Action == "system.update.failed" {
+					out[n-1].State = "failed"
+				}
+			}
+		case "system.update.request":
+			out = append(out, views.UpdateStatus{From: running, At: auditTime(row.Ts), State: "applying"})
+			pending = len(out) - 1
+		case "system.start":
+			if pending >= 0 {
+				u := &out[pending]
+				u.Version = sum.Version
+				u.State = "ok"
+				if sum.Version == u.From {
+					u.State = "rolled_back"
+				}
+				pending = -1
+			}
+			running = sum.Version
+		}
+	}
+	// Requests that never got a start (the panel is still on its way up)
+	// are not history yet.
+	done := out[:0]
+	for _, u := range out {
+		if u.State != "applying" {
+			done = append(done, u)
+		}
+	}
+	for i, j := 0, len(done)-1; i < j; i, j = i+1, j-1 {
+		done[i], done[j] = done[j], done[i]
+	}
+	return done
 }

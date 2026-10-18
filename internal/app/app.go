@@ -321,7 +321,9 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 		go pm.RunReconciler(ctx, 30*time.Second)
 		go pm.RunPortExpiry(ctx, time.Minute)
 	}
-	auditUpdateResult(ctx, core, cfg, log)
+	// The applier writes the result only after this version marked itself
+	// ready: wait for it in the background instead of reading it now.
+	go auditUpdateResult(ctx, core, cfg, log)
 
 	errc := make(chan error, len(listeners)+1)
 	for _, ln := range listeners {

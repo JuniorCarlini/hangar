@@ -61,9 +61,28 @@ const lastUpdateKey = "update.last_status_at"
 // auditUpdateResult records the result of the last update in the audit log,
 // exactly once (the applier runs as root and does not write to the
 // database).
+//
+// The applier marks the update "ok" (or rolls it back) only after this
+// version is up and ready, so right at start the status still says
+// "applying": it is read again every 2 s, for up to 3 minutes.
 func auditUpdateResult(ctx context.Context, core *Core, cfg config.Config, log *slog.Logger) {
-	st, err := update.ReadStatus(UpdateDir(cfg))
-	if err != nil || st == nil || st.State == "applying" {
+	var st *update.Status
+	for range 90 {
+		var err error
+		st, err = update.ReadStatus(UpdateDir(cfg))
+		if err != nil || st == nil {
+			return
+		}
+		if st.State != "applying" {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
+	}
+	if st.State == "applying" {
 		return
 	}
 	stamp := st.At.UTC().Format(time.RFC3339Nano)

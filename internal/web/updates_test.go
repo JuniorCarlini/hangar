@@ -111,23 +111,35 @@ func TestIgnoreFindingNeedsOperatorAndReason(t *testing.T) {
 	}
 }
 
-// The history lists every update applied, not only the last one.
+// The history lists every update applied from the panel, rebuilt from the
+// audit log as it really happens: the version running, the request, the
+// start of the next version. An update undone keeps the version it tried.
 func TestUpdateHistoryListsEveryUpdate(t *testing.T) {
 	e := newEnv(t)
 	e.createUser(t, auth.RoleOwner)
 	session := e.login(t)
 	al := audit.New(e.st.DB)
-	for _, v := range [][2]string{{"v0.3.2", "v0.3.3"}, {"v0.3.3", "v0.4.0"}} {
-		if err := al.Record(context.Background(), audit.Entry{
-			Action: "system.update.ok", Outcome: audit.OK, TargetType: "hangar", TargetID: v[1],
-			Summary: map[string]any{"from": v[0], "to": v[1]},
-		}); err != nil {
+	rec := func(action string, sum map[string]any) {
+		t.Helper()
+		if err := al.Record(context.Background(), audit.Entry{Action: action, Outcome: audit.OK, Summary: sum}); err != nil {
 			t.Fatal(err)
 		}
 	}
+	rec("system.start", map[string]any{"version": "v0.3.2"})
+	rec("system.update.request", map[string]any{"status": 303})
+	rec("system.start", map[string]any{"version": "v0.3.3"})
+	rec("system.start", map[string]any{"version": "v0.3.3"}) // a plain restart: not an update
+	rec("system.update.request", map[string]any{"status": 303})
+	rec("system.start", map[string]any{"version": "v0.4.0"})
+	rec("system.update.request", map[string]any{"status": 303})
+	rec("system.start", map[string]any{"version": "v0.4.0"})
+	rec("system.update.rolled_back", map[string]any{"from": "v0.4.0", "to": "v0.4.1", "message": "não subiu em 90 s"})
 	body := e.do(req{method: "GET", target: "/update", cookies: []*http.Cookie{session}}).Body.String()
-	first, second := strings.Index(body, "v0.3.3 → v0.4.0"), strings.Index(body, "v0.3.2 → v0.3.3")
-	if first < 0 || second < 0 || first > second {
-		t.Fatalf("history should list both updates, newest first (%d, %d)", first, second)
+	third, first, second := strings.Index(body, "v0.4.0 → v0.4.1"), strings.Index(body, "v0.3.3 → v0.4.0"), strings.Index(body, "v0.3.2 → v0.3.3")
+	if third < 0 || first < 0 || second < 0 || !(third < first && first < second) {
+		t.Fatalf("history should list the three updates, newest first (%d, %d, %d)", third, first, second)
+	}
+	if !strings.Contains(body, "não subiu em 90 s") || strings.Count(body, "→") != 3 {
+		t.Error("the rollback reason should show, and a plain restart is not an update")
 	}
 }
