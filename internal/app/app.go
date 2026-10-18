@@ -285,11 +285,14 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 		edgeLn = ln
 	}
 
+	// Not fatal: with the disk nearly full this insert is the first write to
+	// fail, and returning here would crash-loop the panel instead of letting
+	// it come up and show the disk usage.
 	if err := al.Record(ctx, audit.Entry{
 		Action: "system.start", Outcome: audit.OK,
 		Summary: map[string]any{"version": version, "listen": cfg.Panel.Listen},
 	}); err != nil {
-		return err
+		log.Error("could not record the system.start audit entry", "error", err)
 	}
 
 	srv := &http.Server{
