@@ -15,8 +15,15 @@
 # below; to add a DNS provider, add a --with line with its pinned caddy-dns
 # module and list the provider in edge.DNSProviders.
 FROM caddy:2.11-builder-alpine@sha256:d6161a2c82fd58b3205048958fb6246d0c5d892beee8a47e90944610c4efd100 AS builder
-RUN xcaddy build \
-    --with github.com/caddy-dns/cloudflare@v0.2.1
+# The Caddy release and the Go modules with fixes newer than that release
+# are named here, so the edge does not wait for the next official image.
+RUN xcaddy build v2.11.7 \
+    --with github.com/caddy-dns/cloudflare@v0.2.4 \
+    --replace golang.org/x/net=golang.org/x/net@v0.61.0
 
 FROM caddy:2.11-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+# The official image is rebuilt rarely: take the Alpine fixes published
+# since (this runs only when this file changes; the release reuses the
+# image otherwise).
+RUN apk upgrade --no-cache
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy
