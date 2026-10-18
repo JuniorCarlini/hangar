@@ -12,6 +12,24 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.0] - 2026-10-18
+
+### Adicionado
+
+- **Equipe** (só para o dono): convide pessoas por um link de uso único
+  (24 h), escolha o papel (Admin, Operador ou Leitor) e, para Operador e
+  Leitor, quais projetos a pessoa vê. Quem fica limitado a alguns projetos
+  vê só esses projetos e a própria conta: os outros projetos e as telas
+  do servidor somem da barra lateral, da busca e da visão geral, e não
+  abrem nem pelo endereço. Mudar o acesso ou remover alguém encerra as
+  sessões da pessoa na hora; o último dono não pode ser removido.
+
+### Corrigido
+
+- Depois de clicar em **Atualizar**, a tela travava (às vezes na página de
+  "fora do ar"). Agora ela espera o painel reiniciar e se recarrega
+  sozinha quando a versão nova está no ar.
+
 ## [0.4.5] - 2026-10-18
 
 ### Alterado
@@ -173,7 +191,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.5...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/JuniorCarlini/hangar/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/JuniorCarlini/hangar/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/JuniorCarlini/hangar/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/JuniorCarlini/hangar/compare/v0.4.2...v0.4.3
