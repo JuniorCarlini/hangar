@@ -12,6 +12,20 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.4.3] - 2026-10-18
+
+### Corrigido
+
+- A **versão em papel do Kit de recuperação** saía deslocada, estreita, sem
+  o logo e com uma segunda página em branco. Agora ocupa uma página A4
+  inteira, com o QR code ao lado das chaves e o aviso com um ícone.
+
+### Alterado
+
+- O arquivo **hangar-kit.txt** ficou mais claro, na mesma ordem do papel:
+  os dados da chave, o que ela é, como usar, o aviso e, por último, a
+  chave secreta.
+
 ## [0.4.2] - 2026-10-18
 
 ### Alterado
@@ -143,7 +157,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.2...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/JuniorCarlini/hangar/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/JuniorCarlini/hangar/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/JuniorCarlini/hangar/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/JuniorCarlini/hangar/compare/v0.3.3...v0.4.0
