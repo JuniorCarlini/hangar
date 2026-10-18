@@ -563,6 +563,7 @@ removed_or_reordered = "hash anterior não confere (registro removido ou reorden
 content_changed = "conteúdo alterado"
 
 [cli]
+config_permission = "Sem permissão para ler {path} ({error}). O arquivo precisa ser do grupo hangar com modo 640; o próximo início do serviço corrige sozinho, ou rode: sudo hangard system fix-perms"
 error_prefix = "erro:"
 flag_config = "arquivo de configuração"
 missing_command = "Informe um comando."
@@ -695,8 +696,13 @@ Chave privada (segredo HANGAR_CATALOG_KEY no repositório hangar-templates; não
 usage = """
 Uso: hangard system install-units   (root)
   grava as units do systemd e o limite do journald embutidos neste binário
+Uso: hangard system fix-perms       (root)
+  devolve o dono e as permissões do hangar.toml, da chave mestra e do diretório de dados
+Uso: hangard system check-start     (usuário hangar)
+  confere se a configuração e a chave mestra podem ser lidas
 """
 written = "gravado {path}"
+fixed = "corrigido: {change}"
 
 [domain]
 edge_disabled = "O proxy de borda (Caddy) está desligado: os domínios ficam salvos, mas não são servidos. Ligue em [edge] no hangar.toml."

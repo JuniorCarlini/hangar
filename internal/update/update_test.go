@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -197,6 +198,7 @@ func stagedApplier(t *testing.T, newBinary []byte) (*Applier, *fakeService) {
 		DataDir: data, BinaryPath: filepath.Join(binDir, "hangard"), ReadyWait: 2 * time.Second,
 		CurrentVersion: func(context.Context, string) (string, error) { return "v1.0.0", nil },
 		InstallUnits:   func(context.Context, string) error { return nil },
+		Preflight:      func(context.Context, string) error { return nil },
 	}
 	if err := os.WriteFile(a.BinaryPath, []byte("binario-antigo"), 0o755); err != nil { //nolint:gosec // teste
 		t.Fatal(err)
@@ -325,5 +327,22 @@ func TestApplyDetectsCrashLoopFast(t *testing.T) {
 	}
 	if got := read(t, a.BinaryPath); got != "binario-antigo" {
 		t.Errorf("binary was not restored: %q", got)
+	}
+}
+
+// TestPreflightFailureKeepsThePanelUp: a new version that cannot read its
+// config or master key (preflight) never stops the running panel.
+func TestPreflightFailureKeepsThePanelUp(t *testing.T) {
+	a, svc := stagedApplier(t, []byte("binario-novo"))
+	a.Preflight = func(context.Context, string) error { return errors.New("permission denied") }
+	st, err := a.Apply(context.Background())
+	if err == nil || st == nil || st.State != "failed" || !strings.Contains(st.Message, "preflight") {
+		t.Fatalf("Apply = %+v, %v", st, err)
+	}
+	if !svc.running {
+		t.Fatal("the panel was stopped")
+	}
+	if got := read(t, a.BinaryPath); got != "binario-antigo" {
+		t.Fatalf("binary = %q, the old one must stay", got)
 	}
 }

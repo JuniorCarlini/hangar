@@ -563,6 +563,7 @@ removed_or_reordered = "previous hash does not match (record removed or reordere
 content_changed = "content changed"
 
 [cli]
+config_permission = "No permission to read {path} ({error}). The file must belong to the hangar group with mode 640; the next service start fixes it, or run: sudo hangard system fix-perms"
 error_prefix = "error:"
 flag_config = "configuration file"
 missing_command = "Missing command."
@@ -694,9 +695,14 @@ Private key (HANGAR_CATALOG_KEY secret in the hangar-templates repository; keep 
 [cli.system]
 usage = """
 Usage: hangard system install-units   (root)
-  write the systemd units and journald limit embedded in this binary
+  writes the systemd units and journald limit embedded in this binary
+Usage: hangard system fix-perms       (root)
+  puts back the owner and mode of hangar.toml, the master key and the data directory
+Usage: hangard system check-start     (hangar user)
+  checks that the config and the master key can be read
 """
 written = "wrote {path}"
+fixed = "fixed: {change}"
 
 [domain]
 edge_disabled = "The edge proxy (Caddy) is off: domains are saved but not served. Turn it on under [edge] in hangar.toml."

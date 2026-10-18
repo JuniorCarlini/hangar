@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/JuniorCarlini/hangar/internal/hostperms"
 	"github.com/JuniorCarlini/hangar/internal/release"
 )
 
@@ -77,7 +78,14 @@ type Applier struct {
 	// runs "<binary> system install-units"). This way a new version can ship
 	// new units without a reinstall.
 	InstallUnits func(ctx context.Context, binary string) error
-	Now          func() time.Time
+	// ConfigPath is hangar.toml, for the preflight.
+	ConfigPath string
+	// Preflight runs the new binary before the panel is stopped (default:
+	// "system fix-perms" as root, then "system check-start" as the service
+	// user). If the new version could not read its config or master key,
+	// the update does not start and the panel stays up.
+	Preflight func(ctx context.Context, binary string) error
+	Now       func() time.Time
 }
 
 func (a *Applier) updateDir() string { return filepath.Join(a.DataDir, "update") }
@@ -97,6 +105,9 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 	}
 	if a.InstallUnits == nil {
 		a.InstallUnits = installUnits
+	}
+	if a.Preflight == nil {
+		a.Preflight = func(ctx context.Context, binary string) error { return preflight(ctx, binary, a.ConfigPath) }
 	}
 
 	reqPath := filepath.Join(a.updateDir(), requestFile)
@@ -131,6 +142,10 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 		return a.finish("failed", req.Version, current, err.Error())
 	}
 	defer func() { _ = os.Remove(newBin) }()
+
+	if err := a.Preflight(ctx, newBin); err != nil {
+		return a.finish("failed", req.Version, current, "preflight (the panel was not stopped): "+err.Error())
+	}
 
 	if _, err := a.finish("applying", req.Version, current, ""); err != nil {
 		return nil, err
@@ -222,6 +237,32 @@ func installUnits(ctx context.Context, binary string) error {
 	out, err := exec.CommandContext(ctx, binary, "system", "install-units").CombinedOutput() //nolint:gosec // freshly verified binary
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// preflight checks that the new binary will start, before anything stops:
+// it puts the files' owners back (root) and then reads the config and the
+// master key as the service user, like the service will.
+func preflight(ctx context.Context, binary, configPath string) error {
+	if configPath == "" {
+		configPath = "/etc/hangar/hangar.toml"
+	}
+	// The verified copy is root-only (0600); the service user must run it.
+	if err := os.Chmod(binary, 0o755); err != nil { //nolint:gosec // a root-owned binary in a root-owned directory
+		return err
+	}
+	if out, err := exec.CommandContext(ctx, binary, "system", "fix-perms", "-config", configPath).CombinedOutput(); err != nil { //nolint:gosec // freshly verified binary
+		return fmt.Errorf("fix-perms: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	uid, gid, err := hostperms.SystemLookup("hangar")
+	if err != nil {
+		return err
+	}
+	cmd := exec.CommandContext(ctx, binary, "system", "check-start", "-config", configPath)                     //nolint:gosec // freshly verified binary
+	cmd.SysProcAttr = &syscall.SysProcAttr{Credential: &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}} //nolint:gosec // ids from /etc/passwd
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("check-start as hangar: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

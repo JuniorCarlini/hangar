@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -132,4 +133,23 @@ func loadConfig(args []string, stderr io.Writer) (config.Config, error) {
 	return loadConfigFile(*path)
 }
 
-func loadConfigFile(path string) (config.Config, error) { return config.Load(path) }
+func loadConfigFile(path string) (config.Config, error) {
+	// A config the service cannot read is almost always a manual edit that
+	// left it root:root; the next start fixes it (ExecStartPre), and the
+	// message says how to fix it by hand meanwhile.
+	if f, err := os.Open(path); errors.Is(err, fs.ErrPermission) { //nolint:gosec // the operator's config path
+		return config.Config{}, i18n.E("cli.config_permission", "path", path, "error", err.Error())
+	} else if err == nil {
+		_ = f.Close()
+	}
+	return config.Load(path)
+}
+
+// configPath reads -config from args without loading the file.
+func configPath(args []string) string {
+	fs := flag.NewFlagSet("hangard", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	path := fs.String("config", "/etc/hangar/hangar.toml", "")
+	_ = fs.Parse(args)
+	return *path
+}

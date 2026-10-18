@@ -55,6 +55,7 @@ func selfUpdateCmd(ctx context.Context, args []string, stdout, stderr io.Writer)
 			BinaryPath: cfg.Update.BinaryPath,
 			Service:    update.Systemd{Unit: cfg.Update.Service + ".service"},
 			ReadyWait:  90 * time.Second,
+			ConfigPath: configPath(args[1:]),
 		}
 		st, err := a.Apply(ctx)
 		if st == nil && err == nil {

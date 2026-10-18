@@ -10,6 +10,12 @@ Wants=network-online.target
 Type=simple
 User=hangar
 Group=hangar
+# "+" runs this one step as root, outside the sandbox below: it puts back the
+# owner and mode of the config, master key and data directory, so a file left
+# root:root by a manual edit heals on the next start instead of crash-looping
+# the panel until someone logs in by SSH. "-": if it cannot fix something,
+# the panel still tries to start (and says why if it cannot read its files).
+ExecStartPre=-+/usr/local/bin/hangard system fix-perms -config /etc/hangar/hangar.toml
 ExecStart=/usr/local/bin/hangard serve -config /etc/hangar/hangar.toml
 Restart=on-failure
 RestartSec=3
