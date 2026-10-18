@@ -295,6 +295,30 @@ func TestConfigDNS01Wildcard(t *testing.T) {
 	}
 }
 
+// An admin-added "*.<base>" custom domain must not get its own on-demand
+// HTTP-01 policy: that would match before the managed DNS-01 wildcard and push
+// every new subdomain onto per-host issuance, burning ACME rate limits.
+func TestConfigCustomBaseWildcardDeferredToDNS01(t *testing.T) {
+	b, err := BuildConfig(ConfigInput{
+		AdminListen: "unix//run/caddy/admin.sock|0660",
+		Email:       "ops@exemplo.com",
+		BaseDomain:  "apps.exemplo.com", DNSProvider: "cloudflare", DNSToken: "tok-123",
+		Fixed: []Route{
+			{Hosts: []string{"*.apps.exemplo.com"}, Upstream: "catchall:80", Key: "catchall"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	if strings.Contains(s, `"on_demand"`) {
+		t.Error("custom *.base must not create an on-demand policy; the DNS-01 wildcard covers it")
+	}
+	if !strings.Contains(s, `"automate"`) || !strings.Contains(s, `"*.apps.exemplo.com"`) {
+		t.Error("the base wildcard must still be managed via DNS-01 automate")
+	}
+}
+
 func TestCoveredByBase(t *testing.T) {
 	base := "apps.x.com"
 	for _, h := range []string{"a.apps.x.com", "loja-web.apps.x.com"} {

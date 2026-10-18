@@ -169,6 +169,7 @@ func TestIsStockCaddyImage(t *testing.T) {
 	stock := []string{
 		"caddy", "caddy:2.11", "caddy:latest", "caddy:2.11.7-alpine",
 		"library/caddy:2.11-alpine", "docker.io/library/caddy:2.11-alpine", "caddy@sha256:abc",
+		"index.docker.io/library/caddy:2.11-alpine",
 	}
 	for _, s := range stock {
 		if !isStockCaddyImage(s) {

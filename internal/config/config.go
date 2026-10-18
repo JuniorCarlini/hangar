@@ -110,7 +110,8 @@ const DefaultEdgeImage = "caddy:2.11-alpine"
 // "docker.io/library/caddy@sha256:…"). None of them ship a DNS provider
 // module, so DNS-01 needs a custom image instead.
 func isStockCaddyImage(image string) bool {
-	s := strings.TrimPrefix(strings.TrimPrefix(image, "docker.io/"), "library/")
+	s := strings.TrimPrefix(image, "index.docker.io/")
+	s = strings.TrimPrefix(strings.TrimPrefix(s, "docker.io/"), "library/")
 	return s == "caddy" || strings.HasPrefix(s, "caddy:") || strings.HasPrefix(s, "caddy@")
 }
 

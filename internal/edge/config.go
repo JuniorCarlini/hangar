@@ -102,9 +102,20 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 		},
 	}
 	var fixedHosts []string
+	dnsWildcard := in.BaseDomain != "" && in.DNSProvider != "" && in.DNSToken != ""
+	var wildHosts, baseCovered []string
 	if h := in.Hooks; h != nil && len(h.Hosts) > 0 {
 		hosts := slices.Sorted(slices.Values(h.Hosts))
-		fixedHosts = append(fixedHosts, hosts...)
+		for _, hn := range hosts {
+			// A hooks host under the base domain is covered by the one DNS-01
+			// wildcard too: keep it out of the per-host policy so Caddy does
+			// not also obtain a certificate of its own for it.
+			if dnsWildcard && coveredByBase(hn, in.BaseDomain) {
+				baseCovered = append(baseCovered, hn)
+			} else {
+				fixedHosts = append(fixedHosts, hn)
+			}
+		}
 		routes = append(routes,
 			obj{
 				"match":    []any{obj{"host": hosts, "path": []string{HooksPath}}},
@@ -117,12 +128,19 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 				"terminal": true,
 			})
 	}
-	dnsWildcard := in.BaseDomain != "" && in.DNSProvider != "" && in.DNSToken != ""
 	fixed := siteRoutes(in.Fixed)
-	var wildHosts, baseCovered []string
 	for _, r := range fixed {
 		if IsWildcard(r.Hosts[0]) {
-			wildHosts = append(wildHosts, r.Hosts...)
+			for _, h := range r.Hosts {
+				// A custom "*.<base>" must not get its own on-demand HTTP-01
+				// policy: it would match before the managed DNS-01 wildcard
+				// below and push every new subdomain onto per-host issuance,
+				// burning ACME rate limits. The DNS-01 policy serves its cert.
+				if dnsWildcard && h == "*."+in.BaseDomain {
+					continue
+				}
+				wildHosts = append(wildHosts, h)
+			}
 		} else {
 			for _, h := range r.Hosts {
 				// A host under the base domain is served by the one DNS-01
