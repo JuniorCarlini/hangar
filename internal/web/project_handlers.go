@@ -424,6 +424,12 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	if ip, err := netip.ParseAddr(client(r).IP); err == nil && ip.IsGlobalUnicast() && !ip.IsPrivate() {
 		d.ClientIP = ip.String() // pre-filled as "your IP" when opening a port
 	}
+	// The canvas opens a service in its drawer by asking only for the
+	// drawer: no canvas, no menu, no dialogs (a fraction of the page).
+	if r.Header.Get("X-Hangar-Fragment") == "panel" {
+		render(w, r, v.status, views.ServicePanel(d))
+		return
+	}
 	cd, err := h.canvasFor(r, p, s.Slug)
 	if err != nil {
 		loggerFrom(r.Context()).Error("canvas", "error", err)

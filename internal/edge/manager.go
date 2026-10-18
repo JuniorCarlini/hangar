@@ -261,6 +261,7 @@ func (m *Manager) build(ctx context.Context) ([]byte, error) {
 			Hosts:    []string{m.opts.PanelHost},
 			Upstream: net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(PanelPort)),
 			Key:      "hangar_panel",
+			Compress: true,
 		})
 	}
 	byUpstream := map[string]*Route{}

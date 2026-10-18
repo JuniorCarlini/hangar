@@ -87,4 +87,7 @@ func TestBuildRoutesThePublicPanel(t *testing.T) {
 	if strings.Count(s, "hangar.203-0-113-10.sslip.io") < 2 {
 		t.Error("the panel host should be routed and get a certificate")
 	}
+	if strings.Count(s, `"handler": "encode"`) != 1 {
+		t.Error("the panel (and only the panel) should be compressed")
+	}
 }

@@ -379,7 +379,13 @@
     if (location.pathname !== home) history.pushState({ panel: false }, '', home);
   }, true);
   function swap(url, push) {
-    return fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } }).then(function (r) {
+    // Feedback at once: the card being opened shows it is loading while
+    // the drawer comes (only the drawer: X-Hangar-Fragment).
+    var slug = (/\/s\/([^/?#]+)/.exec(url) || [])[1];
+    var card = slug && svg.querySelector('.node[data-slug="' + slug + '"]');
+    if (card) card.classList.add('is-loading');
+    document.documentElement.classList.add('is-busy');
+    return fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html', 'X-Hangar-Fragment': 'panel' } }).then(function (r) {
       if (!r.ok || r.redirected) throw new Error('reload');
       return r.text();
     }).then(function (html) {
@@ -411,7 +417,10 @@
       select((/\/s\/([^/?#]+)/.exec(url) || [])[1]);
       if (doc.title) document.title = doc.title;
       if (push) history.pushState({ panel: true }, '', url);
-    }).catch(function () { location.href = url; });
+    }).catch(function () { location.href = url; }).finally(function () {
+      if (card) card.classList.remove('is-loading');
+      document.documentElement.classList.remove('is-busy');
+    });
   }
   function local(a) {
     if (!a || a.target || a.hasAttribute('download')) return false;

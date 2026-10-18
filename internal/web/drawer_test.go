@@ -202,3 +202,35 @@ func TestNetworkTabModals(t *testing.T) {
 		t.Error("disks are added in a modal")
 	}
 }
+
+// The canvas opens a service by asking only for its drawer: the answer has
+// the drawer and its opener, not the canvas, the menu or the dialogs, and
+// is a fraction of the full page.
+func TestCanvasGetsOnlyTheDrawer(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	a := projects.Actor{UserID: "usr_x"}
+	if _, err := e.pm.CreateProject(ctx, a, "lab", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pm.CreateService(ctx, a, "lab", projects.ServiceInput{Slug: "web", Image: "nginx:1.29-alpine", Port: 80}); err != nil {
+		t.Fatal(err)
+	}
+	e.pm.Wait()
+	c, _ := e.session(t, auth.RoleAdmin)
+	full := e.do(req{method: "GET", target: "/p/lab/s/web", cookies: []*http.Cookie{c}}).Body.String()
+	rec := e.do(req{method: "GET", target: "/p/lab/s/web", cookies: []*http.Cookie{c}, header: map[string]string{"X-Hangar-Fragment": "panel"}})
+	frag := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(frag, `id="svc-panel"`) || !strings.Contains(frag, `id="svc-open"`) {
+		t.Fatalf("fragment: %d", rec.Code)
+	}
+	for _, not := range []string{`id="canvas"`, `class="sidebar`, `id="new-service"`, "<html"} {
+		if strings.Contains(frag, not) {
+			t.Errorf("the drawer fragment must not carry %s", not)
+		}
+	}
+	t.Logf("drawer only: %d KB; full page: %d KB", len(frag)/1024, len(full)/1024)
+	if len(frag)*3 > len(full) {
+		t.Errorf("fragment %d bytes vs full page %d: should be much smaller", len(frag), len(full))
+	}
+}

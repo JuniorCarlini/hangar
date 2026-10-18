@@ -444,6 +444,12 @@ func ServiceTabsFor(canBackup bool) []string {
 	return ServiceTabs[:len(ServiceTabs)-1]
 }
 
+// ServicePanel is the service drawer alone, for the canvas to swap in
+// without loading the whole page again.
+templ ServicePanel(d ServiceData) {
+	@servicePanel(d)
+}
+
 templ servicePanel(d ServiceData) {
 	// A Tucano drawer: it closes with the X, Escape or a click outside, and
 	// canvas.js takes the address back to the project.

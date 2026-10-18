@@ -17,6 +17,10 @@ type Route struct {
 	// Maintenance answers every host with the maintenance page instead of
 	// proxying; the service keeps running behind it.
 	Maintenance bool
+	// Compress encodes the responses (zstd or gzip, as the browser asks).
+	// Only the panel uses it: a canvas page is ~165 KB of HTML and ~20 KB
+	// compressed; the sites keep whatever their apps do.
+	Compress bool
 }
 
 // Where the panel puts the error pages and the deploy markers, as Caddy
@@ -134,7 +138,7 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 		}
 		routes = append(routes, obj{
 			"match":    []any{obj{"host": r.Hosts}},
-			"handle":   []any{siteHandler(r)},
+			"handle":   siteHandlers(r),
 			"terminal": true,
 		})
 	}
@@ -341,10 +345,10 @@ func siteRoutes(in []Route) []Route {
 			}
 		}
 		if len(e) > 0 {
-			exact = append(exact, Route{Hosts: slices.Sorted(slices.Values(e)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance})
+			exact = append(exact, Route{Hosts: slices.Sorted(slices.Values(e)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance, Compress: r.Compress})
 		}
 		if len(w) > 0 {
-			wild = append(wild, Route{Hosts: slices.Sorted(slices.Values(w)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance})
+			wild = append(wild, Route{Hosts: slices.Sorted(slices.Values(w)), Upstream: r.Upstream, Key: r.Key, Maintenance: r.Maintenance, Compress: r.Compress})
 		}
 	}
 	byUpstream := func(a, b Route) int { return strings.Compare(a.Upstream, b.Upstream) }
@@ -403,6 +407,18 @@ func page(kind, code, retryAfter string) obj {
 
 // siteHandler proxies to the service, or serves the maintenance page while
 // its maintenance mode is on (same status and retry as the other pages).
+// siteHandlers is the handler chain of a site: compression first when the
+// route asks for it, then the site itself.
+func siteHandlers(r Route) []any {
+	if r.Compress {
+		return []any{
+			obj{"handler": "encode", "encodings": obj{"zstd": obj{}, "gzip": obj{}}, "prefer": []string{"zstd", "gzip"}, "minimum_length": 1024},
+			siteHandler(r),
+		}
+	}
+	return []any{siteHandler(r)}
+}
+
 func siteHandler(r Route) obj {
 	if r.Maintenance {
 		return page("maint", "503", "30")
