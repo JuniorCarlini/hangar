@@ -12,6 +12,29 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.4.0] - 2026-10-17
+
+### Adicionado
+
+- **Lembrete do Kit de recuperação**: a cada 5 meses o painel pergunta se o
+  kit ainda está guardado (uma faixa no topo, só para o dono). Basta
+  escolher o arquivo do kit ou digitar o código de confirmação de novo.
+- Em **Backups**, um quadro **O que é salvo e quando**: o painel todo dia e
+  depois de mudanças, os PostgreSQL no intervalo que você escolher, e por
+  quanto tempo cada cópia fica guardada. MariaDB, MongoDB, Redis e os
+  arquivos dos apps ainda não têm backup automático, e o quadro diz isso.
+
+### Alterado
+
+- As notas de cada versão, na tela de atualização, agora são o texto do
+  CHANGELOG, em português e sem marcação.
+- O instalador não pede mais para copiar a chave mestra pelo SSH: o Kit de
+  recuperação, gerado no painel, já cobre o backup do painel com a chave.
+- Os passos para ligar os backups foram reescritos em palavras simples,
+  inclusive por que o bucket é criado por você, e não pelo Hangar.
+- O rodapé da barra lateral mostra só o IP do servidor e a versão do
+  Hangar, com o aviso de versão nova. CPU e memória ficam na Visão geral.
+
 ## [0.3.3] - 2026-10-17
 
 ### Adicionado
@@ -104,7 +127,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.3.3...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/JuniorCarlini/hangar/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/JuniorCarlini/hangar/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/JuniorCarlini/hangar/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/JuniorCarlini/hangar/compare/v0.3.0...v0.3.1
