@@ -101,9 +101,13 @@ type Auth struct {
 	Require2FA bool `toml:"require_2fa"`
 }
 
-// DefaultEdgeImage is the stock Caddy image. It cannot do DNS-01: using a
-// DNS provider needs a custom image (deploy/caddy/Dockerfile).
-const DefaultEdgeImage = "caddy:2.11-alpine"
+// DefaultEdgeImage is the edge Caddy image used when [edge] image is not set.
+// Release builds bake the project's hangar-caddy image (pinned by digest) in
+// here via -ldflags (see cmd/hangard), so DNS-01 works out of the box; a plain
+// "go build" leaves the stock Caddy, which cannot do DNS-01 until a custom
+// image is built (deploy/caddy/Dockerfile). It is a var so the binary can set
+// the baked image before the config loads.
+var DefaultEdgeImage = "caddy:2.11-alpine"
 
 // isStockCaddyImage reports whether image is the official Caddy image, under
 // any tag or registry prefix ("caddy", "caddy:2.11", "library/caddy:latest",

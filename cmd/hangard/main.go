@@ -22,6 +22,18 @@ import (
 // version is set at build time: -ldflags "-X main.version=v1.2.3".
 var version = "dev"
 
+// edgeImage is the edge Caddy image baked at build time (the release's
+// hangar-caddy, pinned by digest): -ldflags "-X main.edgeImage=...". It becomes
+// the default when [edge] image is not set. Empty in dev builds, which fall
+// back to the stock Caddy and cannot do DNS-01 until a custom image is built.
+var edgeImage string
+
+func init() {
+	if edgeImage != "" {
+		config.DefaultEdgeImage = edgeImage
+	}
+}
+
 // loc is the CLI language, from LC_ALL/LC_MESSAGES/LANG (docs/22).
 var loc = i18n.FromEnv(os.Getenv)
 

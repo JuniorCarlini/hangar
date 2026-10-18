@@ -8,7 +8,65 @@ permissions:
   contents: write
 
 jobs:
+  # Build and publish the edge Caddy image (with the DNS-01 provider modules)
+  # for this version, and expose its digest. The binary below is pinned to that
+  # digest, so the signed binary names the exact image the edge pulls.
+  edge-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.resolve.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-qemu-action@v3
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve the edge image (reuse when the Dockerfile is unchanged)
+        id: resolve
+        env:
+          IMAGE: ghcr.io/juniorcarlini/hangar-caddy
+          # Layers from xcaddy's Go compile are not byte-reproducible, so
+          # rebuilding every release would change the digest and recreate the
+          # edge container (a brief outage for every customer) on every update.
+          # The image is keyed by the Dockerfile's content instead: an unchanged
+          # Dockerfile reuses the existing build, so the digest — and the edge
+          # container — changes only on releases that actually change this image.
+          SOURCE_DATE_EPOCH: "0"
+        run: |
+          H=$(sha256sum deploy/caddy/Dockerfile | cut -c1-16)
+          TAG="$IMAGE:df-$H"
+          if digest=$(docker buildx imagetools inspect "$TAG" --format '{{.Manifest.Digest}}' 2>/dev/null); then
+            echo "reusing $TAG ($digest)"
+          else
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --provenance=false --sbom=false \
+              --output "type=image,name=$TAG,push=true,rewrite-timestamp=true" \
+              deploy/caddy
+            digest=$(docker buildx imagetools inspect "$TAG" --format '{{.Manifest.Digest}}')
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          # A version-tagged alias on the same manifest, for browsing the registry.
+          docker buildx imagetools create --tag "$IMAGE:${{ github.ref_name }}" "$IMAGE@$digest"
+
+  # Depends on edge-image on purpose: if the image push fails, no release is
+  # cut, so a binary never ships pointing at an image that is not in the
+  # registry.
   release:
+    needs: edge-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -25,11 +83,15 @@ jobs:
       - name: Binaries
         env:
           VERSION: ${{ github.ref_name }}
+          # The exact edge image this build pulls, by digest. install.sh
+          # verifies the binary (Ed25519), the binary names the image, Docker
+          # pulls that content: no separate image signature needed.
+          EDGE_IMAGE: ghcr.io/juniorcarlini/hangar-caddy@${{ needs.edge-image.outputs.digest }}
         run: |
           mkdir dist
           for arch in amd64 arm64; do
             GOOS=linux GOARCH=$arch CGO_ENABLED=0 go build -trimpath \
-              -ldflags "-s -w -X main.version=${VERSION}" \
+              -ldflags "-s -w -X main.version=${VERSION} -X main.edgeImage=${EDGE_IMAGE}" \
               -o dist/hangard-linux-$arch ./cmd/hangard
           done
           cp deploy/install.sh dist/install.sh
