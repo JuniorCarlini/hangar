@@ -326,8 +326,8 @@ templ svcBackupRestore(d ServiceData) {
 			</fieldset>
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
 				<div class="flex min-w-0 flex-col gap-1.5">
-					<label class="tuc-label is-required" for="rs-kit">{ t(ctx, "svcbackup.kit") }</label>
-					<input class="tuc-input" id="rs-kit" name="kit" type="file" accept=".txt,.age,text/plain" required/>
+					<span class="tuc-label is-required">{ t(ctx, "svcbackup.kit") }</span>
+					<input id="rs-kit" name="kit" type="file" accept=".txt,.age,text/plain" data-tuc-upload data-max-size="64KB" aria-label={ t(ctx, "svcbackup.kit") }/>
 					<span class="tuc-hint">{ t(ctx, "svcbackup.kit_hint") }</span>
 				</div>
 				<div class="flex min-w-0 flex-col gap-1.5">

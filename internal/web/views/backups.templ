@@ -283,24 +283,28 @@ templ backupKeys(d BackupsData) {
 // kitConfirmForm proves the kit was kept: the file is read in the
 // browser (kit.js) and only the code is sent; the code can also be typed.
 templ kitConfirmForm(csrf string, k BackupKeyRow, sudo bool) {
-	<form method="post" action="/backups/keys/confirm" class="flex flex-wrap items-end gap-3 py-1">
+	<form method="post" action="/backups/keys/confirm" class="flex flex-col gap-3 py-2">
 		<input type="hidden" name="csrf" value={ csrf }/>
 		<input type="hidden" name="id" value={ k.ID }/>
-		<div class="flex min-w-[220px] flex-[1_1_260px] flex-col gap-1.5">
-			<label class="tuc-label" for={ "kit-file-" + k.ID }>{ t(ctx, "backups.keys.confirm_file") }</label>
-			<input class="tuc-input" id={ "kit-file-" + k.ID } type="file" accept=".txt,.age,text/plain" data-kit-file data-public={ k.Public }/>
+		<div class="flex min-w-0 flex-col gap-1.5">
+			<span class="tuc-label">{ t(ctx, "backups.keys.confirm_file") }</span>
+			// The file is read here in the browser (kit.js): only the code it
+			// yields fills the field below and is sent.
+			<input type="file" id={ "kit-file-" + k.ID } accept=".txt,.age,text/plain" data-tuc-upload data-max-size="64KB" data-kit-file data-public={ k.Public } aria-label={ t(ctx, "backups.keys.confirm_file") }/>
 			<span class="tuc-hint" data-kit-file-msg aria-live="polite">{ t(ctx, "backups.keys.confirm_file_hint") }</span>
 		</div>
-		<div class="flex min-w-[180px] flex-col gap-1.5">
-			<label class="tuc-label" for={ "kit-code-" + k.ID }>{ t(ctx, "backups.keys.code") }</label>
-			<input class="tuc-input font-mono uppercase" id={ "kit-code-" + k.ID } name="code" required maxlength="20" autocomplete="off" placeholder={ "XXXX-XXXX-XXXX" }/>
+		<div class="flex flex-wrap items-end gap-3">
+			<div class="flex min-w-[200px] flex-[0_1_260px] flex-col gap-1.5">
+				<label class="tuc-label" for={ "kit-code-" + k.ID }>{ t(ctx, "backups.keys.code") }</label>
+				<input class="tuc-input font-mono uppercase" id={ "kit-code-" + k.ID } name="code" required maxlength="20" autocomplete="off" placeholder={ "XXXX-XXXX-XXXX" }/>
+			</div>
+			if sudo {
+				<button class="tuc-btn is-success" type="submit">
+					@Icon("shield-check", "size-3.5")
+					{ t(ctx, "backups.keys.confirm") }
+				</button>
+			}
 		</div>
-		if sudo {
-			<button class="tuc-btn is-success" type="submit">
-				@Icon("shield-check", "size-3.5")
-				{ t(ctx, "backups.keys.confirm") }
-			</button>
-		}
 	</form>
 }
 

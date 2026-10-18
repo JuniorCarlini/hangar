@@ -329,9 +329,11 @@ if (typeof module !== 'undefined' && module.exports) {
   });
 
   // Confirmation: the kit file is read here, locally; only the code goes.
+  // The picker is Tucano's upload: a file chosen or dropped arrives in its
+  // tucano:change event; a plain change covers it without Tucano.
   document.querySelectorAll('[data-kit-file]').forEach(function (input) {
-    input.addEventListener('change', function () {
-      var form = input.form, f = input.files && input.files[0];
+    function picked(f) {
+      var form = input.closest('form');
       var msg = form.querySelector('[data-kit-file-msg]');
       if (!f) return;
       if (f.size > 64 * 1024) { msg.textContent = t.noKey; return; }
@@ -349,9 +351,14 @@ if (typeof module !== 'undefined' && module.exports) {
         msg.textContent = t.fileOk;
       }).catch(function (e) {
         msg.textContent = e && e.message === 'mismatch' ? t.mismatch : t.noKey;
-      }).finally(function () {
-        input.value = '';
       });
+    }
+    input.addEventListener('tucano:change', function (ev) {
+      var files = (ev.detail && ev.detail.files) || [];
+      picked(files.length ? files[files.length - 1].file : null);
+    });
+    input.addEventListener('change', function () {
+      if (!input.hasAttribute('data-tuc-ready')) picked(input.files && input.files[0]);
     });
   });
 })();
