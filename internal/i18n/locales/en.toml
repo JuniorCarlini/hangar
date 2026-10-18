@@ -2003,6 +2003,7 @@ paper_text = "This is the key that opens your Hangar backups. Keep this paper in
 paper_label = "Key name"
 paper_date = "Generated on"
 paper_code = "Confirmation code"
+paper_qr = "Scan to restore"
 paper_secret = "Secret key (the spaces are only for easier reading)"
 paper_public = "Public key (to check)"
 paper_how = "How to use"
@@ -2038,21 +2039,36 @@ mismatch = "This kit belongs to another key."
 no_key = "No private key found in this file."
 file_ok = "Kit checked: code filled in."
 qr_label = "QR code of the private key"
-file_text = """Hangar · Recovery kit
-Name: {label}
-Generated: {date}
-Public key: {public}
-Confirmation code: {code}
+file_text = """Hangar · Recovery kit · CONFIDENTIAL
+==========================================================
 
-This is the key that opens your Hangar backups. Keep this file
-OFF the server (password manager, USB stick, paper in a safe).
-Whoever has this file can read the backups; without it nobody can, not even you.
+Key name:           {label}
+Generated on:       {date}
+Confirmation code:  {code}
+Public key:         {public}
 
+This is the key that opens your Hangar backups. The secret key is on
+the last line of this file (it starts with AGE-SECRET-KEY-1).
+
+HOW TO USE
+1. Keep this file OUTSIDE the server (password manager or USB drive)
+   and the paper version somewhere else.
+2. The panel asks for a confirmation from time to time: choose this
+   file or type the confirmation code above.
+3. To recover the backups on a new server, Hangar asks for this file.
+
+WARNING
+Whoever has this file opens your backups; without it, nobody can, not
+even you. Do not send it in a message or by e-mail.
+
+FOR TERMINAL USERS
 Open a backup on your computer:
   hangar-cofre decrypt file.age -identity hangar-kit.txt
   (or: age -d -i hangar-kit.txt file.age)
 Protect this file with a passphrase:
-  hangar-cofre kit protect hangar-kit.txt"""
+  hangar-cofre kit protect hangar-kit.txt
+
+SECRET KEY (line below):"""
 
 [target]
 page_title = "New destination · Backups · Hangar"

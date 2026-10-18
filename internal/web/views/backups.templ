@@ -721,12 +721,20 @@ templ BackupKit(d KitData) {
 								<div><dt>{ t(ctx, "kit.paper_code") }</dt><dd id="kit-paper-code" class="kit-paper__mono"></dd></div>
 							</dl>
 							<section class="kit-paper__key">
-								<div id="kit-paper-qr"></div>
+								<figure class="kit-paper__qr">
+									<div id="kit-paper-qr"></div>
+									<figcaption>{ t(ctx, "kit.paper_qr") }</figcaption>
+								</figure>
 								<div class="kit-paper__secret">
-									<p class="kit-paper__caption">{ t(ctx, "kit.paper_secret") }</p>
-									<p id="kit-paper-secret" class="kit-paper__mono"></p>
-									<p class="kit-paper__caption">{ t(ctx, "kit.paper_public") }</p>
-									<p id="kit-paper-public" class="kit-paper__mono kit-paper__small"></p>
+									<div>
+										<p class="kit-paper__caption">{ t(ctx, "kit.paper_secret") }</p>
+										<p id="kit-paper-secret" class="kit-paper__mono"></p>
+									</div>
+									<div class="kit-paper__divider"></div>
+									<div>
+										<p class="kit-paper__caption">{ t(ctx, "kit.paper_public") }</p>
+										<p id="kit-paper-public" class="kit-paper__mono kit-paper__small"></p>
+									</div>
 								</div>
 							</section>
 							<section class="kit-paper__how">
@@ -737,7 +745,10 @@ templ BackupKit(d KitData) {
 									<li>{ t(ctx, "kit.paper_how3") }</li>
 								</ol>
 							</section>
-							<footer class="kit-paper__warn">{ t(ctx, "kit.paper_warn") }</footer>
+							<footer class="kit-paper__warn">
+								<svg class="kit-paper__warn-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+								<span>{ t(ctx, "kit.paper_warn") }</span>
+							</footer>
 							<pre id="kit-paper-text" hidden></pre>
 						</div>
 					</div>

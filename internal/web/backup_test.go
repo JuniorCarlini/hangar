@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestKitRegistrationNeedsOwnerSudoAndCode(t *testing.T) {
 	}
 	sc, sp := e.sudo(t, c, p)
 	kit := e.do(req{method: "GET", target: "/backups/kit", cookies: []*http.Cookie{sc}}).Body.String()
-	if !strings.Contains(kit, "/assets/kit.js") || !strings.Contains(kit, "data-kit-generate") || strings.Contains(kit, "AGE-SECRET-KEY") {
+	if !strings.Contains(kit, "/assets/kit.js") || !strings.Contains(kit, "data-kit-generate") || regexp.MustCompile(`AGE-SECRET-KEY-1[0-9A-Z]{50,}`).MatchString(kit) {
 		t.Fatal("the kit page must generate in the browser, with no key in the HTML")
 	}
 	form.Set("csrf", sp.CSRFToken)

@@ -2003,6 +2003,7 @@ paper_text = "Esta é a chave que abre os backups do seu Hangar. Guarde este pap
 paper_label = "Nome da chave"
 paper_date = "Gerada em"
 paper_code = "Código de confirmação"
+paper_qr = "Leia para restaurar"
 paper_secret = "Chave secreta (os espaços são só para facilitar a leitura)"
 paper_public = "Chave pública (para conferir)"
 paper_how = "Como usar"
@@ -2038,21 +2039,37 @@ mismatch = "Este kit não é o desta chave."
 no_key = "Não achei uma chave privada neste arquivo."
 file_ok = "Kit conferido: código preenchido."
 qr_label = "QR code da chave privada"
-file_text = """Hangar · Kit de recuperação
-Nome: {label}
-Gerado em: {date}
-Chave pública: {public}
-Código de confirmação: {code}
+file_text = """Hangar · Kit de recuperação · CONFIDENCIAL
+==========================================================
 
-Esta é a chave que abre os backups do seu Hangar. Guarde este arquivo
-FORA do servidor (gerenciador de senhas, pendrive, papel num cofre).
-Quem tiver este arquivo lê os backups; sem ele, ninguém lê, nem você.
+Nome da chave:          {label}
+Gerada em:              {date}
+Código de confirmação:  {code}
+Chave pública:          {public}
 
-Abrir um backup no seu computador:
+Esta é a chave que abre os backups do seu Hangar. A chave secreta está
+na última linha deste arquivo (começa com AGE-SECRET-KEY-1).
+
+COMO USAR
+1. Guarde este arquivo FORA do servidor (gerenciador de senhas ou
+   pendrive) e a versão em papel em outro lugar.
+2. O painel pede a confirmação de tempos em tempos: escolha este
+   arquivo ou digite o código de confirmação acima.
+3. Para recuperar os backups num servidor novo, o Hangar pede este
+   arquivo.
+
+ATENÇÃO
+Quem tiver este arquivo abre os seus backups; sem ele, ninguém abre,
+nem você. Não envie por mensagem nem por e-mail.
+
+PARA QUEM USA O TERMINAL
+Abrir um backup no computador:
   hangar-cofre decrypt arquivo.age -identity hangar-kit.txt
   (ou: age -d -i hangar-kit.txt arquivo.age)
 Proteger este arquivo com uma frase-senha:
-  hangar-cofre kit protect hangar-kit.txt"""
+  hangar-cofre kit protect hangar-kit.txt
+
+CHAVE SECRETA (linha abaixo):"""
 
 [target]
 page_title = "Novo destino · Backups · Hangar"

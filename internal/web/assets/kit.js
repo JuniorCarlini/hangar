@@ -290,6 +290,23 @@ if (typeof module !== 'undefined' && module.exports) {
     updateRegister();
   });
 
+  // On print, the sheet becomes the page's only content: it moves to the
+  // end of <body> and everything else is left out (CSS, html.printing-kit),
+  // so it is not squeezed into the panel's layout and no blank page follows.
+  // Ctrl+P works the same as the button; afterwards it goes back.
+  var paper = $('.kit-paper');
+  var paperHome = paper && paper.parentNode;
+  window.addEventListener('beforeprint', function () {
+    if (!paper || !state) return;
+    document.body.appendChild(paper);
+    document.documentElement.classList.add('printing-kit');
+  });
+  window.addEventListener('afterprint', function () {
+    if (!paper || paper.parentNode === paperHome) return;
+    paperHome.appendChild(paper);
+    document.documentElement.classList.remove('printing-kit');
+  });
+
   var pr = $('[data-kit-print]');
   if (pr) pr.addEventListener('click', function () {
     window.print();
