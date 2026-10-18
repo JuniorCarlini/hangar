@@ -51,8 +51,10 @@ servidos localmente, e o Editor do Tucano, que grava `style` em atributo, não
   perdido), encerrando as sessões dela.
 - **Passkeys (WebAuthn)**: recomendadas; podem substituir senha+TOTP.
 - **Rate limit**: 5 tentativas/15 min por IP e por usuário; depois, atraso
-  exponencial. 20 falhas por usuário → conta bloqueada até desbloqueio via CLI
-  no servidor (`hangard user unlock`).
+  exponencial. 20 falhas por usuário em 24 h → conta bloqueada por 15 min,
+  dobrando a cada bloqueio seguido, até 24 h; abre sozinha (sem SSH). Quem
+  digita a senha certa durante o bloqueio vê até que horas; senha errada
+  recebe a mensagem genérica. `hangard user unlock` no servidor abre antes.
 - **Sem enumeração de usuário**: mesma resposta e mesmo tempo para usuário
   inexistente.
 - **Primeiro acesso**: enquanto não existe usuário, a tela "Criar a conta

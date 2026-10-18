@@ -174,7 +174,7 @@ padrão é restaurar num serviço novo, sobrescrever exige digitar o nome).
 |---|---|---|
 | Senha de um usuário | esqueceu, vazou | `sudo -u hangar hangard user password -email ...` (desbloqueia e encerra as sessões) |
 | 2FA | celular perdido, app comprometido | `sudo -u hangar hangard user totp -email ...` (novo QR) ou `totp-off` |
-| Conta bloqueada (20 falhas) | | `sudo -u hangar hangard user unlock -email ...` |
+| Conta bloqueada (20 falhas) | não quer esperar o bloqueio acabar sozinho (15 min a 24 h) | `sudo -u hangar hangard user unlock -email ...` |
 | Chave mestra | `/etc/hangar` ou um backup antigo do painel caiu em mãos erradas | abaixo |
 | Token do Git (credencial) | vazou, expirou | página **Credenciais Git** (ou Configurações do projeto) → **Trocar token**: vale para todos os serviços que usam a credencial no próximo deploy. Serviço com token próprio antigo: Configurações do serviço → **Trocar credencial** |
 | Webhook do GitHub | URL vazou | Configurações → **gerar novo** webhook (2FA) e colar no GitHub |

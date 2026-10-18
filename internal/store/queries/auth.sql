@@ -25,18 +25,28 @@ UPDATE users SET totp_secret_enc = ?, totp_last_step = 0, updated_at = ? WHERE i
 UPDATE users SET totp_last_step = sqlc.arg(step) WHERE id = sqlc.arg(id) AND totp_last_step < sqlc.arg(step);
 
 -- name: RecordLoginFailure :one
+-- Counts one failure in the current window; failures older than the window
+-- start a new count.
 UPDATE users
-SET failed_logins = failed_logins + 1,
-    locked_at = CASE WHEN failed_logins + 1 >= sqlc.arg(lock_after) THEN sqlc.arg(now) ELSE locked_at END,
+SET failed_logins = CASE WHEN failed_since IS NULL OR failed_since <= sqlc.arg(window_start) THEN 1 ELSE failed_logins + 1 END,
+    failed_since  = CASE WHEN failed_since IS NULL OR failed_since <= sqlc.arg(window_start) THEN sqlc.arg(now) ELSE failed_since END,
     updated_at = sqlc.arg(now)
 WHERE id = sqlc.arg(id)
-RETURNING failed_logins, locked_at;
+RETURNING failed_logins, lock_count, locked_until;
+
+-- name: LockUser :execrows
+-- Starts a lock unless one is already running (two failures racing past the
+-- limit lock once). The failure count starts over for after the lock.
+UPDATE users
+SET locked_until = sqlc.arg(locked_until), lock_count = sqlc.arg(lock_count),
+    failed_logins = 0, failed_since = NULL, updated_at = sqlc.arg(now)
+WHERE id = sqlc.arg(id) AND (locked_until IS NULL OR locked_until <= sqlc.arg(now));
 
 -- name: ResetLoginFailures :exec
-UPDATE users SET failed_logins = 0 WHERE id = ?;
+UPDATE users SET failed_logins = 0, failed_since = NULL, lock_count = 0 WHERE id = ?;
 
 -- name: UnlockUser :execrows
-UPDATE users SET failed_logins = 0, locked_at = NULL, updated_at = ? WHERE email = ?;
+UPDATE users SET failed_logins = 0, failed_since = NULL, lock_count = 0, locked_until = NULL, updated_at = ? WHERE email = ?;
 
 -- name: SetPassword :exec
 UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?;
@@ -60,7 +70,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetSession :one
 SELECT s.id_hash, s.user_id, s.stage, s.csrf_token, s.created_at, s.last_seen_at, s.expires_at, s.sudo_until,
-       u.role, u.locked_at, u.locale, u.theme, u.email, u.name, u.all_projects,
+       u.role, u.locked_until, u.locale, u.theme, u.email, u.name, u.all_projects,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = ?;
@@ -97,7 +107,7 @@ WHERE user_id = ? AND stage = 'active' AND expires_at > ? ORDER BY last_seen_at 
 DELETE FROM sessions WHERE user_id = ? AND id_hash = ?;
 
 -- name: ListUsers :many
-SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_at, u.created_at,
+SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_until, u.created_at,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp,
        CAST(coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), 0) AS INTEGER) AS last_seen_at
 FROM users u

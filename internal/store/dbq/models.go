@@ -473,13 +473,15 @@ type User struct {
 	TotpSecretEnc []byte
 	TotpLastStep  int64
 	FailedLogins  int64
-	LockedAt      sql.NullInt64
 	CreatedAt     int64
 	UpdatedAt     int64
 	Locale        sql.NullString
 	Theme         string
 	Name          string
 	AllProjects   int64
+	LockedUntil   sql.NullInt64
+	LockCount     int64
+	FailedSince   sql.NullInt64
 }
 
 type UserProject struct {

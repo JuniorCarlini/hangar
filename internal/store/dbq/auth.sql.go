@@ -387,7 +387,7 @@ func (q *Queries) GetInviteByToken(ctx context.Context, tokenHash string) (Invit
 
 const getSession = `-- name: GetSession :one
 SELECT s.id_hash, s.user_id, s.stage, s.csrf_token, s.created_at, s.last_seen_at, s.expires_at, s.sudo_until,
-       u.role, u.locked_at, u.locale, u.theme, u.email, u.name, u.all_projects,
+       u.role, u.locked_until, u.locale, u.theme, u.email, u.name, u.all_projects,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = ?
@@ -403,7 +403,7 @@ type GetSessionRow struct {
 	ExpiresAt   int64
 	SudoUntil   int64
 	Role        string
-	LockedAt    sql.NullInt64
+	LockedUntil sql.NullInt64
 	Locale      sql.NullString
 	Theme       string
 	Email       string
@@ -425,7 +425,7 @@ func (q *Queries) GetSession(ctx context.Context, idHash []byte) (GetSessionRow,
 		&i.ExpiresAt,
 		&i.SudoUntil,
 		&i.Role,
-		&i.LockedAt,
+		&i.LockedUntil,
 		&i.Locale,
 		&i.Theme,
 		&i.Email,
@@ -437,7 +437,7 @@ func (q *Queries) GetSession(ctx context.Context, idHash []byte) (GetSessionRow,
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name, all_projects FROM users WHERE id = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -451,19 +451,21 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.TotpSecretEnc,
 		&i.TotpLastStep,
 		&i.FailedLogins,
-		&i.LockedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Locale,
 		&i.Theme,
 		&i.Name,
 		&i.AllProjects,
+		&i.LockedUntil,
+		&i.LockCount,
+		&i.FailedSince,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name, all_projects FROM users WHERE email = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -477,19 +479,21 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.TotpSecretEnc,
 		&i.TotpLastStep,
 		&i.FailedLogins,
-		&i.LockedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Locale,
 		&i.Theme,
 		&i.Name,
 		&i.AllProjects,
+		&i.LockedUntil,
+		&i.LockCount,
+		&i.FailedSince,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name, all_projects FROM users WHERE id = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -503,13 +507,15 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.TotpSecretEnc,
 		&i.TotpLastStep,
 		&i.FailedLogins,
-		&i.LockedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Locale,
 		&i.Theme,
 		&i.Name,
 		&i.AllProjects,
+		&i.LockedUntil,
+		&i.LockCount,
+		&i.FailedSince,
 	)
 	return i, err
 }
@@ -614,7 +620,7 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_at, u.created_at,
+SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_until, u.created_at,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp,
        CAST(coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), 0) AS INTEGER) AS last_seen_at
 FROM users u
@@ -627,7 +633,7 @@ type ListUsersRow struct {
 	Name        string
 	Role        string
 	AllProjects int64
-	LockedAt    sql.NullInt64
+	LockedUntil sql.NullInt64
 	CreatedAt   int64
 	HasTotp     int64
 	LastSeenAt  int64
@@ -648,7 +654,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 			&i.Name,
 			&i.Role,
 			&i.AllProjects,
-			&i.LockedAt,
+			&i.LockedUntil,
 			&i.CreatedAt,
 			&i.HasTotp,
 			&i.LastSeenAt,
@@ -666,35 +672,67 @@ func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
 	return items, nil
 }
 
+const lockUser = `-- name: LockUser :execrows
+UPDATE users
+SET locked_until = ?1, lock_count = ?2,
+    failed_logins = 0, failed_since = NULL, updated_at = ?3
+WHERE id = ?4 AND (locked_until IS NULL OR locked_until <= ?3)
+`
+
+type LockUserParams struct {
+	LockedUntil sql.NullInt64
+	LockCount   int64
+	Now         int64
+	ID          string
+}
+
+// Starts a lock unless one is already running (two failures racing past the
+// limit lock once). The failure count starts over for after the lock.
+func (q *Queries) LockUser(ctx context.Context, arg LockUserParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, lockUser,
+		arg.LockedUntil,
+		arg.LockCount,
+		arg.Now,
+		arg.ID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const recordLoginFailure = `-- name: RecordLoginFailure :one
 UPDATE users
-SET failed_logins = failed_logins + 1,
-    locked_at = CASE WHEN failed_logins + 1 >= ?1 THEN ?2 ELSE locked_at END,
+SET failed_logins = CASE WHEN failed_since IS NULL OR failed_since <= ?1 THEN 1 ELSE failed_logins + 1 END,
+    failed_since  = CASE WHEN failed_since IS NULL OR failed_since <= ?1 THEN ?2 ELSE failed_since END,
     updated_at = ?2
 WHERE id = ?3
-RETURNING failed_logins, locked_at
+RETURNING failed_logins, lock_count, locked_until
 `
 
 type RecordLoginFailureParams struct {
-	LockAfter int64
-	Now       int64
-	ID        string
+	WindowStart sql.NullInt64
+	Now         int64
+	ID          string
 }
 
 type RecordLoginFailureRow struct {
 	FailedLogins int64
-	LockedAt     sql.NullInt64
+	LockCount    int64
+	LockedUntil  sql.NullInt64
 }
 
+// Counts one failure in the current window; failures older than the window
+// start a new count.
 func (q *Queries) RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) (RecordLoginFailureRow, error) {
-	row := q.db.QueryRowContext(ctx, recordLoginFailure, arg.LockAfter, arg.Now, arg.ID)
+	row := q.db.QueryRowContext(ctx, recordLoginFailure, arg.WindowStart, arg.Now, arg.ID)
 	var i RecordLoginFailureRow
-	err := row.Scan(&i.FailedLogins, &i.LockedAt)
+	err := row.Scan(&i.FailedLogins, &i.LockCount, &i.LockedUntil)
 	return i, err
 }
 
 const resetLoginFailures = `-- name: ResetLoginFailures :exec
-UPDATE users SET failed_logins = 0 WHERE id = ?
+UPDATE users SET failed_logins = 0, failed_since = NULL, lock_count = 0 WHERE id = ?
 `
 
 func (q *Queries) ResetLoginFailures(ctx context.Context, id string) error {
@@ -804,7 +842,7 @@ func (q *Queries) TouchSession(ctx context.Context, arg TouchSessionParams) erro
 }
 
 const unlockUser = `-- name: UnlockUser :execrows
-UPDATE users SET failed_logins = 0, locked_at = NULL, updated_at = ? WHERE email = ?
+UPDATE users SET failed_logins = 0, failed_since = NULL, lock_count = 0, locked_until = NULL, updated_at = ? WHERE email = ?
 `
 
 type UnlockUserParams struct {

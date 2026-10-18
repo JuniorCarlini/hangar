@@ -74,6 +74,7 @@ no_reset = "Sem \"esqueci a senha\": a recuperação é feita com os códigos de
 [login.error]
 bad_credentials = "E-mail ou senha incorretos, ou conta bloqueada."
 rate_limited = "Muitas tentativas. Tente de novo em {min} min."
+locked = "Conta bloqueada por tentativas erradas até {time}."
 busy = "Muitas tentativas de login no momento. Tente em instantes."
 no_totp = "Esta conta ainda não tem 2FA. Configure no servidor com: hangard user totp -email {email}"
 form_expired = "O formulário expirou. Tente entrar de novo."
@@ -1670,7 +1671,7 @@ host_memory = "A memória do servidor está em {pct}% (alerta acima de {limit}%)
 host_disk = "O disco do servidor está {pct}% ocupado (alerta acima de {limit}%)."
 login_new_ip = "{user} entrou no painel a partir de {ip}, um endereço que essa conta nunca tinha usado."
 login_failures = "Muitas tentativas de login erradas a partir de {ip}. As próximas estão sendo atrasadas."
-account_locked = "A conta {user} foi bloqueada depois de 20 tentativas erradas (a última de {ip}). Desbloqueio só pelo servidor: hangard user unlock."
+account_locked = "A conta {user} foi bloqueada por {min} min depois de 20 tentativas erradas (a última de {ip}). Ela volta a abrir sozinha; cada novo bloqueio seguido dura o dobro, até 24 h."
 totp_disabled = "A verificação em duas etapas da conta {user} foi desligada."
 sudo_action = "{user} {action}: {target}."
 user_created = "A conta {user} foi criada com o papel {role}."

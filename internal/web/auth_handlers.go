@@ -246,6 +246,7 @@ func (h *handlers) loginSubmit(w http.ResponseWriter, r *http.Request) {
 	token, complete, err := h.auth.Login(r.Context(), email, r.PostFormValue("password"), client(r))
 
 	var rl *auth.RateLimitedError
+	var locked *auth.LockedError
 	switch {
 	case err == nil && complete:
 		// Account without 2FA: the session is already active.
@@ -260,9 +261,13 @@ func (h *handlers) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		render(w, form, http.StatusServiceUnavailable, views.Login(email, i18n.T(r.Context(), "login.error.busy"), ""))
 	case errors.Is(err, auth.ErrNoTOTP):
 		render(w, form, http.StatusUnauthorized, views.Login(email, i18n.T(r.Context(), "login.error.no_totp", "email", email), ""))
-	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrLocked):
-		// One message for wrong credentials and a locked account: it never
-		// reveals which accounts exist.
+	case errors.As(err, &locked):
+		// Only the right password gets here, so saying the account is
+		// locked reveals nothing to someone guessing.
+		render(w, form, http.StatusForbidden, views.Login(email, lockedMessage(r, locked), ""))
+	case errors.Is(err, auth.ErrInvalidCredentials):
+		// One message for wrong credentials whether or not the account
+		// exists or is locked: it never reveals which accounts exist.
 		render(w, form, http.StatusUnauthorized, views.Login(email, i18n.T(r.Context(), "login.error.bad_credentials"), ""))
 	default:
 		loggerFrom(r.Context()).Error("login", "error", err)
@@ -287,6 +292,7 @@ func (h *handlers) twoFactorSubmit(w http.ResponseWriter, r *http.Request) {
 	token, err := h.auth.LoginSecondFactor(r.Context(), pending.Value, r.PostFormValue("code"), client(r))
 
 	var rl *auth.RateLimitedError
+	var locked *auth.LockedError
 	switch {
 	case err == nil:
 		clearCookie(w, pendingCookie)
@@ -297,12 +303,22 @@ func (h *handlers) twoFactorSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?expired=1", http.StatusSeeOther)
 	case errors.As(err, &rl):
 		render(w, r, http.StatusTooManyRequests, views.TwoFactor(i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes())))
+	case errors.As(err, &locked):
+		// The pending step is gone; the password is asked again after the lock.
+		clearCookie(w, pendingCookie)
+		render(w, withLoginToken(w, r), http.StatusForbidden, views.Login("", lockedMessage(r, locked), ""))
 	case errors.Is(err, auth.ErrInvalidCode):
 		render(w, r, http.StatusUnauthorized, views.TwoFactor(i18n.T(r.Context(), "twofa.error.invalid")))
 	default:
 		loggerFrom(r.Context()).Error("2fa", "error", err)
 		render(w, r, http.StatusInternalServerError, views.TwoFactor(i18n.T(r.Context(), "error.internal")))
 	}
+}
+
+// lockedMessage says until when the account stays locked, in the server's
+// clock (with its zone, since the browser's may differ).
+func lockedMessage(r *http.Request, e *auth.LockedError) string {
+	return i18n.T(r.Context(), "login.error.locked", "time", e.Until.Local().Format("15:04 MST"))
 }
 
 func (h *handlers) logout(w http.ResponseWriter, r *http.Request) {

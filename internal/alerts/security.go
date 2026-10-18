@@ -127,7 +127,7 @@ func (s *Service) securityEvent(ctx context.Context, e audit.Entry) (Event, bool
 	case e.Action == "auth.login.fail" && summary("limit_reached") == "true":
 		return sec("login_failures", Warning, e.IP, map[string]string{"ip": e.IP})
 	case e.Action == "auth.account.locked":
-		return sec("account_locked", Critical, e.ActorID, map[string]string{"ip": e.IP})
+		return sec("account_locked", Critical, e.ActorID, map[string]string{"ip": e.IP, "min": summary("minutes")})
 	case (e.Action == "auth.totp.disable" || e.Action == "auth.totp.reset") && e.Outcome == audit.OK:
 		target := e.TargetID
 		if target == "" {

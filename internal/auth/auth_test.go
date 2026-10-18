@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"path/filepath"
@@ -285,29 +286,156 @@ func TestRateLimitPerIPAndRecovery(t *testing.T) {
 	}
 }
 
+// failLogins sends n wrong passwords for email, each from its own address
+// and with the in-memory e-mail limit cleared, so only the account counter
+// (and not the per-IP or per-e-mail limits) decides, with no time passing.
+func (f *fixture) failLogins(t *testing.T, email string, n int) {
+	t.Helper()
+	for i := range n {
+		f.svc.limits.reset("email:" + email)
+		ip := fmt.Sprintf("10.9.%d.%d", i/250, i%250+1)
+		if _, _, err := f.svc.Login(context.Background(), email, "senha-errada-qualquer", Client{IP: ip}); !errors.Is(err, ErrInvalidCredentials) {
+			t.Fatalf("wrong password %d: %v", i, err)
+		}
+	}
+	f.svc.limits.reset("email:" + email)
+}
+
+func (f *fixture) countAudit(t *testing.T, action string) int {
+	t.Helper()
+	var n int
+	if err := f.st.DB.QueryRow("SELECT count(*) FROM audit_log WHERE action = ?", action).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// lockedFor returns how long the account is locked from now, failing when
+// the right password is not refused with a *LockedError.
+func (f *fixture) lockedFor(t *testing.T, email string) time.Duration {
+	t.Helper()
+	_, _, err := f.svc.Login(context.Background(), email, goodPassword, Client{IP: "10.8.0.1"})
+	var le *LockedError
+	if !errors.As(err, &le) || !errors.Is(err, ErrLocked) {
+		t.Fatalf("right password on a locked account: %v", err)
+	}
+	f.svc.limits.reset("email:" + email)
+	f.svc.limits.reset("ip:10.8.0.1")
+	return le.Until.Sub(f.clock.now())
+}
+
 func TestAccountLocksAfterManyFailures(t *testing.T) {
 	f := newFixture(t)
 	f.userWithTOTP(t, "a@hangar.dev", RoleAdmin)
 	ctx := context.Background()
 
-	// Different IPs to stay clear of the per-IP limit; the e-mail stays the
-	// same, so advance the clock every block for the e-mail window to reopen.
-	for i := range LockAfter {
-		if i > 0 && i%LimitFailures == 0 {
-			f.clock.advance(LimitWindow)
-		}
-		_, _, _ = f.svc.Login(ctx, "a@hangar.dev", "senha-errada-qualquer", Client{IP: "10.0.0.1"})
+	f.failLogins(t, "a@hangar.dev", LockAfter-1)
+	if _, _, err := f.svc.Login(ctx, "a@hangar.dev", goodPassword, Client{IP: "10.0.0.1"}); err != nil {
+		t.Fatalf("one failure short of the limit: %v", err)
 	}
-	f.clock.advance(LimitWindow)
-	if _, _, err := f.svc.Login(ctx, "a@hangar.dev", goodPassword, Client{IP: "10.0.0.2"}); !errors.Is(err, ErrLocked) {
-		t.Fatalf("account should be locked, got %v", err)
+	// Only a finished login clears the count (the password step alone does
+	// not, or the 2FA step could be guessed forever): one more failure locks.
+	f.failLogins(t, "a@hangar.dev", 1)
+	if got := f.lockedFor(t, "a@hangar.dev"); got != LockBase {
+		t.Fatalf("first lock lasts %s, want %s", got, LockBase)
+	}
+	if n := f.countAudit(t, "auth.account.locked"); n != 1 {
+		t.Fatalf("%d lock audit records, want 1", n)
 	}
 
+	// A wrong password while locked gets the generic error (no hint that the
+	// account exists or is locked) and does not stretch the lock.
+	f.failLogins(t, "a@hangar.dev", LockAfter)
+	if got := f.lockedFor(t, "a@hangar.dev"); got != LockBase {
+		t.Fatalf("lock after more failures while locked: %s, want %s", got, LockBase)
+	}
+
+	// The lock ends by itself: no SSH needed.
+	f.clock.advance(LockBase)
+	if _, _, err := f.svc.Login(ctx, "a@hangar.dev", goodPassword, Client{IP: "10.0.0.2"}); err != nil {
+		t.Fatalf("after the lock expired: %v", err)
+	}
+}
+
+func TestUnlockByCLIEndsTheLock(t *testing.T) {
+	f := newFixture(t)
+	f.userWithTOTP(t, "a@hangar.dev", RoleAdmin)
+	ctx := context.Background()
+	f.failLogins(t, "a@hangar.dev", LockAfter)
+	f.lockedFor(t, "a@hangar.dev")
 	if err := f.svc.Unlock(ctx, "a@hangar.dev"); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := f.svc.Login(ctx, "a@hangar.dev", goodPassword, Client{IP: "10.0.0.3"}); err != nil {
 		t.Fatalf("after unlocking: %v", err)
+	}
+}
+
+func TestLockDoublesAndCaps(t *testing.T) {
+	for n, want := range map[int64]time.Duration{
+		1: 15 * time.Minute, 2: 30 * time.Minute, 3: time.Hour, 6: 8 * time.Hour,
+		7: 16 * time.Hour, 8: LockMax, 9: LockMax, 1000: LockMax,
+	} {
+		if got := lockDuration(n); got != want {
+			t.Errorf("lock %d: %s, want %s", n, got, want)
+		}
+	}
+
+	f := newFixture(t)
+	_, secret := f.userWithTOTP(t, "a@hangar.dev", RoleAdmin)
+	for i, want := range []time.Duration{LockBase, 2 * LockBase, 4 * LockBase} {
+		f.failLogins(t, "a@hangar.dev", LockAfter)
+		got := f.lockedFor(t, "a@hangar.dev")
+		if got != want {
+			t.Fatalf("lock %d in a row: %s, want %s", i+1, got, want)
+		}
+		f.clock.advance(got)
+	}
+	// A finished login starts the doubling over.
+	f.login(t, "a@hangar.dev", secret)
+	f.failLogins(t, "a@hangar.dev", LockAfter)
+	if got := f.lockedFor(t, "a@hangar.dev"); got != LockBase {
+		t.Fatalf("lock after a success: %s, want %s", got, LockBase)
+	}
+	// So does a long quiet time after the last lock.
+	f.clock.advance(LockBase + LockMax + time.Second)
+	f.failLogins(t, "a@hangar.dev", LockAfter)
+	if got := f.lockedFor(t, "a@hangar.dev"); got != LockBase {
+		t.Fatalf("lock long after the previous one: %s, want %s", got, LockBase)
+	}
+}
+
+func TestOldFailuresAreForgotten(t *testing.T) {
+	f := newFixture(t)
+	f.userWithTOTP(t, "a@hangar.dev", RoleAdmin)
+	f.failLogins(t, "a@hangar.dev", LockAfter-1)
+	f.clock.advance(LockWindow)
+	f.failLogins(t, "a@hangar.dev", LockAfter-1)
+	if _, _, err := f.svc.Login(context.Background(), "a@hangar.dev", goodPassword, Client{IP: "10.0.0.5"}); err != nil {
+		t.Fatalf("failures from another window added up: %v", err)
+	}
+}
+
+// Wrong 2FA codes count toward the lock too, and a pending step that meets
+// a lock is ended with the lock's end time.
+func TestSecondFactorFailuresLock(t *testing.T) {
+	f := newFixture(t)
+	f.userWithTOTP(t, "a@hangar.dev", RoleAdmin)
+	ctx := context.Background()
+	f.failLogins(t, "a@hangar.dev", LockAfter-1)
+	pending, _, err := f.svc.Login(ctx, "a@hangar.dev", goodPassword, Client{IP: "10.0.0.6"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.LoginSecondFactor(ctx, pending, "000000", Client{IP: "10.0.0.6"}); !errors.Is(err, ErrInvalidCode) {
+		t.Fatalf("wrong code: %v", err)
+	}
+	var le *LockedError
+	if _, err := f.svc.LoginSecondFactor(ctx, pending, "000000", Client{IP: "10.0.0.6"}); !errors.As(err, &le) {
+		t.Fatalf("pending step on a locked account: %v", err)
+	}
+	if n := f.countAudit(t, "auth.account.locked"); n != 1 {
+		t.Fatalf("%d lock audit records, want 1", n)
 	}
 }
 

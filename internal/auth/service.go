@@ -24,11 +24,18 @@ import (
 
 // Session lifetimes and attempt limits (docs/17 § 1.4).
 const (
-	SessionIdle   = 30 * time.Minute
-	SessionMax    = 12 * time.Hour
-	PendingTTL    = 5 * time.Minute
-	SudoTTL       = 5 * time.Minute
-	LockAfter     = 20
+	SessionIdle = 30 * time.Minute
+	SessionMax  = 12 * time.Hour
+	PendingTTL  = 5 * time.Minute
+	SudoTTL     = 5 * time.Minute
+	LockAfter   = 20
+	// LockWindow is how long failed logins are remembered toward LockAfter.
+	LockWindow = 24 * time.Hour
+	// The first lock lasts LockBase; each lock in a row doubles it, up to
+	// LockMax. The lock is temporary so that nobody can lock the only owner
+	// out for good just by knowing the e-mail.
+	LockBase      = 15 * time.Minute
+	LockMax       = 24 * time.Hour
 	LimitFailures = 5
 	LimitWindow   = 15 * time.Minute
 	touchEvery    = time.Minute
@@ -36,9 +43,10 @@ const (
 	issuer        = "Hangar"
 )
 
-// Errors the handlers translate for the UI. The login page shows the same
-// message for invalid credentials and a locked account, so it never reveals
-// which accounts exist.
+// Errors the handlers translate for the UI. A wrong password gets the same
+// message whether the account exists or is locked, so it never reveals
+// which accounts exist; only the right password learns about a lock (as a
+// *LockedError).
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrLocked             = errors.New("account locked")
@@ -49,6 +57,35 @@ var (
 	ErrTOTPAlreadyOn      = &i18n.Error{Key: "account.totp.error.already_on"}
 	ErrTOTPRequired       = &i18n.Error{Key: "account.totp.error.required"}
 )
+
+// LockedError is returned when the right password (or the pending 2FA step)
+// meets an account locked after too many failures. errors.Is(err,
+// ErrLocked) holds for it.
+type LockedError struct{ Until time.Time }
+
+func (e *LockedError) Error() string {
+	return "account locked until " + e.Until.UTC().Format(time.RFC3339)
+}
+
+// Is makes errors.Is(err, ErrLocked) true.
+func (e *LockedError) Is(target error) bool { return target == ErrLocked }
+
+// lockDuration is how long the n-th lock in a row lasts (n >= 1).
+func lockDuration(n int64) time.Duration {
+	d := LockBase
+	for i := int64(1); i < n && d < LockMax; i++ {
+		d *= 2
+	}
+	return min(d, LockMax)
+}
+
+// lockedUntil reports whether a locked_until value is still in the future.
+func (s *Service) lockedUntil(v sql.NullInt64) (time.Time, bool) {
+	if !v.Valid || v.Int64 <= s.now().Unix() {
+		return time.Time{}, false
+	}
+	return time.Unix(v.Int64, 0), true
+}
 
 // RateLimitedError tells how long until new attempts are allowed.
 type RateLimitedError struct{ RetryAfter time.Duration }
@@ -238,7 +275,8 @@ func (s *Service) NewRecoveryCodes(ctx context.Context, userID string) ([]string
 	return codes, nil
 }
 
-// Unlock unlocks an account (only through the CLI on the server).
+// Unlock ends an account lock before it expires by itself (CLI on the
+// server) and forgets the failures, so the next lock starts short again.
 func (s *Service) Unlock(ctx context.Context, email string) error {
 	n, err := s.q.UnlockUser(ctx, dbq.UnlockUserParams{UpdatedAt: s.now().Unix(), Email: strings.TrimSpace(email)})
 	if err != nil {
@@ -296,22 +334,20 @@ func (s *Service) login(ctx context.Context, email, password string, c Client) (
 	if err != nil {
 		return "", false, err
 	}
-	if u.LockedAt.Valid {
+	if until, locked := s.lockedUntil(u.LockedUntil); locked {
+		// Failures while locked are not counted: the lock never grows from
+		// attempts it already blocks.
 		s.fail(ctx, c, u.ID, "account_locked", ipKey, emailKey)
-		return "", false, ErrLocked
+		if ok {
+			return "", false, &LockedError{Until: until}
+		}
+		return "", false, ErrInvalidCredentials
 	}
 	if !ok {
-		row, err := s.q.RecordLoginFailure(ctx, dbq.RecordLoginFailureParams{LockAfter: LockAfter, Now: s.now().Unix(), ID: u.ID})
-		if err != nil {
+		if err := s.recordFailure(ctx, u.ID, c); err != nil {
 			return "", false, err
 		}
 		s.fail(ctx, c, u.ID, "wrong_password", ipKey, emailKey)
-		if row.LockedAt.Valid && row.FailedLogins == LockAfter {
-			s.record(ctx, audit.Entry{
-				ActorID: u.ID, IP: c.IP, Action: "auth.account.locked", Outcome: audit.Denied,
-				TargetType: "user", TargetID: u.ID, Summary: map[string]any{"failures": row.FailedLogins},
-			})
-		}
 		return "", false, ErrInvalidCredentials
 	}
 	if len(u.TotpSecretEnc) == 0 {
@@ -365,10 +401,18 @@ func (s *Service) LoginSecondFactor(ctx context.Context, pendingToken, code stri
 		return "", err
 	}
 
+	if until, locked := s.lockedUntil(sess.LockedUntil); locked {
+		// Locked after this step began: the password must be tried again
+		// once the lock is over.
+		_ = s.q.DeleteSession(ctx, sess.IDHash)
+		s.fail(ctx, c, sess.UserID, "account_locked", ipKey, pendKey)
+		return "", &LockedError{Until: until}
+	}
+
 	method, err := s.checkSecondFactor(ctx, sess.UserID, code)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCode) {
-			if _, ferr := s.q.RecordLoginFailure(ctx, dbq.RecordLoginFailureParams{LockAfter: LockAfter, Now: s.now().Unix(), ID: sess.UserID}); ferr != nil {
+			if ferr := s.recordFailure(ctx, sess.UserID, c); ferr != nil {
 				return "", ferr
 			}
 			if s.fail(ctx, c, sess.UserID, "wrong_2fa_code", ipKey, pendKey) >= LimitFailures {
@@ -477,7 +521,8 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 		return nil, err
 	}
 	now := s.now()
-	if sess.Stage != "active" || sess.LockedAt.Valid ||
+	_, locked := s.lockedUntil(sess.LockedUntil)
+	if sess.Stage != "active" || locked ||
 		now.Unix() >= sess.ExpiresAt || now.Sub(time.Unix(sess.LastSeenAt, 0)) >= SessionIdle {
 		if sess.Stage == "active" {
 			_ = s.q.DeleteSession(ctx, sess.IDHash)
@@ -846,6 +891,44 @@ func (s *Service) checkLimits(keys ...string) error {
 // fail records the failure in the limiters and the audit log. After
 // LimitFailures in the window the key is blocked and later attempts never
 // get here: that is what keeps an attack from flooding the log (docs/20).
+// recordFailure counts a wrong password or 2FA code against the account and,
+// at LockAfter failures within LockWindow, locks it for lockDuration of the
+// locks in a row. A lock that ended more than LockMax ago no longer counts
+// as "in a row".
+func (s *Service) recordFailure(ctx context.Context, userID string, c Client) error {
+	now := s.now()
+	row, err := s.q.RecordLoginFailure(ctx, dbq.RecordLoginFailureParams{
+		WindowStart: sql.NullInt64{Int64: now.Add(-LockWindow).Unix(), Valid: true}, Now: now.Unix(), ID: userID,
+	})
+	if err != nil {
+		return err
+	}
+	if row.FailedLogins < LockAfter {
+		return nil
+	}
+	count := row.LockCount
+	if row.LockedUntil.Valid && now.Unix()-row.LockedUntil.Int64 > int64(LockMax/time.Second) {
+		count = 0
+	}
+	count++
+	d := lockDuration(count)
+	until := now.Add(d)
+	n, err := s.q.LockUser(ctx, dbq.LockUserParams{
+		LockedUntil: sql.NullInt64{Int64: until.Unix(), Valid: true}, LockCount: count, Now: now.Unix(), ID: userID,
+	})
+	if err != nil {
+		return err
+	}
+	if n == 1 {
+		s.record(ctx, audit.Entry{
+			ActorID: userID, IP: c.IP, Action: "auth.account.locked", Outcome: audit.Denied,
+			TargetType: "user", TargetID: userID,
+			Summary: map[string]any{"failures": row.FailedLogins, "minutes": int(d.Minutes()), "until": until.Unix()},
+		})
+	}
+	return nil
+}
+
 func (s *Service) fail(ctx context.Context, c Client, userID, reason string, keys ...string) int {
 	worst := 0
 	for _, k := range keys {

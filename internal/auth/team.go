@@ -108,7 +108,7 @@ func (s *Service) Team(ctx context.Context) ([]Member, []Invite, error) {
 	for _, r := range rows {
 		role, _ := ParseRole(r.Role)
 		m := Member{
-			ID: r.ID, Email: r.Email, Name: r.Name, HasTOTP: r.HasTotp == 1, Locked: r.LockedAt.Valid,
+			ID: r.ID, Email: r.Email, Name: r.Name, HasTOTP: r.HasTotp == 1, Locked: r.LockedUntil.Valid && r.LockedUntil.Int64 > s.now().Unix(),
 			Access:    Access{Role: role, AllProjects: r.AllProjects == 1, Projects: byUser[r.ID]},
 			CreatedAt: time.Unix(r.CreatedAt, 0),
 		}

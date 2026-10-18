@@ -74,6 +74,7 @@ no_reset = "No \"forgot password\": recovery uses your recovery codes or the ser
 [login.error]
 bad_credentials = "Wrong e-mail or password, or the account is locked."
 rate_limited = "Too many attempts. Try again in {min} min."
+locked = "Account locked after too many failed attempts until {time}."
 busy = "Too many login attempts right now. Try again shortly."
 no_totp = "This account has no 2FA yet. Set it up on the server with: hangard user totp -email {email}"
 form_expired = "The form expired. Please sign in again."
@@ -1670,7 +1671,7 @@ host_memory = "Server memory has been at {pct}% (alert above {limit}%) for 5 min
 host_disk = "The server disk is {pct}% full (alert above {limit}%)."
 login_new_ip = "{user} logged in from {ip}, an address this account had never used."
 login_failures = "Many failed logins from {ip}. Further attempts are being delayed."
-account_locked = "Account {user} was locked after 20 failed attempts (the last from {ip}). Unlock only on the server: hangard user unlock."
+account_locked = "Account {user} was locked for {min} min after 20 failed attempts (the last from {ip}). It opens again by itself; each new lock in a row lasts twice as long, up to 24 h."
 totp_disabled = "Two-step verification was turned off for {user}."
 sudo_action = "{user} {action}: {target}."
 user_created = "Account {user} was created with the {role} role."

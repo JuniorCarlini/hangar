@@ -361,6 +361,26 @@ func TestWrongPasswordShowsGenericMessage(t *testing.T) {
 	}
 }
 
+// A locked account: the right password learns until when; a wrong one still
+// gets the generic message, so a guesser learns nothing.
+func TestLockedAccountTellsTheRightPasswordUntilWhen(t *testing.T) {
+	e := newEnv(t)
+	e.createUser(t, auth.RoleOwner)
+	until := time.Now().Add(time.Hour).Truncate(time.Second)
+	if _, err := e.st.DB.Exec("UPDATE users SET locked_until = ?, lock_count = 1 WHERE email = ?", until.Unix(), testEmail); err != nil {
+		t.Fatal(err)
+	}
+	want := i18n.Tl("pt-BR", "login.error.locked", "time", until.Local().Format("15:04 MST"))
+	rec := e.do(req{method: "POST", target: "/login", form: url.Values{"email": {testEmail}, "password": {testPassword}}})
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), want) {
+		t.Errorf("right password: status %d, want the lock message %q", rec.Code, want)
+	}
+	rec = e.do(req{method: "POST", target: "/login", form: url.Values{"email": {testEmail}, "password": {"senha-errada-aqui-123"}}})
+	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), i18n.Tl("pt-BR", "login.error.bad_credentials")) {
+		t.Errorf("wrong password: status %d", rec.Code)
+	}
+}
+
 func TestLogoutRequiresCSRFToken(t *testing.T) {
 	e := newEnv(t)
 	e.createUser(t, auth.RoleOwner)
