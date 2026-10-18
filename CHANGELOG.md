@@ -12,6 +12,21 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.8] - 2026-10-18
+
+### Corrigido
+
+- **Confirmar senha (sudo)**: senha errada numa conta sem 2FA agora diz
+  "Senha incorreta" (antes aparecia a mensagem do código de 2FA), o erro
+  volta para o próprio formulário em vez de uma página de texto, e páginas
+  abertas em outras abas continuam funcionando depois da confirmação (antes
+  davam "Requisição recusada").
+- **Certificado coringa do domínio base**: um domínio `*.seudominio` cadastrado
+  à mão não passa mais na frente do certificado coringa (DNS-01) do domínio
+  base, o que fazia cada subdomínio pedir um certificado próprio e gastar o
+  limite do Let's Encrypt. Endereços de webhook no domínio base também não
+  pedem mais um certificado repetido.
+
 ## [0.5.7] - 2026-10-18
 
 ### Melhorado
