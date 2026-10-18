@@ -36,7 +36,7 @@ import (
 // CatalogPublicKeyHex is the community catalog's public key. Empty turns
 // the sync off. Test builds may set it with -ldflags "-X
 // github.com/JuniorCarlini/hangar/internal/templates.CatalogPublicKeyHex=...".
-var CatalogPublicKeyHex = ""
+var CatalogPublicKeyHex = "188a4925cba3cb0e1bcd51a389128bc8b2d29f0568d85ba781e6e566f028e941"
 
 // DefaultCatalogURL is where the signed community catalog is published.
 const DefaultCatalogURL = "https://github.com/JuniorCarlini/hangar-templates/releases/latest/download/catalog.tar.gz"
