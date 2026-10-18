@@ -137,10 +137,21 @@ func (h *handlers) inviteForm(r *http.Request, inv auth.Invite) views.InviteForm
 	}
 }
 
+// inviteFailed answers an invitation link that cannot be used: too many
+// tries from this address, or an unknown, used or expired link.
+func inviteFailed(w http.ResponseWriter, r *http.Request, err error) {
+	var rl *auth.RateLimitedError
+	if errors.As(err, &rl) {
+		http.Error(w, i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes()), http.StatusTooManyRequests)
+		return
+	}
+	render(w, r, http.StatusNotFound, views.InviteInvalid())
+}
+
 func (h *handlers) invitePage(w http.ResponseWriter, r *http.Request) {
-	inv, err := h.auth.InviteFor(r.Context(), r.PathValue("token"))
+	inv, err := h.auth.CheckInvite(r.Context(), r.PathValue("token"), client(r))
 	if err != nil {
-		render(w, r, http.StatusNotFound, views.InviteInvalid())
+		inviteFailed(w, r, err)
 		return
 	}
 	render(w, withLoginToken(w, r), http.StatusOK, views.InvitePage(h.inviteForm(r, inv), ""))
@@ -148,9 +159,9 @@ func (h *handlers) invitePage(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) inviteSubmit(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
-	inv, err := h.auth.InviteFor(r.Context(), token)
+	inv, err := h.auth.CheckInvite(r.Context(), token, client(r))
 	if err != nil {
-		render(w, r, http.StatusNotFound, views.InviteInvalid())
+		inviteFailed(w, r, err)
 		return
 	}
 	valid := validLoginToken(r)

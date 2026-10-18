@@ -10,6 +10,7 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/projects"
+	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
 // limitedSession creates two projects and an operator who only sees "lab",
@@ -110,5 +111,55 @@ func TestOnlyOwnersManageTheTeam(t *testing.T) {
 	c, _ := e.session(t, auth.RoleAdmin)
 	if rec := e.do(req{method: "GET", target: "/team", cookies: []*http.Cookie{c}}); rec.Code != http.StatusForbidden {
 		t.Fatalf("admin on the team page: %d", rec.Code)
+	}
+}
+
+// Every route of the panel, for a user limited to "lab": nothing of another
+// project nor any server-wide page answers (404, or 403 when the role is
+// short anyway). Only the personal routes and "lab" itself are open.
+func TestLimitedUserSweepsEveryRoute(t *testing.T) {
+	e := newEnv(t)
+	c := e.limitedSession(t)
+	rt := newRouter(nil, nil)
+	routes(rt, &handlers{})
+	param := regexp.MustCompile(`\{[a-z]+\$?\}`)
+	for _, r := range rt.Routes() {
+		if r.Policy.Public {
+			continue
+		}
+		method, path, _ := strings.Cut(r.Pattern, " ")
+		if path == "/{$}" {
+			path = "/"
+		}
+		path = strings.ReplaceAll(path, "{project}", "loja")
+		path = param.ReplaceAllString(path, "x")
+		if strings.HasSuffix(path, "/") && path != "/" {
+			path += "x"
+		}
+		var form url.Values
+		if method != http.MethodGet {
+			form = url.Values{}
+		}
+		rec := e.do(req{method: method, target: path, form: form, cookies: []*http.Cookie{c}})
+		if limitedRoutes[r.Pattern] || strings.HasPrefix(r.Pattern, "GET /templates/") || r.Pattern == "GET "+views.ComposeSampleURL {
+			continue
+		}
+		if rec.Code != http.StatusNotFound && rec.Code != http.StatusForbidden {
+			t.Errorf("%s %s answered %d to a user limited to lab", method, path, rec.Code)
+		}
+	}
+}
+
+// Trying invitation links from the browser counts as failed attempts:
+// after the login's limit, the address gets 429, even on a valid link.
+func TestGuessingInviteLinksFromTheBrowser(t *testing.T) {
+	e := newEnv(t)
+	for i := range auth.LimitFailures {
+		if rec := e.do(req{method: "GET", target: "/invite/" + strings.Repeat("y", 42) + string(rune('a'+i))}); rec.Code != http.StatusNotFound {
+			t.Fatalf("guess %d: %d", i, rec.Code)
+		}
+	}
+	if rec := e.do(req{method: "GET", target: "/invite/" + strings.Repeat("z", 43)}); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("after %d guesses: %d", auth.LimitFailures, rec.Code)
 	}
 }

@@ -208,6 +208,22 @@ func (s *Service) InviteFor(ctx context.Context, token string) (Invite, error) {
 	return toInvite(r), nil
 }
 
+// CheckInvite is InviteFor for a visitor: an unknown, used or expired link
+// counts as a failed attempt from their address, with the login's limits,
+// so links cannot be guessed by trying (they are 256-bit anyway).
+func (s *Service) CheckInvite(ctx context.Context, token string, c Client) (Invite, error) {
+	ipKey := "ip:" + c.IP
+	if err := s.checkLimits(ipKey); err != nil {
+		return Invite{}, err
+	}
+	defer s.limits.end(ipKey)
+	inv, err := s.InviteFor(ctx, token)
+	if errors.Is(err, ErrInviteInvalid) {
+		s.fail(ctx, c, "", "invalid_invite", ipKey)
+	}
+	return inv, err
+}
+
 // AcceptInvite creates the invited user with the password they chose, gives
 // them the invitation's access and opens their session. The invitation is
 // spent in the same transaction: a link works once.

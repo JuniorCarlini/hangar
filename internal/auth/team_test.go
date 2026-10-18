@@ -145,3 +145,29 @@ func TestUpdatingAccessEndsSessions(t *testing.T) {
 		}
 	}
 }
+
+// Guessing invitation links: after LimitFailures wrong tokens from one IP,
+// that IP is blocked, even for a right token, until the window passes.
+func TestGuessingInviteLinksIsRateLimited(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	own := f.owner(t)
+	token, err := f.svc.CreateInvite(ctx, own, "maria@hangar.dev", Access{Role: RoleViewer, AllProjects: true}, Client{IP: "189.10.20.30"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	attacker := Client{IP: "45.1.2.3"}
+	for i := range LimitFailures {
+		if _, err := f.svc.AcceptInvite(ctx, randomToken(), goodPassword, attacker); !errors.Is(err, ErrInviteInvalid) {
+			t.Fatalf("guess %d: %v", i, err)
+		}
+	}
+	var rl *RateLimitedError
+	if _, err := f.svc.AcceptInvite(ctx, token, goodPassword, attacker); !errors.As(err, &rl) {
+		t.Fatalf("after %d wrong guesses the IP must be blocked: %v", LimitFailures, err)
+	}
+	// Someone else, from another address, still joins with the real link.
+	if _, err := f.svc.AcceptInvite(ctx, token, goodPassword, Client{IP: "189.10.20.30"}); err != nil {
+		t.Fatalf("the invited person: %v", err)
+	}
+}
