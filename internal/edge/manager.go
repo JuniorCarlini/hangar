@@ -83,6 +83,45 @@ type Manager struct {
 	http *http.Client
 
 	mu sync.Mutex
+	// dns is the panel's DNS settings source (SetDNSSource); dnsBase and
+	// dnsWild cache the last resolved base domain and whether the DNS-01
+	// wildcard is on, so HasCertificate needs no database read. All under mu.
+	dns     DNSSource
+	dnsBase string
+	dnsWild bool
+}
+
+// SetDNSSource wires the panel's DNS settings (base domain, provider, token)
+// into the edge so the operator can configure the wildcard from the panel
+// instead of the config file. It is set after construction because the source
+// (the projects manager) is built with the edge, not before it.
+func (m *Manager) SetDNSSource(s DNSSource) {
+	m.mu.Lock()
+	m.dns = s
+	m.mu.Unlock()
+}
+
+// resolveDNS returns the base domain, provider and token in effect: the panel's
+// database when a base domain is set there, otherwise the config file (the
+// bootstrap values). A source error falls back to the file rather than dropping
+// TLS, and the token is never logged.
+func (m *Manager) resolveDNS(ctx context.Context) (base, provider, token string) {
+	base, provider, token = m.opts.BaseDomain, m.opts.DNSProvider, m.opts.DNSToken
+	m.mu.Lock()
+	src := m.dns
+	m.mu.Unlock()
+	if src == nil {
+		return
+	}
+	s, err := src.EdgeDNS(ctx)
+	if err != nil {
+		m.log.Warn("read edge DNS settings; using the config file", "error", err)
+		return
+	}
+	if s.BaseDomain != "" {
+		base, provider, token = s.BaseDomain, s.Provider, string(s.Token)
+	}
+	return
 }
 
 // NewManager creates the manager; Start brings Caddy up.
@@ -227,8 +266,11 @@ func (m *Manager) HasCertificate(host string) bool {
 	// "*.<base>" wildcard certificate (stored as wildcard_.<base>), not a
 	// per-host one. Only when DNS-01 is on: otherwise an old wildcard left on
 	// disk would wrongly report hosts as ready while Caddy issues per-host.
-	if o := m.opts; o.BaseDomain != "" && o.DNSProvider != "" && o.DNSToken != "" && coveredByBase(host, o.BaseDomain) {
-		name := "wildcard_." + o.BaseDomain
+	m.mu.Lock()
+	base, wild := m.dnsBase, m.dnsWild
+	m.mu.Unlock()
+	if wild && coveredByBase(host, base) {
+		name := "wildcard_." + base
 		if matches, _ := filepath.Glob(filepath.Join(certs, "*", name, name+".crt")); len(matches) > 0 {
 			return true
 		}
@@ -237,14 +279,19 @@ func (m *Manager) HasCertificate(host string) bool {
 }
 
 func (m *Manager) build(ctx context.Context) ([]byte, error) {
+	base, provider, token := m.resolveDNS(ctx)
+	m.mu.Lock()
+	m.dnsBase = base
+	m.dnsWild = base != "" && provider != "" && token != ""
+	m.mu.Unlock()
 	in := ConfigInput{
 		AdminListen: "unix/" + caddyRunDir + "/" + adminSocket + "|0660",
 		AskURL:      "http://" + net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(AskPort)) + AskPath,
 		Email:       m.opts.Email,
 		ACMECA:      m.opts.ACMECA,
-		BaseDomain:  m.opts.BaseDomain,
-		DNSProvider: m.opts.DNSProvider,
-		DNSToken:    m.opts.DNSToken,
+		BaseDomain:  base,
+		DNSProvider: provider,
+		DNSToken:    token,
 	}
 	if m.opts.ACMECARoot != "" {
 		in.ACMECARoots = []string{caddyRunDir + "/" + caRootFile}
