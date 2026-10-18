@@ -296,7 +296,7 @@ templ kitConfirmForm(csrf string, k BackupKeyRow, sudo bool) {
 		<div class="flex flex-wrap items-end gap-3">
 			<div class="flex min-w-[200px] flex-[0_1_260px] flex-col gap-1.5">
 				<label class="tuc-label" for={ "kit-code-" + k.ID }>{ t(ctx, "backups.keys.code") }</label>
-				<input class="tuc-input font-mono uppercase" id={ "kit-code-" + k.ID } name="code" required maxlength="20" autocomplete="off" placeholder={ "XXXX-XXXX-XXXX" }/>
+				<input class="tuc-input font-mono uppercase" id={ "kit-code-" + k.ID } name="code" required maxlength="14" autocomplete="off" spellcheck="false" placeholder={ "XXXX-XXXX-XXXX" } data-tuc-mask="****-****-****"/>
 			</div>
 			if sudo {
 				<button class="tuc-btn is-success" type="submit">
