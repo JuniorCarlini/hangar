@@ -12,6 +12,16 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.4] - 2026-10-18
+
+### Corrigido
+
+- Logo depois de ligar o **Público**, abrir o link mostrava um erro do
+  navegador enquanto o certificado ainda não tinha saído. Agora o botão
+  de abrir leva à página "Ativando a conexão segura", que entra sozinha no
+  site quando o certificado fica pronto, e o selo muda para "HTTPS ativo"
+  sem precisar recarregar.
+
 ## [0.5.3] - 2026-10-18
 
 ### Corrigido
@@ -214,7 +224,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.3...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/JuniorCarlini/hangar/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/JuniorCarlini/hangar/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/JuniorCarlini/hangar/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/JuniorCarlini/hangar/compare/v0.5.0...v0.5.1
