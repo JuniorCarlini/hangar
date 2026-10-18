@@ -520,3 +520,30 @@ func TestOSVCachesAnswers(t *testing.T) {
 		t.Errorf("querybatch called %d times, want 1 (6 h cache)", f.batches)
 	}
 }
+
+// TestFixedVersionPerRelease: OSV lists each distribution release with its
+// own fix; a fix that exists only in a newer release is not offered.
+func TestFixedVersionPerRelease(t *testing.T) {
+	var v osvVuln
+	rec := `{"id":"DEBIAN-CVE-X","affected":[
+		{"package":{"name":"glibc","ecosystem":"Debian:13"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"}]}]},
+		{"package":{"name":"glibc","ecosystem":"Debian:14"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"2.43-5"}]}]},
+		{"package":{"name":"curl","ecosystem":"Alpine:v3.23"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"7.88.0"},{"fixed":"8.22.0-r0"}]}]},
+		{"package":{"name":"curl","ecosystem":"Alpine:v3.24"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"7.88.0"},{"fixed":"8.21.0-r0"}]}]},
+		{"package":{"name":"django","ecosystem":"PyPI"},"ranges":[{"type":"ECOSYSTEM","events":[{"introduced":"0"},{"fixed":"6.1.3"}]}]}]}`
+	if err := json.Unmarshal([]byte(rec), &v); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		p    Package
+		want string
+	}{
+		{Package{Ecosystem: "Debian:13", Name: "glibc", Version: "2.41-12+deb13u4"}, ""},
+		{Package{Ecosystem: "Alpine:v3.23", Name: "curl", Version: "8.17.0-r1"}, "8.22.0-r0"},
+		{Package{Ecosystem: "PyPI", Name: "Django", Version: "6.1.2"}, "6.1.3"},
+	} {
+		if got := fixedVersion(v, c.p); got != c.want {
+			t.Errorf("%s %s: fixed = %q, want %q", c.p.Ecosystem, c.p.Name, got, c.want)
+		}
+	}
+}

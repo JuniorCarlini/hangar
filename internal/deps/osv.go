@@ -370,10 +370,20 @@ func fixedVersion(v osvVuln, p Package) string {
 	return best
 }
 
+// samePackage tells whether a record's affected entry is about p. A
+// distribution release (Debian:13, Alpine:v3.23) must match exactly: the
+// same record lists each release with its own fix, and a fix that only
+// exists in Debian 14 does nothing for a Debian 13 image.
 func samePackage(eco, name string, p Package) bool {
-	base := func(e string) string { b, _, _ := strings.Cut(e, ":"); return strings.ToLower(b) }
-	if base(eco) != base(p.Ecosystem) {
-		return false
+	if strings.Contains(p.Ecosystem, ":") {
+		if !strings.EqualFold(eco, p.Ecosystem) {
+			return false
+		}
+	} else {
+		base := func(e string) string { b, _, _ := strings.Cut(e, ":"); return strings.ToLower(b) }
+		if base(eco) != base(p.Ecosystem) {
+			return false
+		}
 	}
 	return normalizeName(p.Ecosystem, name) == normalizeName(p.Ecosystem, p.Name)
 }
