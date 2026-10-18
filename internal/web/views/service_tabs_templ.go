@@ -5345,11 +5345,11 @@ func domainDialog(d ServiceData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = domainModeCard("chart-column", t(ctx, "domain.scale_title"), t(ctx, "domain.scale_text"), t(ctx, "domain.scale_pill")).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = domainModeCard("chart-column", t(ctx, "domain.scale_title"), t(ctx, "domain.scale_text"), "").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 453, "<div class=\"flex flex-col gap-3 rounded-sm border border-accent bg-accent-soft p-3\"><div class=\"grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)] gap-2 max-sm:grid-cols-1\"><select class=\"tuc-input\" name=\"dns_provider\" aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 453, "<div class=\"flex flex-col gap-3 rounded-sm border border-accent bg-accent-soft p-3\"><div class=\"flex flex-col gap-2\"><select class=\"tuc-input\" name=\"dns_provider\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
