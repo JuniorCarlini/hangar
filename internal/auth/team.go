@@ -159,6 +159,11 @@ func (s *Service) CreateInvite(ctx context.Context, p *Principal, email string, 
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return "", err
 	}
+	// A new invitation replaces any still open for the same address: only
+	// the latest link works, so a link sent by mistake does not stay live.
+	if _, err := s.q.DeleteOpenInvitesForEmail(ctx, email); err != nil {
+		return "", err
+	}
 	token := randomToken()
 	projects, _ := json.Marshal(a.Projects)
 	if a.Projects == nil {
@@ -265,6 +270,10 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string, c Cl
 		return "", fmt.Errorf("create user: %w", err)
 	}
 	if err := setAccess(ctx, q, id, inv.Access, now); err != nil {
+		return "", err
+	}
+	// Other links for this address can no longer be used; drop them.
+	if _, err := q.DeleteOpenInvitesForEmail(ctx, email); err != nil {
 		return "", err
 	}
 	if err := tx.Commit(); err != nil {

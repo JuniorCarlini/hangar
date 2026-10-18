@@ -284,6 +284,18 @@ func (q *Queries) DeleteInvite(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected()
 }
 
+const deleteOpenInvitesForEmail = `-- name: DeleteOpenInvitesForEmail :execrows
+DELETE FROM invites WHERE lower(email) = lower(?) AND used_at IS NULL
+`
+
+func (q *Queries) DeleteOpenInvitesForEmail(ctx context.Context, lower string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteOpenInvitesForEmail, lower)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteOtherSessions = `-- name: DeleteOtherSessions :exec
 DELETE FROM sessions WHERE user_id = ? AND id_hash != ?
 `

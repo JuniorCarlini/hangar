@@ -145,3 +145,6 @@ UPDATE invites SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at >
 
 -- name: DeleteInvite :execrows
 DELETE FROM invites WHERE id = ? AND used_at IS NULL;
+
+-- name: DeleteOpenInvitesForEmail :execrows
+DELETE FROM invites WHERE lower(email) = lower(?) AND used_at IS NULL;

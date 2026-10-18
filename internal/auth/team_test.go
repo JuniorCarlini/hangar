@@ -171,3 +171,34 @@ func TestGuessingInviteLinksIsRateLimited(t *testing.T) {
 		t.Fatalf("the invited person: %v", err)
 	}
 }
+
+// TestOnlyTheLatestInviteLinkWorks: inviting the same address again replaces
+// the open link, and no link for an address outlives its account.
+func TestOnlyTheLatestInviteLinkWorks(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	own := f.owner(t)
+	c := Client{IP: "189.10.20.30"}
+	all := Access{Role: RoleViewer, AllProjects: true}
+
+	first, err := f.svc.CreateInvite(ctx, own, "maria@hangar.dev", all, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.svc.CreateInvite(ctx, own, "Maria@hangar.dev", all, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.InviteFor(ctx, first); !errors.Is(err, ErrInviteInvalid) {
+		t.Fatalf("the replaced link still works: %v", err)
+	}
+	if _, invites, _ := f.svc.Team(ctx); len(invites) != 1 {
+		t.Fatalf("open invites = %d, want 1", len(invites))
+	}
+	if _, err := f.svc.AcceptInvite(ctx, second, goodPassword, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, invites, _ := f.svc.Team(ctx); len(invites) != 0 {
+		t.Fatalf("open invites after the account exists = %d", len(invites))
+	}
+}
