@@ -12,6 +12,33 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.9] - 2026-10-18
+
+### Novo
+
+- **Como o domínio funciona, escolhido na hora de adicionar**: o modal
+  **Adicionar domínio** tem três modos, cada um explicado em linguagem simples:
+  - **Normal**: um endereço só, como hoje.
+  - **Coringa**: `*.seudominio`, cada subdomínio ganha o próprio certificado
+    na primeira visita. Não precisa de token.
+  - **Em escala**: um certificado coringa único cobre todos os subdomínios,
+    obtido pelo DNS com o token do provedor (Cloudflare). Antes isso exigia
+    editar o `hangar.toml` pelo SSH; agora é tudo pelo painel.
+- **Token do DNS protegido**: o painel testa o token na Cloudflare antes de
+  salvar e recusa se ele não enxergar a zona do domínio (por isso "Em escala"
+  só vale para um domínio cujo DNS é seu; para o domínio de um cliente, use
+  Normal ou Coringa). O token fica cifrado, nunca é mostrado de volta e só
+  um admin, confirmando a senha, troca. Trocar o domínio base pede
+  confirmação, porque os links automáticos mudam junto.
+
+### Melhorado
+
+- **Caddy com o módulo de DNS já embutido**: a borda passa a usar a imagem
+  `hangar-caddy`, publicada a cada versão e fixada no binário assinado. Ela só
+  muda quando o próprio Caddy muda, então atualizar o Hangar não reinicia a
+  borda à toa. Na primeira atualização para esta versão a borda é recriada
+  uma vez (alguns segundos).
+
 ## [0.5.8] - 2026-10-18
 
 ### Corrigido
