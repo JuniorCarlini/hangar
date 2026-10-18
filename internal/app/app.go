@@ -130,16 +130,28 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	if err != nil {
 		return err
 	}
+	// A container must never publish the panel's own ports.
+	node.ReserveHostPorts(listenPorts(cfg)...)
 	// Without Docker the panel stays up (for login, updates and reading);
-	// container actions report that Docker is unavailable.
+	// container actions report that Docker is unavailable. It keeps trying
+	// in the background and restarts the panel once Docker answers.
 	var n node.Node
+	dockerBack := make(chan error, 1)
 	if d, err := docker.New(ctx, cfg.Docker.Host); err != nil {
-		log.Warn("docker unavailable; projects are read-only", "error", err)
+		log.Warn("docker unavailable; projects are read-only until it answers", "error", err)
+		go func() {
+			if err := waitDocker(ctx, cfg.Docker.Host, log); err != nil {
+				dockerBack <- err
+			}
+		}()
 	} else {
 		defer func() { _ = d.Close() }()
 		n = d
 	}
 	pm := projects.New(st.DB, core.Box, n, al, log)
+	if cfg.Edge.Enabled {
+		pm.SetEdgeImage(cfg.Edge.Image)
+	}
 	defer pm.Wait()
 	pm.SetFirewall(firewall.Writer{Dir: FirewallDir(cfg)})
 	pm.SetBuildDir(filepath.Join(cfg.DataDir, "builds"))
@@ -199,28 +211,27 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// The brand settings re-render the error pages Caddy serves (nothing
 	// to do while the edge is off: it renders them when it starts).
 	var pages func(map[string][]byte) error
-	edgeUp := false
 	pm.SetPanelHost(panelHost)
+	var keeper *edgeKeeper
 	if cfg.Edge.Enabled {
+		pm.SetEdgeCap(cfg.Edge.MaxNewCertsPerHour)
 		if n == nil {
 			log.Error("edge enabled but docker is unavailable; domains are not served")
-		} else if em, err := startEdge(ctx, cfg, core, n, hooks, panelHost, pm, log); err != nil {
-			// The panel stays up so the problem can be seen and fixed.
-			log.Error("start edge proxy", "error", err)
+			pm.SetEdgeDown("edge down: docker is unavailable")
 		} else {
-			pm.SetEdge(em)
-			edgeUp = true
-			// Caddy must reach the ask and panel listeners on the gateway
-			// even where the image's own firewall rejects new connections
-			// to the host (the root unit applies it).
-			_, gw, caddyIP := cfg.Edge.EdgeAddrs()
-			if err := (firewall.Writer{Dir: FirewallDir(cfg)}).SetEdge(&firewall.EdgeAccess{
-				Caddy: caddyIP, Gateway: gw, Ports: []int{edge.AskPort, edge.PanelPort},
-			}); err != nil {
-				log.Error("allow caddy to reach the panel", "error", err)
+			keeper = &edgeKeeper{
+				log: log,
+				start: func(ctx context.Context) (edgeProxy, error) {
+					em, err := startEdge(ctx, cfg, core, n, hooks, panelHost, pm, log)
+					if err != nil {
+						return nil, err // not a typed nil in the interface
+					}
+					return em, nil
+				},
+				wire:   func(e edgeProxy) { wireEdge(cfg, pm, e, log) },
+				status: pm.SetEdgeDown,
 			}
-			pm.SetEdgeCap(cfg.Edge.MaxNewCertsPerHour)
-			pages = em.WritePages
+			pages = keeper.WritePages
 		}
 	}
 	// Containers are measured only when the node can report usage; the host
@@ -268,21 +279,6 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 			return i18n.E("app.error.listen", "addr", addr, "error", err)
 		}
 		listeners = append(listeners, ln)
-	}
-
-	// The public panel: Caddy terminates HTTPS on its hostname and proxies
-	// to this listener on the edge gateway, which only Caddy may reach.
-	var edgeLn net.Listener
-	if panelHost != "" && edgeUp {
-		_, gw, _ := cfg.Edge.EdgeAddrs()
-		ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", net.JoinHostPort(gw.String(), strconv.Itoa(edge.PanelPort)))
-		if err != nil {
-			for _, l := range listeners {
-				_ = l.Close()
-			}
-			return i18n.E("app.error.listen", "addr", gw.String(), "error", err)
-		}
-		edgeLn = ln
 	}
 
 	// Not fatal: with the disk nearly full this insert is the first write to
@@ -337,17 +333,35 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 		log.Info("panel listening", "address", ln.Addr().String(), "version", version)
 		go func() { errc <- srv.Serve(ln) }()
 	}
+	// The public panel: Caddy terminates HTTPS on its hostname and proxies
+	// to a listener on the edge gateway, which only Caddy may reach. The
+	// gateway address exists only once the edge network does, so it opens
+	// when the edge is up, and a failed bind is retried, never fatal.
 	var pubSrv *http.Server
-	if edgeLn != nil {
-		_, _, caddyIP := cfg.Edge.EdgeAddrs()
+	if keeper != nil && panelHost != "" {
+		_, gw, caddyIP := cfg.Edge.EdgeAddrs()
 		pubSrv = &http.Server{
 			Handler:           web.BehindEdge(handler, caddyIP),
 			ReadHeaderTimeout: srv.ReadHeaderTimeout, ReadTimeout: srv.ReadTimeout,
 			WriteTimeout: srv.WriteTimeout, IdleTimeout: srv.IdleTimeout,
 			MaxHeaderBytes: srv.MaxHeaderBytes, ErrorLog: srv.ErrorLog,
 		}
-		log.Info("panel public", "url", publicURL(panelHost), "address", edgeLn.Addr().String())
-		go func() { errc <- pubSrv.Serve(edgeLn) }()
+		keeper.public = func(ctx context.Context) error {
+			ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", net.JoinHostPort(gw.String(), strconv.Itoa(edge.PanelPort)))
+			if err != nil {
+				return i18n.E("app.error.listen", "addr", gw.String(), "error", err)
+			}
+			log.Info("panel public", "url", publicURL(panelHost), "address", ln.Addr().String())
+			go func() { errc <- pubSrv.Serve(ln) }()
+			return nil
+		}
+	}
+	if keeper != nil {
+		// One attempt now, so Caddy has the current config as early as
+		// before; whatever failed is retried in the background, and the
+		// edge is checked every minute from then on.
+		keeper.tryUp(ctx)
+		go keeper.run(ctx)
 	}
 	// Only now is this version up: database migrated and listening. It is the
 	// signal the update applier waits for before giving up on a rollback.
@@ -356,8 +370,12 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	}
 	defer func() { _ = os.Remove(filepath.Join(cfg.DataDir, update.ReadyFile)) }()
 
+	var restart error
 	select {
 	case <-ctx.Done():
+	case restart = <-dockerBack:
+		// Shut down cleanly; systemd (Restart=on-failure) starts the panel
+		// again, this time connected to Docker.
 	case err := <-errc:
 		if !errors.Is(err, http.ErrServerClosed) {
 			return fmt.Errorf("servidor: %w", err)
@@ -373,7 +391,37 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown: %w", err)
 	}
-	return al.Record(shutdownCtx, audit.Entry{Action: "system.stop", Outcome: audit.OK})
+	if err := al.Record(shutdownCtx, audit.Entry{Action: "system.stop", Outcome: audit.OK}); err != nil {
+		return err
+	}
+	return restart
+}
+
+// wireEdge connects an edge that just came up to the rest of the panel: the
+// projects reload it on every change, and the firewall lets Caddy reach the
+// ask and panel listeners on the gateway even where the image's own firewall
+// rejects new connections to the host (the root unit applies it).
+func wireEdge(cfg config.Config, pm *projects.Manager, e edgeProxy, log *slog.Logger) {
+	pm.SetEdge(e)
+	_, gw, caddyIP := cfg.Edge.EdgeAddrs()
+	if err := (firewall.Writer{Dir: FirewallDir(cfg)}).SetEdge(&firewall.EdgeAccess{
+		Caddy: caddyIP, Gateway: gw, Ports: []int{edge.AskPort, edge.PanelPort},
+	}); err != nil {
+		log.Error("allow caddy to reach the panel", "error", err)
+	}
+}
+
+// listenPorts are the ports of the panel's own listen addresses.
+func listenPorts(cfg config.Config) []int {
+	var ports []int
+	for _, l := range cfg.Panel.Listen {
+		if _, port, err := net.SplitHostPort(l); err == nil {
+			if n, err := strconv.Atoi(port); err == nil {
+				ports = append(ports, n)
+			}
+		}
+	}
+	return ports
 }
 
 // panelHosts are the Host values the panel accepts: the configured ones and
@@ -406,12 +454,8 @@ func expectedPorts(cfg config.Config, pm *projects.Manager) func(context.Context
 		if cfg.Edge.Enabled {
 			ok[80], ok[443] = true, true
 		}
-		for _, l := range cfg.Panel.Listen {
-			if _, port, err := net.SplitHostPort(l); err == nil {
-				if n, err := strconv.Atoi(port); err == nil {
-					ok[n] = true
-				}
-			}
+		for _, p := range listenPorts(cfg) {
+			ok[p] = true
 		}
 		if ports, err := pm.ListAllPorts(ctx); err == nil {
 			for _, p := range ports {

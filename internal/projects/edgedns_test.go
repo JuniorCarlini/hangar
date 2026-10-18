@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/JuniorCarlini/hangar/internal/edge"
+	"github.com/JuniorCarlini/hangar/internal/i18n"
 )
 
 // TestScaledDomainStoresTheTokenEncrypted: "Em escala" checks the token with
@@ -145,5 +146,32 @@ func TestScaledDomainRollsBackWhenTheDomainFails(t *testing.T) {
 	}
 	if dns, _ := f.m.EdgeDNS(ctx); dns.BaseDomain != "" {
 		t.Errorf("settings kept after the failure: %+v", dns)
+	}
+}
+
+// TestScaledDomainRefusedOnTheStockCaddyImage: the stock Caddy has no DNS
+// provider module, so a DNS-01 config would only be rejected; "Em escala" is
+// refused before anything is stored or asked of the provider.
+func TestScaledDomainRefusedOnTheStockCaddyImage(t *testing.T) {
+	f := newFixture(t)
+	f.m.SetEdge(&countingEdge{})
+	f.m.SetEdgeImage("caddy:2.11-alpine")
+	f.service(t)
+	ctx := context.Background()
+	asked := false
+	f.m.dnsCheck = func(context.Context, string, string, []byte) error { asked = true; return nil }
+
+	err := f.m.AddScaledDomain(ctx, f.who, "lab", "web", "lojas.exemplo.com.br", "", "cloudflare", []byte("t"), false)
+	var ie *i18n.Error
+	if !errors.As(err, &ie) || ie.Key != "domain.error.dns_image" {
+		t.Fatalf("got %v, want domain.error.dns_image", err)
+	}
+	if asked || f.m.BaseDomain() != "" {
+		t.Error("nothing should be asked or stored with the stock image")
+	}
+
+	f.m.SetEdgeImage("ghcr.io/juniorcarlini/hangar-caddy:2.11")
+	if err := f.m.AddScaledDomain(ctx, f.who, "lab", "web", "lojas.exemplo.com.br", "", "cloudflare", []byte("t"), false); err != nil {
+		t.Fatalf("an image with the DNS module: %v", err)
 	}
 }

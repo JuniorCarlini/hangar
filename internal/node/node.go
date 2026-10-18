@@ -238,8 +238,21 @@ type Port struct {
 // VolumeNameRE validates a volume's short name.
 var VolumeNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 
-// ReservedHostPorts are taken by Hangar itself or SSH.
-var ReservedHostPorts = map[int]bool{22: true, 80: true, 443: true, 7700: true, 7701: true}
+// ReservedHostPorts are taken by Hangar itself or SSH: the edge (80/443), the
+// panel (7700), the certificate ask listener (7701) and the public panel's
+// listener behind Caddy (7702). ReserveHostPorts adds the configured panel
+// ports.
+var ReservedHostPorts = map[int]bool{22: true, 80: true, 443: true, 7700: true, 7701: true, 7702: true}
+
+// ReserveHostPorts adds ports to ReservedHostPorts. Call it at startup only,
+// before anything reads the map.
+func ReserveHostPorts(ports ...int) {
+	for _, p := range ports {
+		if p > 0 && p <= 65535 {
+			ReservedHostPorts[p] = true
+		}
+	}
+}
 
 func validMountPath(p string) bool {
 	if !strings.HasPrefix(p, "/") || p == "/" || strings.Contains(p, "..") || strings.ContainsAny(p, ":,\x00") {

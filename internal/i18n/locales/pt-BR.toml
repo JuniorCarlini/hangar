@@ -555,6 +555,7 @@ edge_dns_token = "edge.dns_token sem edge.dns_provider não faz nada. Defina o p
 
 [app.error]
 listen = "Não foi possível escutar em {addr}: {error}"
+docker_back = "O Docker voltou; reiniciando o painel para conectar a ele."
 foreign_owner = "data_dir {dir} pertence a outro usuário (uid {uid}); rode como ele (ex.: sudo -u hangar hangard)."
 token_read = "Não foi possível ler o token do GitHub: {error}"
 token_mode = "Token do GitHub {path} com permissão {mode}: use 0600."
@@ -790,6 +791,7 @@ has_domains = { one = "Remova o domínio desta porta antes de tirá-la da intern
 [domain.error]
 dns_provider = "Escolha um provedor de DNS da lista."
 dns_token_missing = "Cole o token do provedor de DNS."
+dns_image = "A imagem do proxy de borda não tem o módulo de DNS; atualize o Hangar para a versão com a imagem hangar-caddy."
 dns_token = "O provedor recusou o token ou ele não enxerga a zona {zone}. Confira se ele tem permissão de editar o DNS desse domínio."
 base_taken = "O domínio base atual é {base}. Confirme a troca para usar este."
 hostname = "Domínio inválido (ex.: loja.exemplo.com.br)."

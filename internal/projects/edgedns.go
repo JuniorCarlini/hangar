@@ -102,6 +102,11 @@ func (m *Manager) setEdgeDNS(ctx context.Context, a Actor, zone, provider string
 	if !slices.Contains(edge.DNSProviders, provider) {
 		return i18n.E("domain.error.dns_provider")
 	}
+	// The stock Caddy image would reject the DNS-01 config and keep the
+	// whole edge on its previous one.
+	if m.edgeStockImage.Load() {
+		return i18n.E("domain.error.dns_image")
+	}
 	cur, err := m.q.GetEdgeSettings(ctx)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err

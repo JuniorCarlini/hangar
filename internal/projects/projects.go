@@ -63,7 +63,16 @@ type Manager struct {
 	log   *slog.Logger
 	now   func() time.Time
 	wg    sync.WaitGroup
-	edge  EdgeApplier
+	// edge is the EdgeApplier (SetEdge), in a box: the edge can come up
+	// after the panel (Caddy or Docker late at boot) and is read by deploys
+	// already running.
+	edge atomic.Pointer[edgeBox]
+	// edgeDown says why the edge proxy is not serving everything
+	// (SetEdgeDown), "" when it is.
+	edgeDown atomic.Pointer[string]
+	// edgeStockImage: the edge runs the stock Caddy image, which has no DNS
+	// provider module (SetEdgeImage).
+	edgeStockImage atomic.Bool
 	// firewall is set by SetFirewall.
 	firewall FirewallWriter
 	edgeCap  int

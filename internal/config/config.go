@@ -109,11 +109,11 @@ type Auth struct {
 // the baked image before the config loads.
 var DefaultEdgeImage = "caddy:2.11-alpine"
 
-// isStockCaddyImage reports whether image is the official Caddy image, under
+// IsStockCaddyImage reports whether image is the official Caddy image, under
 // any tag or registry prefix ("caddy", "caddy:2.11", "library/caddy:latest",
 // "docker.io/library/caddy@sha256:…"). None of them ship a DNS provider
 // module, so DNS-01 needs a custom image instead.
-func isStockCaddyImage(image string) bool {
+func IsStockCaddyImage(image string) bool {
 	s := strings.TrimPrefix(image, "index.docker.io/")
 	s = strings.TrimPrefix(strings.TrimPrefix(s, "docker.io/"), "library/")
 	return s == "caddy" || strings.HasPrefix(s, "caddy:") || strings.HasPrefix(s, "caddy@")
@@ -403,7 +403,7 @@ func (e Edge) validate() []error {
 	// DNS-01 needs a Caddy image built with the provider's module; the stock
 	// image rejects the config and takes the edge down. Refuse to boot with
 	// the default image when a provider is set (build deploy/caddy).
-	if e.DNSProvider != "" && isStockCaddyImage(e.Image) {
+	if e.DNSProvider != "" && IsStockCaddyImage(e.Image) {
 		errs = append(errs, i18n.E("config.error.edge_dns_image", "image", e.Image))
 	}
 	// A token with no provider does nothing; say so instead of ignoring it.

@@ -555,6 +555,7 @@ edge_dns_token = "edge.dns_token without edge.dns_provider does nothing. Set the
 
 [app.error]
 listen = "Could not listen on {addr}: {error}"
+docker_back = "Docker is available again; restarting the panel to connect it."
 foreign_owner = "data_dir {dir} belongs to another user (uid {uid}); run as that user (e.g. sudo -u hangar hangard)."
 token_read = "Could not read the GitHub token: {error}"
 token_mode = "GitHub token {path} has mode {mode}: use 0600."
@@ -790,6 +791,7 @@ has_domains = { one = "Remove this port's domain before taking it off the intern
 [domain.error]
 dns_provider = "Pick a DNS provider from the list."
 dns_token_missing = "Paste the DNS provider token."
+dns_image = "The edge proxy image has no DNS module; update Hangar to the release with the hangar-caddy image."
 dns_token = "The provider refused the token, or it cannot see the {zone} zone. Check that it may edit this domain's DNS."
 base_taken = "The current base domain is {base}. Confirm the switch to use this one."
 hostname = "Invalid domain (e.g. shop.example.com)."

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
+	"github.com/JuniorCarlini/hangar/internal/config"
 	"github.com/JuniorCarlini/hangar/internal/edge"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/ids"
@@ -25,9 +26,44 @@ type EdgeApplier interface {
 	Apply(ctx context.Context) error
 }
 
-// SetEdge connects the edge proxy. Without it (edge disabled) domains are
-// stored but not served.
-func (m *Manager) SetEdge(e EdgeApplier) { m.edge = e }
+// edgeBox holds the EdgeApplier for the atomic pointer.
+type edgeBox struct{ e EdgeApplier }
+
+// SetEdge connects the edge proxy. Without it (edge disabled, or not up yet)
+// domains are stored but not served. Safe to call while the panel runs: the
+// edge may come up late.
+func (m *Manager) SetEdge(e EdgeApplier) {
+	if e == nil {
+		m.edge.Store(nil)
+		return
+	}
+	m.edge.Store(&edgeBox{e})
+}
+
+// edgeProxy is the connected edge, or nil.
+func (m *Manager) edgeProxy() EdgeApplier {
+	if b := m.edge.Load(); b != nil {
+		return b.e
+	}
+	return nil
+}
+
+// SetEdgeDown records why the edge proxy is down or degraded ("" = it is
+// fine), for the screens.
+func (m *Manager) SetEdgeDown(reason string) { m.edgeDown.Store(&reason) }
+
+// EdgeDown says why the edge proxy is down or degraded, "" when it is fine.
+func (m *Manager) EdgeDown() string {
+	if r := m.edgeDown.Load(); r != nil {
+		return *r
+	}
+	return ""
+}
+
+// SetEdgeImage tells the manager the edge's Caddy image: the stock image has
+// no DNS provider module, so "Em escala" (DNS-01) is refused with it instead
+// of handing Caddy a config it rejects.
+func (m *Manager) SetEdgeImage(image string) { m.edgeStockImage.Store(config.IsStockCaddyImage(image)) }
 
 // deployMarker is the edge's "this service is being deployed" switch: while
 // on, a visitor gets the "updating" page instead of "down".
@@ -37,7 +73,7 @@ type deployMarker interface {
 
 // markDeploying flips the marker when the edge has one.
 func (m *Manager) markDeploying(project, service string, on bool) {
-	if d, ok := m.edge.(deployMarker); ok {
+	if d, ok := m.edgeProxy().(deployMarker); ok {
 		d.SetDeploying(node.ContainerName(project, service), on)
 	}
 }
@@ -57,7 +93,7 @@ const (
 // CertificateState says whether an exact hostname already has its
 // certificate. Wildcards are always CertUnknown: theirs are per subdomain.
 func (m *Manager) CertificateState(host string) string {
-	c, ok := m.edge.(certStore)
+	c, ok := m.edgeProxy().(certStore)
 	if !ok || edge.IsWildcard(host) {
 		return CertUnknown
 	}
@@ -68,13 +104,14 @@ func (m *Manager) CertificateState(host string) string {
 }
 
 // EdgeEnabled reports whether the edge proxy is running.
-func (m *Manager) EdgeEnabled() bool { return m.edge != nil }
+func (m *Manager) EdgeEnabled() bool { return m.edgeProxy() != nil }
 
 func (m *Manager) applyEdge(ctx context.Context) error {
-	if m.edge == nil {
+	e := m.edgeProxy()
+	if e == nil {
 		return nil
 	}
-	if err := m.edge.Apply(ctx); err != nil {
+	if err := e.Apply(ctx); err != nil {
 		m.log.Error("reload edge proxy", "error", err)
 		return i18n.E("domain.error.edge_apply", "error", err)
 	}

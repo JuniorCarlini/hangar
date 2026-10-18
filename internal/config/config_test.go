@@ -172,13 +172,13 @@ func TestIsStockCaddyImage(t *testing.T) {
 		"index.docker.io/library/caddy:2.11-alpine",
 	}
 	for _, s := range stock {
-		if !isStockCaddyImage(s) {
+		if !IsStockCaddyImage(s) {
 			t.Errorf("%q should be the stock caddy image", s)
 		}
 	}
 	custom := []string{"hangar-caddy:2.11", "ghcr.io/me/caddy-dns:1", "mycaddy:1", "caddyserver/caddy:2.11"}
 	for _, s := range custom {
-		if isStockCaddyImage(s) {
+		if IsStockCaddyImage(s) {
 			t.Errorf("%q should not be treated as the stock caddy image", s)
 		}
 	}
