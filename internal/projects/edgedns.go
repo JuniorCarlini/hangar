@@ -138,11 +138,14 @@ func (m *Manager) setEdgeDNS(ctx context.Context, a Actor, zone, provider string
 // becomes the edge's base domain; replacing a different one must be asked
 // for (replace), since every automatic link moves with it.
 func (m *Manager) AddScaledDomain(ctx context.Context, a Actor, projectSlug, serviceSlug, zone, endpointID, provider string, token []byte, replace bool) error {
-	zone, ok := edge.NormalizeHostname(strings.TrimPrefix(strings.TrimSpace(zone), "*."))
+	// NormalizeDomain on the wildcard refuses a public suffix ("*.com.br")
+	// before anything is asked of the provider.
+	wild, ok := edge.NormalizeDomain("*." + strings.TrimPrefix(strings.TrimSpace(zone), "*."))
 	if !ok {
 		return i18n.E("domain.error.hostname")
 	}
-	if _, err := m.q.GetDomainByHostname(ctx, "*."+zone); err == nil {
+	zone = strings.TrimPrefix(wild, "*.")
+	if _, err := m.q.GetDomainByHostname(ctx, wild); err == nil {
 		return ErrExists
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -150,10 +153,26 @@ func (m *Manager) AddScaledDomain(ctx context.Context, a Actor, projectSlug, ser
 	if base := m.baseDomain(); base != "" && base != zone && !replace {
 		return i18n.E("domain.error.base_taken", "base", base)
 	}
+	prev, err := m.q.GetEdgeSettings(ctx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
 	if err := m.setEdgeDNS(ctx, a, zone, provider, token); err != nil {
 		return err
 	}
-	return m.AddDomain(ctx, a, projectSlug, serviceSlug, "*."+zone, endpointID)
+	if err := m.AddDomain(ctx, a, projectSlug, serviceSlug, wild, endpointID); err != nil {
+		// The domain was not added: put the previous settings back, so the
+		// next edge reload does not obtain a wildcard nobody routes.
+		if rerr := m.q.UpsertEdgeSettings(ctx, dbq.UpsertEdgeSettingsParams{
+			BaseDomain: prev.BaseDomain, DnsProvider: prev.DnsProvider, DnsTokenEnc: prev.DnsTokenEnc,
+			UpdatedBy: prev.UpdatedBy, UpdatedAt: m.now().Unix(),
+		}); rerr != nil {
+			m.log.Error("restore edge dns settings", "error", rerr)
+		}
+		m.dbBase.Store(prev.BaseDomain)
+		return err
+	}
+	return nil
 }
 
 // RotateEdgeDNSToken replaces the provider token of the current base domain.

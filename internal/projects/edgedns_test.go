@@ -117,3 +117,33 @@ func TestRotateDNSToken(t *testing.T) {
 		t.Errorf("token = %q", dns.Token)
 	}
 }
+
+// TestScaledDomainRollsBackWhenTheDomainFails: if *.zone cannot be added,
+// the DNS settings go back to what they were, so no wildcard is obtained
+// for a domain nobody routes; a public suffix is refused up front.
+func TestScaledDomainRollsBackWhenTheDomainFails(t *testing.T) {
+	f := newFixture(t)
+	f.m.SetEdge(&countingEdge{})
+	f.service(t)
+	ctx := context.Background()
+	calls := 0
+	f.m.dnsCheck = func(context.Context, string, string, []byte) error { calls++; return nil }
+
+	if err := f.m.AddScaledDomain(ctx, f.who, "lab", "web", "com.br", "", "cloudflare", []byte("t"), false); err == nil {
+		t.Fatal("a public suffix was accepted")
+	}
+	if calls != 0 {
+		t.Error("the provider was asked about a public suffix")
+	}
+	// A service that does not exist makes AddDomain fail after the settings
+	// were written.
+	if err := f.m.AddScaledDomain(ctx, f.who, "lab", "nope", "lojas.exemplo.com.br", "", "cloudflare", []byte("t"), false); err == nil {
+		t.Fatal("added to a missing service")
+	}
+	if got := f.m.BaseDomain(); got != "" {
+		t.Errorf("base domain = %q after the failure", got)
+	}
+	if dns, _ := f.m.EdgeDNS(ctx); dns.BaseDomain != "" {
+		t.Errorf("settings kept after the failure: %+v", dns)
+	}
+}
