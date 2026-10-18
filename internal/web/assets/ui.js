@@ -23,6 +23,12 @@
       var tr = document.querySelector('[data-tuc-modal="#' + d.id + '"], [data-tuc-drawer="#' + d.id + '"]');
       if (tr) tr.click();
     });
+    // What the form came back to show (a preview below the button that
+    // asked for it) is scrolled into view, else the dialog seems unchanged.
+    requestAnimationFrame(function () {
+      var shown = document.querySelector('dialog[open] [data-reveal]');
+      if (shown) shown.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   });
   // Forms that destroy or change something important ask first, in a
   // Tucano dialog whose color says what kind of action it is (data-tone:

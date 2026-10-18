@@ -392,7 +392,7 @@ templ composeTab(d NewServiceData) {
 
 templ composePreview(d NewServiceData, p ComposePreview) {
 	{{ c := d.Compose }}
-	<section class="hg-in d0 flex flex-col gap-3 border-t border-border pt-4" id="compose-preview" aria-labelledby="compose-preview-title">
+	<section class="hg-in d0 flex flex-col gap-3 border-t border-border pt-4" id="compose-preview" aria-labelledby="compose-preview-title" data-reveal>
 		<div class="flex flex-wrap items-center gap-2">
 			<h3 class="m-0 text-sm font-semibold" id="compose-preview-title">{ t(ctx, "compose.preview") }</h3>
 			if p.File != "" {

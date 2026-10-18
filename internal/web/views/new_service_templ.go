@@ -1542,7 +1542,7 @@ func composePreview(d NewServiceData, p ComposePreview) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		c := d.Compose
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 110, "<section class=\"hg-in d0 flex flex-col gap-3 border-t border-border pt-4\" id=\"compose-preview\" aria-labelledby=\"compose-preview-title\"><div class=\"flex flex-wrap items-center gap-2\"><h3 class=\"m-0 text-sm font-semibold\" id=\"compose-preview-title\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 110, "<section class=\"hg-in d0 flex flex-col gap-3 border-t border-border pt-4\" id=\"compose-preview\" aria-labelledby=\"compose-preview-title\" data-reveal><div class=\"flex flex-wrap items-center gap-2\"><h3 class=\"m-0 text-sm font-semibold\" id=\"compose-preview-title\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
