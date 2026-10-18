@@ -959,14 +959,6 @@ templ domainDialog(d ServiceData) {
 							@Icon("lock", "size-3.5 shrink-0 text-success")
 							{ t(ctx, "domain.dns_token_lock") }
 						</span>
-						<details class="text-xs">
-							<summary class="cursor-pointer font-semibold text-accent-text">{ t(ctx, "domain.dns_token_how") }</summary>
-							<ol class="mt-2 list-decimal pl-5 leading-relaxed text-muted">
-								<li>{ t(ctx, "domain.dns_token_how_1") }</li>
-								<li>{ t(ctx, "domain.dns_token_how_2") }</li>
-								<li>{ t(ctx, "domain.dns_token_how_3") }</li>
-							</ol>
-						</details>
 					</div>
 					if d.Domains.Base.Domain != "" {
 						<input type="hidden" name="replace_base" value="1"/>
