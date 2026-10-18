@@ -12,6 +12,13 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.1] - 2026-10-18
+
+### Corrigido
+
+- Em **Equipe**, sem nenhum projeto criado, a escolha de projetos mostra o
+  aviso no mesmo estilo das outras telas vazias.
+
 ## [0.5.0] - 2026-10-18
 
 ### Adicionado
@@ -191,7 +198,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.0...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/JuniorCarlini/hangar/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/JuniorCarlini/hangar/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/JuniorCarlini/hangar/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/JuniorCarlini/hangar/compare/v0.4.3...v0.4.4
