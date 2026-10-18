@@ -221,6 +221,9 @@ password_label = "Confirm your password to continue"
 title = "Confirm it's you"
 text = "Sensitive actions ask for confirmation again; it lasts 5 minutes and is recorded in the audit log."
 
+[sudo.error]
+wrong_password = "Incorrect password."
+
 [password]
 too_short = "Weak password: use at least {min} characters."
 too_long = "Password too long: at most {max} characters."

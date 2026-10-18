@@ -284,7 +284,7 @@ func (s *Service) AcceptInvite(ctx context.Context, token, password string, c Cl
 		ActorID: id, IP: c.IP, UserAgent: c.UserAgent, Action: "user.create", Outcome: audit.OK,
 		TargetType: "user", TargetID: id, Summary: map[string]any{"role": inv.Access.Role.String(), "via": "invite", "invite": inv.ID},
 	})
-	sess, err := s.createSession(ctx, id, "active", c, s.now().Add(SessionMax), 0)
+	sess, err := s.createSession(ctx, id, "active", c, s.now().Add(SessionMax), 0, "")
 	if err != nil {
 		return "", err
 	}

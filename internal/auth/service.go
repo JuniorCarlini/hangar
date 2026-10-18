@@ -328,7 +328,7 @@ func (s *Service) login(ctx context.Context, email, password string, c Client) (
 		}
 		s.limits.reset(ipKey)
 		s.limits.reset(emailKey)
-		token, err := s.createSession(ctx, u.ID, "active", c, s.now().Add(SessionMax), 0)
+		token, err := s.createSession(ctx, u.ID, "active", c, s.now().Add(SessionMax), 0, "")
 		if err != nil {
 			return "", false, err
 		}
@@ -339,7 +339,7 @@ func (s *Service) login(ctx context.Context, email, password string, c Client) (
 		return token, true, nil
 	}
 
-	token, err := s.createSession(ctx, u.ID, "pending_2fa", c, s.now().Add(PendingTTL), 0)
+	token, err := s.createSession(ctx, u.ID, "pending_2fa", c, s.now().Add(PendingTTL), 0, "")
 	if err != nil {
 		return "", false, err
 	}
@@ -388,7 +388,7 @@ func (s *Service) LoginSecondFactor(ctx context.Context, pendingToken, code stri
 	s.limits.reset(ipKey)
 	s.limits.reset(pendKey)
 
-	token, err := s.createSession(ctx, sess.UserID, "active", c, s.now().Add(SessionMax), 0)
+	token, err := s.createSession(ctx, sess.UserID, "active", c, s.now().Add(SessionMax), 0, "")
 	if err != nil {
 		return "", err
 	}
@@ -532,7 +532,10 @@ func (s *Service) Sudo(ctx context.Context, p *Principal, code string, c Client)
 	}
 	s.limits.reset(key)
 
-	token, err := s.createSession(ctx, p.UserID, "active", c, time.Unix(old.ExpiresAt, 0), s.now().Add(SudoTTL).Unix())
+	// Keep the same CSRF token: rotating the session token already defeats
+	// fixation, and reusing the CSRF token means the forms on pages the person
+	// already had open do not start failing with "request refused".
+	token, err := s.createSession(ctx, p.UserID, "active", c, time.Unix(old.ExpiresAt, 0), s.now().Add(SudoTTL).Unix(), old.CsrfToken)
 	if err != nil {
 		return "", err
 	}
@@ -806,11 +809,17 @@ func (s *Service) CleanupSessions(ctx context.Context) (int64, error) {
 	})
 }
 
-func (s *Service) createSession(ctx context.Context, userID, stage string, c Client, expires time.Time, sudoUntil int64) (string, error) {
+// createSession writes a session row and returns its token. A non-empty csrf
+// carries the CSRF token forward from an earlier session (used by Sudo, so the
+// forms already on the person's open pages keep working); empty mints a new one.
+func (s *Service) createSession(ctx context.Context, userID, stage string, c Client, expires time.Time, sudoUntil int64, csrf string) (string, error) {
 	token := randomToken()
+	if csrf == "" {
+		csrf = randomToken()
+	}
 	now := s.now().Unix()
 	err := s.q.CreateSession(ctx, dbq.CreateSessionParams{
-		IDHash: hashToken(token), UserID: userID, Stage: stage, CsrfToken: randomToken(),
+		IDHash: hashToken(token), UserID: userID, Stage: stage, CsrfToken: csrf,
 		Ip:        sql.NullString{String: c.IP, Valid: c.IP != ""},
 		UserAgent: sql.NullString{String: truncate(c.UserAgent, 256), Valid: c.UserAgent != ""},
 		CreatedAt: now, LastSeenAt: now, ExpiresAt: expires.Unix(), SudoUntil: sudoUntil,

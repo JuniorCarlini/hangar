@@ -314,23 +314,30 @@ func (h *handlers) logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
-// sudo confirms 2FA again and sends the user back where they were.
+// sudo re-confirms who is at the keyboard — the 2FA code, or the account
+// password when there is no 2FA — and sends the person back where they were.
+// On failure it re-renders the sudo page with the error and the same next, so
+// they can try again instead of landing on a bare error.
 func (h *handlers) sudo(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
+	next := safeNext(r.PostFormValue("next"))
 	token, err := h.auth.Sudo(r.Context(), p, r.PostFormValue("code"), client(r))
 
 	var rl *auth.RateLimitedError
 	switch {
 	case err == nil:
 		setCookie(w, sessionCookie, token, auth.SessionMax)
-		http.Redirect(w, r, safeNext(r.PostFormValue("next")), http.StatusSeeOther) //nolint:gosec // safeNext only accepts a local path
+		http.Redirect(w, r, next, http.StatusSeeOther) //nolint:gosec // safeNext only accepts a local path
 	case errors.As(err, &rl):
-		http.Error(w, i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes()), http.StatusTooManyRequests)
+		render(w, r, http.StatusTooManyRequests, views.Sudo(i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes()), next, p.CSRFToken))
+	case errors.Is(err, auth.ErrInvalidCode) && p.HasTOTP:
+		render(w, r, http.StatusUnauthorized, views.Sudo(i18n.T(r.Context(), "twofa.error.invalid"), next, p.CSRFToken))
 	case errors.Is(err, auth.ErrInvalidCode):
-		http.Error(w, i18n.T(r.Context(), "twofa.error.invalid"), http.StatusUnauthorized)
+		// No 2FA: the field was the account password, so say "password".
+		render(w, r, http.StatusUnauthorized, views.Sudo(i18n.T(r.Context(), "sudo.error.wrong_password"), next, p.CSRFToken))
 	default:
 		loggerFrom(r.Context()).Error("sudo", "error", err)
-		http.Error(w, i18n.T(r.Context(), "error.internal"), http.StatusInternalServerError)
+		render(w, r, http.StatusInternalServerError, views.Sudo(i18n.T(r.Context(), "error.internal"), next, p.CSRFToken))
 	}
 }
 

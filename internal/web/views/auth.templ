@@ -151,6 +151,42 @@ templ TwoFactor(errMsg string) {
 	}
 }
 
+// Sudo is the re-confirmation page: it is shown when a fresh confirmation
+// fails, keeping the error and the next destination so the person can try
+// again on a styled page instead of a bare error. The field is the account
+// password when there is no 2FA, otherwise the authenticator code.
+templ Sudo(errMsg, next, csrf string) {
+	@layout(t(ctx, "sudo.title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<form class="flex w-full max-w-[380px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7" method="post" action="/sudo" autocomplete="off">
+				<input type="hidden" name="csrf" value={ csrf }/>
+				<input type="hidden" name="next" value={ next }/>
+				@brand("")
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "sudo.title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "sudo.text") }</p>
+				</div>
+				@errorAlert(errMsg)
+				if noTOTP(ctx) {
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="code">{ t(ctx, "sudo.password_label") }</label>
+						<input class="tuc-input" id="code" name="code" type="password" autocomplete="current-password" required autofocus data-tuc-reveal/>
+					</div>
+				} else {
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="code">{ t(ctx, "twofa.code") }</label>
+						<input class="tuc-input input-code" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="17" required autofocus/>
+					</div>
+				}
+				<button class="tuc-btn is-primary is-block" type="submit">
+					@Icon("shield-check", "size-4")
+					{ t(ctx, "sudo.confirm") }
+				</button>
+			</form>
+		</main>
+	}
+}
+
 // SetupForm is what the first-run setup page shows and keeps between tries.
 type SetupForm struct {
 	Email       string

@@ -108,7 +108,7 @@ func (s *Service) CreateOwner(ctx context.Context, email, password string, c Cli
 		ActorID: id, IP: c.IP, UserAgent: c.UserAgent, Action: "user.create", Outcome: audit.OK,
 		TargetType: "user", TargetID: id, Summary: map[string]any{"role": RoleOwner.String(), "via": "setup"},
 	})
-	token, err := s.createSession(ctx, id, "active", c, s.now().Add(SessionMax), 0)
+	token, err := s.createSession(ctx, id, "active", c, s.now().Add(SessionMax), 0, "")
 	if err != nil {
 		return "", err
 	}

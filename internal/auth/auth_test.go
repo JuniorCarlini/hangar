@@ -345,11 +345,17 @@ func TestOptionalTOTP(t *testing.T) {
 	if _, err := f.svc.Sudo(ctx, p, "123456", cli); !errors.Is(err, ErrInvalidCode) {
 		t.Errorf("a code is not the password: %v", err)
 	}
+	sudoCSRF := p.CSRFToken
 	token, err = f.svc.Sudo(ctx, p, goodPassword, cli)
 	if err != nil {
 		t.Fatal(err)
 	}
 	p, _ = f.svc.Authenticate(ctx, token)
+	// Sudo rotates the session token but keeps the CSRF token, so forms already
+	// open in the browser keep working instead of failing as "request refused".
+	if p.CSRFToken != sudoCSRF {
+		t.Errorf("sudo changed the CSRF token: %q -> %q", sudoCSRF, p.CSRFToken)
+	}
 
 	// Turning 2FA on from My account.
 	secret, _ := NewTOTPSecret()

@@ -221,6 +221,9 @@ password_label = "Confirme sua senha para continuar"
 title = "Confirme que é você"
 text = "Ações sensíveis pedem a confirmação de novo; ela vale por 5 minutos e fica registrada na auditoria."
 
+[sudo.error]
+wrong_password = "Senha incorreta."
+
 [password]
 too_short = "Senha fraca: use pelo menos {min} caracteres."
 too_long = "Senha muito longa: no máximo {max} caracteres."
