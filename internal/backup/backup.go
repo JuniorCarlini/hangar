@@ -167,13 +167,24 @@ func (m *Manager) tasker() (node.Node, node.Tasker, error) {
 
 // --- recipients (the recovery kit's public keys) ------------------------------
 
+// KitCheckEvery is how often the panel asks the owner to prove the
+// recovery kit is still kept (about five months): a kit lost unnoticed
+// only shows up on the day it is needed, when the server is already gone.
+const KitCheckEvery = 150 * 24 * time.Hour
+
 // Recipient is a public key of a recovery kit.
 type Recipient struct {
-	ID        string
-	Label     string
-	PublicKey string
-	Confirmed bool
-	CreatedAt time.Time
+	ID          string
+	Label       string
+	PublicKey   string
+	Confirmed   bool
+	ConfirmedAt time.Time
+	CreatedAt   time.Time
+}
+
+// CheckDue reports whether this confirmed key is due for a new check.
+func (r Recipient) CheckDue(now time.Time) bool {
+	return r.Confirmed && !now.Before(r.ConfirmedAt.Add(KitCheckEvery))
 }
 
 // Recipients lists the kit keys.
@@ -184,9 +195,28 @@ func (m *Manager) Recipients(ctx context.Context) ([]Recipient, error) {
 	}
 	out := make([]Recipient, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, Recipient{ID: r.ID, Label: r.Label, PublicKey: r.AgePublicKey, Confirmed: r.ConfirmedAt.Valid, CreatedAt: time.Unix(r.CreatedAt, 0)})
+		out = append(out, Recipient{
+			ID: r.ID, Label: r.Label, PublicKey: r.AgePublicKey, Confirmed: r.ConfirmedAt.Valid,
+			ConfirmedAt: time.Unix(r.ConfirmedAt.Int64, 0), CreatedAt: time.Unix(r.CreatedAt, 0),
+		})
 	}
 	return out, nil
+}
+
+// KitCheckDue reports whether any confirmed kit key has gone KitCheckEvery
+// without a new confirmation.
+func (m *Manager) KitCheckDue(ctx context.Context) bool {
+	keys, err := m.Recipients(ctx)
+	if err != nil {
+		return false
+	}
+	now := m.now()
+	for _, k := range keys {
+		if k.CheckDue(now) {
+			return true
+		}
+	}
+	return false
 }
 
 // AddRecipient stores the public key of a kit generated in the browser,

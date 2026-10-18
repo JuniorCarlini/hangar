@@ -1870,6 +1870,12 @@ confirm_file = "Selecione o hangar-kit.txt (lido só no navegador)"
 confirm_file_hint = "Ou digite o código de confirmação que está no kit."
 code = "Código de confirmação"
 confirm = "Confirmar que guardei"
+due = "confirmar de novo"
+due_hint = "Faz mais de 5 meses da última confirmação: mostre que o kit ainda está com você."
+
+[backups.kit_check]
+banner = "Faz mais de 5 meses que você confirmou o Kit de recuperação. Ele ainda está guardado?"
+action = "Confirmar o kit"
 
 [backups.targets]
 title = "Destinos"

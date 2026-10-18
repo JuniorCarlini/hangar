@@ -14,7 +14,9 @@ import (
 	"filippo.io/age"
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
+	"github.com/JuniorCarlini/hangar/internal/backup"
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 )
 
@@ -179,5 +181,26 @@ func TestParseMoment(t *testing.T) {
 	}
 	if defaultRestoreName("db") != "db-restaurado" || len(defaultRestoreName(strings.Repeat("a", 32))) > 32 {
 		t.Fatal("defaultRestoreName")
+	}
+}
+
+// A kit confirmed more than KitCheckEvery ago brings a bar to the top of
+// every page for the owner, and a "confirm again" form on the key.
+func TestOldKitConfirmationAsksAgain(t *testing.T) {
+	e := newEnv(t)
+	e.createUser(t, auth.RoleOwner)
+	session := e.login(t)
+	old := time.Now().Add(-backup.KitCheckEvery - time.Hour).Unix()
+	if _, err := e.st.DB.Exec(`INSERT INTO backup_recipients (id, label, age_public_key, confirm_hash, confirmed_at, created_at) VALUES ('bkr_1', 'Junior', 'age1qqq', 'x', ?, ?)`, old, old); err != nil {
+		t.Fatal(err)
+	}
+	rec := e.do(req{method: "GET", target: "/", cookies: []*http.Cookie{session}})
+	if !strings.Contains(rec.Body.String(), i18n.Tl("pt-BR", "backups.kit_check.banner")) {
+		t.Fatal("the overview should ask about the kit")
+	}
+	rec = e.do(req{method: "GET", target: "/backups", cookies: []*http.Cookie{session}})
+	body := rec.Body.String()
+	if !strings.Contains(body, i18n.Tl("pt-BR", "backups.keys.due")) || !strings.Contains(body, `action="/backups/keys/confirm"`) {
+		t.Fatal("the backups page should offer to confirm the key again")
 	}
 }

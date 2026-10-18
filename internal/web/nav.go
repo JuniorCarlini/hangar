@@ -72,6 +72,7 @@ func (h *handlers) navFor(r *http.Request, p *auth.Principal) views.Nav {
 		n.Locked = h.lock.Locked(r.Context())
 	}
 	n.BackupAlerts = h.backups.AlertCount(r.Context())
+	n.KitCheckDue = n.IsOwner && h.backups.KitCheckDue(r.Context())
 	if n.IsOwner && h.updates != nil {
 		if av, _ := h.updates.Latest(); av != nil {
 			n.Update = true

@@ -38,6 +38,7 @@ type BackupKeyRow struct {
 	Public    string
 	Created   string
 	Confirmed bool
+	Due       bool // confirmed long ago: asked to prove it is still kept
 }
 
 // BackupTargetRow is a destination.
@@ -239,7 +240,9 @@ templ backupKeys(d BackupsData) {
 								<td>{ k.Label }</td>
 								<td class="max-w-[280px] truncate font-mono text-xs" title={ k.Public }>{ k.Public }</td>
 								<td>
-									if k.Confirmed {
+									if k.Due {
+										<span class="tuc-badge is-warning" title={ t(ctx, "backups.keys.due_hint") }>{ t(ctx, "backups.keys.due") }</span>
+									} else if k.Confirmed {
 										<span class="tuc-badge is-success">{ t(ctx, "backups.keys.confirmed") }</span>
 									} else {
 										<span class="tuc-badge is-warning">{ t(ctx, "backups.keys.pending") }</span>
@@ -258,7 +261,7 @@ templ backupKeys(d BackupsData) {
 									}
 								</td>
 							</tr>
-							if !k.Confirmed && d.CanOwner {
+							if (!k.Confirmed || k.Due) && d.CanOwner {
 								<tr>
 									<td colspan="5">
 										@kitConfirmForm(d.CSRF, k, d.SudoActive)

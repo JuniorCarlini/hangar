@@ -49,7 +49,7 @@ func (h *handlers) renderBackups(w http.ResponseWriter, r *http.Request, status 
 	}
 	d.Ready = o.Ready
 	for _, k := range o.Recipients {
-		d.Keys = append(d.Keys, views.BackupKeyRow{ID: k.ID, Label: k.Label, Public: k.PublicKey, Confirmed: k.Confirmed, Created: k.CreatedAt.Format(backupTime)})
+		d.Keys = append(d.Keys, views.BackupKeyRow{ID: k.ID, Label: k.Label, Public: k.PublicKey, Confirmed: k.Confirmed, Due: k.CheckDue(time.Now()), Created: k.CreatedAt.Format(backupTime)})
 	}
 	for _, t := range o.Targets {
 		row := views.BackupTargetRow{

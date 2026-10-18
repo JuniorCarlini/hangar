@@ -426,3 +426,37 @@ func hasAlert(as []Alert, kind string) bool {
 	}
 	return false
 }
+
+// Every few months the owner is asked to prove the kit is still kept; typing
+// the code again restarts the count.
+func TestKitCheckComesBackEveryFewMonths(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	now := time.Now()
+	f.m.now = func() time.Time { return now }
+	code := archive.ConfirmCode(f.id)
+	rid, err := f.m.AddRecipient(ctx, f.who, "Junior", f.id.Recipient().String(), archive.CodeHash(code))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.m.KitCheckDue(ctx) {
+		t.Fatal("an unconfirmed key is not a reminder: it has its own warning")
+	}
+	if err := f.m.ConfirmRecipient(ctx, f.who, rid, code); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(KitCheckEvery - time.Hour)
+	if f.m.KitCheckDue(ctx) {
+		t.Fatal("asked before the time")
+	}
+	now = now.Add(time.Hour)
+	if !f.m.KitCheckDue(ctx) {
+		t.Fatal("no reminder after the period")
+	}
+	if err := f.m.ConfirmRecipient(ctx, f.who, rid, code); err != nil {
+		t.Fatal(err)
+	}
+	if f.m.KitCheckDue(ctx) {
+		t.Error("confirming again must restart the count")
+	}
+}

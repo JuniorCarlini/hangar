@@ -21,6 +21,7 @@ templ shell(title string) {
 	@layout(title) {
 		@topBar(navFrom(ctx))
 		@lockBanner(navFrom(ctx))
+		@kitCheckBanner(navFrom(ctx))
 		<div class="flex min-h-[calc(100vh-48px)] w-full">
 			@sidebar(navFrom(ctx))
 			<main class="page flex min-w-0 flex-1 flex-col">
