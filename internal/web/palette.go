@@ -82,15 +82,18 @@ func (h *handlers) paletteFor(ctx context.Context, p *auth.Principal) paletteDat
 	add := func(it paletteItem) { d.Items = append(d.Items, it) }
 
 	add(paletteItem{Group: "pages", Label: tr("nav.overview"), Icon: "gauge", Href: "/"})
-	add(paletteItem{Group: "pages", Label: tr("nav.domains"), Icon: "globe", Href: "/domains"})
-	add(paletteItem{Group: "pages", Label: tr("nav.ports"), Icon: "plug", Href: "/ports"})
-	add(paletteItem{Group: "pages", Label: tr("nav.updates"), Icon: "shield-alert", Href: "/updates"})
+	if !p.Limited() {
+		add(paletteItem{Group: "pages", Label: tr("nav.domains"), Icon: "globe", Href: "/domains"})
+		add(paletteItem{Group: "pages", Label: tr("nav.ports"), Icon: "plug", Href: "/ports"})
+		add(paletteItem{Group: "pages", Label: tr("nav.updates"), Icon: "shield-alert", Href: "/updates"})
+		add(paletteItem{Group: "pages", Label: tr("nav.alerts"), Icon: "bell", Href: "/alerts"})
+		add(paletteItem{Group: "pages", Label: tr("nav.backups"), Icon: "database-backup", Href: "/backups"})
+	}
 	if admin {
 		add(paletteItem{Group: "pages", Label: tr("nav.status_links"), Icon: "wifi", Href: "/status-links"})
 	}
-	add(paletteItem{Group: "pages", Label: tr("nav.alerts"), Icon: "bell", Href: "/alerts"})
-	add(paletteItem{Group: "pages", Label: tr("nav.backups"), Icon: "database-backup", Href: "/backups"})
 	if owner {
+		add(paletteItem{Group: "pages", Label: tr("nav.team"), Icon: "users", Href: "/team"})
 		add(paletteItem{Group: "pages", Label: tr("nav.update"), Icon: "refresh-cw", Href: "/update"})
 	}
 	add(paletteItem{Group: "pages", Label: tr("nav.account"), Icon: "user", Href: "/account"})
@@ -103,7 +106,7 @@ func (h *handlers) paletteFor(ctx context.Context, p *auth.Principal) paletteDat
 		loggerFrom(ctx).Error("palette: projects", "error", err)
 	}
 	for _, pr := range list {
-		if !node.SlugRE.MatchString(pr.Slug) {
+		if !node.SlugRE.MatchString(pr.Slug) || !p.CanSeeProject(pr.Slug) {
 			continue
 		}
 		hint := ""

@@ -65,4 +65,16 @@ type Principal struct {
 	// SessionToken is the cookie's clear-text token, needed to rotate the
 	// session on sudo and logout. It is never stored or logged.
 	SessionToken string
+	// AllProjects is false for a user limited to Projects (slugs): they see
+	// only those, and none of the server-wide pages.
+	AllProjects bool
+	Projects    map[string]bool
 }
+
+// CanSeeProject reports whether the user may reach the project.
+func (p *Principal) CanSeeProject(slug string) bool {
+	return p != nil && (!p.Limited() || p.Projects[slug])
+}
+
+// Limited reports whether the user only reaches some projects.
+func (p *Principal) Limited() bool { return p != nil && !p.AllProjects && p.Role < RoleAdmin }

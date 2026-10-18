@@ -10,6 +10,21 @@ import (
 	"database/sql"
 )
 
+const addUserProject = `-- name: AddUserProject :exec
+INSERT INTO user_projects (user_id, project_id)
+SELECT ?, id FROM projects WHERE slug = ?
+`
+
+type AddUserProjectParams struct {
+	UserID string
+	Slug   string
+}
+
+func (q *Queries) AddUserProject(ctx context.Context, arg AddUserProjectParams) error {
+	_, err := q.db.ExecContext(ctx, addUserProject, arg.UserID, arg.Slug)
+	return err
+}
+
 const advanceTOTPStep = `-- name: AdvanceTOTPStep :execrows
 UPDATE users SET totp_last_step = ?1 WHERE id = ?2 AND totp_last_step < ?1
 `
@@ -27,6 +42,39 @@ func (q *Queries) AdvanceTOTPStep(ctx context.Context, arg AdvanceTOTPStepParams
 	return result.RowsAffected()
 }
 
+const allUserProjects = `-- name: AllUserProjects :many
+SELECT up.user_id, p.slug FROM user_projects up JOIN projects p ON p.id = up.project_id
+ORDER BY p.slug
+`
+
+type AllUserProjectsRow struct {
+	UserID string
+	Slug   string
+}
+
+func (q *Queries) AllUserProjects(ctx context.Context) ([]AllUserProjectsRow, error) {
+	rows, err := q.db.QueryContext(ctx, allUserProjects)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AllUserProjectsRow{}
+	for rows.Next() {
+		var i AllUserProjectsRow
+		if err := rows.Scan(&i.UserID, &i.Slug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const clearTOTP = `-- name: ClearTOTP :exec
 UPDATE users SET totp_secret_enc = NULL, totp_last_step = 0, updated_at = ? WHERE id = ?
 `
@@ -39,6 +87,26 @@ type ClearTOTPParams struct {
 func (q *Queries) ClearTOTP(ctx context.Context, arg ClearTOTPParams) error {
 	_, err := q.db.ExecContext(ctx, clearTOTP, arg.UpdatedAt, arg.ID)
 	return err
+}
+
+const clearUserProjects = `-- name: ClearUserProjects :exec
+DELETE FROM user_projects WHERE user_id = ?
+`
+
+func (q *Queries) ClearUserProjects(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, clearUserProjects, userID)
+	return err
+}
+
+const countOwners = `-- name: CountOwners :one
+SELECT count(*) FROM users WHERE role = 'owner'
+`
+
+func (q *Queries) CountOwners(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOwners)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const countUnusedRecoveryCodes = `-- name: CountUnusedRecoveryCodes :one
@@ -93,6 +161,38 @@ func (q *Queries) CreateFirstUser(ctx context.Context, arg CreateFirstUserParams
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const createInvite = `-- name: CreateInvite :exec
+INSERT INTO invites (id, token_hash, email, role, all_projects, projects_json, created_by, created_at, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type CreateInviteParams struct {
+	ID           string
+	TokenHash    string
+	Email        string
+	Role         string
+	AllProjects  int64
+	ProjectsJson string
+	CreatedBy    sql.NullString
+	CreatedAt    int64
+	ExpiresAt    int64
+}
+
+func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) error {
+	_, err := q.db.ExecContext(ctx, createInvite,
+		arg.ID,
+		arg.TokenHash,
+		arg.Email,
+		arg.Role,
+		arg.AllProjects,
+		arg.ProjectsJson,
+		arg.CreatedBy,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+	)
+	return err
 }
 
 const createSession = `-- name: CreateSession :exec
@@ -172,6 +272,18 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context, arg DeleteExpiredSe
 	return result.RowsAffected()
 }
 
+const deleteInvite = `-- name: DeleteInvite :execrows
+DELETE FROM invites WHERE id = ? AND used_at IS NULL
+`
+
+func (q *Queries) DeleteInvite(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteInvite, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteOtherSessions = `-- name: DeleteOtherSessions :exec
 DELETE FROM sessions WHERE user_id = ? AND id_hash != ?
 `
@@ -204,6 +316,15 @@ func (q *Queries) DeleteSession(ctx context.Context, idHash []byte) error {
 	return err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = ?
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	return err
+}
+
 const deleteUserSession = `-- name: DeleteUserSession :execrows
 DELETE FROM sessions WHERE user_id = ? AND id_hash = ?
 `
@@ -230,30 +351,53 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID string) error {
 	return err
 }
 
+const getInviteByToken = `-- name: GetInviteByToken :one
+SELECT id, token_hash, email, role, all_projects, projects_json, created_by, created_at, expires_at, used_at FROM invites WHERE token_hash = ?
+`
+
+func (q *Queries) GetInviteByToken(ctx context.Context, tokenHash string) (Invite, error) {
+	row := q.db.QueryRowContext(ctx, getInviteByToken, tokenHash)
+	var i Invite
+	err := row.Scan(
+		&i.ID,
+		&i.TokenHash,
+		&i.Email,
+		&i.Role,
+		&i.AllProjects,
+		&i.ProjectsJson,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.UsedAt,
+	)
+	return i, err
+}
+
 const getSession = `-- name: GetSession :one
 SELECT s.id_hash, s.user_id, s.stage, s.csrf_token, s.created_at, s.last_seen_at, s.expires_at, s.sudo_until,
-       u.role, u.locked_at, u.locale, u.theme, u.email, u.name,
+       u.role, u.locked_at, u.locale, u.theme, u.email, u.name, u.all_projects,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = ?
 `
 
 type GetSessionRow struct {
-	IDHash     []byte
-	UserID     string
-	Stage      string
-	CsrfToken  string
-	CreatedAt  int64
-	LastSeenAt int64
-	ExpiresAt  int64
-	SudoUntil  int64
-	Role       string
-	LockedAt   sql.NullInt64
-	Locale     sql.NullString
-	Theme      string
-	Email      string
-	Name       string
-	HasTotp    int64
+	IDHash      []byte
+	UserID      string
+	Stage       string
+	CsrfToken   string
+	CreatedAt   int64
+	LastSeenAt  int64
+	ExpiresAt   int64
+	SudoUntil   int64
+	Role        string
+	LockedAt    sql.NullInt64
+	Locale      sql.NullString
+	Theme       string
+	Email       string
+	Name        string
+	AllProjects int64
+	HasTotp     int64
 }
 
 func (q *Queries) GetSession(ctx context.Context, idHash []byte) (GetSessionRow, error) {
@@ -274,13 +418,40 @@ func (q *Queries) GetSession(ctx context.Context, idHash []byte) (GetSessionRow,
 		&i.Theme,
 		&i.Email,
 		&i.Name,
+		&i.AllProjects,
 		&i.HasTotp,
 	)
 	return i, err
 }
 
+const getUser = `-- name: GetUser :one
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name, all_projects FROM users WHERE id = ?
+`
+
+func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUser, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Role,
+		&i.TotpSecretEnc,
+		&i.TotpLastStep,
+		&i.FailedLogins,
+		&i.LockedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Locale,
+		&i.Theme,
+		&i.Name,
+		&i.AllProjects,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name FROM users WHERE email = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name, all_projects FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -300,12 +471,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Locale,
 		&i.Theme,
 		&i.Name,
+		&i.AllProjects,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name FROM users WHERE id = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, locked_at, created_at, updated_at, locale, theme, name, all_projects FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -325,6 +497,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.Locale,
 		&i.Theme,
 		&i.Name,
+		&i.AllProjects,
 	)
 	return i, err
 }
@@ -341,6 +514,44 @@ type InsertRecoveryCodeParams struct {
 func (q *Queries) InsertRecoveryCode(ctx context.Context, arg InsertRecoveryCodeParams) error {
 	_, err := q.db.ExecContext(ctx, insertRecoveryCode, arg.UserID, arg.CodeHash)
 	return err
+}
+
+const listOpenInvites = `-- name: ListOpenInvites :many
+SELECT id, token_hash, email, role, all_projects, projects_json, created_by, created_at, expires_at, used_at FROM invites WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at DESC
+`
+
+func (q *Queries) ListOpenInvites(ctx context.Context, expiresAt int64) ([]Invite, error) {
+	rows, err := q.db.QueryContext(ctx, listOpenInvites, expiresAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Invite{}
+	for rows.Next() {
+		var i Invite
+		if err := rows.Scan(
+			&i.ID,
+			&i.TokenHash,
+			&i.Email,
+			&i.Role,
+			&i.AllProjects,
+			&i.ProjectsJson,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.UsedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listUserSessions = `-- name: ListUserSessions :many
@@ -375,6 +586,59 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 			&i.Ip,
 			&i.UserAgent,
 			&i.CreatedAt,
+			&i.LastSeenAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_at, u.created_at,
+       CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp,
+       CAST(coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), 0) AS INTEGER) AS last_seen_at
+FROM users u
+ORDER BY CASE u.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'operator' THEN 2 ELSE 3 END, u.email
+`
+
+type ListUsersRow struct {
+	ID          string
+	Email       string
+	Name        string
+	Role        string
+	AllProjects int64
+	LockedAt    sql.NullInt64
+	CreatedAt   int64
+	HasTotp     int64
+	LastSeenAt  int64
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersRow{}
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.AllProjects,
+			&i.LockedAt,
+			&i.CreatedAt,
+			&i.HasTotp,
 			&i.LastSeenAt,
 		); err != nil {
 			return nil, err
@@ -477,6 +741,27 @@ func (q *Queries) SetTOTPSecret(ctx context.Context, arg SetTOTPSecretParams) er
 	return err
 }
 
+const setUserAccess = `-- name: SetUserAccess :exec
+UPDATE users SET role = ?, all_projects = ?, updated_at = ? WHERE id = ?
+`
+
+type SetUserAccessParams struct {
+	Role        string
+	AllProjects int64
+	UpdatedAt   int64
+	ID          string
+}
+
+func (q *Queries) SetUserAccess(ctx context.Context, arg SetUserAccessParams) error {
+	_, err := q.db.ExecContext(ctx, setUserAccess,
+		arg.Role,
+		arg.AllProjects,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
 const setUserName = `-- name: SetUserName :exec
 UPDATE users SET name = ?, updated_at = ? WHERE id = ?
 `
@@ -523,6 +808,24 @@ func (q *Queries) UnlockUser(ctx context.Context, arg UnlockUserParams) (int64, 
 	return result.RowsAffected()
 }
 
+const useInvite = `-- name: UseInvite :execrows
+UPDATE invites SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?
+`
+
+type UseInviteParams struct {
+	UsedAt    sql.NullInt64
+	ID        string
+	ExpiresAt int64
+}
+
+func (q *Queries) UseInvite(ctx context.Context, arg UseInviteParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, useInvite, arg.UsedAt, arg.ID, arg.ExpiresAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const useRecoveryCode = `-- name: UseRecoveryCode :execrows
 UPDATE recovery_codes SET used_at = ?
 WHERE user_id = ? AND code_hash = ? AND used_at IS NULL
@@ -540,4 +843,32 @@ func (q *Queries) UseRecoveryCode(ctx context.Context, arg UseRecoveryCodeParams
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const userProjectSlugs = `-- name: UserProjectSlugs :many
+SELECT p.slug FROM user_projects up JOIN projects p ON p.id = up.project_id
+WHERE up.user_id = ? ORDER BY p.slug
+`
+
+func (q *Queries) UserProjectSlugs(ctx context.Context, userID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, userProjectSlugs, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

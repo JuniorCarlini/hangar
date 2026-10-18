@@ -60,7 +60,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetSession :one
 SELECT s.id_hash, s.user_id, s.stage, s.csrf_token, s.created_at, s.last_seen_at, s.expires_at, s.sudo_until,
-       u.role, u.locked_at, u.locale, u.theme, u.email, u.name,
+       u.role, u.locked_at, u.locale, u.theme, u.email, u.name, u.all_projects,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp
 FROM sessions s JOIN users u ON u.id = s.user_id
 WHERE s.id_hash = ?;
@@ -95,3 +95,53 @@ WHERE user_id = ? AND stage = 'active' AND expires_at > ? ORDER BY last_seen_at 
 
 -- name: DeleteUserSession :execrows
 DELETE FROM sessions WHERE user_id = ? AND id_hash = ?;
+
+-- name: ListUsers :many
+SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_at, u.created_at,
+       CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp,
+       CAST(coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), 0) AS INTEGER) AS last_seen_at
+FROM users u
+ORDER BY CASE u.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'operator' THEN 2 ELSE 3 END, u.email;
+
+-- name: GetUser :one
+SELECT * FROM users WHERE id = ?;
+
+-- name: CountOwners :one
+SELECT count(*) FROM users WHERE role = 'owner';
+
+-- name: SetUserAccess :exec
+UPDATE users SET role = ?, all_projects = ?, updated_at = ? WHERE id = ?;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE id = ?;
+
+-- name: UserProjectSlugs :many
+SELECT p.slug FROM user_projects up JOIN projects p ON p.id = up.project_id
+WHERE up.user_id = ? ORDER BY p.slug;
+
+-- name: AllUserProjects :many
+SELECT up.user_id, p.slug FROM user_projects up JOIN projects p ON p.id = up.project_id
+ORDER BY p.slug;
+
+-- name: ClearUserProjects :exec
+DELETE FROM user_projects WHERE user_id = ?;
+
+-- name: AddUserProject :exec
+INSERT INTO user_projects (user_id, project_id)
+SELECT ?, id FROM projects WHERE slug = ?;
+
+-- name: CreateInvite :exec
+INSERT INTO invites (id, token_hash, email, role, all_projects, projects_json, created_by, created_at, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: ListOpenInvites :many
+SELECT * FROM invites WHERE used_at IS NULL AND expires_at > ? ORDER BY created_at DESC;
+
+-- name: GetInviteByToken :one
+SELECT * FROM invites WHERE token_hash = ?;
+
+-- name: UseInvite :execrows
+UPDATE invites SET used_at = ? WHERE id = ? AND used_at IS NULL AND expires_at > ?;
+
+-- name: DeleteInvite :execrows
+DELETE FROM invites WHERE id = ? AND used_at IS NULL;

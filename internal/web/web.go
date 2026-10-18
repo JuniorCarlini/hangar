@@ -38,7 +38,10 @@ type Deps struct {
 	// Updates and UpdateDir feed the update page (docs/21).
 	Updates   updates
 	UpdateDir string
-	Projects  *projects.Manager
+	// PanelURL is the panel's public address ("" when it is private), for
+	// links sent to people (invitations).
+	PanelURL string
+	Projects *projects.Manager
 	// Metrics feeds the overview and the service metrics; nil shows zeros.
 	Metrics *metrics.Collector
 	// Deps is the dependency and vulnerability monitor (docs/14); nil
@@ -88,7 +91,7 @@ func New(d Deps) (http.Handler, error) {
 	views.AssetVersion = assetVersion()
 	rt := newRouter(d.Auth, d.Audit)
 	hs := &handlers{
-		auth: d.Auth, updates: d.Updates, updateDir: d.UpdateDir, projects: d.Projects, metrics: d.Metrics, audit: d.Audit,
+		auth: d.Auth, updates: d.Updates, updateDir: d.UpdateDir, panelURL: d.PanelURL, projects: d.Projects, metrics: d.Metrics, audit: d.Audit,
 		deps: d.Deps, status: d.Status, pub: newPublicStatus(d.Status), alerts: d.Alerts, lock: d.Lock, hooksBase: d.HooksBase, backups: d.Backups,
 		hookFails: newHookFails(), serverIP: d.ServerIP, baseDomain: d.BaseDomain, autoLinkIP: d.AutoLinkIP, errorPages: d.ErrorPages, brand: d.Brand,
 	}
@@ -128,6 +131,9 @@ func routes(rt *Router, h *handlers) {
 	// one-time code from the server.
 	rt.HandleFunc("GET /setup", h.setupPage, public)
 	rt.HandleFunc("POST /setup", h.setupSubmit, Policy{Public: true, Audit: "user.create", AuditByHandler: true})
+	// Invitations: a one-time link where the invited person sets a password.
+	rt.HandleFunc("GET /invite/{token}", h.invitePage, public)
+	rt.HandleFunc("POST /invite/{token}", h.inviteSubmit, Policy{Public: true, Audit: "user.create", AuditByHandler: true})
 	rt.HandleFunc("GET /login", h.loginPage, public)
 	rt.HandleFunc("POST /login", h.loginSubmit, Policy{Public: true, Audit: "auth.login.password", AuditByHandler: true})
 	rt.HandleFunc("GET /login/2fa", h.twoFactorPage, public)
@@ -290,6 +296,12 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST /account/totp/disable", h.disableTOTP, Policy{Role: auth.RoleViewer, Audit: "auth.totp.disable", AuditByHandler: true})
 	rt.HandleFunc("POST /account/preferences", h.savePreferences, Policy{Role: auth.RoleViewer, Audit: "user.preferences", AuditByHandler: true})
 
+	// The team: owners invite people and choose what each one reaches.
+	rt.HandleFunc("GET /team", h.teamPage, Policy{Role: auth.RoleOwner})
+	rt.HandleFunc("POST /team/invites", h.teamInvite, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.invite", AuditByHandler: true})
+	rt.HandleFunc("POST /team/invites/{id}/cancel", h.teamCancelInvite, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.invite.cancel", AuditByHandler: true})
+	rt.HandleFunc("POST /team/users/{id}", h.teamUpdate, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.update", AuditByHandler: true})
+	rt.HandleFunc("POST /team/users/{id}/delete", h.teamRemove, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.remove", AuditByHandler: true})
 	rt.HandleFunc("GET /update", h.updatePage, Policy{Role: auth.RoleOwner})
 	rt.HandleFunc("POST /update/check", h.updateCheck, Policy{Role: auth.RoleOwner, Audit: "system.update.check"})
 	rt.HandleFunc("POST /update", h.updateApply, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "system.update.request"})

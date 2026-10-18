@@ -1,0 +1,502 @@
+package views
+
+import (
+	"fmt"
+	"strings"
+)
+
+// The team page: who can use this panel, with which role and on which
+// projects, and the open invitations.
+
+// TeamMember is one user in the team list.
+type TeamMember struct {
+	ID          string
+	Email       string
+	Name        string
+	Role        string
+	AllProjects bool
+	Projects    []string
+	HasTOTP     bool
+	Locked      bool
+	LastSeen    string // "" = never
+	Self        bool
+}
+
+// TeamProject is a project in the access pickers.
+type TeamProject struct {
+	Slug     string
+	Name     string
+	Services int
+}
+
+// TeamInvite is an open invitation.
+type TeamInvite struct {
+	ID          string
+	Email       string
+	Role        string
+	AllProjects bool
+	Projects    []string
+	Expires     string
+}
+
+// TeamData feeds the team page.
+type TeamData struct {
+	CSRF       string
+	SudoActive bool
+	Members    []TeamMember
+	Invites    []TeamInvite
+	Projects   []TeamProject // every project, for the pickers
+	InviteLink string   // just created: shown once
+	Error      string
+	Flash      string
+	// InviteOpen reopens the invite dialog with Error.
+	InviteOpen bool
+}
+
+func roleBadge(role string) string {
+	switch role {
+	case "owner":
+		return "tuc-badge is-accent"
+	case "admin":
+		return "tuc-badge is-info"
+	case "operator":
+		return "tuc-badge is-success"
+	}
+	return "tuc-badge"
+}
+
+func hasProject(list []string, p string) bool {
+	for _, x := range list {
+		if x == p {
+			return true
+		}
+	}
+	return false
+}
+
+// Team is the team page (owner only).
+templ Team(d TeamData) {
+	@shell(t(ctx, "team.page_title")) {
+		@pageHead(t(ctx, "team.title"), t(ctx, "team.subtitle")) {
+			if d.SudoActive {
+				<button type="button" class="tuc-btn is-primary" data-tuc-modal="#team-invite">
+					@Icon("user-plus", "size-3.5")
+					{ t(ctx, "team.invite") }
+				</button>
+			}
+		}
+		@pageBody() {
+			if !d.InviteOpen {
+				@errorAlert(d.Error)
+			}
+			@toast("success", d.Flash)
+			if !d.SudoActive {
+				<section class={ cardClass }>
+					<div class={ cardBodyClass }>
+						@sudoForm(d.CSRF, "/team", t(ctx, "team.sudo_label"))
+					</div>
+				</section>
+			}
+			if d.InviteLink != "" {
+				<div class="tuc-alert is-success" role="status">
+					@Icon("link", "size-4")
+					<div class="tuc-alert__body flex min-w-0 flex-col gap-2">
+						<p class="tuc-alert__title">{ t(ctx, "team.link_title") }</p>
+						<p>{ t(ctx, "team.link_text") }</p>
+						<div class="flex min-w-0 items-center gap-2">
+							<code class="min-w-0 flex-1 truncate rounded-sm border border-border bg-surface px-2 py-1.5 font-mono text-xs">{ d.InviteLink }</code>
+							<button type="button" class="tuc-btn is-outline is-sm" data-copy={ d.InviteLink } data-copied={ t(ctx, "team.link_copied") }>
+								@Icon("copy", "size-3.5")
+								{ t(ctx, "team.link_copy") }
+							</button>
+						</div>
+					</div>
+				</div>
+			}
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "team.members"))
+				<div class="tuc-table-wrap">
+					<table class="tuc-table is-compact w-full">
+						<thead>
+							<tr>
+								<th>{ t(ctx, "team.col.person") }</th>
+								<th>{ t(ctx, "team.col.role") }</th>
+								<th>{ t(ctx, "team.col.projects") }</th>
+								<th>{ t(ctx, "team.col.twofa") }</th>
+								<th>{ t(ctx, "team.col.seen") }</th>
+								<th class="tuc-table__actions"></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, m := range d.Members {
+								<tr>
+									<td>
+										<div class="flex min-w-0 flex-col">
+											<span class="truncate font-medium">
+												if m.Name != "" {
+													{ m.Name }
+												} else {
+													{ m.Email }
+												}
+												if m.Self {
+													<span class="ml-1 text-xs text-muted">{ t(ctx, "team.you") }</span>
+												}
+											</span>
+											if m.Name != "" {
+												<span class="truncate text-xs text-muted">{ m.Email }</span>
+											}
+										</div>
+									</td>
+									<td><span class={ roleBadge(m.Role) }>{ t(ctx, "role." + m.Role) }</span></td>
+									<td>
+										@projectList(m.AllProjects, m.Projects)
+									</td>
+									<td>
+										if m.HasTOTP {
+											<span class="tuc-badge is-success">{ t(ctx, "team.twofa_on") }</span>
+										} else {
+											<span class="text-muted">—</span>
+										}
+									</td>
+									<td class="text-muted">
+										if m.LastSeen == "" {
+											{ t(ctx, "team.never") }
+										} else {
+											{ m.LastSeen }
+										}
+									</td>
+									<td class="tuc-table__actions">
+										if !m.Self && d.SudoActive {
+											<div class="flex justify-end gap-1">
+												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal={ "#team-edit-" + m.ID } aria-label={ t(ctx, "team.edit_named", "who", m.Email) } title={ t(ctx, "team.edit") }>
+													@Icon("pencil", "size-3.5")
+												</button>
+												<form data-confirm={ t(ctx, "confirm.team_remove.title") } data-confirm-text={ t(ctx, "confirm.team_remove.text", "who", m.Email) } data-confirm-ok={ t(ctx, "confirm.team_remove.ok") } data-tone="danger" method="post" action={ templ.SafeURL("/team/users/" + m.ID + "/delete") }>
+													<input type="hidden" name="csrf" value={ d.CSRF }/>
+													<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" aria-label={ t(ctx, "team.remove_named", "who", m.Email) } title={ t(ctx, "team.remove") }>
+														@Icon("trash", "size-3.5")
+													</button>
+												</form>
+											</div>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</section>
+			if len(d.Invites) > 0 {
+				<section class={ cardClass }>
+					@cardHead(t(ctx, "team.invites"))
+					<div class="tuc-table-wrap">
+						<table class="tuc-table is-compact w-full">
+							<thead>
+								<tr>
+									<th>{ t(ctx, "team.col.email") }</th>
+									<th>{ t(ctx, "team.col.role") }</th>
+									<th>{ t(ctx, "team.col.projects") }</th>
+									<th>{ t(ctx, "team.col.expires") }</th>
+									<th class="tuc-table__actions"></th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, inv := range d.Invites {
+									<tr>
+										<td>{ inv.Email }</td>
+										<td><span class={ roleBadge(inv.Role) }>{ t(ctx, "role." + inv.Role) }</span></td>
+										<td>
+											@projectList(inv.AllProjects, inv.Projects)
+										</td>
+										<td class="text-muted">{ inv.Expires }</td>
+										<td class="tuc-table__actions">
+											if d.SudoActive {
+												<form data-confirm={ t(ctx, "confirm.team_cancel.title") } data-confirm-text={ t(ctx, "confirm.team_cancel.text", "who", inv.Email) } data-confirm-ok={ t(ctx, "confirm.team_cancel.ok") } data-tone="warning" method="post" action={ templ.SafeURL("/team/invites/" + inv.ID + "/cancel") }>
+													<input type="hidden" name="csrf" value={ d.CSRF }/>
+													<button class="tuc-btn is-ghost is-sm" type="submit">{ t(ctx, "team.cancel_invite") }</button>
+												</form>
+											}
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			}
+			@teamRoles()
+		}
+		if d.SudoActive {
+			@teamInviteDialog(d)
+			for _, m := range d.Members {
+				if !m.Self {
+					@teamEditDialog(d, m)
+				}
+			}
+		}
+	}
+}
+
+// projectList shows "all" or the project chips.
+templ projectList(all bool, projects []string) {
+	if all {
+		<span class="text-muted">{ t(ctx, "team.all_projects") }</span>
+	} else {
+		<span class="flex flex-wrap gap-1">
+			for _, p := range projects {
+				<span class="tuc-badge font-mono">{ p }</span>
+			}
+		</span>
+	}
+}
+
+// teamRoles explains, in plain words, what each role may do.
+templ teamRoles() {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "team.roles_title"))
+		<div class="tuc-table-wrap">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "team.col.role") }</th><th>{ t(ctx, "team.roles_can") }</th></tr></thead>
+				<tbody>
+					for _, r := range []string{"owner", "admin", "operator", "viewer"} {
+						<tr>
+							<td class="w-[140px]"><span class={ roleBadge(r) }>{ t(ctx, "role." + r) }</span></td>
+							<td class="text-muted">{ t(ctx, "team.role_can." + r) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class={ cardBodyClass }>
+			@notice("info", "folder", t(ctx, "team.projects_note"))
+		</div>
+	</section>
+}
+
+// roleIcon is the icon of a role card.
+func roleIcon(role string) string {
+	switch role {
+	case "owner":
+		return "key-round"
+	case "admin":
+		return "shield"
+	case "operator":
+		return "rocket"
+	}
+	return "eye"
+}
+
+// accessFields are the role and project pickers of the invite and edit
+// dialogs: roles as selectable cards, then all projects or only some, the
+// projects as chips.
+templ accessFields(roles []string, role string, all bool, chosen []string, projects []TeamProject) {
+	<div class="flex flex-col gap-2">
+		<span class="tuc-label">{ t(ctx, "team.col.role") }</span>
+		<div class={ "grid gap-2 " + roleGrid(len(roles)) } role="radiogroup" aria-label={ t(ctx, "team.col.role") }>
+			for _, r := range roles {
+				<label class="flex cursor-pointer flex-col gap-1.5 rounded-md border border-border bg-surface-2 p-3 transition-colors hover:border-border-strong has-checked:border-accent has-checked:bg-accent-soft has-focus-visible:ring-2 has-focus-visible:ring-accent">
+					<input type="radio" class="sr-only" name="role" value={ r } checked?={ r == role }/>
+					<span class="flex items-center gap-2 text-[13px] font-semibold">
+						@Icon(roleIcon(r), "size-4 text-accent-text")
+						<span class="capitalize">{ t(ctx, "role." + r) }</span>
+					</span>
+					<span class="text-xs leading-snug text-muted">{ t(ctx, "team.role_short." + r) }</span>
+				</label>
+			}
+		</div>
+	</div>
+	// Owners and admins always see every project: the project choice only
+	// exists for operators and viewers.
+	<div class="flex items-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2.5 text-[13px] text-muted" data-shown-when="role=owner|admin">
+		@Icon("layers", "size-4 shrink-0")
+		<span>{ t(ctx, "team.admin_all_note") }</span>
+	</div>
+	<div class="flex flex-col gap-2" data-shown-when="role=operator|viewer">
+		<span class="tuc-label">{ t(ctx, "team.col.projects") }</span>
+		<div class="tuc-btn-group is-segmented w-full [&>.tuc-btn]:flex-1" role="radiogroup" aria-label={ t(ctx, "team.col.projects") }>
+			<label class="tuc-btn">
+				<input type="radio" class="tuc-btn__input" name="scope" value="all" checked?={ all }/>
+				@Icon("layers", "size-3.5")
+				{ t(ctx, "team.scope_all") }
+			</label>
+			<label class="tuc-btn">
+				<input type="radio" class="tuc-btn__input" name="scope" value="some" checked?={ !all }/>
+				@Icon("folder", "size-3.5")
+				{ t(ctx, "team.scope_some") }
+			</label>
+		</div>
+		<p class="tuc-hint" data-shown-when="scope=all">{ t(ctx, "team.scope_all_hint") }</p>
+		<div class="flex flex-col gap-2" data-shown-when="scope=some">
+			<p class="tuc-hint">{ t(ctx, "team.scope_some_hint") }</p>
+			if len(projects) == 0 {
+				<span class="text-xs text-muted">{ t(ctx, "team.no_projects_yet") }</span>
+			}
+			<div class="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-2">
+				for _, p := range projects {
+					<label class="flex cursor-pointer flex-col gap-1.5 rounded-md border border-border bg-surface-2 p-3 transition-colors hover:border-border-strong has-checked:border-accent has-checked:bg-accent-soft has-focus-visible:ring-2 has-focus-visible:ring-accent">
+						<input type="checkbox" class="sr-only" name="projects" value={ p.Slug } checked?={ hasProject(chosen, p.Slug) }/>
+						<span class="flex min-w-0 items-center gap-2 text-[13px] font-semibold">
+							@Icon("folder", "size-4 shrink-0 text-accent-text")
+							<span class="truncate font-mono">{ p.Slug }</span>
+						</span>
+						<span class="text-xs leading-snug text-muted">
+							{ t(ctx, "team.project_services", "n", p.Services) }
+							if p.Name != "" && p.Name != p.Slug {
+								{ " · " + p.Name }
+							}
+						</span>
+					</label>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+func roleGrid(n int) string {
+	if n == 4 {
+		return "grid-cols-2"
+	}
+	return "grid-cols-3 max-sm:grid-cols-1"
+}
+
+templ teamInviteDialog(d TeamData) {
+	<dialog class="tuc-modal is-md" id="team-invite" aria-labelledby="team-invite-title" data-open={ fmt.Sprint(d.InviteOpen) }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="team-invite-title">{ t(ctx, "team.invite") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action="/team/invites" class="tuc-modal__body flex flex-col gap-4" autocomplete="off">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				if d.InviteOpen {
+					@errorAlert(d.Error)
+				}
+				<p class="tuc-modal__text">{ t(ctx, "team.invite_hint") }</p>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="ti-email">{ t(ctx, "team.col.email") }</label>
+					<input class="tuc-input" id="ti-email" name="email" type="email" required maxlength="254"/>
+				</div>
+				@accessFields([]string{"admin", "operator", "viewer"}, "operator", true, nil, d.Projects)
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("link", "size-3.5")
+						{ t(ctx, "team.invite_create") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+templ teamEditDialog(d TeamData, m TeamMember) {
+	<dialog class="tuc-modal is-md" id={ "team-edit-" + m.ID } aria-labelledby={ "team-edit-title-" + m.ID }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id={ "team-edit-title-" + m.ID }>{ t(ctx, "team.edit_title", "who", m.Email) }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action={ templ.SafeURL("/team/users/" + m.ID) } class="tuc-modal__body flex flex-col gap-4" autocomplete="off" data-confirm={ t(ctx, "confirm.team_update.title") } data-confirm-text={ t(ctx, "confirm.team_update.text", "who", m.Email) } data-confirm-ok={ t(ctx, "confirm.team_update.ok") } data-tone="warning">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				@accessFields([]string{"owner", "admin", "operator", "viewer"}, m.Role, m.AllProjects, m.Projects, d.Projects)
+				@notice("warning", "log-out", t(ctx, "team.edit_sessions"))
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("save", "size-3.5")
+						{ t(ctx, "team.save") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+// InviteForm is what the invitation page shows.
+type InviteForm struct {
+	Token       string
+	Email       string
+	Role        string
+	AllProjects bool
+	Projects    []string
+	TwoFA       bool
+	Required    bool
+	MinLen      int
+}
+
+// InvitePage lets an invited person set a password and join.
+templ InvitePage(f InviteForm, errMsg string) {
+	@layout(t(ctx, "invite.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<form class="flex w-full max-w-[420px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7" method="post" action={ templ.SafeURL("/invite/" + f.Token) } autocomplete="on">
+				<input type="hidden" name="csrf" value={ loginCSRF(ctx) }/>
+				@brand("")
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "invite.title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "invite.subtitle", "role", t(ctx, "role." + f.Role)) }</p>
+				</div>
+				@errorAlert(errMsg)
+				<dl class="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-sm border border-border bg-surface-2 px-3 py-2 text-[13px]">
+					<dt class="text-muted">{ t(ctx, "team.col.email") }</dt>
+					<dd class="m-0 truncate font-medium">{ f.Email }</dd>
+					<dt class="text-muted">{ t(ctx, "team.col.projects") }</dt>
+					<dd class="m-0">
+						if f.AllProjects {
+							{ t(ctx, "team.all_projects") }
+						} else {
+							<span class="font-mono">{ strings.Join(f.Projects, ", ") }</span>
+						}
+					</dd>
+				</dl>
+				<input type="email" name="email" value={ f.Email } autocomplete="username" hidden/>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="password">{ t(ctx, "setup.password") }</label>
+					<input class="tuc-input" id="password" name="password" type="password" autocomplete="new-password" minlength={ f.MinLen } maxlength="256" required autofocus data-tuc-reveal/>
+					<span class="tuc-hint">{ t(ctx, "setup.password_hint", "min", f.MinLen) }</span>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="confirm">{ t(ctx, "setup.confirm") }</label>
+					<input class="tuc-input" id="confirm" name="confirm" type="password" autocomplete="new-password" minlength={ f.MinLen } maxlength="256" required data-tuc-reveal/>
+				</div>
+				if f.Required {
+					<div class="tuc-alert is-info" role="note">
+						@Icon("shield-check", "size-4")
+						<div class="tuc-alert__body"><p>{ t(ctx, "setup.twofa_required") }</p></div>
+					</div>
+				} else {
+					<div class="flex flex-col gap-1">
+						<label class="tuc-choice">
+							<input type="checkbox" class="tuc-check" name="twofa" value="1" checked?={ f.TwoFA }/>
+							<span>{ t(ctx, "setup.twofa") }</span>
+						</label>
+						<p class="tuc-hint">{ t(ctx, "setup.twofa_hint") }</p>
+					</div>
+				}
+				<button class="tuc-btn is-primary is-block" type="submit">
+					@Icon("arrow-right", "size-4")
+					{ t(ctx, "invite.submit") }
+				</button>
+			</form>
+		</main>
+	}
+}
+
+// InviteInvalid is shown for a used, expired or unknown invitation link.
+templ InviteInvalid() {
+	@layout(t(ctx, "invite.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<div class="flex w-full max-w-[420px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7">
+				@brand("")
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "invite.invalid_title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "invite.invalid_text") }</p>
+				</div>
+				<a class="tuc-btn is-outline is-block" href="/login">{ t(ctx, "invite.to_login") }</a>
+			</div>
+		</main>
+	}
+}

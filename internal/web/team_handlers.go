@@ -1,0 +1,190 @@
+package web
+
+import (
+	"errors"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/JuniorCarlini/hangar/internal/auth"
+	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/web/views"
+)
+
+func (h *handlers) teamPage(w http.ResponseWriter, r *http.Request) {
+	flash := ""
+	switch r.URL.Query().Get("ok") {
+	case "updated":
+		flash = i18n.T(r.Context(), "team.updated")
+	case "removed":
+		flash = i18n.T(r.Context(), "team.removed")
+	case "cancelled":
+		flash = i18n.T(r.Context(), "team.cancelled")
+	}
+	h.renderTeam(w, r, http.StatusOK, views.TeamData{Flash: flash})
+}
+
+func (h *handlers) renderTeam(w http.ResponseWriter, r *http.Request, status int, d views.TeamData) {
+	ctx := r.Context()
+	p := PrincipalFrom(ctx)
+	d.CSRF, d.SudoActive = p.CSRFToken, time.Now().Before(p.SudoUntil)
+	members, invites, err := h.auth.Team(ctx)
+	if err != nil {
+		loggerFrom(ctx).Error("team", "error", err)
+	}
+	for _, m := range members {
+		row := views.TeamMember{
+			ID: m.ID, Email: m.Email, Name: m.Name, Role: m.Access.Role.String(), AllProjects: m.Access.AllProjects,
+			Projects: m.Access.Projects, HasTOTP: m.HasTOTP, Locked: m.Locked, Self: m.ID == p.UserID,
+		}
+		if !m.LastSeen.IsZero() {
+			row.LastSeen = m.LastSeen.Local().Format("02/01 15:04")
+		}
+		if m.Access.Role >= auth.RoleAdmin {
+			row.AllProjects = true
+		}
+		d.Members = append(d.Members, row)
+	}
+	for _, inv := range invites {
+		d.Invites = append(d.Invites, views.TeamInvite{
+			ID: inv.ID, Email: inv.Email, Role: inv.Access.Role.String(), AllProjects: inv.Access.AllProjects,
+			Projects: inv.Access.Projects, Expires: inv.ExpiresAt.Local().Format("02/01 15:04"),
+		})
+	}
+	if list, err := h.projects.ListProjects(ctx); err == nil {
+		for _, pr := range list {
+			d.Projects = append(d.Projects, views.TeamProject{Slug: pr.Slug, Name: pr.Name, Services: int(pr.Services)})
+		}
+	}
+	render(w, r, status, views.Team(d))
+}
+
+// accessFromForm reads the role and project pickers.
+func accessFromForm(r *http.Request) (auth.Access, error) {
+	role, err := auth.ParseRole(r.PostFormValue("role"))
+	if err != nil {
+		return auth.Access{}, err
+	}
+	a := auth.Access{Role: role, AllProjects: r.PostFormValue("scope") != "some"}
+	if !a.AllProjects {
+		a.Projects = r.PostForm["projects"]
+	}
+	return a, nil
+}
+
+func (h *handlers) teamInvite(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFrom(r.Context())
+	a, err := accessFromForm(r)
+	if err == nil {
+		var token string
+		token, err = h.auth.CreateInvite(r.Context(), p, strings.TrimSpace(r.PostFormValue("email")), a, client(r))
+		if err == nil {
+			h.renderTeam(w, r, http.StatusOK, views.TeamData{InviteLink: h.panelBase(r) + "/invite/" + token})
+			return
+		}
+	}
+	h.renderTeam(w, r, http.StatusUnprocessableEntity, views.TeamData{Error: i18n.Message(i18n.Locale(r.Context()), err), InviteOpen: true})
+}
+
+func (h *handlers) teamCancelInvite(w http.ResponseWriter, r *http.Request) {
+	if err := h.auth.CancelInvite(r.Context(), PrincipalFrom(r.Context()), r.PathValue("id"), client(r)); err != nil {
+		h.renderTeam(w, r, http.StatusUnprocessableEntity, views.TeamData{Error: i18n.Message(i18n.Locale(r.Context()), err)})
+		return
+	}
+	http.Redirect(w, r, "/team?ok=cancelled", http.StatusSeeOther)
+}
+
+func (h *handlers) teamUpdate(w http.ResponseWriter, r *http.Request) {
+	a, err := accessFromForm(r)
+	if err == nil {
+		err = h.auth.UpdateMember(r.Context(), PrincipalFrom(r.Context()), r.PathValue("id"), a, client(r))
+	}
+	if err != nil {
+		h.renderTeam(w, r, http.StatusUnprocessableEntity, views.TeamData{Error: i18n.Message(i18n.Locale(r.Context()), err)})
+		return
+	}
+	http.Redirect(w, r, "/team?ok=updated", http.StatusSeeOther)
+}
+
+func (h *handlers) teamRemove(w http.ResponseWriter, r *http.Request) {
+	if err := h.auth.RemoveMember(r.Context(), PrincipalFrom(r.Context()), r.PathValue("id"), client(r)); err != nil {
+		h.renderTeam(w, r, http.StatusUnprocessableEntity, views.TeamData{Error: i18n.Message(i18n.Locale(r.Context()), err)})
+		return
+	}
+	http.Redirect(w, r, "/team?ok=removed", http.StatusSeeOther)
+}
+
+// panelBase is the panel's own address for links sent to people: the
+// public one when the panel is public, else the address in use.
+func (h *handlers) panelBase(r *http.Request) string {
+	if h.panelURL != "" {
+		return h.panelURL
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
+// --- the invited person's side ------------------------------------------
+
+func (h *handlers) inviteForm(r *http.Request, inv auth.Invite) views.InviteForm {
+	return views.InviteForm{
+		Token: r.PathValue("token"), Email: inv.Email, Role: inv.Access.Role.String(),
+		AllProjects: inv.Access.AllProjects, Projects: inv.Access.Projects, TwoFA: true,
+		Required: h.auth.Require2FA(), MinLen: auth.MinPasswordLen,
+	}
+}
+
+func (h *handlers) invitePage(w http.ResponseWriter, r *http.Request) {
+	inv, err := h.auth.InviteFor(r.Context(), r.PathValue("token"))
+	if err != nil {
+		render(w, r, http.StatusNotFound, views.InviteInvalid())
+		return
+	}
+	render(w, withLoginToken(w, r), http.StatusOK, views.InvitePage(h.inviteForm(r, inv), ""))
+}
+
+func (h *handlers) inviteSubmit(w http.ResponseWriter, r *http.Request) {
+	token := r.PathValue("token")
+	inv, err := h.auth.InviteFor(r.Context(), token)
+	if err != nil {
+		render(w, r, http.StatusNotFound, views.InviteInvalid())
+		return
+	}
+	valid := validLoginToken(r)
+	form := withLoginToken(w, r)
+	f := h.inviteForm(r, inv)
+	f.TwoFA = f.Required || r.PostFormValue("twofa") == "1"
+	if !valid {
+		render(w, form, http.StatusForbidden, views.InvitePage(f, i18n.T(r.Context(), "login.error.form_expired")))
+		return
+	}
+	password := r.PostFormValue("password")
+	if password != r.PostFormValue("confirm") {
+		render(w, form, http.StatusUnprocessableEntity, views.InvitePage(f, i18n.T(r.Context(), "setup.error.mismatch")))
+		return
+	}
+	sess, err := h.auth.AcceptInvite(r.Context(), token, password, client(r))
+	var rl *auth.RateLimitedError
+	var ie *i18n.Error
+	switch {
+	case err == nil:
+		setCookie(w, sessionCookie, sess, auth.SessionMax)
+		if f.TwoFA {
+			http.Redirect(w, r, "/account#totp", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+	case errors.Is(err, auth.ErrInviteInvalid):
+		render(w, r, http.StatusNotFound, views.InviteInvalid())
+	case errors.As(err, &rl):
+		render(w, form, http.StatusTooManyRequests, views.InvitePage(f, i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes())))
+	case errors.As(err, &ie):
+		render(w, form, http.StatusUnprocessableEntity, views.InvitePage(f, i18n.Message(i18n.Locale(r.Context()), err)))
+	default:
+		loggerFrom(r.Context()).Error("accept invite", "error", err)
+		render(w, form, http.StatusInternalServerError, views.InvitePage(f, i18n.T(r.Context(), "error.internal")))
+	}
+}

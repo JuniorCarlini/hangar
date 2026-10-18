@@ -90,7 +90,7 @@ func (rt *Router) Handle(pattern string, h http.Handler, p Policy) {
 		return
 	}
 	rt.routes = append(rt.routes, RouteInfo{Pattern: pattern, Method: method, Policy: p})
-	rt.mux.Handle(pattern, rt.enforce(method, p, h))
+	rt.mux.Handle(pattern, rt.enforce(method, pattern, p, h))
 }
 
 // HandleFunc is Handle for functions.
@@ -129,7 +129,34 @@ func checkPolicy(method string, p Policy) error {
 	return nil
 }
 
-func (rt *Router) enforce(method string, p Policy, h http.Handler) http.Handler {
+// limitedRoutes are the routes outside any project that a user limited to
+// some projects may still use: their own account and the overview (which
+// shows only their projects). Everything else server-wide is out of reach.
+var limitedRoutes = map[string]bool{
+	"GET /{$}":                           true,
+	"GET /overview":                      true,
+	"GET /palette.json":                  true,
+	"POST /logout":                       true,
+	"POST /sudo":                         true,
+	"GET /account":                       true,
+	"POST /account/sessions/end":         true,
+	"POST /account/totp/enable":          true,
+	"POST /account/totp/disable":         true,
+	"POST /account/preferences":          true,
+	"GET /templates/{template}/logo.svg": true,
+	"GET /_pista":                        true,
+}
+
+// limitedAllows reports whether a user limited to some projects may use the
+// route: a project route only for one of their projects, else the list above.
+func limitedAllows(pattern string, r *http.Request, who *auth.Principal) bool {
+	if strings.Contains(pattern, "{project}") {
+		return who.CanSeeProject(r.PathValue("project"))
+	}
+	return limitedRoutes[pattern] || strings.HasPrefix(pattern, "GET "+views.ComposeSampleURL)
+}
+
+func (rt *Router) enforce(method, pattern string, p Policy, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var principal *auth.Principal
 		if !p.Public {
@@ -152,6 +179,12 @@ func (rt *Router) enforce(method string, p Policy, h http.Handler) http.Handler 
 			case principal.Role < p.Role:
 				rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "insufficient_role"})
 				http.Error(w, i18n.T(r.Context(), "error.forbidden"), http.StatusForbidden)
+				return
+			case principal.Limited() && !limitedAllows(pattern, r, principal):
+				// Not found rather than forbidden: a limited user does not learn
+				// which other projects exist.
+				rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "project_access"})
+				http.NotFound(w, r)
 				return
 			case p.Sudo && !rt.now().Before(principal.SudoUntil):
 				rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "sudo_required"})

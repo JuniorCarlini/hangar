@@ -22,6 +22,7 @@ dark = "Dark"
 light = "Light"
 
 [nav]
+team = "Team"
 new_version = "new version"
 updates = "Updates"
 status_links = "Status links"
@@ -132,6 +133,87 @@ text = "The panel could not complete the request. Try again in a moment; if it k
 [errorpage.other]
 title = "Could not open"
 text = "The request could not be served."
+
+[team]
+page_title = "Team · Hangar"
+title = "Team"
+subtitle = "Who uses this panel and what each person may do"
+invite = "Invite someone"
+invite_create = "Create invitation link"
+invite_hint = "Creates a one-time link, valid for 24 h. You send it to the person and they create their own password."
+sudo_label = "Confirm your password to invite, change or remove people"
+link_title = "Invitation created"
+link_text = "Send this link to the person. It works for 24 hours, only once, and is not shown again."
+link_copy = "Copy"
+link_copied = "Link copied"
+members = "People"
+invites = "Open invitations"
+you = "(you)"
+twofa_on = "on"
+never = "never signed in"
+all_projects = "All"
+edit = "Edit access"
+edit_named = "Edit the access of {who}"
+edit_title = "Access of {who}"
+edit_sessions = "On save, the person is signed out and signs in again with the new access."
+save = "Save access"
+remove = "Remove"
+remove_named = "Remove {who}"
+cancel_invite = "Cancel"
+scope_all = "All projects"
+scope_some = "Only some"
+scope_some_hint = "Pick the projects. They do not see the others nor the server pages."
+scope_all_hint = "Sees the projects that exist today and the ones created later."
+admin_all_note = "Admins and owners always see every project."
+no_projects_yet = "No projects yet."
+roles_title = "What each role may do"
+roles_can = "May"
+projects_note = "Operators and viewers can be limited to some projects: they only see those projects and their own account. Owners and admins always see everything."
+updated = "Access updated."
+removed = "Person removed."
+cancelled = "Invitation cancelled."
+
+[team.project_services]
+one = "{n} service"
+other = "{n} services"
+
+[team.col]
+person = "Person"
+email = "E-mail"
+role = "Role"
+projects = "Projects"
+twofa = "2FA"
+seen = "Last seen"
+expires = "Expires"
+
+[team.role_can]
+owner = "Everything, including the team, Hangar updates and the recovery kit."
+admin = "Everything in projects and on the server (domains, ports, backups, terminal, secrets), except the team and updates."
+operator = "Deploy, restart, roll back and change variables. Cannot delete anything or see secrets."
+viewer = "Only look: projects, services, metrics and logs."
+
+[team.role_short]
+owner = "Everything, including the team and updates."
+admin = "Everything in projects and on the server, except the team."
+operator = "Deploy, restart and variables. No deleting."
+viewer = "Only look at projects, metrics and logs."
+
+[team.error]
+last_owner = "The last owner cannot be removed: make someone else an owner first."
+self = "You cannot change or remove your own access here."
+invite_invalid = "This invitation does not exist, was already used or has expired."
+no_projects = "Pick at least one project, or choose all projects."
+invite_role = "Invite as admin, operator or viewer. To have another owner, promote the person after they join."
+project = "Project {project} does not exist."
+
+[invite]
+page_title = "Invitation · Hangar"
+title = "You have been invited"
+subtitle = "Create your password to join the panel as {role}."
+submit = "Create password and sign in"
+invalid_title = "Invalid invitation"
+invalid_text = "This link does not exist, was already used or is older than 24 hours. Ask whoever invited you for a new one."
+to_login = "Go to sign in"
 
 [sudo]
 confirm = "Confirm"
@@ -990,6 +1072,21 @@ orphan = "{service}: container of a service the panel no longer has"
 stopped = "{service} should be running and is stopped"
 missing = "{service}: the container is gone from Docker"
 
+[confirm.team_remove]
+title = "Remove this person?"
+text = "{who} loses access at once and is signed out of every open session. This goes to the audit log."
+ok = "Remove"
+
+[confirm.team_cancel]
+title = "Cancel the invitation?"
+text = "The link sent to {who} stops working."
+ok = "Cancel invitation"
+
+[confirm.team_update]
+title = "Change the access?"
+text = "{who} is signed out now and, on signing in again, gets the new access."
+ok = "Change access"
+
 [confirm.logout]
 title = "Log out?"
 text = "You will need to sign in again with your password (and 2FA, if set)."
@@ -1542,6 +1639,10 @@ down = "The service is down: the previous version did not come back."
 none = "There was no previous version live."
 
 [alert.action]
+user_invite_cancel = "cancelled a team invitation"
+user_invite = "invited someone to the team"
+user_update = "changed the access of a team member"
+user_remove = "removed a team member"
 backup_key_add = "added a backup key"
 backup_key_confirm = "confirmed a backup key"
 backup_key_remove = "removed a backup key"

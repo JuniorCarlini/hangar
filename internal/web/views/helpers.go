@@ -49,6 +49,9 @@ type Nav struct {
 	BackupAlerts int
 	// KitCheckDue asks the owner to confirm the recovery kit is still kept.
 	KitCheckDue bool
+	// Limited: the user only reaches some projects; the server-wide pages
+	// are hidden.
+	Limited bool
 	// NewProject is the "new project" dialog in the frame: open after
 	// ?new=1, or again with the error when creating failed.
 	NewProject NewProjectForm

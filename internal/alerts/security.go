@@ -42,6 +42,10 @@ var SensitiveActions = []string{
 	"backup.target.add",
 	"backup.target.remove",
 	"backup.download_link",
+	"user.invite",
+	"user.invite.cancel",
+	"user.update",
+	"user.remove",
 }
 
 // SecurityKinds are the alerts that cannot be turned off.

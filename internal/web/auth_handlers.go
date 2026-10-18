@@ -69,6 +69,7 @@ type handlers struct {
 	auth       *auth.Service
 	updates    updates
 	updateDir  string
+	panelURL   string
 	projects   *projects.Manager
 	metrics    *metrics.Collector
 	audit      *audit.Logger

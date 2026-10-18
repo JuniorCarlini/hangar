@@ -493,11 +493,23 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 	if err != nil {
 		return nil, err
 	}
-	return &Principal{
+	p := &Principal{
 		UserID: sess.UserID, Role: role, SudoUntil: time.Unix(sess.SudoUntil, 0),
 		CSRFToken: sess.CsrfToken, SessionToken: token,
 		Email: sess.Email, Name: sess.Name, Locale: sess.Locale.String, Theme: sess.Theme, HasTOTP: sess.HasTotp == 1,
-	}, nil
+		AllProjects: sess.AllProjects == 1 || role >= RoleAdmin,
+	}
+	if !p.AllProjects {
+		slugs, err := s.q.UserProjectSlugs(ctx, sess.UserID)
+		if err != nil {
+			return nil, err
+		}
+		p.Projects = make(map[string]bool, len(slugs))
+		for _, sl := range slugs {
+			p.Projects[sl] = true
+		}
+	}
+	return p, nil
 }
 
 // Sudo checks 2FA again and swaps the session for a new one with sudo valid

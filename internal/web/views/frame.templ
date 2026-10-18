@@ -246,8 +246,8 @@ templ userMenu(n Nav) {
 			<span class="grow text-[13px] text-muted">{ t(ctx, "account.theme") }</span>
 			<div class="tuc-btn-group is-segmented" role="radiogroup" aria-label={ t(ctx, "account.theme") }>
 				for _, th := range []string{"system", "dark", "light"} {
-					<label class="tuc-btn is-sm is-icon" title={ t(ctx, "theme." + th) }>
-						<input type="radio" class="tuc-btn__input" name="theme" value={ th } checked?={ n.Theme == th || (n.Theme == "" && th == "system") } aria-label={ t(ctx, "theme." + th) } data-autosubmit/>
+					<label class="tuc-btn is-sm is-icon" title={ t(ctx, "theme."+th) }>
+						<input type="radio" class="tuc-btn__input" name="theme" value={ th } checked?={ n.Theme == th || (n.Theme == "" && th == "system") } aria-label={ t(ctx, "theme."+th) } data-autosubmit/>
 						@Icon(ThemeIcon(th), "size-3.5")
 					</label>
 				}
@@ -260,7 +260,7 @@ templ userMenu(n Nav) {
 			<span class="grow text-[13px] text-muted">{ t(ctx, "account.language") }</span>
 			<div class="tuc-btn-group is-segmented" role="radiogroup" aria-label={ t(ctx, "account.language") }>
 				for _, l := range Locales() {
-					<label class="tuc-btn is-sm px-2.5 text-xs" title={ t(ctx, "locale." + l) }>
+					<label class="tuc-btn is-sm px-2.5 text-xs" title={ t(ctx, "locale."+l) }>
 						<input type="radio" class="tuc-btn__input" name="locale" value={ l } checked?={ lang(ctx) == l } data-autosubmit/>
 						{ localeShort(l) }
 					</label>
@@ -279,7 +279,6 @@ templ userMenu(n Nav) {
 		</form>
 	</div>
 }
-
 
 // localeShort is the language's code on the toggle (PT, EN).
 func localeShort(l string) string {
@@ -313,39 +312,42 @@ templ sidebar(n Nav) {
 		<nav class="tuc-menu" aria-label={ t(ctx, "nav.menu") }>
 			<div class="tuc-menu__section">{ t(ctx, "nav.server") }</div>
 			@navLink(n, "overview", "/", "gauge", t(ctx, "nav.overview"))
-			<div class="tuc-menu__section">{ t(ctx, "nav.section_access") }</div>
-			@navLink(n, "domains", "/domains", "globe", t(ctx, "nav.domains"))
-			@navLink(n, "ports", "/ports", "plug", t(ctx, "nav.ports")) {
-				if n.PortsOpen > 0 {
-					<span class="tuc-menu__count"><span class="tuc-badge is-warning is-plain">{ fmt.Sprint(n.PortsOpen) }</span></span>
+			if !n.Limited {
+				<div class="tuc-menu__section">{ t(ctx, "nav.section_access") }</div>
+				@navLink(n, "domains", "/domains", "globe", t(ctx, "nav.domains"))
+				@navLink(n, "ports", "/ports", "plug", t(ctx, "nav.ports")) {
+					if n.PortsOpen > 0 {
+						<span class="tuc-menu__count"><span class="tuc-badge is-warning is-plain">{ fmt.Sprint(n.PortsOpen) }</span></span>
+					}
 				}
-			}
-			if n.CanStatus {
-				@navLink(n, "status-links", "/status-links", "wifi", t(ctx, "nav.status_links"))
-			}
-			<div class="tuc-menu__section">{ t(ctx, "nav.section_ops") }</div>
-			if n.CanStatus {
-				@navLink(n, "git-credentials", "/git-credentials", "key-round", t(ctx, "nav.git_credentials"))
-			}
-			@navLink(n, "backups", "/backups", "database-backup", t(ctx, "nav.backups")) {
-				if n.BackupAlerts > 0 {
-					<span class="tuc-menu__count"><span class="tuc-badge is-danger is-plain">{ fmt.Sprint(n.BackupAlerts) }</span></span>
+				if n.CanStatus {
+					@navLink(n, "status-links", "/status-links", "wifi", t(ctx, "nav.status_links"))
 				}
-			}
-			@navLink(n, "updates", "/updates", "shield-alert", t(ctx, "nav.updates")) {
-				if n.VulnCritical > 0 {
-					<span class="tuc-menu__count"><span class="tuc-badge is-danger is-plain">{ fmt.Sprint(n.VulnCritical) }</span></span>
-				} else if n.VulnSecurity > 0 {
-					<span class="tuc-menu__count"><span class="tuc-badge is-warning is-plain">{ fmt.Sprint(n.VulnSecurity) }</span></span>
+				<div class="tuc-menu__section">{ t(ctx, "nav.section_ops") }</div>
+				if n.CanStatus {
+					@navLink(n, "git-credentials", "/git-credentials", "key-round", t(ctx, "nav.git_credentials"))
 				}
+				@navLink(n, "backups", "/backups", "database-backup", t(ctx, "nav.backups")) {
+					if n.BackupAlerts > 0 {
+						<span class="tuc-menu__count"><span class="tuc-badge is-danger is-plain">{ fmt.Sprint(n.BackupAlerts) }</span></span>
+					}
+				}
+				@navLink(n, "updates", "/updates", "shield-alert", t(ctx, "nav.updates")) {
+					if n.VulnCritical > 0 {
+						<span class="tuc-menu__count"><span class="tuc-badge is-danger is-plain">{ fmt.Sprint(n.VulnCritical) }</span></span>
+					} else if n.VulnSecurity > 0 {
+						<span class="tuc-menu__count"><span class="tuc-badge is-warning is-plain">{ fmt.Sprint(n.VulnSecurity) }</span></span>
+					}
+				}
+				@navLink(n, "alerts", "/alerts", "bell", t(ctx, "nav.alerts"))
 			}
-			@navLink(n, "alerts", "/alerts", "bell", t(ctx, "nav.alerts"))
 			if n.CanStatus || n.IsOwner {
 				<div class="tuc-menu__section">{ t(ctx, "nav.section_system") }</div>
 				if n.CanStatus {
 					@navLink(n, "brand", "/brand", "palette", t(ctx, "nav.brand"))
 				}
 				if n.IsOwner {
+					@navLink(n, "team", "/team", "users", t(ctx, "nav.team"))
 					@navLink(n, "update", "/update", "refresh-cw", t(ctx, "nav.update")) {
 						if n.Update {
 							<span class="tuc-menu__count"><span class="tuc-badge is-info is-plain">1</span></span>

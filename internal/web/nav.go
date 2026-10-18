@@ -48,14 +48,20 @@ func (h *handlers) navFor(r *http.Request, p *auth.Principal) views.Nav {
 		n.Active = "update"
 	case strings.HasPrefix(path, "/alerts"):
 		n.Active = "alerts"
+	case strings.HasPrefix(path, "/team"):
+		n.Active = "team"
 	case strings.HasPrefix(path, "/account"):
 		n.Active = "account"
 	case strings.HasPrefix(path, "/p/"):
 		slug, _, _ := strings.Cut(strings.TrimPrefix(path, "/p/"), "/")
 		n.Active = "p:" + slug
 	}
+	n.Limited = p.Limited()
 	if list, err := h.projects.ListProjects(r.Context()); err == nil {
 		for _, pr := range list {
+			if !p.CanSeeProject(pr.Slug) {
+				continue
+			}
 			n.Projects = append(n.Projects, views.NavProject{Slug: pr.Slug, Name: pr.Name, Services: pr.Services})
 		}
 	}
@@ -65,7 +71,9 @@ func (h *handlers) navFor(r *http.Request, p *auth.Principal) views.Nav {
 	vc := h.depsCounts(r.Context())
 	n.VulnCritical, n.VulnSecurity = vc["critical"], vc["security"]
 	n.CanStatus = p.Role >= auth.RoleAdmin
-	h.bell(r, p, &n)
+	if !n.Limited {
+		h.bell(r, p, &n)
+	}
 	n.CanLock = h.lock != nil && n.IsOwner
 	if h.lock != nil {
 		n.Locked = h.lock.Locked(r.Context())

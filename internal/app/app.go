@@ -244,7 +244,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	defer bm.Wait()
 	handler, err := web.New(web.Deps{
 		Hosts: panelHosts(cfg, panelHost), Log: log, Audit: al, Auth: core.Auth,
-		Updates: checker, UpdateDir: UpdateDir(cfg), Projects: pm, Metrics: mc, HooksBase: hooksBase, Backups: bm, ServerIP: serverIP(ctx, cfg), BaseDomain: cfg.Edge.BaseDomain, AutoLinkIP: autoLinkIP(cfg), ErrorPages: pages, Brand: errpages.NewStore(core.Store.DB),
+		Updates: checker, UpdateDir: UpdateDir(cfg), PanelURL: publicURL(panelHost), Projects: pm, Metrics: mc, HooksBase: hooksBase, Backups: bm, ServerIP: serverIP(ctx, cfg), BaseDomain: cfg.Edge.BaseDomain, AutoLinkIP: autoLinkIP(cfg), ErrorPages: pages, Brand: errpages.NewStore(core.Store.DB),
 		Deps: dm, Status: sp, StatusHosts: cfg.Status.Hosts,
 		Alerts: core.Alerts, Lock: core.Lock,
 	})

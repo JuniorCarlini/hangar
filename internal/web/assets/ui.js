@@ -117,7 +117,7 @@
     if (v !== el.value) el.value = v;
   });
   // A block marked data-shown-when="<key>=<value>" shows only while the
-  // control named by key has that value: a select (its id), a checkbox
+  // control named by key has that value (or one of "a|b"): a select (its id), a checkbox
   // (its id; "1" checked, "0" not) or a radio group (its name, looked up in
   // the block's own form first). Its fields are disabled while hidden, so
   // the browser neither requires nor sends them.
@@ -132,7 +132,7 @@
   function syncShown() {
     document.querySelectorAll('[data-shown-when]').forEach(function (el) {
       var cond = el.dataset.shownWhen.split('=');
-      var on = valueOf(cond[0], el.closest('form')) === cond[1];
+      var on = cond[1].split('|').indexOf(valueOf(cond[0], el.closest('form'))) >= 0;
       el.hidden = !on;
       if (el.matches('input, select, textarea')) el.disabled = !on;
       el.querySelectorAll('input, select, textarea').forEach(function (f) { f.disabled = !on; });

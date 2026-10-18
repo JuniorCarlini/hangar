@@ -69,7 +69,12 @@ func (h *handlers) renderOverview(w http.ResponseWriter, r *http.Request, status
 	}
 
 	known := h.knownServices(ctx)
+	who := PrincipalFrom(ctx)
 	for _, c := range snap.Containers {
+		// A user limited to some projects sees only their containers.
+		if who.Limited() && !who.CanSeeProject(c.Project) {
+			continue
+		}
 		share := c.CPU / float64(cpus)
 		row := views.OverviewService{
 			Name: c.Name, CPU: int(math.Round(share)), CPUText: decimal(ctx, share, 1) + "%",
@@ -94,12 +99,23 @@ func (h *handlers) renderOverview(w http.ResponseWriter, r *http.Request, status
 	if rows, err := h.audit.Recent(ctx, activityActions, 40); err != nil {
 		loggerFrom(ctx).Error("recent activity", "error", err)
 	} else {
+		if who.Limited() {
+			mine := rows[:0]
+			for _, row := range rows {
+				if row.ProjectSlug != "" && who.CanSeeProject(row.ProjectSlug) {
+					mine = append(mine, row)
+				}
+			}
+			rows = mine
+		}
 		d.Events = activity(ctx, rows, time.Now(), 8)
 	}
 
 	d.DockerDown = !h.projects.DockerAvailable()
-	vc := h.depsCounts(ctx)
-	d.VulnCritical, d.VulnSecurity = vc["critical"], vc["security"]
+	if !who.Limited() {
+		vc := h.depsCounts(ctx)
+		d.VulnCritical, d.VulnSecurity = vc["critical"], vc["security"]
+	}
 	if p := PrincipalFrom(ctx); p != nil && p.Role >= auth.RoleOwner && h.updates != nil {
 		if av, _ := h.updates.Latest(); av != nil {
 			d.UpdateAvailable = av.Version

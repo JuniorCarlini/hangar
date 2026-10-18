@@ -22,6 +22,7 @@ dark = "Escuro"
 light = "Claro"
 
 [nav]
+team = "Equipe"
 new_version = "nova versão"
 updates = "Atualizações"
 status_links = "Links de status"
@@ -132,6 +133,87 @@ text = "O painel não conseguiu concluir o pedido. Tente de novo em instantes; s
 [errorpage.other]
 title = "Não foi possível abrir"
 text = "O pedido não pôde ser atendido."
+
+[team]
+page_title = "Equipe · Hangar"
+title = "Equipe"
+subtitle = "Quem usa este painel e o que cada pessoa pode fazer"
+invite = "Convidar pessoa"
+invite_create = "Gerar link de convite"
+invite_hint = "Gera um link de uso único, válido por 24 h. Você manda para a pessoa e ela cria a própria senha."
+sudo_label = "Confirme sua senha para convidar, mudar ou remover pessoas"
+link_title = "Convite criado"
+link_text = "Mande este link para a pessoa. Ele vale por 24 horas, funciona uma vez só e não aparece de novo."
+link_copy = "Copiar"
+link_copied = "Link copiado"
+members = "Pessoas"
+invites = "Convites abertos"
+you = "(você)"
+twofa_on = "ligada"
+never = "nunca entrou"
+all_projects = "Todos"
+edit = "Editar acesso"
+edit_named = "Editar o acesso de {who}"
+edit_title = "Acesso de {who}"
+edit_sessions = "Ao salvar, a pessoa sai do painel e entra de novo já com o acesso novo."
+save = "Salvar acesso"
+remove = "Remover"
+remove_named = "Remover {who}"
+cancel_invite = "Cancelar"
+scope_all = "Todos os projetos"
+scope_some = "Só alguns"
+scope_some_hint = "Escolha os projetos. Ela não vê os outros nem as telas do servidor."
+scope_all_hint = "Vê os projetos que existem hoje e os que forem criados depois."
+admin_all_note = "Admin e Dono sempre veem todos os projetos."
+no_projects_yet = "Ainda não há projetos."
+roles_title = "O que cada papel pode fazer"
+roles_can = "Pode"
+projects_note = "Operador e Leitor podem ficar limitados a alguns projetos: eles só veem esses projetos e a própria conta. Dono e Admin sempre veem tudo."
+updated = "Acesso atualizado."
+removed = "Pessoa removida."
+cancelled = "Convite cancelado."
+
+[team.project_services]
+one = "{n} serviço"
+other = "{n} serviços"
+
+[team.col]
+person = "Pessoa"
+email = "E-mail"
+role = "Papel"
+projects = "Projetos"
+twofa = "2FA"
+seen = "Último acesso"
+expires = "Expira em"
+
+[team.role_can]
+owner = "Tudo, inclusive a equipe, as atualizações do Hangar e o Kit de recuperação."
+admin = "Tudo nos projetos e no servidor (domínios, portas, backups, terminal, segredos), menos a equipe e as atualizações."
+operator = "Fazer deploy, reiniciar, voltar versão e mudar variáveis. Não apaga nada nem vê segredos."
+viewer = "Só ver: projetos, serviços, métricas e logs."
+
+[team.role_short]
+owner = "Tudo, inclusive a equipe e as atualizações."
+admin = "Tudo nos projetos e no servidor, menos a equipe."
+operator = "Deploy, reiniciar e variáveis. Sem apagar."
+viewer = "Só ver projetos, métricas e logs."
+
+[team.error]
+last_owner = "Não dá para tirar o último Dono: promova outra pessoa a Dono antes."
+self = "Você não pode mudar nem remover o seu próprio acesso por aqui."
+invite_invalid = "Este convite não existe, já foi usado ou expirou."
+no_projects = "Escolha pelo menos um projeto, ou marque todos os projetos."
+invite_role = "Convide como Admin, Operador ou Leitor. Para ter outro Dono, promova a pessoa depois que ela entrar."
+project = "O projeto {project} não existe."
+
+[invite]
+page_title = "Convite · Hangar"
+title = "Você foi convidado"
+subtitle = "Crie a sua senha para entrar no painel como {role}."
+submit = "Criar senha e entrar"
+invalid_title = "Convite inválido"
+invalid_text = "Este link não existe, já foi usado ou passou de 24 horas. Peça um convite novo para quem te convidou."
+to_login = "Ir para o login"
 
 [sudo]
 confirm = "Confirmar"
@@ -990,6 +1072,21 @@ orphan = "{service}: container de um serviço que não existe mais no painel"
 stopped = "{service} deveria estar rodando e está parado"
 missing = "{service}: o container sumiu do Docker"
 
+[confirm.team_remove]
+title = "Remover esta pessoa?"
+text = "{who} perde o acesso na hora e sai de todas as sessões abertas. Isso fica na auditoria."
+ok = "Remover"
+
+[confirm.team_cancel]
+title = "Cancelar o convite?"
+text = "O link enviado para {who} para de funcionar."
+ok = "Cancelar convite"
+
+[confirm.team_update]
+title = "Mudar o acesso?"
+text = "{who} sai do painel agora e, ao entrar de novo, já fica com o acesso novo."
+ok = "Mudar acesso"
+
 [confirm.logout]
 title = "Sair da conta?"
 text = "Você vai precisar entrar de novo com senha (e 2FA, se tiver)."
@@ -1542,6 +1639,10 @@ down = "O serviço ficou fora do ar: a versão anterior não voltou."
 none = "Não havia versão anterior no ar."
 
 [alert.action]
+user_invite_cancel = "cancelou um convite da equipe"
+user_invite = "convidou uma pessoa para a equipe"
+user_update = "mudou o acesso de uma pessoa da equipe"
+user_remove = "removeu uma pessoa da equipe"
 backup_key_add = "adicionou uma chave de backup"
 backup_key_confirm = "confirmou uma chave de backup"
 backup_key_remove = "removeu uma chave de backup"

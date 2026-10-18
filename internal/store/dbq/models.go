@@ -257,6 +257,19 @@ type GitCredential struct {
 	LastUsedAt sql.NullInt64
 }
 
+type Invite struct {
+	ID           string
+	TokenHash    string
+	Email        string
+	Role         string
+	AllProjects  int64
+	ProjectsJson string
+	CreatedBy    sql.NullString
+	CreatedAt    int64
+	ExpiresAt    int64
+	UsedAt       sql.NullInt64
+}
+
 type LogMark struct {
 	ID        string
 	ServiceID string
@@ -457,6 +470,12 @@ type User struct {
 	Locale        sql.NullString
 	Theme         string
 	Name          string
+	AllProjects   int64
+}
+
+type UserProject struct {
+	UserID    string
+	ProjectID string
 }
 
 type WalStatus struct {
