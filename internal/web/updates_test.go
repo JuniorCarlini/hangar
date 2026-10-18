@@ -136,7 +136,7 @@ func TestUpdateHistoryListsEveryUpdate(t *testing.T) {
 	rec("system.update.rolled_back", map[string]any{"from": "v0.4.0", "to": "v0.4.1", "message": "não subiu em 90 s"})
 	body := e.do(req{method: "GET", target: "/update", cookies: []*http.Cookie{session}}).Body.String()
 	third, first, second := strings.Index(body, "v0.4.0 → v0.4.1"), strings.Index(body, "v0.3.3 → v0.4.0"), strings.Index(body, "v0.3.2 → v0.3.3")
-	if third < 0 || first < 0 || second < 0 || !(third < first && first < second) {
+	if third < 0 || first < 0 || second < 0 || third >= first || first >= second {
 		t.Fatalf("history should list the three updates, newest first (%d, %d, %d)", third, first, second)
 	}
 	if !strings.Contains(body, "não subiu em 90 s") || strings.Count(body, "→") != 3 {
