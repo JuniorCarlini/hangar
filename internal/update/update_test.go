@@ -199,6 +199,7 @@ func stagedApplier(t *testing.T, newBinary []byte) (*Applier, *fakeService) {
 		CurrentVersion: func(context.Context, string) (string, error) { return "v1.0.0", nil },
 		InstallUnits:   func(context.Context, string) error { return nil },
 		Preflight:      func(context.Context, string) error { return nil },
+		FreeSpace:      func(string) (uint64, error) { return 1 << 40, nil },
 	}
 	if err := os.WriteFile(a.BinaryPath, []byte("binario-antigo"), 0o755); err != nil { //nolint:gosec // teste
 		t.Fatal(err)
@@ -344,5 +345,140 @@ func TestPreflightFailureKeepsThePanelUp(t *testing.T) {
 	}
 	if got := read(t, a.BinaryPath); got != "binario-antigo" {
 		t.Fatalf("binary = %q, the old one must stay", got)
+	}
+}
+
+// TestRollbackReportsFailedWhenOldVersionDoesNotComeBack: "rolled_back" means
+// the previous version is serving again; if it does not come up either, the
+// state is "failed".
+func TestRollbackReportsFailedWhenOldVersionDoesNotComeBack(t *testing.T) {
+	a, svc := stagedApplier(t, []byte("binario-quebrado"))
+	delete(svc.healthy, "binario-antigo") // the old version no longer starts either
+
+	st, err := a.Apply(context.Background())
+	if err == nil || st.State != "failed" || !strings.Contains(st.Message, "previous version did not come back") {
+		t.Fatalf("Apply = %+v, %v", st, err)
+	}
+	if got := read(t, a.BinaryPath); got != "binario-antigo" {
+		t.Errorf("binary was not restored: %q", got)
+	}
+}
+
+// TestNotEnoughDiskKeepsThePanelUp: without room for the copies the update
+// makes, nothing stops.
+func TestNotEnoughDiskKeepsThePanelUp(t *testing.T) {
+	a, svc := stagedApplier(t, []byte("binario-novo"))
+	svc.healthy["binario-novo"] = "v1.1.0"
+	var asked []string
+	a.FreeSpace = func(path string) (uint64, error) {
+		asked = append(asked, path)
+		return 10, nil // "banco original" alone is 14 bytes
+	}
+	st, err := a.Apply(context.Background())
+	if err == nil || st == nil || st.State != "failed" || !strings.Contains(st.Message, "preflight: not enough disk") {
+		t.Fatalf("Apply = %+v, %v", st, err)
+	}
+	if !svc.running || svc.starts != 0 {
+		t.Fatal("the panel was stopped")
+	}
+	if got := read(t, a.BinaryPath); got != "binario-antigo" {
+		t.Fatalf("binary = %q, the old one must stay", got)
+	}
+	if len(asked) == 0 || asked[0] != a.DataDir {
+		t.Errorf("free space asked for %v, want the data dir first", asked)
+	}
+}
+
+func TestCheckDiskNeedsTwiceTheDatabasePlusBinary(t *testing.T) {
+	a, _ := stagedApplier(t, []byte("binario-novo"))
+	// DataDir needs 2*14 (database) + 14 (largest binary) = 42 bytes;
+	// the binary directory needs 14.
+	newBin := filepath.Join(t.TempDir(), "novo")
+	if err := os.WriteFile(newBin, []byte("binario-novo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	binDir := filepath.Dir(a.BinaryPath)
+	free := map[string]uint64{a.DataDir: 42, binDir: 14}
+	a.FreeSpace = func(p string) (uint64, error) { return free[p], nil }
+	if err := a.checkDisk(newBin); err != nil {
+		t.Fatalf("exactly enough: %v", err)
+	}
+	free[a.DataDir] = 41
+	if err := a.checkDisk(newBin); err == nil {
+		t.Fatal("one byte short in the data dir was accepted")
+	}
+	free[a.DataDir], free[binDir] = 42, 13
+	if err := a.checkDisk(newBin); err == nil {
+		t.Fatal("one byte short next to the binary was accepted")
+	}
+}
+
+// TestApplyPrunesOldPreUpdateBackups: each update leaves a database copy;
+// only the newest ones stay.
+func TestApplyPrunesOldPreUpdateBackups(t *testing.T) {
+	a, svc := stagedApplier(t, []byte("binario-novo"))
+	svc.healthy["binario-novo"] = "v1.1.0"
+	backups := filepath.Join(a.DataDir, "backups")
+	old := time.Now().Add(-48 * time.Hour)
+	for i, name := range []string{"pre-update-v0.9.0-a", "pre-update-v0.9.1-b", "pre-update-v0.9.2-c", "pre-update-v0.9.3-d"} {
+		dir := filepath.Join(backups, name)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		mod := old.Add(time.Duration(i) * time.Hour)
+		if err := os.Chtimes(dir, mod, mod); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(backups, "outra-coisa"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if st, err := a.Apply(context.Background()); err != nil || st.State != "ok" {
+		t.Fatalf("Apply = %+v, %v", st, err)
+	}
+	entries, _ := os.ReadDir(backups)
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	// The copy this update made plus the two newest older ones; anything
+	// that is not a pre-update copy is left alone.
+	if len(got) != 4 || got[0] != "outra-coisa" || got[1] != "pre-update-v0.9.2-c" || got[2] != "pre-update-v0.9.3-d" || !strings.HasPrefix(got[3], "pre-update-v1.0.0-") {
+		t.Fatalf("backups left: %v", got)
+	}
+}
+
+// TestRestoreFileReplacesThroughRename: the restored file has the backup's
+// content and mode, and no temporary file is left behind.
+func TestRestoreFileReplacesThroughRename(t *testing.T) {
+	dir := t.TempDir()
+	src, dst := filepath.Join(dir, "copia"), filepath.Join(dir, "hangar.db")
+	if err := os.WriteFile(src, []byte("copia boa"), 0o640); err != nil { //nolint:gosec // teste
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dst, []byte("banco migrado"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreFile(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, dst); got != "copia boa" {
+		t.Errorf("restored content: %q", got)
+	}
+	if info, _ := os.Stat(dst); info.Mode().Perm() != 0o640 {
+		t.Errorf("mode = %v", info.Mode().Perm())
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 2 {
+		t.Errorf("temporary file left behind: %v", entries)
+	}
+
+	// A copy that cannot be read leaves the current file whole.
+	if err := restoreFile(filepath.Join(dir, "nao-existe"), dst); err == nil {
+		t.Fatal("restore from a missing copy succeeded")
+	}
+	if got := read(t, dst); got != "copia boa" {
+		t.Errorf("file touched by a failed restore: %q", got)
 	}
 }

@@ -85,8 +85,15 @@ type Applier struct {
 	// user). If the new version could not read its config or master key,
 	// the update does not start and the panel stays up.
 	Preflight func(ctx context.Context, binary string) error
+	// FreeSpace reports the bytes still writable on the filesystem holding
+	// path (default: statfs). The disk check runs before the panel stops.
+	FreeSpace func(path string) (uint64, error)
 	Now       func() time.Time
 }
+
+// keepBackups is how many pre-update copies (and pre-migration copies) are
+// kept; older ones are deleted after a successful update.
+const keepBackups = 3
 
 func (a *Applier) updateDir() string { return filepath.Join(a.DataDir, "update") }
 
@@ -108,6 +115,9 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 	}
 	if a.Preflight == nil {
 		a.Preflight = func(ctx context.Context, binary string) error { return preflight(ctx, binary, a.ConfigPath) }
+	}
+	if a.FreeSpace == nil {
+		a.FreeSpace = freeSpace
 	}
 
 	reqPath := filepath.Join(a.updateDir(), requestFile)
@@ -143,6 +153,9 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 	}
 	defer func() { _ = os.Remove(newBin) }()
 
+	if err := a.checkDisk(newBin); err != nil {
+		return a.finish("failed", req.Version, current, "preflight: "+err.Error()+" (the panel was not stopped)")
+	}
 	if err := a.Preflight(ctx, newBin); err != nil {
 		return a.finish("failed", req.Version, current, "preflight (the panel was not stopped): "+err.Error())
 	}
@@ -179,6 +192,7 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 
 	_ = os.RemoveAll(filepath.Join(a.updateDir(), stagingDir))
 	pruneReleases(filepath.Join(a.DataDir, "releases"), 3)
+	pruneOldest(filepath.Join(a.DataDir, "backups"), "pre-update-", keepBackups)
 	return a.finish("ok", req.Version, current, "")
 }
 
@@ -241,6 +255,43 @@ func installUnits(ctx context.Context, binary string) error {
 	return nil
 }
 
+// checkDisk refuses to start when the disk cannot hold what the update
+// writes: in DataDir the database copy, the copy the new version makes
+// before migrating, and the kept old binary; next to the binary, the copy a
+// rollback puts back. Running out of space halfway would leave the panel
+// down or the database half restored.
+func (a *Applier) checkDisk(newBin string) error {
+	var dbSize uint64
+	for _, f := range dbFiles {
+		if info, err := os.Stat(filepath.Join(a.DataDir, f)); err == nil {
+			dbSize += uint64(info.Size()) //nolint:gosec // file sizes are not negative
+		}
+	}
+	var binSize uint64
+	for _, b := range []string{a.BinaryPath, newBin} {
+		if info, err := os.Stat(b); err == nil && uint64(info.Size()) > binSize { //nolint:gosec // file sizes are not negative
+			binSize = uint64(info.Size()) //nolint:gosec // file sizes are not negative
+		}
+	}
+	checks := []struct {
+		dir  string
+		need uint64
+	}{
+		{a.DataDir, 2*dbSize + binSize},
+		{filepath.Dir(a.BinaryPath), binSize},
+	}
+	for _, c := range checks {
+		free, err := a.FreeSpace(c.dir)
+		if err != nil {
+			return fmt.Errorf("measure free disk in %s: %w", c.dir, err)
+		}
+		if free < c.need {
+			return fmt.Errorf("not enough disk in %s: %d MiB free, %d MiB needed", c.dir, free>>20, (c.need+(1<<20)-1)>>20)
+		}
+	}
+	return nil
+}
+
 // preflight checks that the new binary will start, before anything stops:
 // it puts the files' owners back (root) and then reads the config and the
 // master key as the service user, like the service will.
@@ -283,8 +334,12 @@ func (a *Applier) rollback(ctx context.Context, version, current, oldBin, backup
 			errs = append(errs, "restore database: "+err.Error())
 		}
 	}
+	_ = os.Remove(filepath.Join(a.DataDir, ReadyFile))
 	if err := a.Service.Start(ctx); err != nil {
 		errs = append(errs, "start previous version: "+err.Error())
+	} else if err := a.waitReady(ctx, current); err != nil {
+		// Only "rolled_back" when the old version is really serving again.
+		errs = append(errs, "previous version did not come back: "+err.Error())
 	}
 	msg := reason
 	if len(errs) > 0 {
@@ -351,11 +406,52 @@ func (a *Applier) restoreDB(dir string) error {
 			_ = os.Remove(dst) // the new version's -wal/-shm must not be left behind
 			continue
 		}
-		if err := copyPreserving(src, dst); err != nil {
+		if err := restoreFile(src, dst); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// restoreFile puts src at dst through a temporary file in dst's directory
+// and a rename: if the copy fails halfway (disk full, the applier killed),
+// dst is still the whole file it was, never a truncated database.
+func restoreFile(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(dst)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(dst)+".restoring-")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	_ = tmp.Close()
+	if err := copyPreserving(src, tmpName); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	// CreateTemp makes 0600; give back the backup's mode.
+	if err := os.Chmod(tmpName, info.Mode().Perm()); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, dst); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	return syncDir(dir)
+}
+
+// syncDir makes a rename in dir durable.
+func syncDir(dir string) error {
+	d, err := os.Open(dir) //nolint:gosec // the applier's own paths
+	if err != nil {
+		return err
+	}
+	defer func() { _ = d.Close() }()
+	return d.Sync()
 }
 
 func (a *Applier) finish(state, version, from, msg string) (*Status, error) {
@@ -439,6 +535,39 @@ func copyPreserving(src, dst string) error {
 		}
 	}
 	return nil
+}
+
+// pruneOldest keeps the keep newest entries of dir whose name starts with
+// prefix and deletes the rest (files or directories). Names end in a UTC
+// timestamp, but what comes before it (a version) does not sort, so age is
+// the modification time.
+func pruneOldest(dir, prefix string, keep int) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	type aged struct {
+		name string
+		mod  time.Time
+	}
+	var match []aged
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		match = append(match, aged{e.Name(), info.ModTime()})
+	}
+	if len(match) <= keep {
+		return
+	}
+	sort.Slice(match, func(i, j int) bool { return match[i].mod.After(match[j].mod) })
+	for _, m := range match[keep:] {
+		_ = os.RemoveAll(filepath.Join(dir, m.name))
+	}
 }
 
 // pruneReleases keeps only the keep most recent old binaries.

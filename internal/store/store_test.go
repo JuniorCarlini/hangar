@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -101,5 +102,37 @@ func TestReopenIsIdempotent(t *testing.T) {
 	// With no pending migration on the second open, no copy is made.
 	if entries, _ := os.ReadDir(filepath.Join(dir, "backups")); len(entries) != 0 {
 		t.Errorf("expected no pre-migration copies, found %d", len(entries))
+	}
+}
+
+// TestPrunePreMigrateKeepsNewest: every migration run leaves a copy; only the
+// newest ones stay, and unrelated files in the directory are left alone.
+func TestPrunePreMigrateKeepsNewest(t *testing.T) {
+	dir := t.TempDir()
+	names := []string{
+		"pre-migracao-20260101T000000Z.db",
+		"pre-migracao-20260201T000000Z.db",
+		"pre-migracao-20260301T000000Z.db",
+		"pre-migracao-20260401T000000Z.db",
+		"pre-migracao-20260501T000000Z.db",
+		"outro-arquivo.db",
+	}
+	for _, n := range names {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	prunePreMigrate(dir, 3, discard)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, e := range entries {
+		got = append(got, e.Name())
+	}
+	want := []string{"outro-arquivo.db", "pre-migracao-20260301T000000Z.db", "pre-migracao-20260401T000000Z.db", "pre-migracao-20260501T000000Z.db"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("left %v, want %v", got, want)
 	}
 }

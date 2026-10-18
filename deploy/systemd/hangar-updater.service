@@ -7,7 +7,13 @@ Documentation=https://github.com/JuniorCarlini/hangar/blob/main/docs/21-atualiza
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/hangard self-update apply -config /etc/hangar/hangar.toml
-TimeoutStartSec=300
+# Worst case: preflight, copying the database, 90 s for the new version and
+# another 90 s for the old one after a rollback, plus a large database.
+TimeoutStartSec=900
+# Whatever happens to the applier (finished, failed, killed by the timeout),
+# the panel is started again: it must never be left stopped until someone
+# logs in by SSH. A no-op when it is already running.
+ExecStopPost=/bin/systemctl --no-block start hangard.service
 NoNewPrivileges=yes
 ProtectHome=yes
 PrivateTmp=yes

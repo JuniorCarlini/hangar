@@ -21,3 +21,14 @@ func TestUnitsAreEmbedded(t *testing.T) {
 		}
 	}
 }
+
+// An applier killed by its timeout must not leave the panel stopped.
+func TestUpdaterAlwaysStartsThePanelAgain(t *testing.T) {
+	b, err := fs.ReadFile(Systemd, "systemd/hangar-updater.service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "\nExecStopPost=/bin/systemctl --no-block start hangard.service\n") {
+		t.Error("hangar-updater.service does not start hangard.service after it stops")
+	}
+}

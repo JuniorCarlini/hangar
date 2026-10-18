@@ -14,6 +14,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -127,14 +129,48 @@ func migrate(ctx context.Context, db *sql.DB, path, backupDir string, log *slog.
 	for _, r := range results {
 		log.Info("migration applied", "version", r.Source.Version, "file", r.Source.Path)
 	}
+	if current > 0 {
+		prunePreMigrate(backupDir, keepPreMigrate, log)
+	}
 	return nil
 }
+
+// keepPreMigrate is how many pre-migration copies are kept: every version
+// with a new migration adds one, and nothing else deletes them, so without
+// a limit they would slowly fill the disk.
+const keepPreMigrate = 3
+
+// prunePreMigrate deletes all but the keep newest pre-migration copies. Their
+// names end in a UTC timestamp, so name order is age order.
+func prunePreMigrate(dir string, keep int, log *slog.Logger) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	var names []string
+	for _, e := range entries {
+		if n := e.Name(); !e.IsDir() && strings.HasPrefix(n, preMigratePrefix) && strings.HasSuffix(n, ".db") {
+			names = append(names, n)
+		}
+	}
+	if len(names) <= keep {
+		return
+	}
+	sort.Strings(names)
+	for _, n := range names[:len(names)-keep] {
+		if err := os.Remove(filepath.Join(dir, n)); err != nil {
+			log.Warn("could not delete an old pre-migration copy", "file", n, "error", err)
+		}
+	}
+}
+
+const preMigratePrefix = "pre-migracao-"
 
 func backupBeforeMigrate(ctx context.Context, db *sql.DB, dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("create backup directory: %w", err)
 	}
-	dest := filepath.Join(dir, "pre-migracao-"+time.Now().UTC().Format("20060102T150405Z")+".db")
+	dest := filepath.Join(dir, preMigratePrefix+time.Now().UTC().Format("20060102T150405Z")+".db")
 	if _, err := os.Stat(dest); err == nil {
 		return "", errors.New("pre-migration copy already exists: " + dest)
 	}
