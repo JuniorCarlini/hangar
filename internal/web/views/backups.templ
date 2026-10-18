@@ -116,8 +116,6 @@ templ backupStatusBadge(status string) {
 			<span class="tuc-badge is-warning">{ t(ctx, "backups.status.warning") }</span>
 		case "danger":
 			<span class="tuc-badge is-danger">{ t(ctx, "backups.status.danger") }</span>
-		default:
-			<span class="tuc-badge is-info">{ t(ctx, "backups.status.setup") }</span>
 	}
 }
 
@@ -160,6 +158,7 @@ templ Backups(d BackupsData) {
 			}
 			@backupKeys(d)
 			@backupTargets(d)
+			@backupSchedule(d)
 			@backupServices(d)
 			@backupHistory(d)
 			@backupRules(d)
@@ -526,6 +525,40 @@ templ backupRunsTable(runs []BackupRunRow, showLabel, canLink bool) {
 
 // backupRules tells how to set the bucket up: what the server's credential
 // may do and the lifecycle rules that expire old backups.
+// backupSchedule says, in plain words, what is saved, how often and for
+// how long (the retention comes from the bucket's lifecycle rules).
+templ backupSchedule(d BackupsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "backups.when.title"))
+		<div class="tuc-table-wrap">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "backups.when.what") }</th><th>{ t(ctx, "backups.when.how_often") }</th><th>{ t(ctx, "backups.when.kept") }</th></tr></thead>
+				<tbody>
+					<tr>
+						<td>{ t(ctx, "backups.when.panel") }</td>
+						<td class="text-muted">{ t(ctx, "backups.when.panel_often") }</td>
+						<td class="text-muted">{ t(ctx, "backups.when.panel_kept") }</td>
+					</tr>
+					<tr>
+						<td>{ t(ctx, "backups.when.pg") }</td>
+						<td class="text-muted">{ t(ctx, "backups.when.pg_often") }</td>
+						<td class="text-muted">{ t(ctx, "backups.when.pg_kept") }</td>
+					</tr>
+					<tr>
+						<td>{ t(ctx, "backups.when.wal") }</td>
+						<td class="text-muted">{ t(ctx, "backups.when.wal_often") }</td>
+						<td class="text-muted">{ t(ctx, "backups.when.wal_kept") }</td>
+					</tr>
+					<tr>
+						<td>{ t(ctx, "backups.when.others") }</td>
+						<td class="text-muted" colspan="2">{ t(ctx, "backups.when.others_often") }</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+	</section>
+}
+
 templ backupRules(d BackupsData) {
 	<section class={ cardClass }>
 		@cardHead(t(ctx, "backups.rules.title"))

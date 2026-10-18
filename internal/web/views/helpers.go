@@ -57,12 +57,9 @@ type Nav struct {
 	// Apple devices, "Ctrl " elsewhere (from the User-Agent).
 	ModKey string
 
-	// Server footer of the sidebar.
+	// Server footer of the sidebar (Host also shows in the account menu).
 	Host    string
 	Version string
-	CPU     int    // percent
-	RAM     string // "1,9 / 8 GB"
-	RAMPct  int
 
 	// The bell: newest alerts and whether any is unseen.
 	Alerts       []AlertRow

@@ -20,7 +20,6 @@ func (h *handlers) navFor(r *http.Request, p *auth.Principal) views.Nav {
 	}
 	n.Host, _ = os.Hostname()
 	n.ServerIP = h.serverIP
-	n.CPU, n.RAM, n.RAMPct = h.footerLoad(r)
 	if h.updates != nil {
 		n.Version = h.updates.Current()
 	}

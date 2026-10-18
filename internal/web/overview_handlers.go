@@ -121,15 +121,6 @@ func stateTone(state string) string {
 	return "info"
 }
 
-// footerLoad is the sidebar footer's CPU and memory.
-func (h *handlers) footerLoad(r *http.Request) (cpu int, ram string, ramPct int) {
-	s := h.metrics.Latest()
-	if s.Host.MemLimit == 0 {
-		return 0, "–", 0
-	}
-	return int(math.Round(s.Host.CPU)), fmtBytesOf(r.Context(), s.Host.Mem, s.Host.MemLimit), pct(s.Host.Mem, s.Host.MemLimit)
-}
-
 // diskSegments splits the used part of the disk the way the macOS storage
 // bar does: Docker's images, volumes and containers (with the build cache),
 // and everything else on the disk. Before Docker's usage is known there is

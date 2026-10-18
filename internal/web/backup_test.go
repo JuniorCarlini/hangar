@@ -38,7 +38,7 @@ func TestBackupsPageShowsSetupToEveryone(t *testing.T) {
 	c, _ := e.session(t, auth.RoleViewer)
 	rec := e.do(req{method: "GET", target: "/backups", cookies: []*http.Cookie{c}})
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, "Configurar backups") || !strings.Contains(body, "diario/") {
+	if rec.Code != http.StatusOK || !strings.Contains(body, "Como ligar os backups") || !strings.Contains(body, "O que é salvo e quando") || !strings.Contains(body, "diario/") {
 		t.Fatalf("backups page: %d", rec.Code)
 	}
 	if strings.Contains(body, `href="/backups/kit"`) {

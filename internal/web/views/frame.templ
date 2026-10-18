@@ -375,10 +375,10 @@ templ sidebar(n Nav) {
 	</aside>
 }
 
-// serverFooter is the server's name, version and load at the bottom of the
-// sidebar.
+// serverFooter is the server's IP (copied with a click) and the Hangar
+// version at the bottom of the sidebar; the load lives in the overview.
 templ serverFooter(n Nav) {
-	<div class="mt-auto flex flex-col gap-1.5 border-t border-border px-2 pt-3 text-xs text-muted">
+	<div class="mt-auto flex flex-col gap-2 border-t border-border px-2 pt-3 text-xs text-muted">
 		if n.ServerIP != "" {
 			<button type="button" class="flex w-full items-center gap-2 rounded-sm border border-border bg-surface-2 px-2 py-1.5 text-left text-fg hover:border-border-strong" data-copy={ n.ServerIP } data-copied={ t(ctx, "nav.ip_copied") } aria-label={ t(ctx, "nav.ip_copy", "ip", n.ServerIP) } title={ t(ctx, "nav.ip_copy", "ip", n.ServerIP) }>
 				@Icon("map-pin", "size-3.5 shrink-0 text-muted")
@@ -386,14 +386,16 @@ templ serverFooter(n Nav) {
 				@Icon("copy", "size-3.5 shrink-0 text-muted")
 			</button>
 		}
-		<div class="flex items-center gap-1.5 font-medium text-fg">
-			<span class="size-1.5 rounded-[1px] bg-success" aria-hidden="true"></span>
-			<span class="truncate">{ n.Host } · { n.Version }</span>
-		</div>
-		<div class="flex justify-between"><span>CPU</span><span class="tabular-nums">{ fmt.Sprint(n.CPU) }%</span></div>
-		<div class="h-[3px] bg-surface-2"><div class={ "bar-fill h-[3px] " + toneBg(level(n.CPU)) + " " + pctWidth(n.CPU) }></div></div>
-		<div class="flex justify-between"><span>RAM</span><span class="tabular-nums">{ n.RAM }</span></div>
-		<div class="h-[3px] bg-surface-2"><div class={ "bar-fill h-[3px] " + toneBg(level(n.RAMPct)) + " " + pctWidth(n.RAMPct) }></div></div>
+		if n.IsOwner {
+			<a class="flex items-center justify-between gap-2 rounded-sm px-2 py-1 text-muted no-underline hover:bg-surface-2 hover:text-fg" href="/update">
+				<span class="truncate">Hangar { n.Version }</span>
+				if n.Update {
+					<span class="tuc-badge is-accent">{ t(ctx, "nav.new_version") }</span>
+				}
+			</a>
+		} else {
+			<span class="truncate px-2 py-1">Hangar { n.Version }</span>
+		}
 	</div>
 }
 

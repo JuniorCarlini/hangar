@@ -52,9 +52,9 @@ proteger.
 |---|---|---|---|
 | **PostgreSQL**: contínuo | Arquivamento de WAL com WAL-G (cifrado com chave pública) + base backup diário | contínuo (`archive_timeout=60s`) | **≤ 1 minuto** |
 | **PostgreSQL**: lógico | `pg_dump -Fc` → zstd → age | diário (+ antes de todo deploy com migração e antes de atualizar versão) | 24 h (é a cópia "portátil") |
-| Redis de **filas/sessões** | `BGSAVE` → RDB → zstd → age | a cada 6 h | 6 h |
+| Redis de **filas/sessões** *(em breve)* | `BGSAVE` → RDB → zstd → age | a cada 6 h | 6 h |
 | Redis de **cache** | **não faz backup** (é descartável) | — | — |
-| Volumes de apps | `tar` do volume (montado só leitura) → zstd → age | diário | 24 h |
+| Volumes de apps *(em breve)* | `tar` do volume (montado só leitura) → zstd → age | diário | 24 h |
 | **Painel Hangar** | `VACUUM INTO` do SQLite + `hangar.toml` + **chave mestra** + certificados | diário + a cada mudança de configuração | — |
 | Mídia no R2/S3 (fotos dos produtos) | Replicação do bucket para **outro provedor** (rclone, só cópia, nunca apaga do destino) | diário | 24 h |
 | Código | Já está no GitHub; imagens são reconstruídas. Opcional: espelhar o repositório | — | — |
