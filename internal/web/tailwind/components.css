@@ -319,6 +319,10 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
   .tuc-menu__item:hover svg.lucide-wifi > :nth-child(3) { animation: ico-fade 1.4s .36s ease both; }
   .tuc-menu__item:hover svg.lucide-wifi > :nth-child(4) { animation: ico-fade 1.4s .54s ease both; }
   .tuc-menu__item:hover svg.lucide-palette { animation-name: ico-turn; }
+  /* Team: the person behind steps in beside the one in front. */
+  .tuc-menu__item:hover svg.lucide-users { animation-name: ico-pop; }
+  .tuc-menu__item:hover svg.lucide-users > :nth-child(2),
+  .tuc-menu__item:hover svg.lucide-users > :nth-child(3) { animation: ico-join 1s cubic-bezier(.34, 1.4, .64, 1) both; }
   [data-palette-open]:hover > svg.lucide-search { transform-origin: 40% 40%; animation-name: ico-search; }
 }
 @keyframes ico-ring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(14deg); } 30% { transform: rotate(-12deg); } 45% { transform: rotate(8deg); } 60% { transform: rotate(-5deg); } 75% { transform: rotate(2deg); } }
@@ -330,6 +334,7 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 @keyframes ico-pop { 0%, 100% { transform: scale(1); } 45% { transform: scale(1.2); } 70% { transform: scale(.95); } }
 @keyframes ico-pulse { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.15); } 55% { transform: scale(.96); } 80% { transform: scale(1.05); } }
 @keyframes ico-fade { 0% { opacity: 1; } 30% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes ico-join { 0% { opacity: 0; transform: translateX(-4px); } 45% { opacity: 1; } 100% { opacity: 1; transform: translateX(0); } }
 @keyframes ico-search { 0%, 100% { transform: rotate(0) scale(1); } 40% { transform: rotate(-12deg) scale(1.12); } }
 
 /* ---------------------------------------------------------------- Brand */
