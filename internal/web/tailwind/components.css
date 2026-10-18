@@ -189,6 +189,11 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 .canvas.is-moving .edge path { transition: none; }
 .canvas-zoom { position: absolute; left: 16px; bottom: 16px; z-index: 4; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--p-border); border-radius: 8px; background: var(--p-surface); box-shadow: var(--p-shadow-pop); }
 
+/* A service card being opened: dimmed and pulsing until its drawer comes. */
+.node.is-loading { animation: hg-loading 1s ease-in-out infinite; }
+@keyframes hg-loading { 50% { opacity: .55; } }
+html.is-busy, html.is-busy .node { cursor: progress; }
+
 /* Screen animations. Between pages the content cross-fades (View
    Transitions); the top bar and the sidebar keep still. On arrival, the
    page's blocks come in one after the other. */

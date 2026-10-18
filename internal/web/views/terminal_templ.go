@@ -114,7 +114,7 @@ func TerminalPage(d TerminalData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"><label class=\"tuc-btn is-sm\"><input type=\"radio\" class=\"tuc-btn__input\" name=\"shell\" value=\"bash\" checked>bash</label> <label class=\"tuc-btn is-sm\"><input type=\"radio\" class=\"tuc-btn__input\" name=\"shell\" value=\"sh\">sh</label></div><button type=\"button\" class=\"tuc-btn is-outline is-sm\" id=\"terminal-again\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"><label class=\"tuc-btn is-sm\"><input type=\"radio\" class=\"tuc-btn__input\" name=\"shell\" value=\"bash\" checked>bash</label> <label class=\"tuc-btn is-sm\"><input type=\"radio\" class=\"tuc-btn__input\" name=\"shell\" value=\"sh\">sh</label></div><button type=\"button\" class=\"tuc-btn is-outline is-sm self-stretch\" id=\"terminal-again\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
