@@ -721,6 +721,34 @@ func (q *Queries) SetServiceDeploySettings(ctx context.Context, arg SetServiceDe
 	return err
 }
 
+const setServiceImage = `-- name: SetServiceImage :execrows
+UPDATE services SET image = ?1, updated_at = ?2
+WHERE id = ?3 AND image = ?4
+`
+
+type SetServiceImageParams struct {
+	Image     string
+	UpdatedAt int64
+	ID        string
+	OldImage  string
+}
+
+// Points the service at another image, only if it still runs the one the
+// caller saw (two changes at once, or a revert after someone else changed
+// it, must not overwrite each other).
+func (q *Queries) SetServiceImage(ctx context.Context, arg SetServiceImageParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setServiceImage,
+		arg.Image,
+		arg.UpdatedAt,
+		arg.ID,
+		arg.OldImage,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const setServiceMaintenance = `-- name: SetServiceMaintenance :exec
 UPDATE services SET maintenance = ?, updated_at = ? WHERE id = ?
 `

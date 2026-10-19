@@ -277,7 +277,7 @@ func (h *handlers) servicePage(w http.ResponseWriter, r *http.Request) {
 // reaches the page directly).
 func flashFrom(r *http.Request) string {
 	switch ok := r.URL.Query().Get("ok"); ok {
-	case "deploy", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
+	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
 		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed":
 		return i18n.T(r.Context(), "flash."+ok)
 	}
@@ -299,6 +299,8 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	}
 	if d.Git = h.gitView(r, s.ID, s.ProjectID, v); d.Git != nil {
 		d.Image = d.Git.Display + "@" + d.Git.Branch
+	} else if !strings.Contains(s.Image, "@") {
+		d.ImageRepo, d.ImageTag = projects.SplitImage(s.Image)
 	}
 	d.State = h.serviceState(r.Context(), p.Slug, s)
 	d.Deploying = d.State == "deploying"
@@ -475,7 +477,7 @@ func inferTab(r *http.Request) string {
 	case strings.HasSuffix(path, "/backup"), strings.Contains(path, "/backups"):
 		return "backups"
 	case strings.HasSuffix(path, "/deploy-settings"), strings.HasSuffix(path, "/delete"), strings.Contains(path, "/git"), strings.Contains(path, "/volumes"),
-		strings.HasSuffix(path, "/maintenance"):
+		strings.HasSuffix(path, "/maintenance"), strings.HasSuffix(path, "/image"):
 		return "settings"
 	}
 	switch r.URL.Query().Get("ok") {
@@ -515,6 +517,18 @@ func (h *handlers) deployService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectLocal(w, r, h.serviceBase(r)+"?ok=deploy")
+}
+
+// changeImage points the service at another tag of its image and deploys
+// it (from the Settings tab, or from the updates page when a newer tag
+// fixes a vulnerability). A deploy that fails puts the previous tag back.
+func (h *handlers) changeImage(w http.ResponseWriter, r *http.Request) {
+	if _, err := h.projects.ChangeImageTag(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), r.PostFormValue("tag")); err != nil {
+		code, msg := userError(r, err)
+		h.renderService(w, r, serviceView{status: code, errMsg: msg})
+		return
+	}
+	redirectLocal(w, r, h.serviceBase(r)+"?ok=image")
 }
 
 // rebuildService deploys from scratch: no build cache, base images and the

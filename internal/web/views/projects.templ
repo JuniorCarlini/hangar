@@ -240,6 +240,10 @@ type ServiceData struct {
 	ProjectName string
 	Slug        string
 	Image       string
+	// ImageRepo and ImageTag split Image for the "Image" card (services run
+	// from an image; ImageTag is "" when it is pinned by digest).
+	ImageRepo string
+	ImageTag  string
 	Port        int64
 	MemoryMB    int64
 	CPUs        string

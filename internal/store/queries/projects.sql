@@ -85,6 +85,13 @@ SELECT * FROM deployments WHERE id = ? AND service_id = ?;
 -- name: SetServiceDeploySettings :exec
 UPDATE services SET predeploy_json = ?, health_path = ?, validate_json = ?, validate_timeout_s = ?, updated_at = ? WHERE id = ?;
 
+-- name: SetServiceImage :execrows
+-- Points the service at another image, only if it still runs the one the
+-- caller saw (two changes at once, or a revert after someone else changed
+-- it, must not overwrite each other).
+UPDATE services SET image = sqlc.arg(image), updated_at = sqlc.arg(updated_at)
+WHERE id = sqlc.arg(id) AND image = sqlc.arg(old_image);
+
 -- name: SetServiceMaintenance :exec
 UPDATE services SET maintenance = ?, updated_at = ? WHERE id = ?;
 

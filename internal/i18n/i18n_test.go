@@ -116,7 +116,7 @@ func TestMessageTranslatesJoinedErrors(t *testing.T) {
 var dynamicPrefixes = map[string][]string{
 	"state.":               {"running", "deploying", "restarting", "exited", "dead", "created", "paused", "removing", "missing", "failed", "unknown"},
 	"deploy.status.":       {"live", "running", "failed", "superseded"},
-	"deploy.trigger.":      {"create", "manual", "webhook", "rollback", "ports", "restore", "rebuild"},
+	"deploy.trigger.":      {"create", "manual", "webhook", "rollback", "ports", "restore", "rebuild", "image"},
 	"update.state.":        {"ok", "rolled_back", "failed", "applying"},
 	"team.role_can.":       {"owner", "admin", "operator", "viewer"},
 	"team.role_short.":     {"owner", "admin", "operator", "viewer"},
@@ -137,7 +137,7 @@ var dynamicPrefixes = map[string][]string{
 	// errpages.Error carries these keys (shown by the brand settings).
 	"brand.error.": {"name", "contact", "color", "theme", "logo", "logo_size", "logo_dimensions", "page", "too_long"},
 	"flash.": {
-		"deploy", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings",
+		"deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings",
 		"git", "git-token", "webhook-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed",
 	},
 	"flash.backups.":         {"key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued"},
@@ -164,7 +164,7 @@ var dynamicPrefixes = map[string][]string{
 	"alert.title.":           {"test", "deps", "container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "login_new_ip", "login_failures", "account_locked", "totp_disabled", "sudo_action", "user_created", "port_public", "port_unknown", "channel_added", "update_applied", "update_failed", "lockdown", "lockdown_released", "deploy_failed"},
 	"alert.text.":            {"test", "deps", "container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "login_new_ip", "login_failures", "account_locked", "totp_disabled", "sudo_action", "user_created", "port_public", "port_unknown", "channel_added", "update_applied", "update_failed", "lockdown", "lockdown_released", "deploy_failed"},
 	"alert.previous.":        {"live", "restored", "down", "none"},
-	"alert.action.":          {"secret_reveal", "service_delete", "project_delete", "domain_dynamic_enable", "domain_dynamic_disable", "domain_dynamic_rotate_secret", "domain_add", "edge_dns_set", "domain_remove", "service_endpoint_public", "service_endpoint_sslip_on", "port_open", "project_link", "service_backup_download", "system_update_request", "alerts_channel_delete", "alerts_channel_toggle", "status_link_create", "status_link_revoke", "service_git_webhook", "backup_key_add", "backup_key_confirm", "backup_key_remove", "backup_restore_start", "backup_target_add", "backup_target_remove", "backup_download_link", "brand_save", "service_volume_wipe", "service_terminal_open", "user_invite", "user_invite_cancel", "user_update", "user_remove"},
+	"alert.action.":          {"secret_reveal", "service_delete", "project_delete", "domain_dynamic_enable", "domain_dynamic_disable", "domain_dynamic_rotate_secret", "domain_add", "edge_dns_set", "domain_remove", "service_endpoint_public", "service_endpoint_sslip_on", "port_open", "project_link", "service_backup_download", "system_update_request", "alerts_channel_delete", "alerts_channel_toggle", "status_link_create", "status_link_revoke", "service_git_webhook", "backup_key_add", "backup_key_confirm", "backup_key_remove", "backup_restore_start", "backup_target_add", "backup_target_remove", "backup_download_link", "brand_save", "service_volume_wipe", "service_image_change", "service_terminal_open", "user_invite", "user_invite_cancel", "user_update", "user_remove"},
 	"alerts.flash.":          {"channel-added", "channel-deleted", "channel-paused", "channel-resumed", "tested", "rules", "muted", "unmuted"},
 	"alerts.kind.":           {"telegram", "email", "webhook"},
 	"alerts.new.":            {"telegram", "email", "webhook"},

@@ -390,12 +390,14 @@ func (m *Manager) Rebuild(ctx context.Context, a Actor, projectSlug, serviceSlug
 // deployRequest is one deploy: image, when set, replaces the service's image
 // for this deploy only and skips any build (rollback to a pinned image);
 // commit is the commit that image was built from; fresh skips every cache
-// (Rebuild).
+// (Rebuild); revertImage, when set, is the image the service ran before
+// this deploy changed it (ChangeImageTag): a failed deploy puts it back.
 type deployRequest struct {
-	trigger string
-	image   string
-	commit  gitsrc.Commit
-	fresh   bool
+	trigger     string
+	image       string
+	commit      gitsrc.Commit
+	fresh       bool
+	revertImage string
 }
 
 // deploy runs a deploy in the background.
@@ -536,6 +538,9 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 				}
 			}
 			m.log.Warn("deploy failed", "service", p.Slug+"/"+s.Slug, "error", errText.String, "previous", previous)
+			if req.revertImage != "" {
+				m.revertImage(bg, a, s.ID, s.Image, req.revertImage, depID)
+			}
 		}
 		if ferr := m.q.FinishDeployment(bg, dbq.FinishDeploymentParams{
 			Status: status, Error: errText, FinishedAt: sql.NullInt64{Int64: m.now().Unix(), Valid: true}, ID: depID,

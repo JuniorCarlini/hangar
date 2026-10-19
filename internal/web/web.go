@@ -155,6 +155,9 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET "+svc+"/logs", h.serviceLogs, viewer)
 	rt.HandleFunc("POST "+svc+"/logs/mark", h.markLog, Policy{Role: auth.RoleOperator, Audit: "service.logs.mark"})
 	rt.HandleFunc("POST "+svc+"/deploy", h.deployService, Policy{Role: auth.RoleOperator, Audit: "service.deploy", AuditByHandler: true})
+	// Changing the image's tag changes what runs (a version nobody reviewed
+	// may come with it): admin and sudo, like opening a way in.
+	rt.HandleFunc("POST "+svc+"/image", h.changeImage, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.image.change", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/rebuild", h.rebuildService, Policy{Role: auth.RoleOperator, Audit: "service.deploy", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/position", h.moveCard, Policy{Role: auth.RoleOperator, Audit: "service.move"})
 	rt.HandleFunc("POST "+svc+"/action", h.serviceAction, Policy{Role: auth.RoleOperator, Audit: "service.action", AuditByHandler: true})

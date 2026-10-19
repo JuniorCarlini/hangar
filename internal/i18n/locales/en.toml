@@ -315,6 +315,7 @@ failed = "Failed"
 superseded = "Superseded"
 
 [deploy.trigger]
+image = "version change"
 rebuild = "from scratch (no cache)"
 restore = "restore"
 create = "creation"
@@ -324,6 +325,7 @@ rollback = "rollback"
 ports = "ports"
 
 [flash]
+image = "Version changed and deploy started. If the new one does not come up, the service stays on the previous one."
 compose = "Services created from the compose file. Their deploys have started: databases first."
 volume = "Disk added. It applies from the next deploy."
 volume-removed = "Disk detached. It applies from the next deploy."
@@ -1694,6 +1696,7 @@ down = "The service is down: the previous version did not come back."
 none = "There was no previous version live."
 
 [alert.action]
+service_image_change = "changed the image version of a service"
 user_invite_cancel = "cancelled a team invitation"
 user_invite = "invited someone to the team"
 user_update = "changed the access of a team member"
@@ -2849,3 +2852,21 @@ pushed = "Last push"
 credential = "Credential"
 open_github = "Open on GitHub"
 branch_hint = "The repository's branches; the default one comes selected."
+
+[image_tag]
+title = "Image"
+hint = "Change the version (tag) of the image the service runs. The deploy starts right away; if the new version does not come up, the previous one stays live and the service goes back to it."
+stateful = "Database: only change within the same major version (e.g. 18.1 → 18.3). A new major version may convert the data, and then it cannot go back by itself: take a backup first."
+tag = "Version (tag)"
+change = "Change version"
+
+[image_tag.error]
+git = "This service is built from Git: its version comes from the repository."
+tag = "Invalid version. Use only the tag (lowercase letters, digits, dot, hyphen and underscore), without the image name."
+same = "The service already runs this version."
+changed = "The service's image changed meanwhile. Reload the page and try again."
+
+[confirm.image]
+title = "Change the version of {name}?"
+text = "The service will run the new image version. If it does not become healthy, the previous one stays (or comes back) and the service returns to the old version."
+ok = "Change and deploy"

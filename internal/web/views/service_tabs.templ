@@ -988,6 +988,9 @@ templ tabSettings(d ServiceData) {
 		@cardHead(t(ctx, "service.resources"))
 		@serviceStats(d)
 	</section>
+	if d.Git == nil && d.ImageTag != "" {
+		@imageCard(d)
+	}
 	@maintenanceCard(d)
 	if d.CanAdmin {
 		@dangerZone(t(ctx, "service.danger.title"), t(ctx, "service.danger.hint")) {
@@ -1024,6 +1027,44 @@ templ tabSettings(d ServiceData) {
 			</dialog>
 		}
 	}
+}
+
+// imageCard changes the tag of the image the service runs (same
+// repository) and deploys it; a failed deploy keeps or brings back the
+// previous version and tag. It changes what runs: admin and sudo.
+templ imageCard(d ServiceData) {
+	<section class={ cardClass } id="image">
+		@cardHead(t(ctx, "image_tag.title"))
+		<div class={ cardBodyClass }>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "image_tag.hint") }</p>
+			if d.Stateful {
+				@notice("warning", "triangle-alert", t(ctx, "image_tag.stateful"))
+			}
+			if d.CanAdmin && d.SudoActive {
+				<form data-confirm={ t(ctx, "confirm.image.title", "name", d.Slug) } data-confirm-text={ t(ctx, "confirm.image.text") } data-confirm-ok={ t(ctx, "confirm.image.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/image") } class="flex flex-wrap items-end gap-3">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="flex min-w-0 flex-[1_1_320px] flex-col gap-1.5">
+						<label class="tuc-label" for="image-tag">{ t(ctx, "image_tag.tag") }</label>
+						<div class="flex min-w-0 items-center gap-1.5">
+							<span class="truncate font-mono text-[13px] text-muted">{ d.ImageRepo + ":" }</span>
+							<input class="tuc-input min-w-0 grow font-mono text-[13px]" id="image-tag" name="tag" value={ d.ImageTag } required maxlength="128" pattern="[a-z0-9_][a-z0-9._\-]*" autocomplete="off" spellcheck="false"/>
+						</div>
+					</div>
+					<button class="tuc-btn is-outline" type="submit">
+						@Icon("circle-arrow-up", "size-4")
+						{ t(ctx, "image_tag.change") }
+					</button>
+				</form>
+			} else {
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<span class="font-mono text-[13px]">{ d.ImageRepo + ":" + d.ImageTag }</span>
+					if d.CanAdmin {
+						@sudoButton(t(ctx, "image_tag.change"))
+					}
+				</div>
+			}
+		</div>
+	</section>
 }
 
 // maintenanceCard turns the maintenance page on and off for every domain

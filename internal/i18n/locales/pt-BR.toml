@@ -315,6 +315,7 @@ failed = "Falhou"
 superseded = "Substituído"
 
 [deploy.trigger]
+image = "troca de versão"
 restore = "restauração"
 create = "criação"
 manual = "manual"
@@ -324,6 +325,7 @@ ports = "portas"
 rebuild = "do zero (sem cache)"
 
 [flash]
+image = "Versão trocada e deploy iniciado. Se a nova não subir, o serviço continua na anterior."
 compose = "Serviços criados a partir do compose. Os deploys já começaram: os bancos primeiro."
 volume = "Disco adicionado. Vale a partir do próximo deploy."
 volume-removed = "Disco desligado. Vale a partir do próximo deploy."
@@ -1694,6 +1696,7 @@ down = "O serviço ficou fora do ar: a versão anterior não voltou."
 none = "Não havia versão anterior no ar."
 
 [alert.action]
+service_image_change = "trocou a versão da imagem de um serviço"
 user_invite_cancel = "cancelou um convite da equipe"
 user_invite = "convidou uma pessoa para a equipe"
 user_update = "mudou o acesso de uma pessoa da equipe"
@@ -2850,3 +2853,21 @@ pushed = "Último push"
 credential = "Credencial"
 open_github = "Abrir no GitHub"
 branch_hint = "Os branches do repositório; o padrão já vem escolhido."
+
+[image_tag]
+title = "Imagem"
+hint = "Troque a versão (tag) da imagem que o serviço roda. O deploy começa na hora; se a versão nova não subir, a anterior continua no ar e o serviço volta para ela."
+stateful = "Banco de dados: troque só dentro da mesma versão principal (ex.: 18.1 → 18.3). Uma versão principal nova pode converter os dados, e aí não dá para voltar sozinho: faça backup antes."
+tag = "Versão (tag)"
+change = "Trocar versão"
+
+[image_tag.error]
+git = "Este serviço é construído do Git: a versão vem do repositório."
+tag = "Versão inválida. Use só a tag (letras minúsculas, números, ponto, hífen e sublinhado), sem o nome da imagem."
+same = "O serviço já roda essa versão."
+changed = "A imagem do serviço mudou enquanto isso. Recarregue a página e tente de novo."
+
+[confirm.image]
+title = "Trocar a versão de {name}?"
+text = "O serviço passa a rodar a nova versão da imagem. Se ela não ficar saudável, a anterior continua (ou volta) e o serviço retorna à versão antiga."
+ok = "Trocar e fazer deploy"

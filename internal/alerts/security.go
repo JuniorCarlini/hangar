@@ -33,6 +33,7 @@ var SensitiveActions = []string{
 	"status_link.create",
 	"brand.save",
 	"service.volume.wipe",
+	"service.image.change",
 	"service.terminal.open",
 	"status_link.revoke",
 	"service.git.webhook",
