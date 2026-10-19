@@ -21,7 +21,6 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/cofre"
 	"github.com/JuniorCarlini/hangar/internal/config"
-	"github.com/JuniorCarlini/hangar/internal/docker"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/update"
@@ -201,7 +200,7 @@ func restoreDatabases(ctx context.Context, cfg config.Config, ids []age.Identity
 		return err
 	}
 	defer func() { _ = core.Close() }()
-	d, err := docker.New(ctx, cfg.Docker.Host)
+	d, err := app.ConnectDocker(ctx, core, cfg.Docker.Host)
 	if err != nil {
 		return err
 	}

@@ -45,8 +45,11 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 	switch {
 	case err == nil:
 		c := res.Container
-		if c.Config == nil || c.Config.Labels[node.LabelManaged] != "true" {
+		if c.Config == nil {
 			return ErrNotManaged
+		}
+		if err := l.checkOwner(ctx, node.EdgeContainer, c.Config.Labels); err != nil {
+			return err
 		}
 		if c.Config.Labels[labelEdgeSpec] == hash {
 			if c.State != nil && c.State.Running {
@@ -79,9 +82,9 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 			Cmd:          []string{"caddy", "run", "--config", "/run/caddy/bootstrap.json"},
 			Env:          []string{"XDG_DATA_HOME=/data", "XDG_CONFIG_HOME=/config", "HOME=/tmp"},
 			ExposedPorts: exposed,
-			Labels: map[string]string{
+			Labels: l.withInstance(map[string]string{
 				node.LabelManaged: "true", "hangar.role": "edge", labelEdgeSpec: hash,
-			},
+			}),
 		},
 		HostConfig: &container.HostConfig{
 			PortBindings:   ports,
@@ -136,7 +139,7 @@ func (l *Local) edgeImage(ctx context.Context, base string) (string, error) {
 			Image:      base,
 			User:       "0:0",
 			Entrypoint: []string{"setcap", "-r", "/usr/bin/caddy"},
-			Labels:     map[string]string{node.LabelManaged: "true", "hangar.role": "edge-build"},
+			Labels:     l.withInstance(map[string]string{node.LabelManaged: "true", "hangar.role": "edge-build"}),
 		},
 		HostConfig: &container.HostConfig{
 			NetworkMode: "none",
@@ -182,7 +185,7 @@ func (l *Local) ensureEdgeNetwork(ctx context.Context, spec node.EdgeSpec) error
 		if res.Network.Labels[node.LabelManaged] != "true" {
 			return fmt.Errorf("network %s exists and was not created by Hangar", node.EdgeNetwork)
 		}
-		return nil
+		return l.checkOwner(ctx, node.EdgeNetwork, res.Network.Labels)
 	}
 	if !isNotFound(err) {
 		return err
@@ -190,7 +193,7 @@ func (l *Local) ensureEdgeNetwork(ctx context.Context, spec node.EdgeSpec) error
 	_, err = l.c.NetworkCreate(ctx, node.EdgeNetwork, client.NetworkCreateOptions{
 		Driver: "bridge",
 		IPAM:   &network.IPAM{Config: []network.IPAMConfig{{Subnet: spec.Subnet, Gateway: spec.Gateway}}},
-		Labels: map[string]string{node.LabelManaged: "true", "hangar.role": "edge"},
+		Labels: l.withInstance(map[string]string{node.LabelManaged: "true", "hangar.role": "edge"}),
 	})
 	if err != nil {
 		return fmt.Errorf("create edge network: %w", err)
@@ -212,8 +215,11 @@ func (l *Local) ServiceAddress(ctx context.Context, project, service string, por
 		return "", err
 	}
 	c := res.Container
-	if c.Config == nil || c.Config.Labels[node.LabelManaged] != "true" {
+	if c.Config == nil {
 		return "", ErrNotManaged
+	}
+	if err := l.checkOwner(ctx, node.ContainerName(project, service), c.Config.Labels); err != nil {
+		return "", err
 	}
 	if c.NetworkSettings == nil {
 		return "", errors.New("container has no network")
@@ -237,8 +243,11 @@ func (l *Local) ConnectEdge(ctx context.Context, project, service string) error 
 		return err
 	}
 	c := res.Container
-	if c.Config == nil || c.Config.Labels[node.LabelManaged] != "true" {
+	if c.Config == nil {
 		return ErrNotManaged
+	}
+	if err := l.checkOwner(ctx, node.ContainerName(project, service), c.Config.Labels); err != nil {
+		return err
 	}
 	if c.NetworkSettings != nil && c.NetworkSettings.Networks[node.EdgeNetwork] != nil {
 		return nil

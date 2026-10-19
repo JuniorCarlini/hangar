@@ -100,3 +100,9 @@ UPDATE services SET canvas_x = ?, canvas_y = ? WHERE id = ?;
 
 -- name: ResetCanvasPositions :exec
 UPDATE services SET canvas_x = NULL, canvas_y = NULL WHERE project_id = ?;
+
+-- name: KnowsProject :one
+SELECT count(*) FROM projects WHERE id = ?;
+
+-- name: KnowsService :one
+SELECT count(*) FROM services WHERE id = ? AND project_id = ?;

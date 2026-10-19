@@ -290,6 +290,33 @@ func (q *Queries) HasRunningDeployment(ctx context.Context, serviceID string) (i
 	return count, err
 }
 
+const knowsProject = `-- name: KnowsProject :one
+SELECT count(*) FROM projects WHERE id = ?
+`
+
+func (q *Queries) KnowsProject(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, knowsProject, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const knowsService = `-- name: KnowsService :one
+SELECT count(*) FROM services WHERE id = ? AND project_id = ?
+`
+
+type KnowsServiceParams struct {
+	ID        string
+	ProjectID string
+}
+
+func (q *Queries) KnowsService(ctx context.Context, arg KnowsServiceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, knowsService, arg.ID, arg.ProjectID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const lastLiveDeployment = `-- name: LastLiveDeployment :one
 SELECT id, service_id, status, image, env_hash, "trigger", created_by, error, started_at, finished_at, phase, log, image_ref, commit_sha, commit_message FROM deployments WHERE service_id = ? AND status = 'live' ORDER BY started_at DESC, rowid DESC LIMIT 1
 `

@@ -36,7 +36,7 @@ func (l *Local) RunTask(ctx context.Context, spec node.TaskSpec, stdin io.Reader
 	suffix := make([]byte, 6)
 	_, _ = rand.Read(suffix)
 	name := "hangar_task_" + hex.EncodeToString(suffix)
-	labels := map[string]string{node.LabelManaged: "true", LabelTask: "true"}
+	labels := l.withInstance(map[string]string{node.LabelManaged: "true", LabelTask: "true"})
 
 	hc := hostConfig(node.ServiceSpec{MemoryBytes: spec.MemoryBytes, NanoCPUs: spec.NanoCPUs, PidsLimit: spec.PidsLimit})
 	hc.NetworkMode = "none"
@@ -48,6 +48,9 @@ func (l *Local) RunTask(ctx context.Context, spec node.TaskSpec, stdin io.Reader
 		}
 		if res.Volume.Labels[node.LabelManaged] != "true" {
 			return fmt.Errorf("volume %s was not created by Hangar", m.Volume)
+		}
+		if err := l.checkOwner(ctx, m.Volume, res.Volume.Labels); err != nil {
+			return err
 		}
 		hc.Mounts = append(hc.Mounts, mount.Mount{Type: mount.TypeVolume, Source: m.Volume, Target: m.Path, ReadOnly: m.ReadOnly})
 	}

@@ -7,8 +7,6 @@ import (
 
 	"github.com/moby/moby/client"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-
-	"github.com/JuniorCarlini/hangar/internal/node"
 )
 
 // ContainerImage returns the ID and size of the image the Hangar container
@@ -22,8 +20,11 @@ func (l *Local) ContainerImage(ctx context.Context, name string) (string, int64,
 		return "", 0, err
 	}
 	c := res.Container
-	if c.Config == nil || c.Config.Labels[node.LabelManaged] != "true" {
+	if c.Config == nil {
 		return "", 0, ErrNotManaged
+	}
+	if err := l.checkOwner(ctx, name, c.Config.Labels); err != nil {
+		return "", 0, err
 	}
 	img, err := l.c.ImageInspect(ctx, c.Image)
 	if err != nil {

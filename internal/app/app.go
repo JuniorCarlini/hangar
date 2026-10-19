@@ -137,7 +137,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// in the background and restarts the panel once Docker answers.
 	var n node.Node
 	dockerBack := make(chan error, 1)
-	if d, err := docker.New(ctx, cfg.Docker.Host); err != nil {
+	if d, err := ConnectDocker(ctx, core, cfg.Docker.Host); err != nil {
 		log.Warn("docker unavailable; projects are read-only until it answers", "error", err)
 		go func() {
 			if err := waitDocker(ctx, cfg.Docker.Host, log); err != nil {

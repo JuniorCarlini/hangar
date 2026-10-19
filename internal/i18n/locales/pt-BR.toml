@@ -465,6 +465,7 @@ bulk_too_many = "No máximo {max} variáveis de uma vez."
 
 [docker.error]
 not_managed = "Já existe um container com este nome que não foi criado pelo Hangar; nada foi alterado."
+other_instance = "{name} pertence a outro painel Hangar neste Docker (mesmos nomes de projeto e serviço); nada foi alterado. Use outro nome para o projeto ou o serviço."
 
 [update]
 waiting = "Esta tela se atualiza sozinha quando a versão nova estiver no ar."

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
@@ -33,6 +34,11 @@ var ErrNotManaged = &i18n.Error{Key: "docker.error.not_managed"}
 // Local implements node.Node on this machine's Docker.
 type Local struct {
 	c *client.Client
+	// instance and adopt decide which Hangar objects are this panel's
+	// (owner.go); adopted caches the positive answers.
+	instance string
+	adopt    AdoptFunc
+	adopted  sync.Map
 }
 
 // New connects to Docker (DOCKER_HOST or the default socket).
@@ -59,8 +65,8 @@ func (l *Local) Close() error { return l.c.Close() }
 
 var _ node.Node = (*Local)(nil)
 
-func managedLabels(projectID, project string) map[string]string {
-	return map[string]string{node.LabelManaged: "true", node.LabelProjectID: projectID, node.LabelProject: project}
+func (l *Local) managedLabels(projectID, project string) map[string]string {
+	return l.withInstance(map[string]string{node.LabelManaged: "true", node.LabelProjectID: projectID, node.LabelProject: project})
 }
 
 // EnsureProjectNetwork creates the project's network if it does not exist.
@@ -72,14 +78,14 @@ func (l *Local) EnsureProjectNetwork(ctx context.Context, projectID, project str
 		if res.Network.Labels[node.LabelManaged] != "true" {
 			return fmt.Errorf("network %s exists and was not created by Hangar", name)
 		}
-		return nil
+		return l.checkOwner(ctx, name, res.Network.Labels)
 	}
 	if !isNotFound(err) {
 		return fmt.Errorf("inspect network %s: %w", name, err)
 	}
 	_, err = l.c.NetworkCreate(ctx, name, client.NetworkCreateOptions{
 		Driver: "bridge",
-		Labels: managedLabels(projectID, project),
+		Labels: l.managedLabels(projectID, project),
 	})
 	if err != nil {
 		return fmt.Errorf("create network %s: %w", name, err)
@@ -100,6 +106,9 @@ func (l *Local) RemoveProjectNetwork(ctx context.Context, project string) error 
 	if res.Network.Labels[node.LabelManaged] != "true" {
 		return fmt.Errorf("network %s was not created by Hangar", name)
 	}
+	if err := l.checkOwner(ctx, name, res.Network.Labels); err != nil {
+		return err
+	}
 	_, err = l.c.NetworkRemove(ctx, name, client.NetworkRemoveOptions{})
 	return err
 }
@@ -107,7 +116,7 @@ func (l *Local) RemoveProjectNetwork(ctx context.Context, project string) error 
 // createContainer creates (without starting) a service container named name
 // running image, with the hardening from docs/05.
 func (l *Local) createContainer(ctx context.Context, spec node.ServiceSpec, name, image string) (string, error) {
-	labels := managedLabels(spec.ProjectID, spec.Project)
+	labels := l.managedLabels(spec.ProjectID, spec.Project)
 	labels[node.LabelServiceID] = spec.ServiceID
 	labels[node.LabelService] = spec.Service
 	labels[node.LabelDeployment] = spec.Deployment
@@ -223,12 +232,15 @@ func (l *Local) ensureVolume(ctx context.Context, spec node.ServiceSpec, v node.
 		if res.Volume.Labels[node.LabelManaged] != "true" {
 			return "", fmt.Errorf("volume %s exists and was not created by Hangar", name)
 		}
+		if err := l.checkOwner(ctx, name, res.Volume.Labels); err != nil {
+			return "", err
+		}
 		return name, nil
 	}
 	if !isNotFound(err) {
 		return "", err
 	}
-	labels := managedLabels(spec.ProjectID, spec.Project)
+	labels := l.managedLabels(spec.ProjectID, spec.Project)
 	labels[node.LabelServiceID] = spec.ServiceID
 	labels[node.LabelService] = spec.Service
 	if _, err := l.c.VolumeCreate(ctx, client.VolumeCreateOptions{Name: name, Labels: labels}); err != nil {
@@ -258,7 +270,7 @@ func (l *Local) ownVolume(ctx context.Context, image, volume string) {
 	}
 	cfg := &container.Config{
 		Image: image, User: "0:0", Entrypoint: []string{"chown", owner, "/mnt/volume"},
-		Labels: map[string]string{node.LabelManaged: "true", LabelTask: "true"},
+		Labels: l.withInstance(map[string]string{node.LabelManaged: "true", LabelTask: "true"}),
 	}
 	hc := &container.HostConfig{
 		NetworkMode: "none", CapDrop: []string{"ALL"}, CapAdd: []string{"CHOWN"},
@@ -338,8 +350,11 @@ func (l *Local) inspectManaged(ctx context.Context, name string) (string, error)
 	if err != nil {
 		return "", err
 	}
-	if res.Container.Config == nil || res.Container.Config.Labels[node.LabelManaged] != "true" {
+	if res.Container.Config == nil {
 		return "", ErrNotManaged
+	}
+	if err := l.checkOwner(ctx, strings.TrimPrefix(res.Container.Name, "/"), res.Container.Config.Labels); err != nil {
+		return "", err
 	}
 	return res.Container.ID, nil
 }
@@ -410,8 +425,11 @@ func (l *Local) Status(ctx context.Context, project, service string) (node.Statu
 		return node.Status{}, err
 	}
 	c := res.Container
-	if c.Config == nil || c.Config.Labels[node.LabelManaged] != "true" {
+	if c.Config == nil {
 		return node.Status{}, ErrNotManaged
+	}
+	if err := l.checkOwner(ctx, node.ContainerName(project, service), c.Config.Labels); err != nil {
+		return node.Status{}, err
 	}
 	st := node.Status{Exists: true, RestartCount: c.RestartCount, Image: c.Config.Image, Deployment: c.Config.Labels[node.LabelDeployment]}
 	if c.State != nil {
@@ -516,6 +534,9 @@ func (l *Local) ListManaged(ctx context.Context) ([]node.Managed, error) {
 	}
 	out := make([]node.Managed, 0, len(res.Items))
 	for _, c := range res.Items {
+		if !l.owns(ctx, c.Labels) {
+			continue // another panel's container on the same Docker
+		}
 		name := ""
 		if len(c.Names) > 0 {
 			name = strings.TrimPrefix(c.Names[0], "/")

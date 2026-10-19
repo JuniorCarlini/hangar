@@ -55,10 +55,10 @@ func (l *Local) Build(ctx context.Context, spec node.BuildSpec, log func(string)
 	go func() { pw.CloseWithError(writeContext(pw, spec.ContextDir, df)) }()
 	defer func() { _ = pr.Close() }()
 
-	labels := map[string]string{
+	labels := l.withInstance(map[string]string{
 		node.LabelManaged: "true", node.LabelProjectID: spec.ProjectID, node.LabelProject: spec.Project,
 		node.LabelServiceID: spec.ServiceID, node.LabelService: spec.Service, node.LabelDeployment: spec.Deployment,
-	}
+	})
 	res, err := l.c.ImageBuild(ctx, pr, client.ImageBuildOptions{
 		Tags:        []string{spec.Tag},
 		Dockerfile:  df,

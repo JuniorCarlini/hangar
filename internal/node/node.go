@@ -16,12 +16,15 @@ import (
 // Labels written on everything Hangar creates. Hangar never touches a
 // container or network without hangar.managed=true.
 const (
-	LabelManaged     = "hangar.managed"
-	LabelProjectID   = "hangar.project.id"
-	LabelProject     = "hangar.project"
-	LabelServiceID   = "hangar.service.id"
-	LabelService     = "hangar.service"
-	LabelDeployment  = "hangar.deployment"
+	LabelManaged    = "hangar.managed"
+	LabelProjectID  = "hangar.project.id"
+	LabelProject    = "hangar.project"
+	LabelServiceID  = "hangar.service.id"
+	LabelService    = "hangar.service"
+	LabelDeployment = "hangar.deployment"
+	// LabelInstance is the id of the panel that created the object: several
+	// panels may share one Docker daemon (internal/docker/owner.go).
+	LabelInstance    = "hangar.instance"
 	NetworkPrefix    = "hangar_"
 	ContainerNameSep = "_"
 )

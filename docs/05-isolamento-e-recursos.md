@@ -21,6 +21,16 @@ Servidor
 - Labels em tudo que o Hangar cria: `hangar.managed=true`,
   `hangar.project=<id>`, `hangar.service=<id>`, `hangar.deployment=<id>`.
   O Hangar **nunca** toca em container sem `hangar.managed=true`.
+- Cada painel tem um id de instância (gerado uma vez, guardado no banco em
+  `settings.instance_id`) e grava `hangar.instance=<id>` em todo container,
+  rede e volume que cria. Dois painéis no mesmo Docker (um de
+  desenvolvimento ao lado de outro, por exemplo) podem ter projeto e
+  serviço com o mesmo nome — e então o mesmo nome de container
+  (`loja_web`): cada um só age sobre o que tem o seu id, e o outro recebe
+  um erro dizendo que o nome pertence a outro painel. O que foi criado
+  antes do id existir (sem o label) é adotado só quando os ids de projeto e
+  serviço do label existem no banco deste painel; assim uma instalação
+  atualizada continua mandando nos seus containers, e nunca nos de outro.
 
 ## Nomes e DNS interno
 

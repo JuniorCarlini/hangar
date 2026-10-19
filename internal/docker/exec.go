@@ -72,8 +72,11 @@ func (l *Local) SetLinked(ctx context.Context, project, service string, linked [
 		return err
 	}
 	c := res.Container
-	if c.Config == nil || c.Config.Labels[node.LabelManaged] != "true" {
+	if c.Config == nil {
 		return ErrNotManaged
+	}
+	if err := l.checkOwner(ctx, node.ContainerName(project, service), c.Config.Labels); err != nil {
+		return err
 	}
 	want := map[string]bool{}
 	for _, p := range linked {
