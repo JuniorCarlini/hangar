@@ -1,0 +1,10 @@
+# Applies the disk size limits whenever the panel changes them.
+[Unit]
+Description=Hangar — espera mudanças nos limites dos discos
+
+[Path]
+PathChanged=/var/lib/hangar/volumes/desired.json
+Unit=hangar-volumes.service
+
+[Install]
+WantedBy=multi-user.target

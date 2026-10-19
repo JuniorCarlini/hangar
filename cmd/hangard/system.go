@@ -14,9 +14,11 @@ import (
 	"github.com/JuniorCarlini/hangar/deploy"
 	"github.com/JuniorCarlini/hangar/internal/app"
 	"github.com/JuniorCarlini/hangar/internal/config"
+	"github.com/JuniorCarlini/hangar/internal/docker"
 	"github.com/JuniorCarlini/hangar/internal/firewall"
 	"github.com/JuniorCarlini/hangar/internal/hostperms"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 )
 
 // unitTargets maps each embedded file to its destination.
@@ -27,12 +29,17 @@ var unitTargets = map[string]string{
 	"hangar-firewall.service": "/etc/systemd/system/hangar-firewall.service",
 	"hangar-firewall.path":    "/etc/systemd/system/hangar-firewall.path",
 	"hangar-firewall.timer":   "/etc/systemd/system/hangar-firewall.timer",
+	"hangar-volumes.service":  "/etc/systemd/system/hangar-volumes.service",
+	"hangar-volumes.path":     "/etc/systemd/system/hangar-volumes.path",
 	"journald-hangar.conf":    "/etc/systemd/journald.conf.d/hangar.conf",
 }
 
 func systemCmd(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) >= 1 && args[0] == "firewall-apply" {
 		return firewallApply(ctx, args[1:])
+	}
+	if len(args) >= 1 && args[0] == "volumes-apply" {
+		return volumesApply(ctx, args[1:])
 	}
 	if len(args) >= 1 && args[0] == "fix-perms" {
 		return fixPerms(args[1:], stdout)
@@ -69,6 +76,13 @@ func systemCmd(ctx context.Context, args []string, stdout, stderr io.Writer) err
 		{"systemctl", "enable", "--now", "hangar-firewall.path"},
 		{"systemctl", "enable", "hangar-firewall.service"},
 		{"systemctl", "enable", "--now", "hangar-firewall.timer"},
+		// The disk limits: the path unit applies what the panel writes, the
+		// service mounts the images at boot. Started once now so the panel
+		// sees the unit answered and offers limits (--no-block: an update
+		// must not wait on a copy in progress).
+		{"systemctl", "enable", "--now", "hangar-volumes.path"},
+		{"systemctl", "enable", "hangar-volumes.service"},
+		{"systemctl", "start", "--no-block", "hangar-volumes.service"},
 	} {
 		if out, err := exec.CommandContext(ctx, cmd[0], cmd[1:]...).CombinedOutput(); err != nil { //nolint:gosec // fixed commands
 			return fmt.Errorf("%v: %w: %s", cmd, err, out)
@@ -93,6 +107,33 @@ func firewallApply(ctx context.Context, args []string) error {
 		return err
 	}
 	return firewall.Apply(ctx, app.FirewallDir(cfg))
+}
+
+// volumesApply creates, mounts, grows, fills or deletes the disk images of
+// limited volumes as the panel asked (root, started by
+// hangar-volumes.service at boot and whenever the panel writes).
+func volumesApply(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("volumes-apply", flag.ContinueOnError)
+	cfgPath := fs.String("config", "/etc/hangar/hangar.toml", tr("cli.flag_config"))
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if os.Geteuid() != 0 {
+		return i18n.E("cli.need_root")
+	}
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		return err
+	}
+	a := &volumes.Applier{
+		Paths: volumes.Paths{Data: cfg.DataDir},
+		// Only copying data in or out needs Docker; at boot the unit runs
+		// before it and only mounts.
+		Docker: func(ctx context.Context) (volumes.Docker, error) {
+			return docker.New(ctx, cfg.Docker.Host)
+		},
+	}
+	return a.Apply(ctx)
 }
 
 // fixPerms puts back the owner and mode of the config, master key and data

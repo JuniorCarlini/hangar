@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/netip"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -237,6 +238,18 @@ type Volume struct {
 	// is this service's own.
 	Service   string
 	ServiceID string
+	// Device, when set, is the folder inside the volume's disk image that
+	// the Docker volume binds to: a volume with a size limit
+	// (internal/volumes). Always <data>/volume-mounts/<Docker name>/data.
+	Device string
+}
+
+// ValidDevice reports whether device is where the disk image of the
+// Docker volume name is mounted: never any other host path.
+func ValidDevice(device, name string) bool {
+	return path.IsAbs(device) && path.Clean(device) == device && path.Base(device) == "data" &&
+		path.Base(path.Dir(device)) == name && path.Base(path.Dir(path.Dir(device))) == "volume-mounts" &&
+		!strings.ContainsAny(device, "\x00\n\r:,")
 }
 
 // VolumeOwner is the service whose Docker volume v is, in spec.
@@ -402,6 +415,9 @@ func (s ServiceSpec) Validate() error {
 		if v.Service != "" && (!SlugRE.MatchString(v.Service) || v.Service == s.Service || v.ServiceID == "") {
 			return fmt.Errorf("invalid owner of volume %q: %q", v.Name, v.Service)
 		}
+		if owner, _ := s.VolumeOwner(v); v.Device != "" && !ValidDevice(v.Device, VolumeName(s.Project, owner, v.Name)) {
+			return fmt.Errorf("invalid disk image folder of volume %q: %q", v.Name, v.Device)
+		}
 		seenVol[v.Name] = true
 	}
 	for _, p := range s.Ports {
@@ -436,6 +452,18 @@ func (s ServiceSpec) Validate() error {
 // DefaultCaps is the minimum common images (nginx, apps that switch users on
 // startup) need after cap_drop ALL.
 var DefaultCaps = []string{"CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "NET_BIND_SERVICE", "KILL"}
+
+// VolumeBinder is implemented by nodes that can move a volume onto a disk
+// image with a size limit (internal/volumes) and back.
+type VolumeBinder interface {
+	// VolumeDevice says whether the Docker volume exists and the folder it
+	// binds to ("" for a plain volume).
+	VolumeDevice(ctx context.Context, name string) (exists bool, device string, err error)
+	// SwitchVolume recreates v, which no container may use, bound to
+	// device, or plain when device is "". A plain volume's files are
+	// deleted with it.
+	SwitchVolume(ctx context.Context, spec ServiceSpec, v Volume, device string) error
+}
 
 // VolumeEnsurer is implemented by nodes that can create a service's
 // volumes ahead of its deploy (shared volumes of a template). Optional: a
@@ -525,6 +553,8 @@ type DiskUsage struct {
 	// ByService is each service's volume bytes (by service id), summed from
 	// the same "docker system df" so no extra call is made.
 	ByService map[string]int64
+	// ByVolume is each service volume's bytes, by Docker name.
+	ByVolume map[string]int64
 }
 
 // Reclaimed is disk space freed by a cleanup, in bytes.

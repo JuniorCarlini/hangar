@@ -1,0 +1,25 @@
+# Applies the disk size limits written by the panel (docs/05): creates,
+# mounts, grows, fills and deletes the disk images of limited volumes. Runs
+# as root because it mounts loop devices; it validates the file again first
+# and only touches paths it derives from a volume's name.
+[Unit]
+Description=Hangar — aplica os limites de tamanho dos discos
+Documentation=https://github.com/JuniorCarlini/hangar/blob/main/docs/05-isolamento-e-recursos.md
+# Before Docker: at boot the images are mounted before any container that
+# binds to one starts (without the mount the container refuses to start,
+# it never runs on an empty folder).
+Before=docker.service
+After=local-fs.target
+RequiresMountsFor=/var/lib/hangar
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hangard system volumes-apply -config /etc/hangar/hangar.toml
+# Moving a volume's data into its image takes as long as the copy does.
+TimeoutStartSec=infinity
+NoNewPrivileges=yes
+# No PrivateTmp, ProtectHome or other namespacing: the mounts must be made
+# in the host's mount namespace, where Docker and the panel see them.
+
+[Install]
+WantedBy=multi-user.target

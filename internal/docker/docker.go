@@ -276,6 +276,12 @@ func (l *Local) ensureVolume(ctx context.Context, spec node.ServiceSpec, v node.
 		if err := l.checkOwner(ctx, name, res.Volume.Labels); err != nil {
 			return "", err
 		}
+		// A volume with a size limit must already be on its disk image:
+		// a plain one here means its data was not moved yet, and the app
+		// must not start on it.
+		if v.Device != "" && res.Volume.Options["device"] != v.Device {
+			return "", fmt.Errorf("volume %s is not on its size-limited disk yet", name)
+		}
 		// Labels cannot change, so the mark stays: chown only touches the
 		// volume's top folder, and doing it again gives the same result.
 		if res.Volume.Labels[labelChownPending] == "true" && v.Service == "" && l.imageHere(ctx, spec.Image) {
@@ -294,7 +300,7 @@ func (l *Local) ensureVolume(ctx context.Context, spec node.ServiceSpec, v node.
 	if !chownNow {
 		labels[labelChownPending] = "true"
 	}
-	if _, err := l.c.VolumeCreate(ctx, client.VolumeCreateOptions{Name: name, Labels: labels}); err != nil {
+	if _, err := l.c.VolumeCreate(ctx, client.VolumeCreateOptions{Name: name, Driver: "local", DriverOpts: bindOptions(v.Device), Labels: labels}); err != nil {
 		return "", fmt.Errorf("create volume %s: %w", name, err)
 	}
 	if chownNow {
