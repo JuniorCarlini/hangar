@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -55,8 +56,7 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 			if c.State != nil && c.State.Running {
 				return nil
 			}
-			_, err := l.c.ContainerStart(ctx, c.ID, client.ContainerStartOptions{})
-			return err
+			return l.startOnAddress(ctx, c.ID, node.EdgeNetwork, spec.CaddyIP)
 		}
 		if _, err := l.c.ContainerRemove(ctx, c.ID, client.ContainerRemoveOptions{Force: true}); err != nil {
 			return fmt.Errorf("replace caddy: %w", err)
@@ -109,10 +109,77 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 	if err != nil {
 		return fmt.Errorf("create caddy: %w", err)
 	}
-	if _, err := l.c.ContainerStart(ctx, created.ID, client.ContainerStartOptions{}); err != nil {
+	if err := l.startOnAddress(ctx, created.ID, node.EdgeNetwork, spec.CaddyIP); err != nil {
 		return fmt.Errorf("start caddy: %w", err)
 	}
 	return nil
+}
+
+// startOnAddress starts a container that has the fixed address ip on
+// network. Docker hands the other containers of the network addresses from
+// the whole subnet and does not keep a stopped container's fixed address
+// for it, so while Caddy is down a service can take Caddy's address: at boot
+// Docker restarts every container at once, and Caddy's start then fails with
+// "Address already in use" for as long as that service runs, which leaves
+// every site down. A Hangar container holding the address leaves the
+// network, the container starts, and the other one joins again with a new
+// address and the same aliases.
+func (l *Local) startOnAddress(ctx context.Context, id, networkName string, ip netip.Addr) error {
+	moved, err := l.freeAddress(ctx, id, networkName, ip)
+	if err == nil {
+		_, err = l.c.ContainerStart(ctx, id, client.ContainerStartOptions{})
+	}
+	for _, m := range moved {
+		_, cerr := l.c.NetworkConnect(context.WithoutCancel(ctx), networkName, client.NetworkConnectOptions{
+			Container: m.id, EndpointConfig: &network.EndpointSettings{Aliases: m.aliases},
+		})
+		if cerr != nil && err == nil {
+			err = fmt.Errorf("reconnect %s to %s: %w", m.name, networkName, cerr)
+		}
+	}
+	return err
+}
+
+type movedEndpoint struct {
+	id, name string
+	aliases  []string
+}
+
+// freeAddress disconnects from network the container other than id that
+// holds ip, returning it so the caller connects it again.
+func (l *Local) freeAddress(ctx context.Context, id, networkName string, ip netip.Addr) ([]movedEndpoint, error) {
+	res, err := l.c.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	var moved []movedEndpoint
+	for cid, ep := range res.Network.Containers {
+		if cid == id || ep.IPv4Address.Addr() != ip {
+			continue
+		}
+		info, err := l.c.ContainerInspect(ctx, cid, client.ContainerInspectOptions{})
+		if err != nil {
+			return moved, err
+		}
+		c := info.Container
+		if c.Config == nil {
+			return moved, fmt.Errorf("%s holds %s on %s: %w", ep.Name, ip, networkName, ErrNotManaged)
+		}
+		if err := l.checkOwner(ctx, ep.Name, c.Config.Labels); err != nil {
+			return moved, fmt.Errorf("%s holds %s on %s: %w", ep.Name, ip, networkName, err)
+		}
+		m := movedEndpoint{id: cid, name: ep.Name}
+		if c.NetworkSettings != nil {
+			if e := c.NetworkSettings.Networks[networkName]; e != nil {
+				m.aliases = e.Aliases
+			}
+		}
+		if _, err := l.c.NetworkDisconnect(ctx, networkName, client.NetworkDisconnectOptions{Container: cid, Force: true}); err != nil {
+			return moved, fmt.Errorf("free %s on %s: %w", ip, networkName, err)
+		}
+		moved = append(moved, m)
+	}
+	return moved, nil
 }
 
 // edgeImage derives, once per base image, a copy of the Caddy image without
