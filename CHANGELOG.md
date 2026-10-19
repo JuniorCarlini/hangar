@@ -12,6 +12,28 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.12] - 2026-10-18
+
+### Novo
+
+- **Catálogo de templates que se atualiza sozinho**: o painel passa a baixar
+  uma vez por dia o catálogo assinado de
+  [hangar-templates](https://github.com/JuniorCarlini/hangar-templates). Um
+  robô sobe cada template para a imagem estável mais nova que a regra dele
+  permite (bancos de dados não pulam de versão major), confere tudo com as
+  regras do painel e assina. Templates novos chegam sem precisar de versão
+  nova do Hangar.
+- **Filezam no catálogo**: gestor de arquivos na web, o primeiro template de
+  terceiros.
+
+### Melhorado
+
+- **Proxy de borda atualizado**: Caddy 2.11.7 com as correções mais novas;
+  a verificação de vulnerabilidades da borda vai de 6 avisos para nenhum.
+  Nesta atualização a borda é recriada uma vez (alguns segundos fora do ar).
+- Dependências atualizadas (bibliotecas Go, ferramentas de verificação) e
+  RustFS 1.0.3 no template.
+
 ## [0.5.11] - 2026-10-18
 
 ### Melhorado
