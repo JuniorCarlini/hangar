@@ -202,3 +202,31 @@ func TestOnlyTheLatestInviteLinkWorks(t *testing.T) {
 		t.Fatalf("open invites after the account exists = %d", len(invites))
 	}
 }
+
+// TestLastSeenOutlivesSessions: once someone logged in, the team page keeps
+// showing when, even after every session of theirs is gone.
+func TestLastSeenOutlivesSessions(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	own := f.owner(t)
+	c := Client{IP: "189.10.20.30"}
+	token, err := f.svc.CreateInvite(ctx, own, "maria@hangar.dev", Access{Role: RoleViewer, AllProjects: true}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.AcceptInvite(ctx, token, goodPassword, c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.st.DB.ExecContext(ctx, "DELETE FROM sessions"); err != nil {
+		t.Fatal(err)
+	}
+	members, _, err := f.svc.Team(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range members {
+		if m.Email == "maria@hangar.dev" && m.LastSeen.IsZero() {
+			t.Fatal("shows as never logged in after the sessions ended")
+		}
+	}
+}

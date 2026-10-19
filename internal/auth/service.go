@@ -535,6 +535,7 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 		if err := s.q.TouchSession(ctx, dbq.TouchSessionParams{LastSeenAt: now.Unix(), IDHash: sess.IDHash}); err != nil {
 			return nil, err
 		}
+		s.markSeen(ctx, sess.UserID, now.Unix())
 	}
 	role, err := ParseRole(sess.Role)
 	if err != nil {
@@ -874,7 +875,17 @@ func (s *Service) createSession(ctx context.Context, userID, stage string, c Cli
 	if err != nil {
 		return "", fmt.Errorf("create session: %w", err)
 	}
+	if stage == "active" {
+		s.markSeen(ctx, userID, now)
+	}
 	return token, nil
+}
+
+// markSeen keeps when the person last used the panel on the account, so it
+// outlives the sessions (which expire and are deleted).
+func (s *Service) markSeen(ctx context.Context, userID string, at int64) {
+	// Best effort: a failed write must not fail a login or a request.
+	_ = s.q.SetUserLastSeen(ctx, dbq.SetUserLastSeenParams{At: at, ID: userID})
 }
 
 // --- limits and audit -------------------------------------------------------

@@ -78,6 +78,9 @@ WHERE s.id_hash = ?;
 -- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = ? WHERE id_hash = ?;
 
+-- name: SetUserLastSeen :exec
+UPDATE users SET last_seen_at = sqlc.arg(at) WHERE id = sqlc.arg(id) AND last_seen_at < sqlc.arg(at);
+
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id_hash = ?;
 
@@ -109,7 +112,7 @@ DELETE FROM sessions WHERE user_id = ? AND id_hash = ?;
 -- name: ListUsers :many
 SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_until, u.created_at,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp,
-       CAST(coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), 0) AS INTEGER) AS last_seen_at
+       CAST(max(u.last_seen_at, coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id AND s.stage = 'active'), 0)) AS INTEGER) AS last_seen_at
 FROM users u
 ORDER BY CASE u.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'operator' THEN 2 ELSE 3 END, u.email;
 

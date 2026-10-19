@@ -437,7 +437,7 @@ func (q *Queries) GetSession(ctx context.Context, idHash []byte) (GetSessionRow,
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since FROM users WHERE id = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since, last_seen_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
@@ -460,12 +460,13 @@ func (q *Queries) GetUser(ctx context.Context, id string) (User, error) {
 		&i.LockedUntil,
 		&i.LockCount,
 		&i.FailedSince,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since FROM users WHERE email = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since, last_seen_at FROM users WHERE email = ?
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -488,12 +489,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.LockedUntil,
 		&i.LockCount,
 		&i.FailedSince,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since FROM users WHERE id = ?
+SELECT id, email, password_hash, role, totp_secret_enc, totp_last_step, failed_logins, created_at, updated_at, locale, theme, name, all_projects, locked_until, lock_count, failed_since, last_seen_at FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -516,6 +518,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.LockedUntil,
 		&i.LockCount,
 		&i.FailedSince,
+		&i.LastSeenAt,
 	)
 	return i, err
 }
@@ -622,7 +625,7 @@ func (q *Queries) ListUserSessions(ctx context.Context, arg ListUserSessionsPara
 const listUsers = `-- name: ListUsers :many
 SELECT u.id, u.email, u.name, u.role, u.all_projects, u.locked_until, u.created_at,
        CAST(coalesce(length(u.totp_secret_enc), 0) > 0 AS INTEGER) AS has_totp,
-       CAST(coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), 0) AS INTEGER) AS last_seen_at
+       CAST(max(u.last_seen_at, coalesce((SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id AND s.stage = 'active'), 0)) AS INTEGER) AS last_seen_at
 FROM users u
 ORDER BY CASE u.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'operator' THEN 2 ELSE 3 END, u.email
 `
@@ -809,6 +812,20 @@ func (q *Queries) SetUserAccess(ctx context.Context, arg SetUserAccessParams) er
 		arg.UpdatedAt,
 		arg.ID,
 	)
+	return err
+}
+
+const setUserLastSeen = `-- name: SetUserLastSeen :exec
+UPDATE users SET last_seen_at = ?1 WHERE id = ?2 AND last_seen_at < ?1
+`
+
+type SetUserLastSeenParams struct {
+	At int64
+	ID string
+}
+
+func (q *Queries) SetUserLastSeen(ctx context.Context, arg SetUserLastSeenParams) error {
+	_, err := q.db.ExecContext(ctx, setUserLastSeen, arg.At, arg.ID)
 	return err
 }
 

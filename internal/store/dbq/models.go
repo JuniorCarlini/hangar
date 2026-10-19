@@ -482,6 +482,7 @@ type User struct {
 	LockedUntil   sql.NullInt64
 	LockCount     int64
 	FailedSince   sql.NullInt64
+	LastSeenAt    int64
 }
 
 type UserProject struct {
