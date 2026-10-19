@@ -238,8 +238,9 @@ func (f *fakeOSV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// fakeRegistry needs an anonymous token and pages the tag list.
-func fakeRegistry(t *testing.T, tags map[string][]string) *httptest.Server {
+// fakeRegistry needs an anonymous token, pages the tag list and answers
+// manifest HEADs with the digest of "repo:tag" in digests.
+func fakeRegistry(t *testing.T, tags map[string][]string, digests map[string]string) *httptest.Server {
 	t.Helper()
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -250,6 +251,15 @@ func fakeRegistry(t *testing.T, tags map[string][]string) *httptest.Server {
 		if r.Header.Get("Authorization") != "Bearer anon" {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="`+srv.URL+`/token",service="registry.test",scope="repository:x:pull"`)
 			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		if repo, tag, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/v2/"), "/manifests/"); ok {
+			d, found := digests[repo+":"+tag]
+			if !found || r.Method != http.MethodHead {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Docker-Content-Digest", d)
 			return
 		}
 		repo := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v2/"), "/tags/list")
@@ -318,6 +328,8 @@ type testEnv struct {
 	exec  *fakeExec
 	notes *captured
 	now   time.Time
+	// digests the fake registry serves, by "repo:tag".
+	digests map[string]string
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -338,14 +350,14 @@ func newTestEnv(t *testing.T) *testEnv {
 			t.Fatal(err)
 		}
 	}
-	e := &testEnv{st: st, osv: newFakeOSV(), notes: &captured{}, now: time.Date(2026, 10, 16, 6, 0, 0, 0, time.UTC)}
+	e := &testEnv{st: st, osv: newFakeOSV(), notes: &captured{}, now: time.Date(2026, 10, 16, 6, 0, 0, 0, time.UTC), digests: map[string]string{}}
 	osvSrv := httptest.NewServer(e.osv)
 	t.Cleanup(osvSrv.Close)
 	reg := fakeRegistry(t, map[string][]string{
 		"library/postgres": {"17.6", "18.0", "18.1", "18.2", "19.0", "latest"},
 		"lab/web":          {"1.0"},
 		"library/caddy":    {"2.11-alpine", "2.12-alpine"},
-	})
+	}, e.digests)
 	r := NewRegistry(reg.Client())
 	r.Endpoint = func(string) string { return reg.URL }
 	e.exec = &fakeExec{files: map[string]map[string]string{
@@ -484,7 +496,7 @@ func TestIgnoreHidesFindingUntilNewerVersion(t *testing.T) {
 	// A newer tag than the ignored one shows up again.
 	e.now = e.now.Add(7 * time.Hour) // past the registry cache
 	e.m.o.Registry.cache = map[string]cached[[]string]{}
-	srv := fakeRegistry(t, map[string][]string{"library/postgres": {"18.0", "18.3"}, "library/caddy": {"2.11-alpine"}})
+	srv := fakeRegistry(t, map[string][]string{"library/postgres": {"18.0", "18.3"}, "library/caddy": {"2.11-alpine"}}, nil)
 	e.m.o.Registry.http = srv.Client()
 	e.m.o.Registry.Endpoint = func(string) string { return srv.URL }
 	_ = e.m.Scan(ctx)

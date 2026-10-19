@@ -5,15 +5,15 @@ WHERE coalesce(service_id, '') = sqlc.arg(service_key) AND target = sqlc.arg(tar
 
 -- name: InsertDependencyFinding :exec
 INSERT INTO dependency_findings (id, service_id, target, ecosystem, package, current_version, latest_version,
-    fixed_version, severity, level, advisory_id, aliases, summary, source, kind, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    fixed_version, severity, level, advisory_id, aliases, summary, source, kind, remedy, remedy_tag, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: RefreshDependencyFinding :exec
 -- Seen again: new versions and severity, reopened if it had been resolved
 -- (reopening clears notified_at so it is warned about again).
 UPDATE dependency_findings
 SET current_version = ?, latest_version = ?, fixed_version = ?, severity = ?, level = ?, aliases = ?,
-    summary = ?, source = ?, last_seen_at = ?,
+    summary = ?, source = ?, remedy = ?, remedy_tag = ?, last_seen_at = ?,
     notified_at = CASE WHEN resolved_at IS NULL THEN notified_at END,
     resolved_at = NULL
 WHERE id = ?;
@@ -27,7 +27,8 @@ WHERE coalesce(service_id, '') = ? AND target = ?
   AND resolved_at IS NULL AND last_seen_at < ? AND kind IN (sqlc.slice(kinds));
 
 -- name: ListOpenDependencyFindings :many
-SELECT f.*, coalesce(s.slug, '') AS service_slug, coalesce(p.slug, '') AS project_slug
+SELECT f.*, coalesce(s.slug, '') AS service_slug, coalesce(p.slug, '') AS project_slug,
+       coalesce(s.image, '') AS service_image
 FROM dependency_findings f
 LEFT JOIN services s ON s.id = f.service_id
 LEFT JOIN projects p ON p.id = s.project_id
@@ -69,8 +70,19 @@ SELECT * FROM dependency_scans;
 -- name: ListLiveServiceImages :many
 -- Every service with its current image and the exact reference that went
 -- live (digest), for the inventory.
-SELECT s.id, s.slug, p.slug AS project_slug, s.image, s.desired_state,
+SELECT s.id, s.slug, p.slug AS project_slug, s.image, s.desired_state, s.stateful,
+       CAST(EXISTS (SELECT 1 FROM service_git g WHERE g.service_id = s.id) AS INTEGER) AS built_from_git,
        CAST(coalesce((SELECT d.image_ref FROM deployments d WHERE d.service_id = s.id AND d.status = 'live'
                       ORDER BY d.started_at DESC LIMIT 1), '') AS TEXT) AS image_ref
 FROM services s JOIN projects p ON p.id = s.project_id
 ORDER BY p.slug, s.slug;
+
+-- name: GetImageProbe :one
+SELECT * FROM image_probes WHERE digest = ?;
+
+-- name: UpsertImageProbe :exec
+INSERT INTO image_probes (digest, packages_json, error, probed_at) VALUES (?, ?, ?, ?)
+ON CONFLICT (digest) DO UPDATE SET packages_json = excluded.packages_json, error = excluded.error, probed_at = excluded.probed_at;
+
+-- name: DeleteOldImageProbes :exec
+DELETE FROM image_probes WHERE probed_at < ?;

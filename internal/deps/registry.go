@@ -83,8 +83,9 @@ type Registry struct {
 	Endpoint func(host string) string
 	now      func() time.Time
 
-	mu    sync.Mutex
-	cache map[string]cached[[]string]
+	mu      sync.Mutex
+	cache   map[string]cached[[]string]
+	digests map[string]cached[string]
 }
 
 // NewRegistry returns a registry client.
@@ -92,7 +93,7 @@ func NewRegistry(hc *http.Client) *Registry {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Registry{http: hc, Endpoint: defaultEndpoint, now: time.Now, cache: map[string]cached[[]string]{}}
+	return &Registry{http: hc, Endpoint: defaultEndpoint, now: time.Now, cache: map[string]cached[[]string]{}, digests: map[string]cached[string]{}}
 }
 
 func defaultEndpoint(host string) string {
@@ -323,4 +324,74 @@ func nextPage(base, link string) string {
 		return ""
 	}
 	return base + target
+}
+
+// manifestAccept asks for the multi-platform index first (its digest is
+// what `docker pull` records in the image's RepoDigests), then a single
+// platform's manifest.
+var manifestAccept = strings.Join([]string{
+	"application/vnd.oci.image.index.v1+json",
+	"application/vnd.docker.distribution.manifest.list.v2+json",
+	"application/vnd.oci.image.manifest.v1+json",
+	"application/vnd.docker.distribution.manifest.v2+json",
+}, ", ")
+
+var digestRE = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+// digestTTL keeps a tag's digest for the rest of a scan, not longer: a tag
+// moves when its image is rebuilt.
+const digestTTL = 30 * time.Minute
+
+// Digest is the digest the registry serves for the reference's tag right
+// now (a HEAD request: it does not count as a pull).
+func (g *Registry) Digest(ctx context.Context, ref ImageRef) (string, error) {
+	if ref.Tag == "" {
+		return "", errors.New("registry: no tag")
+	}
+	key := ref.Host + "/" + ref.Repo + ":" + ref.Tag
+	now := g.now()
+	g.mu.Lock()
+	if c, ok := g.digests[key]; ok && now.Sub(c.at) < digestTTL {
+		g.mu.Unlock()
+		return c.v, nil
+	}
+	g.mu.Unlock()
+
+	base := strings.TrimRight(g.Endpoint(ref.Host), "/")
+	u := base + "/v2/" + ref.Repo + "/manifests/" + url.PathEscape(ref.Tag)
+	token := ""
+	for attempt := 0; attempt < 2; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodHead, u, nil)
+		if err != nil {
+			return "", err
+		}
+		req.Header.Set("Accept", manifestAccept)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		res, err := g.http.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("registry: %w", err)
+		}
+		_, _ = io.Copy(io.Discard, io.LimitReader(res.Body, 64<<10))
+		_ = res.Body.Close()
+		if res.StatusCode == http.StatusUnauthorized && token == "" {
+			if token, err = g.anonymousToken(ctx, base, res.Header.Get("WWW-Authenticate")); err != nil {
+				return "", err
+			}
+			continue
+		}
+		if res.StatusCode != http.StatusOK {
+			return "", fmt.Errorf("registry manifest: status %d", res.StatusCode)
+		}
+		d := res.Header.Get("Docker-Content-Digest")
+		if !digestRE.MatchString(d) {
+			return "", errors.New("registry manifest: no digest")
+		}
+		g.mu.Lock()
+		g.digests[key] = cached[string]{v: d, at: now}
+		g.mu.Unlock()
+		return d, nil
+	}
+	return "", errors.New("registry: not authorized")
 }

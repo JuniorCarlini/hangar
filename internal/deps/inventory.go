@@ -92,14 +92,23 @@ func Inventory(ctx context.Context, ex Execer, project, service string) ([]Packa
 }
 
 func dedupe(in []Package) []Package {
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	out := make([]Package, 0, len(in))
 	for _, p := range in {
 		k := queryKey(p)
-		if seen[k] || p.Name == "" || p.Version == "" || len(p.Name) > maxPackageLen || len(p.Version) > 100 {
+		if p.Name == "" || p.Version == "" || len(p.Name) > maxPackageLen || len(p.Version) > 100 {
 			continue
 		}
-		seen[k] = true
+		if i, ok := seen[k]; ok {
+			// The same version read twice (installed metadata and the
+			// project's lockfile): keep the lockfile, it names the package
+			// manager the fix is made with.
+			if Manager(p.Source) != "" && Manager(out[i].Source) == "" {
+				out[i].Source = p.Source
+			}
+			continue
+		}
+		seen[k] = len(out)
 		out = append(out, p)
 	}
 	sort.Slice(out, func(i, j int) bool {

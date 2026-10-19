@@ -52,3 +52,30 @@ func (l *Local) SaveImage(ctx context.Context, id string, w io.Writer) error {
 	_, err = io.Copy(w, rc)
 	return err
 }
+
+// LocalImage reports whether ref (name@digest or name:tag) is in the image
+// store, with its ID and size.
+func (l *Local) LocalImage(ctx context.Context, ref string) (string, int64, bool, error) {
+	img, err := l.c.ImageInspect(ctx, ref)
+	if isNotFound(err) {
+		return "", 0, false, nil
+	}
+	if err != nil {
+		return "", 0, false, err
+	}
+	return img.ID, img.Size, true, nil
+}
+
+// PullImage pulls ref from its registry (the dependency monitor reads a
+// newer image before anyone deploys it).
+func (l *Local) PullImage(ctx context.Context, ref string) error { return l.pullRemote(ctx, ref) }
+
+// RemoveImage drops the reference; the image itself goes only when nothing
+// else (another tag, a container) uses it.
+func (l *Local) RemoveImage(ctx context.Context, ref string) error {
+	_, err := l.c.ImageRemove(ctx, ref, client.ImageRemoveOptions{PruneChildren: true})
+	if isNotFound(err) {
+		return nil
+	}
+	return err
+}

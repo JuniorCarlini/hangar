@@ -343,6 +343,69 @@ func TestImageScannerLimits(t *testing.T) {
 	}
 }
 
+// fakePuller keeps an image store of references.
+type fakePuller struct {
+	size    int64
+	present map[string]bool
+	pulls   []string
+	removed []string
+}
+
+func (f *fakePuller) LocalImage(_ context.Context, ref string) (string, int64, bool, error) {
+	return "sha256:id-" + ref, f.size, f.present[ref], nil
+}
+
+func (f *fakePuller) PullImage(_ context.Context, ref string) error {
+	f.pulls = append(f.pulls, ref)
+	f.present[ref] = true
+	return nil
+}
+
+func (f *fakePuller) RemoveImage(_ context.Context, ref string) error {
+	f.removed = append(f.removed, ref)
+	delete(f.present, ref)
+	return nil
+}
+
+// A probe pulls an image that is not here, reads it and removes it again;
+// an image already here is read and left alone. The scanner's limits hold.
+func TestProbeImage(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "img.tar")
+	fixtureImage(t, src, false)
+	st, _ := os.Stat(src)
+	pl := &fakePuller{size: st.Size(), present: map[string]bool{"docker.io/library/nginx@sha256:here": true}}
+	s := &ImageScanner{Images: &fakeImages{tar: src, size: st.Size()}, Dir: t.TempDir(), Puller: pl}
+	s.freeBytes = func(string) (int64, error) { return 10 << 30, nil }
+
+	pkgs, err := s.ProbeImage(context.Background(), "docker.io/library/nginx@sha256:new")
+	if err != nil || len(pkgs) < 5 {
+		t.Fatalf("probe: %d packages, %v", len(pkgs), err)
+	}
+	if len(pl.pulls) != 1 || len(pl.removed) != 1 || pl.present["docker.io/library/nginx@sha256:new"] {
+		t.Errorf("pulled %v, removed %v: a probed image must not stay", pl.pulls, pl.removed)
+	}
+	if _, err := s.ProbeImage(context.Background(), "docker.io/library/nginx@sha256:here"); err != nil {
+		t.Fatal(err)
+	}
+	if len(pl.pulls) != 1 || len(pl.removed) != 1 {
+		t.Errorf("an image already here was pulled or removed: %v %v", pl.pulls, pl.removed)
+	}
+
+	var skip *SkipError
+	s.freeBytes = func(string) (int64, error) { return 1 << 30, nil }
+	if _, err := s.ProbeImage(context.Background(), "docker.io/library/nginx@sha256:other"); !errors.As(err, &skip) || len(pl.pulls) != 1 {
+		t.Errorf("little disk: %v, pulls %v", err, pl.pulls)
+	}
+	s.freeBytes = func(string) (int64, error) { return 10 << 30, nil }
+	s.MaxImageBytes = st.Size() - 1
+	if _, err := s.ProbeImage(context.Background(), "docker.io/library/nginx@sha256:big"); !errors.As(err, &skip) || pl.present["docker.io/library/nginx@sha256:big"] {
+		t.Errorf("too big: %v (removed after the pull: %v)", err, pl.removed)
+	}
+	if _, err := (&ImageScanner{Images: &fakeImages{}, Dir: t.TempDir()}).ProbeImage(context.Background(), "x@sha256:y"); err == nil {
+		t.Error("probe without a puller")
+	}
+}
+
 // TestScanUsesImageAndFallsBack: services are read from their image, the
 // edge too; a service whose image cannot be scanned is read through exec.
 func TestScanUsesImageAndFallsBack(t *testing.T) {

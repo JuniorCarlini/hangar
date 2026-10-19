@@ -32,8 +32,17 @@ func (q *Queries) DeleteFindingIgnore(ctx context.Context, id string) (int64, er
 	return result.RowsAffected()
 }
 
+const deleteOldImageProbes = `-- name: DeleteOldImageProbes :exec
+DELETE FROM image_probes WHERE probed_at < ?
+`
+
+func (q *Queries) DeleteOldImageProbes(ctx context.Context, probedAt int64) error {
+	_, err := q.db.ExecContext(ctx, deleteOldImageProbes, probedAt)
+	return err
+}
+
 const findDependencyFinding = `-- name: FindDependencyFinding :one
-SELECT id, service_id, target, ecosystem, package, current_version, latest_version, fixed_version, severity, level, advisory_id, aliases, summary, source, kind, first_seen_at, last_seen_at, resolved_at, notified_at FROM dependency_findings
+SELECT id, service_id, target, ecosystem, package, current_version, latest_version, fixed_version, severity, level, advisory_id, aliases, summary, source, kind, first_seen_at, last_seen_at, resolved_at, notified_at, remedy, remedy_tag FROM dependency_findings
 WHERE coalesce(service_id, '') = ?1 AND target = ?2 AND ecosystem = ?3
   AND package = ?4 AND advisory_id = ?5 AND kind = ?6
 `
@@ -77,12 +86,14 @@ func (q *Queries) FindDependencyFinding(ctx context.Context, arg FindDependencyF
 		&i.LastSeenAt,
 		&i.ResolvedAt,
 		&i.NotifiedAt,
+		&i.Remedy,
+		&i.RemedyTag,
 	)
 	return i, err
 }
 
 const getDependencyFinding = `-- name: GetDependencyFinding :one
-SELECT id, service_id, target, ecosystem, package, current_version, latest_version, fixed_version, severity, level, advisory_id, aliases, summary, source, kind, first_seen_at, last_seen_at, resolved_at, notified_at FROM dependency_findings WHERE id = ?
+SELECT id, service_id, target, ecosystem, package, current_version, latest_version, fixed_version, severity, level, advisory_id, aliases, summary, source, kind, first_seen_at, last_seen_at, resolved_at, notified_at, remedy, remedy_tag FROM dependency_findings WHERE id = ?
 `
 
 func (q *Queries) GetDependencyFinding(ctx context.Context, id string) (DependencyFinding, error) {
@@ -108,14 +119,32 @@ func (q *Queries) GetDependencyFinding(ctx context.Context, id string) (Dependen
 		&i.LastSeenAt,
 		&i.ResolvedAt,
 		&i.NotifiedAt,
+		&i.Remedy,
+		&i.RemedyTag,
+	)
+	return i, err
+}
+
+const getImageProbe = `-- name: GetImageProbe :one
+SELECT digest, packages_json, error, probed_at FROM image_probes WHERE digest = ?
+`
+
+func (q *Queries) GetImageProbe(ctx context.Context, digest string) (ImageProbe, error) {
+	row := q.db.QueryRowContext(ctx, getImageProbe, digest)
+	var i ImageProbe
+	err := row.Scan(
+		&i.Digest,
+		&i.PackagesJson,
+		&i.Error,
+		&i.ProbedAt,
 	)
 	return i, err
 }
 
 const insertDependencyFinding = `-- name: InsertDependencyFinding :exec
 INSERT INTO dependency_findings (id, service_id, target, ecosystem, package, current_version, latest_version,
-    fixed_version, severity, level, advisory_id, aliases, summary, source, kind, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    fixed_version, severity, level, advisory_id, aliases, summary, source, kind, remedy, remedy_tag, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertDependencyFindingParams struct {
@@ -134,6 +163,8 @@ type InsertDependencyFindingParams struct {
 	Summary        string
 	Source         string
 	Kind           string
+	Remedy         string
+	RemedyTag      string
 	FirstSeenAt    int64
 	LastSeenAt     int64
 }
@@ -155,6 +186,8 @@ func (q *Queries) InsertDependencyFinding(ctx context.Context, arg InsertDepende
 		arg.Summary,
 		arg.Source,
 		arg.Kind,
+		arg.Remedy,
+		arg.RemedyTag,
 		arg.FirstSeenAt,
 		arg.LastSeenAt,
 	)
@@ -288,7 +321,8 @@ func (q *Queries) ListFindingIgnores(ctx context.Context, now sql.NullInt64) ([]
 }
 
 const listLiveServiceImages = `-- name: ListLiveServiceImages :many
-SELECT s.id, s.slug, p.slug AS project_slug, s.image, s.desired_state,
+SELECT s.id, s.slug, p.slug AS project_slug, s.image, s.desired_state, s.stateful,
+       CAST(EXISTS (SELECT 1 FROM service_git g WHERE g.service_id = s.id) AS INTEGER) AS built_from_git,
        CAST(coalesce((SELECT d.image_ref FROM deployments d WHERE d.service_id = s.id AND d.status = 'live'
                       ORDER BY d.started_at DESC LIMIT 1), '') AS TEXT) AS image_ref
 FROM services s JOIN projects p ON p.id = s.project_id
@@ -301,6 +335,8 @@ type ListLiveServiceImagesRow struct {
 	ProjectSlug  string
 	Image        string
 	DesiredState string
+	Stateful     int64
+	BuiltFromGit int64
 	ImageRef     string
 }
 
@@ -321,6 +357,8 @@ func (q *Queries) ListLiveServiceImages(ctx context.Context) ([]ListLiveServiceI
 			&i.ProjectSlug,
 			&i.Image,
 			&i.DesiredState,
+			&i.Stateful,
+			&i.BuiltFromGit,
 			&i.ImageRef,
 		); err != nil {
 			return nil, err
@@ -337,7 +375,8 @@ func (q *Queries) ListLiveServiceImages(ctx context.Context) ([]ListLiveServiceI
 }
 
 const listOpenDependencyFindings = `-- name: ListOpenDependencyFindings :many
-SELECT f.id, f.service_id, f.target, f.ecosystem, f.package, f.current_version, f.latest_version, f.fixed_version, f.severity, f.level, f.advisory_id, f.aliases, f.summary, f.source, f.kind, f.first_seen_at, f.last_seen_at, f.resolved_at, f.notified_at, coalesce(s.slug, '') AS service_slug, coalesce(p.slug, '') AS project_slug
+SELECT f.id, f.service_id, f.target, f.ecosystem, f.package, f.current_version, f.latest_version, f.fixed_version, f.severity, f.level, f.advisory_id, f.aliases, f.summary, f.source, f.kind, f.first_seen_at, f.last_seen_at, f.resolved_at, f.notified_at, f.remedy, f.remedy_tag, coalesce(s.slug, '') AS service_slug, coalesce(p.slug, '') AS project_slug,
+       coalesce(s.image, '') AS service_image
 FROM dependency_findings f
 LEFT JOIN services s ON s.id = f.service_id
 LEFT JOIN projects p ON p.id = s.project_id
@@ -366,8 +405,11 @@ type ListOpenDependencyFindingsRow struct {
 	LastSeenAt     int64
 	ResolvedAt     sql.NullInt64
 	NotifiedAt     sql.NullInt64
+	Remedy         string
+	RemedyTag      string
 	ServiceSlug    string
 	ProjectSlug    string
+	ServiceImage   string
 }
 
 func (q *Queries) ListOpenDependencyFindings(ctx context.Context) ([]ListOpenDependencyFindingsRow, error) {
@@ -399,8 +441,11 @@ func (q *Queries) ListOpenDependencyFindings(ctx context.Context) ([]ListOpenDep
 			&i.LastSeenAt,
 			&i.ResolvedAt,
 			&i.NotifiedAt,
+			&i.Remedy,
+			&i.RemedyTag,
 			&i.ServiceSlug,
 			&i.ProjectSlug,
+			&i.ServiceImage,
 		); err != nil {
 			return nil, err
 		}
@@ -443,7 +488,7 @@ func (q *Queries) MarkDependencyFindingsNotified(ctx context.Context, arg MarkDe
 const refreshDependencyFinding = `-- name: RefreshDependencyFinding :exec
 UPDATE dependency_findings
 SET current_version = ?, latest_version = ?, fixed_version = ?, severity = ?, level = ?, aliases = ?,
-    summary = ?, source = ?, last_seen_at = ?,
+    summary = ?, source = ?, remedy = ?, remedy_tag = ?, last_seen_at = ?,
     notified_at = CASE WHEN resolved_at IS NULL THEN notified_at END,
     resolved_at = NULL
 WHERE id = ?
@@ -458,6 +503,8 @@ type RefreshDependencyFindingParams struct {
 	Aliases        string
 	Summary        string
 	Source         string
+	Remedy         string
+	RemedyTag      string
 	LastSeenAt     int64
 	ID             string
 }
@@ -474,6 +521,8 @@ func (q *Queries) RefreshDependencyFinding(ctx context.Context, arg RefreshDepen
 		arg.Aliases,
 		arg.Summary,
 		arg.Source,
+		arg.Remedy,
+		arg.RemedyTag,
 		arg.LastSeenAt,
 		arg.ID,
 	)
@@ -537,6 +586,28 @@ func (q *Queries) UpsertDependencyScan(ctx context.Context, arg UpsertDependency
 		arg.ScannedAt,
 		arg.Packages,
 		arg.Error,
+	)
+	return err
+}
+
+const upsertImageProbe = `-- name: UpsertImageProbe :exec
+INSERT INTO image_probes (digest, packages_json, error, probed_at) VALUES (?, ?, ?, ?)
+ON CONFLICT (digest) DO UPDATE SET packages_json = excluded.packages_json, error = excluded.error, probed_at = excluded.probed_at
+`
+
+type UpsertImageProbeParams struct {
+	Digest       string
+	PackagesJson string
+	Error        string
+	ProbedAt     int64
+}
+
+func (q *Queries) UpsertImageProbe(ctx context.Context, arg UpsertImageProbeParams) error {
+	_, err := q.db.ExecContext(ctx, upsertImageProbe,
+		arg.Digest,
+		arg.PackagesJson,
+		arg.Error,
+		arg.ProbedAt,
 	)
 	return err
 }

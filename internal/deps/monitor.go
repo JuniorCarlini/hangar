@@ -78,6 +78,10 @@ type Options struct {
 	// Exec reads the containers when their image cannot be scanned; nil
 	// with no Images (Docker unavailable) checks only the image tags.
 	Exec Execer
+	// Prober reads images no container runs (a newer build of the tag, a
+	// newer tag) to tell whether a deploy or a tag change fixes a
+	// vulnerability; nil leaves those undecided (Remedy "unchecked").
+	Prober ImageProber
 	// EdgeImage is Caddy's image, checked for tag updates and, with
 	// Images, inventoried ("" = no edge).
 	EdgeImage string
@@ -197,6 +201,11 @@ type target struct {
 	service   string
 	image     string
 	running   bool
+	// imageRef is what the live deploy pinned (name@sha256:… for pulled
+	// images); stateful and git as the service says.
+	imageRef string
+	stateful bool
+	git      bool
 }
 
 func (t target) key() string {
@@ -213,6 +222,9 @@ type observation struct {
 	kind     string
 	advisory Advisory
 	latest   string
+	// remedy and remedyTag: what fixes a vulnerability (classify).
+	remedy    string
+	remedyTag string
 }
 
 // Scan inventories every target, checks it and stores the findings, then
@@ -245,7 +257,7 @@ func (m *Monitor) scan(ctx context.Context) error {
 	for _, s := range svcs {
 		targets = append(targets, target{
 			serviceID: s.ID, project: s.ProjectSlug, service: s.Slug, image: s.Image,
-			running: s.DesiredState == "running",
+			running: s.DesiredState == "running", imageRef: s.ImageRef, stateful: s.Stateful == 1, git: s.BuiltFromGit == 1,
 		})
 	}
 	if m.o.EdgeImage != "" {
@@ -268,7 +280,9 @@ func (m *Monitor) scan(ctx context.Context) error {
 			return ctx.Err()
 		}
 		invs[i].pkgs, invs[i].invErr = m.inventory(ctx, t)
-		invs[i].tags, invs[i].tagErr = m.o.Registry.Updates(ctx, t.image)
+		if !t.git { // a built image is local: no registry has its tags
+			invs[i].tags, invs[i].tagErr = m.o.Registry.Updates(ctx, t.image)
+		}
 		for _, p := range invs[i].pkgs {
 			if _, ok := index[queryKey(p)]; !ok {
 				index[queryKey(p)] = len(all)
@@ -297,7 +311,8 @@ func (m *Monitor) scan(ctx context.Context) error {
 				}
 			}
 		}
-		if ref, ok := ParseImage(t.image); ok {
+		m.classify(ctx, t, invs[i].tags, obs)
+		if ref, ok := ParseImage(t.image); ok && !t.git {
 			for _, u := range invs[i].tags {
 				obs = append(obs, observation{
 					t: t, kind: u.Kind, latest: u.Latest,
@@ -384,6 +399,7 @@ func (m *Monitor) store(ctx context.Context, obs []observation) error {
 			f.AdvisoryID, f.FixedVersion, f.Severity = o.advisory.ID, o.advisory.Fixed, o.advisory.Severity
 			f.Aliases, f.Summary = strings.Join(o.advisory.Aliases, ","), o.advisory.Summary
 			f.Level = vulnLevel(f.Severity, f.FixedVersion)
+			f.Remedy, f.RemedyTag = o.remedy, o.remedyTag
 		} else {
 			f.LatestVersion, f.Level = o.latest, LevelMinor
 			if o.kind == KindMajor {
@@ -411,7 +427,7 @@ func (m *Monitor) store(ctx context.Context, obs []observation) error {
 			if err := m.q.RefreshDependencyFinding(ctx, dbq.RefreshDependencyFindingParams{
 				CurrentVersion: f.CurrentVersion, LatestVersion: f.LatestVersion, FixedVersion: f.FixedVersion,
 				Severity: f.Severity, Level: f.Level, Aliases: f.Aliases, Summary: f.Summary, Source: f.Source,
-				LastSeenAt: now, ID: cur.ID,
+				Remedy: f.Remedy, RemedyTag: f.RemedyTag, LastSeenAt: now, ID: cur.ID,
 			}); err != nil {
 				return err
 			}
@@ -438,6 +454,12 @@ type Finding struct {
 	Aliases   []string
 	Summary   string
 	Source    string
+	// Remedy says what fixes a vulnerability (Remedy* constants) and
+	// RemedyTag the tag that does, for RemedyTag and RemedyMajor.
+	Remedy    string
+	RemedyTag string
+	// Image is the service's image now ("" for the edge).
+	Image     string
 	FirstSeen time.Time
 	Ignored   bool
 	notified  bool
@@ -471,7 +493,7 @@ func (m *Monitor) Findings(ctx context.Context) ([]Finding, error) {
 			ID: r.ID, ServiceID: r.ServiceID.String, Project: r.ProjectSlug, Service: r.ServiceSlug, Target: r.Target,
 			Ecosystem: r.Ecosystem, Package: r.Package, Current: r.CurrentVersion, Severity: r.Severity, Level: r.Level,
 			Kind: r.Kind, Advisory: r.AdvisoryID, Summary: r.Summary, Source: r.Source, FirstSeen: time.Unix(r.FirstSeenAt, 0),
-			Suggested: r.FixedVersion,
+			Suggested: r.FixedVersion, Remedy: r.Remedy, RemedyTag: r.RemedyTag, Image: r.ServiceImage,
 		}
 		if r.Kind != KindVuln {
 			f.Suggested = r.LatestVersion

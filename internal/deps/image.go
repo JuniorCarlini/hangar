@@ -27,7 +27,13 @@ import (
 	javaarchive "github.com/google/osv-scalibr/extractor/filesystem/language/java/archive"
 	archivemeta "github.com/google/osv-scalibr/extractor/filesystem/language/java/archive/metadata"
 	"github.com/google/osv-scalibr/extractor/filesystem/language/javascript/packagejson"
+	"github.com/google/osv-scalibr/extractor/filesystem/language/javascript/packagelockjson"
+	"github.com/google/osv-scalibr/extractor/filesystem/language/javascript/pnpmlock"
+	"github.com/google/osv-scalibr/extractor/filesystem/language/javascript/yarnlock"
 	"github.com/google/osv-scalibr/extractor/filesystem/language/php/composerlock"
+	"github.com/google/osv-scalibr/extractor/filesystem/language/python/pipfilelock"
+	"github.com/google/osv-scalibr/extractor/filesystem/language/python/poetrylock"
+	"github.com/google/osv-scalibr/extractor/filesystem/language/python/uvlock"
 	"github.com/google/osv-scalibr/extractor/filesystem/language/python/wheelegg"
 	"github.com/google/osv-scalibr/extractor/filesystem/language/ruby/gemfilelock"
 	"github.com/google/osv-scalibr/extractor/filesystem/language/ruby/gemspec"
@@ -56,6 +62,20 @@ type Images interface {
 	SaveImage(ctx context.Context, id string, w io.Writer) error
 }
 
+// Puller fetches and drops images that no container runs, so a newer build
+// or a newer tag can be read before anyone deploys it (docker.Local
+// implements it).
+type Puller interface {
+	// LocalImage reports whether ref (name@digest) is already in the image
+	// store, with its ID and size.
+	LocalImage(ctx context.Context, ref string) (id string, size int64, ok bool, err error)
+	// PullImage pulls ref from its registry.
+	PullImage(ctx context.Context, ref string) error
+	// RemoveImage drops the reference (and the image when nothing else
+	// uses it).
+	RemoveImage(ctx context.Context, ref string) error
+}
+
 // Image scan limits. The panel runs with MemoryMax=384M (docs/04): one
 // image at a time, files kept on disk, never a scan without an end.
 const (
@@ -66,6 +86,9 @@ const (
 	maxScanFileBytes = 256 << 20
 	// diskMargin is left free on top of the scan's own files.
 	diskMargin = 256 << 20
+	// probeFloor is the free space a probe needs before it pulls an image
+	// whose size it cannot know yet.
+	probeFloor = 2 << 30
 	// imageTarPrefix names the exported tarballs in the work dir.
 	imageTarPrefix = "hangar-image-"
 	// scalibrBlobPrefix is the file SCALIBR unpacks the layers into
@@ -98,6 +121,8 @@ type ImageScanner struct {
 	MaxImageBytes int64
 	// Timeout bounds one image (0 = DefaultImageTimeout).
 	Timeout time.Duration
+	// Puller, when set, lets ProbeImage read images no container runs.
+	Puller Puller
 
 	mu sync.Mutex // one image at a time
 	// freeBytes reports the free space of a directory (tests replace it).
@@ -119,6 +144,63 @@ func (s *ImageScanner) ScanContainer(ctx context.Context, container string) ([]P
 	if err != nil {
 		return nil, fmt.Errorf("inspect image: %w", err)
 	}
+	return s.scanImage(ctx, id, size)
+}
+
+// errNoPuller: the node cannot pull images to look inside them.
+var errNoPuller = errors.New("image probes need Docker")
+
+// ProbeImage reads the packages of an image no container runs (ref is
+// name@digest): pulled when it is not here, read like a running image, and
+// removed again when it was not here before. Same limits as ScanContainer:
+// one image at a time, a size cap, a disk check and a time limit.
+func (s *ImageScanner) ProbeImage(ctx context.Context, ref string) ([]Package, error) {
+	if s.Puller == nil {
+		return nil, errNoPuller
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	timeout := s.Timeout
+	if timeout <= 0 {
+		timeout = DefaultImageTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	id, size, present, err := s.Puller.LocalImage(ctx, ref)
+	if err != nil {
+		return nil, fmt.Errorf("inspect image: %w", err)
+	}
+	if !present {
+		if err := os.MkdirAll(s.Dir, 0o700); err != nil {
+			return nil, err
+		}
+		free := s.freeBytes
+		if free == nil {
+			free = diskFree
+		}
+		if have, err := free(s.Dir); err == nil && have < probeFloor {
+			return nil, &SkipError{Reason: fmt.Sprintf("needs %s free in %s to pull an image, has %s", humanBytes(probeFloor), s.Dir, humanBytes(have))}
+		}
+		if err := s.Puller.PullImage(ctx, ref); err != nil {
+			return nil, fmt.Errorf("pull image: %w", err)
+		}
+		defer func() {
+			// Not here before: leave the disk as it was (the deploy pulls it
+			// again when someone asks for it).
+			if err := s.Puller.RemoveImage(context.WithoutCancel(ctx), ref); err != nil {
+				slog.Warn("remove probed image", "image", ref, "error", err)
+			}
+		}()
+		if id, size, present, err = s.Puller.LocalImage(ctx, ref); err != nil || !present {
+			return nil, fmt.Errorf("inspect pulled image: %w", errors.Join(err, errors.New("not found after the pull")))
+		}
+	}
+	return s.scanImage(ctx, id, size)
+}
+
+// scanImage exports the image and reads it (the caller holds s.mu).
+func (s *ImageScanner) scanImage(ctx context.Context, id string, size int64) ([]Package, error) {
 	limit := s.MaxImageBytes
 	if limit <= 0 {
 		limit = DefaultMaxImageBytes
@@ -281,6 +363,9 @@ func imageExtractors() ([]filesystem.Extractor, error) {
 		wheelegg.New, packagejson.New, gemspec.New, gemfilelock.New, composerlock.New,
 		javaarchive.New, depsjson.New, gobinary.New, cargoauditable.New, cargolock.New,
 		pubspec.New, mixlock.New,
+		// The app's own lockfiles name its package manager, so the page can
+		// give the exact command (uv lock --upgrade-package, npm install…).
+		uvlock.New, poetrylock.New, pipfilelock.New, packagelockjson.New, pnpmlock.New, yarnlock.New,
 	}
 	out := make([]filesystem.Extractor, 0, len(news))
 	for _, n := range news {
@@ -300,6 +385,8 @@ func imageExtractors() ([]filesystem.Extractor, error) {
 var lockfileNames = map[string]bool{
 	"composer.lock": true, "Gemfile.lock": true, "gems.locked": true, "Cargo.lock": true,
 	"pubspec.lock": true, "mix.lock": true,
+	"uv.lock": true, "poetry.lock": true, "Pipfile.lock": true,
+	"package-lock.json": true, ".package-lock.json": true, "pnpm-lock.yaml": true, "yarn.lock": true,
 }
 
 var pypiSepRE = regexp.MustCompile(`[-_.]+`)
@@ -366,7 +453,8 @@ func osvPackage(p *extractor.Package) (Package, bool) {
 			pk.Ecosystem += ":LTS"
 		}
 	}
-	if lockfileNames[path.Base(pk.Source)] && (strings.Contains(pk.Source, "/node_modules/") || strings.Contains(pk.Source, "/vendor/")) {
+	if lockfileNames[path.Base(pk.Source)] && (strings.Contains(pk.Source, "/node_modules/") || strings.Contains(pk.Source, "/vendor/") ||
+		strings.Contains(pk.Source, "-packages/")) { // site-packages, dist-packages
 		return Package{}, false
 	}
 	return pk, true

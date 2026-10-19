@@ -169,6 +169,8 @@ type DependencyFinding struct {
 	LastSeenAt     int64
 	ResolvedAt     sql.NullInt64
 	NotifiedAt     sql.NullInt64
+	Remedy         string
+	RemedyTag      string
 }
 
 type DependencyScan struct {
@@ -264,6 +266,13 @@ type GitCredential struct {
 	CreatedAt  int64
 	UpdatedAt  int64
 	LastUsedAt sql.NullInt64
+}
+
+type ImageProbe struct {
+	Digest       string
+	PackagesJson string
+	Error        string
+	ProbedAt     int64
 }
 
 type Invite struct {

@@ -243,8 +243,9 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// container through the node (fixed cat/find commands); without Docker
 	// it only checks image tags.
 	var (
-		ex   deps.Execer
-		imgs deps.ImageInventory
+		ex     deps.Execer
+		imgs   deps.ImageInventory
+		prober deps.ImageProber
 	)
 	if n != nil {
 		ex = n
@@ -252,7 +253,12 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 			if dir, err := scanTempDir(cfg.DataDir); err != nil {
 				log.Warn("dependency image scans disabled", "error", err)
 			} else {
-				imgs = &deps.ImageScanner{Images: di, Dir: dir}
+				sc := &deps.ImageScanner{Images: di, Dir: dir}
+				if pl, ok := n.(deps.Puller); ok {
+					sc.Puller = pl
+					prober = sc
+				}
+				imgs = sc
 			}
 		}
 	}
@@ -261,7 +267,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 		edgeImage = cfg.Edge.Image
 	}
 	dm := deps.New(st.DB, deps.Options{
-		OSV: deps.NewOSV(cfg.Scan.OSVAPI, nil), Images: imgs, Exec: ex, EdgeImage: edgeImage, Audit: al, Log: log,
+		OSV: deps.NewOSV(cfg.Scan.OSVAPI, nil), Images: imgs, Prober: prober, Exec: ex, EdgeImage: edgeImage, Audit: al, Log: log,
 	})
 	sp := statuspage.New(st.DB, mc, al, log)
 	bm, err := NewBackups(core, pm, cfg, version, log)
