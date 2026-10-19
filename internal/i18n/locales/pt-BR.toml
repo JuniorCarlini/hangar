@@ -2935,6 +2935,7 @@ no_fix = "sem correção ainda"
 image = "imagem ainda não saiu"
 hangar = "vem com uma versão do Hangar"
 major = "só na {tag} (major)"
+unchecked = "ainda não verificado"
 
 [deps.row]
 image = "imagem {name}"

@@ -86,3 +86,9 @@ ON CONFLICT (digest) DO UPDATE SET packages_json = excluded.packages_json, error
 
 -- name: DeleteOldImageProbes :exec
 DELETE FROM image_probes WHERE probed_at < ?;
+
+-- name: CountUnclassifiedFindings :one
+-- Open vulnerabilities from before the scan decided their remedy (a panel
+-- just updated from a version without it).
+SELECT COUNT(*) FROM dependency_findings
+WHERE kind = 'vuln' AND resolved_at IS NULL AND remedy = '';

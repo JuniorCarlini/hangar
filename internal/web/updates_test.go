@@ -47,9 +47,10 @@ func TestUpdatesPageAndOverviewAlert(t *testing.T) {
 	if page.Code != http.StatusOK {
 		t.Fatalf("updates page: %d", page.Code)
 	}
-	// Found before remedies existed: waits, with the old advice.
+	// Found before remedies existed: waits, marked as not checked yet (no
+	// command: a waiting row is never the user's own code).
 	for _, want := range []string{
-		"django", "5.2.7", "GHSA-test-1", "django==5.2.7", "1.30-alpine", "Caddy", "https://osv.dev/vulnerability/GHSA-test-1",
+		"django", "5.2.7", "GHSA-test-1", "ainda não verificado", "1.30-alpine", "Caddy", "https://osv.dev/vulnerability/GHSA-test-1",
 		`id="bucket-wait"`, `id="bucket-updates"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -319,7 +320,7 @@ func TestUpdatesPagination(t *testing.T) {
 		t.Error("full page: the wait section should show its first rows and link to the rest")
 	}
 	first := get("/updates?bucket=wait")
-	if rows(first) != 25 || !strings.Contains(first, "1–25 de 58") || !strings.Contains(first, "django==5.2.7") {
+	if rows(first) != 25 || !strings.Contains(first, "1–25 de 58") || !strings.Contains(first, "ainda não verificado") {
 		t.Errorf("page 1: %d rows, range or loudest row missing", rows(first))
 	}
 	if !strings.Contains(first, `class="tuc-pagination"`) || !strings.Contains(first, `href="/updates?bucket=wait&amp;page=2"`) {

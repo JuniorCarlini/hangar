@@ -2934,6 +2934,7 @@ no_fix = "no fix yet"
 image = "image not out yet"
 hangar = "comes with a Hangar release"
 major = "only in {tag} (major)"
+unchecked = "not checked yet"
 
 [deps.row]
 image = "image {name}"

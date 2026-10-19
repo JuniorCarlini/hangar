@@ -360,7 +360,7 @@ templ groupRow(d UpdatesData, r GroupRow) {
 			}
 		</td>
 		<td class="tuc-table__actions">
-			<span class="inline-flex flex-wrap items-center justify-end gap-1.5">
+			<span class="inline-flex items-center justify-end gap-1.5">
 				@rowAction(d, r)
 				if d.CanOperate {
 					<button type="button" class="tuc-btn is-ghost is-sm" data-tuc-modal={ "#ignore-" + r.ID }>
@@ -415,13 +415,13 @@ templ rowAction(d UpdatesData, r GroupRow) {
 				<span class="text-xs text-muted">{ t(ctx, "deps.do.tag_admin", "tag", r.Tag) }</span>
 			}
 		case ActCommand, ActAdvice:
-			<span class="inline-flex max-w-[360px] flex-col items-end gap-1">
+			<span class="inline-flex w-[340px] max-w-full flex-col items-start gap-1 whitespace-normal text-left align-middle">
 				if r.Text != "" {
-					<span class="text-right text-xs text-muted">{ r.Text }</span>
+					<span class="text-xs text-muted">{ r.Text }</span>
 				}
 				if r.Code != "" {
-					<span class="flex items-center gap-1">
-						<code class="rounded-xs bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{ r.Code }</code>
+					<span class="flex max-w-full items-center gap-1">
+						<code class="min-w-0 truncate rounded-xs bg-surface-2 px-1.5 py-0.5 font-mono text-xs" title={ r.Code }>{ r.Code }</code>
 						<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ r.Code } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "deps.copy") }>
 							@Icon("copy", "size-3.5")
 						</button>

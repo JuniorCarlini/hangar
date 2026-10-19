@@ -154,6 +154,18 @@ func (m *Monitor) Run(ctx context.Context, hour int) {
 	if m == nil {
 		return
 	}
+	// Findings from a version that did not classify them would show stale
+	// advice until the next daily scan: classify them shortly after start.
+	if n, err := m.q.CountUnclassifiedFindings(ctx); err == nil && n > 0 {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Minute):
+		}
+		if err := m.Scan(ctx); err != nil && ctx.Err() == nil {
+			m.o.Log.Warn("dependency scan", "error", err)
+		}
+	}
 	for {
 		now := m.now()
 		next := time.Date(now.Year(), now.Month(), now.Day(), hour, 0, 0, 0, now.Location())

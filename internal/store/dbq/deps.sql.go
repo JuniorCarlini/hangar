@@ -11,6 +11,20 @@ import (
 	"strings"
 )
 
+const countUnclassifiedFindings = `-- name: CountUnclassifiedFindings :one
+SELECT COUNT(*) FROM dependency_findings
+WHERE kind = 'vuln' AND resolved_at IS NULL AND remedy = ''
+`
+
+// Open vulnerabilities from before the scan decided their remedy (a panel
+// just updated from a version without it).
+func (q *Queries) CountUnclassifiedFindings(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countUnclassifiedFindings)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteExpiredFindingIgnores = `-- name: DeleteExpiredFindingIgnores :exec
 DELETE FROM finding_ignores WHERE until_at IS NOT NULL AND until_at <= ?
 `

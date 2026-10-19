@@ -290,11 +290,8 @@ func groupRow(ctx context.Context, g deps.Group) views.GroupRow {
 			row.Action, row.Text = views.ActBadge, i18n.T(ctx, "deps.wait.hangar")
 		case strings.HasPrefix(reason, deps.RemedyMajor):
 			row.Action, row.Text = views.ActBadge, i18n.T(ctx, "deps.wait.major", "tag", top.RemedyTag)
-		default: // not checked: the old advice, nothing claimed
-			f := top
-			f.Suggested = g.Fixed
-			row.Action = views.ActAdvice
-			row.Text, row.Code = actionFor(ctx, f)
+		default: // not checked yet: a waiting row is never the user's code, so no command
+			row.Action, row.Text = views.ActBadge, i18n.T(ctx, "deps.wait.unchecked")
 		}
 	}
 	return row
