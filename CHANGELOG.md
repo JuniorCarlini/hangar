@@ -12,6 +12,51 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.13] - 2026-10-19
+
+### Novo
+
+- **Atualizações e vulnerabilidades pelo que fazer**: a página separa as
+  pendências em "Resolve com deploy", "Trocar a versão", "No seu código" e
+  "Aguardando correção". O painel examina a imagem nova no registro antes de
+  dizer que um deploy resolve. Cada pacote vira uma linha ("58 falhas"), e há
+  botão só onde o painel resolve: **Fazer deploy**, **Trocar para …** e
+  **Atualizar Hangar**. Para bibliotecas da sua app, mostra o comando do seu
+  gerenciador (`uv`, `poetry`, `npm`, `go get`…).
+- **Trocar a imagem de um serviço**: cartão "Imagem" nas configurações (e o
+  botão da página de atualizações). Pede a sua senha e, se a versão nova não
+  subir, volta sozinho para a anterior.
+- **Discos com uso e limite**: cada disco mostra quanto usa; com limite, uma
+  barra ("3,2 GB de 20 GB"), aviso aos 80% e aos 95% e o botão **Aumentar**,
+  sem parar o serviço. O limite é opcional e real: o disco não passa do
+  tamanho e não lota o servidor. Templates de banco e de armazenamento já vêm
+  com um tamanho sugerido.
+- **Templates mais completos**: o tempo de desligamento (`stop_grace_period`,
+  até 2 min), discos só leitura (`:ro`) e um disco compartilhado entre os
+  serviços do mesmo template.
+
+### Corrigido
+
+- **Bancos eram derrubados sem aviso ao parar**: PostgreSQL, Redis e
+  qualquer app que troca de usuário não recebiam o sinal de desligar e eram
+  encerrados na hora. Agora desligam certinho (o PostgreSQL faz o checkpoint,
+  o Redis salva os dados).
+- O primeiro boot de um serviço lento (apps Java, bancos importando dados)
+  podia ser derrubado depois de 2 min mesmo com o template pedindo mais; o
+  Hangar agora espera o que o healthcheck declara (até 15 min).
+- Dois painéis no mesmo Docker podiam mexer nos containers um do outro. Cada
+  painel agora só toca no que criou; o que já roda é reconhecido na
+  atualização.
+- "Último acesso" na Equipe dizia "nunca entrou" para quem já tinha saído;
+  agora fica guardado na conta.
+- O uso de disco por serviço (aba Métricas) aparecia vazio em versões novas do
+  Docker.
+- **Depois de reiniciar o servidor, o proxy de borda podia não voltar**: outro
+  container pegava o endereço fixo dele durante o boot e todos os sites
+  ficavam fora. O painel agora libera o endereço antes de subir a borda.
+- O instalador passa a instalar o `e2fsprogs` quando falta (usado pelo limite
+  de disco).
+
 ## [0.5.12] - 2026-10-18
 
 ### Novo
