@@ -993,7 +993,6 @@ code = "Código inválido. Confira o horário do celular e tente o código segui
 already_on = "A 2FA já está ativada."
 required = "Este servidor exige 2FA; ela não pode ser desativada."
 
-
 [pagination]
 label = "Paginação"
 prev = "Anterior"
@@ -1315,7 +1314,6 @@ new_sub = "teto por hora; renovações não contam"
 denied = "Negados nas últimas 24 h"
 denied_sub = "quase sempre varredura automática"
 
-
 [confirm.deploy]
 title = "Fazer deploy de {service}?"
 text = "Sai uma versão nova com as alterações pendentes, sem derrubar o site."
@@ -1434,6 +1432,11 @@ state = "Estado"
 updated = "Atualizado"
 
 [deps]
+flaws_title = { one = "1 falha em {where}", other = "{n} falhas em {where}" }
+flaws = { one = "1 falha", other = "{n} falhas" }
+show_bucket = "Ver todos ({n})"
+bucket_empty = "Nada neste grupo."
+rows = { one = "1 item", other = "{n} itens" }
 page_title = "Atualizações · Hangar"
 title = "Atualizações e vulnerabilidades"
 never = "nenhuma verificação ainda"
@@ -1441,7 +1444,6 @@ last_run = "última verificação: {when}"
 last_run_partial = "última verificação: {when} · com partes que não puderam ser lidas"
 scan_now = "Verificar agora"
 scanning = "Verificando…"
-pending = "Pendências"
 show_all = "Mostrar tudo"
 empty = "Nada pendente: tudo o que roda está sem vulnerabilidade conhecida e na versão mais nova."
 never_scanned = "Nenhuma verificação ainda. A verificação roda todo dia às 06:00, ou clique em Verificar agora."
@@ -1453,34 +1455,14 @@ problems = "Não foi possível ler tudo"
 problems_hint = "Nestes serviços o inventário ficou incompleto (imagem sem find/cat, container parado ou registro fora do ar). O que foi lido continua sendo verificado."
 
 [deps.col]
-level = "Nível"
+flaws = "Falhas"
+severity = "Gravidade"
 where = "Onde"
 package = "Pacote"
 version = "Versão"
 advisory = "Aviso"
-action = "O que fazer"
 until = "Até"
 reason = "Motivo"
-
-[deps.level]
-critical = "Crítico"
-security = "Segurança"
-minor = "Patch/minor"
-major = "Major"
-
-[deps.level_hint]
-critical = "CVE crítica/alta com correção: avisa na hora"
-security = "Outras CVEs: resumo diário"
-minor = "Versão nova compatível: resumo semanal"
-major = "Versão major, pode quebrar: resumo semanal"
-
-[deps.severity]
-critical = "gravidade crítica"
-high = "gravidade alta"
-medium = "gravidade média"
-low = "gravidade baixa"
-unknown = "gravidade não informada"
-none = "sem gravidade"
 
 [deps.kind]
 vuln = "Vulnerabilidade"
@@ -1977,7 +1959,6 @@ enable = "Ligar deploy automático"
 rotate = "Gerar novo"
 disable = "Desligar"
 created = "Webhook pronto. Copie a URL e o segredo agora para o GitHub."
-
 
 [confirm.git_webhook_rotate]
 title = "Gerar uma URL nova?"
@@ -2871,3 +2852,53 @@ changed = "A imagem do serviço mudou enquanto isso. Recarregue a página e tent
 title = "Trocar a versão de {name}?"
 text = "O serviço passa a rodar a nova versão da imagem. Se ela não ficar saudável, a anterior continua (ou volta) e o serviço retorna à versão antiga."
 ok = "Trocar e fazer deploy"
+
+[deps.bucket]
+deploy = "Resolve com deploy"
+tag = "Trocar a versão"
+code = "No seu código"
+wait = "Aguardando correção"
+updates = "Versões novas"
+
+[deps.bucket_sub]
+deploy = "a imagem nova já traz a correção"
+tag = "a tag parou; uma mais nova corrige"
+code = "atualize a biblioteca e faça deploy"
+wait = "só acompanhar; some sozinho"
+
+[deps.bucket_hint]
+deploy = "Já existe imagem nova da mesma versão com a correção. O deploy baixa e troca sem mudar nada. No Caddy do servidor, a correção vem com a versão nova do Hangar."
+tag = "A tag que você usa não recebe mais correções. Trocar para a mais nova resolve; se não subir, volta sozinho."
+code = "Bibliotecas da sua app. Atualize no projeto e faça deploy."
+wait = "Nada a fazer agora. Some sozinho quando a correção sair; aí ela aparece em cima."
+updates = "Versões mais novas das imagens, sem vulnerabilidade conhecida na que roda. Patch e minor trocam com um clique; major pode quebrar: leia as notas antes."
+
+[deps.sev]
+critical = "crítica"
+high = "alta"
+medium = "média"
+low = "baixa"
+unknown = "sem nota"
+
+[deps.kind_short]
+patch = "patch"
+minor = "minor"
+major = "major"
+
+[deps.do]
+deploy = "Fazer deploy"
+hangar = "Atualizar Hangar"
+hangar_owner = "o dono atualiza o Hangar"
+tag = "Trocar para {tag}"
+tag_admin = "um admin troca para {tag}"
+
+[deps.wait]
+no_fix = "sem correção ainda"
+image = "imagem ainda não saiu"
+hangar = "vem com uma versão do Hangar"
+major = "só na {tag} (major)"
+
+[deps.row]
+image = "imagem {name}"
+image_eco = "imagem"
+severe_other = "{severe} graves · {other} outras"

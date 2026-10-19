@@ -618,6 +618,84 @@ func (m *Monitor) Ignore(ctx context.Context, a Actor, findingID, mode, reason s
 	return nil
 }
 
+// maxIgnoreGroup bounds how many findings one ignore may cover.
+const maxIgnoreGroup = 1000
+
+// IgnoreGroup hides the packages of a row of the updates page (every
+// advisory of each package, now and later), with one reason. "Until a
+// newer version" waits for a version newer than the highest one suggested
+// for each package.
+func (m *Monitor) IgnoreGroup(ctx context.Context, a Actor, findingIDs []string, mode, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if len(reason) < 3 || len(reason) > 300 {
+		return ErrReason
+	}
+	if mode != IgnoreDays && mode != IgnoreVersion {
+		return ErrIgnoreMode
+	}
+	if len(findingIDs) == 0 || len(findingIDs) > maxIgnoreGroup {
+		return ErrNotFound
+	}
+	type rule struct {
+		f       dbq.DependencyFinding
+		version string
+		noFix   bool
+	}
+	var order []string
+	rules := map[string]*rule{}
+	for _, id := range findingIDs {
+		f, err := m.q.GetDependencyFinding(ctx, id)
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		k := f.ServiceID.String + "|" + f.Target + "|" + f.Package
+		r, ok := rules[k]
+		if !ok {
+			r = &rule{f: f}
+			rules[k] = r
+			order = append(order, k)
+		}
+		suggested := f.FixedVersion
+		if f.Kind != KindVuln {
+			suggested = f.LatestVersion
+		}
+		if suggested == "" {
+			r.noFix = true
+		} else if r.version == "" || CompareVersions(suggested, r.version) > 0 {
+			r.version = suggested
+		}
+	}
+	if mode == IgnoreVersion {
+		for _, k := range order {
+			if rules[k].noFix {
+				return ErrIgnoreMode
+			}
+		}
+	}
+	for _, k := range order {
+		r := rules[k]
+		p := dbq.InsertFindingIgnoreParams{
+			ID: ids.New("ign_"), ServiceID: r.f.ServiceID, Target: r.f.Target, Package: r.f.Package,
+			Reason: reason, CreatedBy: sql.NullString{String: a.UserID, Valid: a.UserID != ""}, CreatedAt: m.now().Unix(),
+		}
+		if mode == IgnoreDays {
+			p.UntilAt = sql.NullInt64{Int64: m.now().Add(30 * 24 * time.Hour).Unix(), Valid: true}
+		} else {
+			p.UntilVersion = r.version
+		}
+		if err := m.q.InsertFindingIgnore(ctx, p); err != nil {
+			return err
+		}
+		m.record(ctx, a, "deps.ignore", r.f.ID, map[string]any{
+			"package": r.f.Package, "findings": len(findingIDs), "mode": mode, "until_version": p.UntilVersion, "reason": reason,
+		})
+	}
+	return nil
+}
+
 // Ignore is an active ignore rule.
 type Ignore struct {
 	ID           string

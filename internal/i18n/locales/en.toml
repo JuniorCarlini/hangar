@@ -993,7 +993,6 @@ code = "Invalid code. Check the phone's clock and try the next code."
 already_on = "2FA is already on."
 required = "This server requires 2FA; it cannot be turned off."
 
-
 [pagination]
 label = "Pagination"
 prev = "Previous"
@@ -1315,7 +1314,6 @@ new_sub = "hourly cap; renewals do not count"
 denied = "Denied in the last 24 h"
 denied_sub = "mostly automated scans"
 
-
 [confirm.deploy]
 title = "Deploy {service}?"
 text = "A new version goes out with the pending changes, without taking the site down."
@@ -1434,6 +1432,11 @@ state = "State"
 updated = "Updated"
 
 [deps]
+flaws_title = { one = "1 advisory in {where}", other = "{n} advisories in {where}" }
+flaws = { one = "1 advisory", other = "{n} advisories" }
+show_bucket = "Show all ({n})"
+bucket_empty = "Nothing in this group."
+rows = { one = "1 item", other = "{n} items" }
 page_title = "Updates · Hangar"
 title = "Updates and vulnerabilities"
 never = "never checked"
@@ -1441,7 +1444,6 @@ last_run = "last check {when}"
 last_run_partial = "last check {when} · some parts could not be read"
 scan_now = "Check now"
 scanning = "Checking…"
-pending = "Pending"
 show_all = "Show all"
 empty = "Nothing pending: everything running has no known vulnerability and is up to date."
 never_scanned = "No check yet. It runs every day at 06:00, or click Check now."
@@ -1453,34 +1455,14 @@ problems = "Could not read everything"
 problems_hint = "The inventory of these services is incomplete (image without find/cat, stopped container or registry unreachable). What could be read is still checked."
 
 [deps.col]
-level = "Level"
+flaws = "Advisories"
+severity = "Severity"
 where = "Where"
 package = "Package"
 version = "Version"
 advisory = "Advisory"
-action = "What to do"
 until = "Until"
 reason = "Reason"
-
-[deps.level]
-critical = "Critical"
-security = "Security"
-minor = "Patch/minor"
-major = "Major"
-
-[deps.level_hint]
-critical = "Critical/high CVE with a fix: warns right away"
-security = "Other CVEs: daily summary"
-minor = "Compatible new version: weekly summary"
-major = "Major version, may break: weekly summary"
-
-[deps.severity]
-critical = "critical severity"
-high = "high severity"
-medium = "medium severity"
-low = "low severity"
-unknown = "severity not rated"
-none = "no severity"
 
 [deps.kind]
 vuln = "Vulnerability"
@@ -1977,7 +1959,6 @@ enable = "Turn on automatic deploys"
 rotate = "Generate new"
 disable = "Turn off"
 created = "Webhook ready. Copy the URL and the secret into GitHub now."
-
 
 [confirm.git_webhook_rotate]
 title = "Generate a new URL?"
@@ -2870,3 +2851,53 @@ changed = "The service's image changed meanwhile. Reload the page and try again.
 title = "Change the version of {name}?"
 text = "The service will run the new image version. If it does not become healthy, the previous one stays (or comes back) and the service returns to the old version."
 ok = "Change and deploy"
+
+[deps.bucket]
+deploy = "Fixed by a deploy"
+tag = "Switch version"
+code = "In your code"
+wait = "Waiting for a fix"
+updates = "New versions"
+
+[deps.bucket_sub]
+deploy = "the new image already has the fix"
+tag = "the tag stopped; a newer one fixes it"
+code = "update the library and deploy"
+wait = "just watch; it clears by itself"
+
+[deps.bucket_hint]
+deploy = "A new image of the same version with the fix is out. The deploy pulls it and switches without changing anything else. For the server's Caddy, the fix comes with the new Hangar version."
+tag = "The tag you use gets no more fixes. Switching to the newer one fixes it; if it does not come up, it goes back by itself."
+code = "Libraries of your app. Update them in the project and deploy."
+wait = "Nothing to do now. It clears by itself once the fix is out; then it shows up above."
+updates = "Newer image versions, with no known vulnerability in the one running. Patch and minor switch with one click; a major may break: read the notes first."
+
+[deps.sev]
+critical = "critical"
+high = "high"
+medium = "medium"
+low = "low"
+unknown = "unrated"
+
+[deps.kind_short]
+patch = "patch"
+minor = "minor"
+major = "major"
+
+[deps.do]
+deploy = "Deploy"
+hangar = "Update Hangar"
+hangar_owner = "the owner updates Hangar"
+tag = "Switch to {tag}"
+tag_admin = "an admin switches to {tag}"
+
+[deps.wait]
+no_fix = "no fix yet"
+image = "image not out yet"
+hangar = "comes with a Hangar release"
+major = "only in {tag} (major)"
+
+[deps.row]
+image = "image {name}"
+image_eco = "image"
+severe_other = "{severe} severe · {other} other"

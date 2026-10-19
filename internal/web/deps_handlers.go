@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -16,9 +17,20 @@ import (
 
 // --- updates and vulnerabilities page (docs/14, docs/17 § 3.8) ---------------
 
-// findingsPerPage is how many pending findings one page of /updates shows:
-// a real server can have hundreds.
-const findingsPerPage = 25
+const (
+	// rowsPerSection is how many rows a section shows on the full page; the
+	// rest are behind its filter.
+	rowsPerSection = 10
+	// rowsPerPage is one page of a filtered section: a real server can have
+	// hundreds of rows waiting for a fix.
+	rowsPerPage = 25
+	// advisoriesPerRow bounds the list in a row's dialog.
+	advisoriesPerRow = 200
+)
+
+// sectionOrder is the page's sections: the vulnerability buckets, then the
+// newer image tags with no known vulnerability.
+var sectionOrder = append(append([]string{}, deps.Buckets...), deps.BucketUpdates)
 
 func (h *handlers) updatesPage(w http.ResponseWriter, r *http.Request) {
 	flash := ""
@@ -37,84 +49,118 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 	ctx := r.Context()
 	pr := PrincipalFrom(ctx)
 	d := views.UpdatesData{
-		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, Error: errMsg, Flash: flash,
-		Level: r.FormValue("level"), Counts: map[string]int{}, Running: h.deps.Running(),
+		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
+		CanUpdate: pr.Role >= auth.RoleOwner, SudoActive: time.Now().Before(pr.SudoUntil),
+		Error: errMsg, Flash: flash, Bucket: r.FormValue("bucket"), Running: h.deps.Running(),
 	}
-	if d.Level != "" && !validLevel(d.Level) {
-		d.Level = ""
+	if !validBucket(d.Bucket) {
+		d.Bucket = ""
 	}
-	if h.deps != nil {
-		last, lastErr := h.deps.LastRun()
-		if !last.IsZero() {
-			d.LastRun = ago(ctx, last.Format(time.RFC3339Nano), time.Now())
+	if h.deps == nil {
+		d.Empty = true
+		for _, b := range deps.Buckets {
+			d.Cards = append(d.Cards, views.BucketCard{Bucket: b})
 		}
-		d.LastError = lastErr != ""
-		fs, err := h.deps.Findings(ctx)
-		if err != nil {
-			status, d.Error = userError(r, err)
-		}
-		var shown []deps.Finding
-		for _, f := range fs {
-			if f.Ignored {
-				d.IgnoredCount++
-				continue
-			}
-			d.Counts[f.Level]++
-			if d.Level != "" && f.Level != d.Level {
-				continue
-			}
-			shown = append(shown, f)
-		}
-		// The cards count everything; the table renders one page of it.
-		page, _ := strconv.Atoi(r.FormValue("page"))
-		d.Pager = views.NewPager("/updates", updatesQuery(d.Level), page, len(shown), findingsPerPage)
-		for _, f := range shown[d.Pager.Offset():d.Pager.End()] {
-			d.Findings = append(d.Findings, findingRow(ctx, f))
-		}
-		ign, err := h.deps.Ignores(ctx)
-		if err != nil {
-			loggerFrom(ctx).Error("finding ignores", "error", err)
-		}
-		for _, i := range ign {
-			row := views.IgnoreRow{ID: i.ID, Where: targetLabel(ctx, i.Where), Package: i.Package, Advisory: i.Advisory, Reason: i.Reason}
-			switch {
-			case i.UntilVersion != "":
-				row.Until = i18n.T(ctx, "deps.ignore.until_version", "version", i.UntilVersion)
-			case !i.UntilAt.IsZero():
-				row.Until = i18n.T(ctx, "deps.ignore.until_date", "date", i.UntilAt.Format("02/01/2006"))
-			}
-			d.Ignores = append(d.Ignores, row)
-		}
-		scans, err := h.deps.Scans(ctx)
-		if err != nil {
-			loggerFrom(ctx).Error("dependency scans", "error", err)
-		}
-		// After a restart the in-memory last run is gone: use the newest
-		// stored inventory.
-		if d.LastRun == "" {
-			var newest time.Time
-			for _, s := range scans {
-				if s.At.After(newest) {
-					newest = s.At
-				}
-			}
-			if !newest.IsZero() {
-				d.LastRun = ago(ctx, newest.Format(time.RFC3339Nano), time.Now())
-			}
-		}
-		d.Problems = h.scanProblems(ctx, scans)
+		render(w, r, status, views.Updates(d))
+		return
 	}
+	last, lastErr := h.deps.LastRun()
+	if !last.IsZero() {
+		d.LastRun = ago(ctx, last.Format(time.RFC3339Nano), time.Now())
+	}
+	d.LastError = lastErr != ""
+	fs, err := h.deps.Findings(ctx)
+	if err != nil {
+		status, d.Error = userError(r, err)
+	}
+	for _, f := range fs {
+		if f.Ignored {
+			d.IgnoredCount++
+		}
+	}
+	// The edge's image comes with Hangar: a newer release is its "deploy".
+	hangarUpdate := false
+	if h.updates != nil {
+		if av, _ := h.updates.Latest(); av != nil {
+			hangarUpdate = true
+		}
+	}
+	groups := deps.GroupFindings(fs, hangarUpdate)
+	for _, b := range deps.Buckets {
+		d.Cards = append(d.Cards, views.BucketCard{Bucket: b, Count: len(groups[b])})
+	}
+	d.Empty = true
+	page, _ := strconv.Atoi(r.FormValue("page"))
+	for _, b := range sectionOrder {
+		rows := groups[b]
+		if len(rows) > 0 {
+			d.Empty = false
+		}
+		if d.Bucket != "" && b != d.Bucket || d.Bucket == "" && len(rows) == 0 {
+			continue
+		}
+		s := views.UpdatesSection{Bucket: b, Total: len(rows)}
+		shown := rows
+		if d.Bucket == "" {
+			if len(rows) > rowsPerSection {
+				shown, s.More = rows[:rowsPerSection], true
+			}
+		} else {
+			q := url.Values{"bucket": {b}}
+			s.Pager = views.NewPager("/updates", q, page, len(rows), rowsPerPage)
+			shown = rows[s.Pager.Offset():s.Pager.End()]
+		}
+		for _, g := range shown {
+			s.Rows = append(s.Rows, groupRow(ctx, g))
+		}
+		d.Sections = append(d.Sections, s)
+	}
+	if d.Bucket != "" {
+		d.Empty = false // the filtered section says it is empty itself
+	}
+
+	ign, err := h.deps.Ignores(ctx)
+	if err != nil {
+		loggerFrom(ctx).Error("finding ignores", "error", err)
+	}
+	for _, i := range ign {
+		row := views.IgnoreRow{ID: i.ID, Where: targetLabel(ctx, i.Where), Package: i.Package, Advisory: i.Advisory, Reason: i.Reason}
+		switch {
+		case i.UntilVersion != "":
+			row.Until = i18n.T(ctx, "deps.ignore.until_version", "version", i.UntilVersion)
+		case !i.UntilAt.IsZero():
+			row.Until = i18n.T(ctx, "deps.ignore.until_date", "date", i.UntilAt.Format("02/01/2006"))
+		}
+		d.Ignores = append(d.Ignores, row)
+	}
+	scans, err := h.deps.Scans(ctx)
+	if err != nil {
+		loggerFrom(ctx).Error("dependency scans", "error", err)
+	}
+	// After a restart the in-memory last run is gone: use the newest
+	// stored inventory.
+	if d.LastRun == "" {
+		var newest time.Time
+		for _, s := range scans {
+			if s.At.After(newest) {
+				newest = s.At
+			}
+		}
+		if !newest.IsZero() {
+			d.LastRun = ago(ctx, newest.Format(time.RFC3339Nano), time.Now())
+		}
+	}
+	d.Problems = h.scanProblems(ctx, scans)
 	render(w, r, status, views.Updates(d))
 }
 
-// updatesQuery is the query that page links and redirects keep: the
-// level filter (the flash "ok" is shown once and dropped).
-func updatesQuery(level string) url.Values {
-	q := url.Values{}
-	if validLevel(level) {
-		q.Set("level", level)
+func validBucket(b string) bool {
+	for _, v := range sectionOrder {
+		if v == b {
+			return true
+		}
 	}
-	return q
+	return false
 }
 
 // targetLabel names server-level targets in the user's language; services
@@ -124,15 +170,6 @@ func targetLabel(ctx context.Context, where string) string {
 		return i18n.T(ctx, "deps.target.edge")
 	}
 	return where
-}
-
-func validLevel(l string) bool {
-	for _, v := range deps.Levels {
-		if v == l {
-			return true
-		}
-	}
-	return false
 }
 
 // scanProblems names the targets whose last inventory could not read
@@ -161,24 +198,160 @@ func (h *handlers) scanProblems(ctx context.Context, scans map[string]deps.ScanI
 	return out
 }
 
-// findingRow turns a finding into a table row with the suggested action.
-func findingRow(ctx context.Context, f deps.Finding) views.FindingRow {
-	row := views.FindingRow{
-		ID: f.ID, Level: f.Level, Where: targetLabel(ctx, f.Where()), Package: f.Package, Ecosystem: f.Ecosystem,
-		Current: f.Current, Suggested: f.Suggested, Advisory: f.Advisory, Summary: f.Summary,
-		Severity: f.Severity, Kind: f.Kind, CanIgnoreVersion: f.Suggested != "",
+// groupRow turns a group of findings into a row with the action that deals
+// with it.
+func groupRow(ctx context.Context, g deps.Group) views.GroupRow {
+	top := g.Findings[0]
+	row := views.GroupRow{
+		ID: g.ID(), IDs: g.IDs(), Severity: g.Severity, Where: targetLabel(ctx, g.Where()),
+		Project: g.Project, Service: g.Service, Packages: packagesLabel(g),
+		Ecosystem: ecosystemLabel(ctx, g.Ecosystem, g.Source), Current: g.Current, Fixed: g.Fixed,
 	}
-	if f.Project != "" {
-		row.Href = servicePath(f.Project, f.Service)
+	if g.Project != "" {
+		row.Href = servicePath(g.Project, g.Service)
 	}
-	if f.Advisory != "" {
-		row.AdvisoryURL = deps.AdvisoryURL(f.Advisory)
-		if len(f.Aliases) > 0 {
-			row.Aliases = strings.Join(f.Aliases, ", ")
+	// "Until a newer version" needs a version for every package of the row.
+	row.IgnoreVersion = g.Fixed
+	for _, f := range g.Findings {
+		if f.Suggested == "" {
+			row.IgnoreVersion = ""
+			break
 		}
 	}
-	row.Action, row.Code = actionFor(ctx, f)
+	if len(g.Packages) > 1 {
+		row.IgnoreVersion = "" // one per package: the dialog cannot name it
+		if g.Bucket != deps.BucketTag {
+			row.Current, row.Fixed = "", ""
+		}
+	}
+	seen := map[string]bool{}
+	for _, f := range g.Findings {
+		if f.Advisory == "" || seen[f.Advisory] {
+			continue
+		}
+		seen[f.Advisory] = true
+		row.Count++
+		if len(row.Advisories) < advisoriesPerRow {
+			a := views.AdvisoryRow{
+				ID: f.Advisory, URL: deps.AdvisoryURL(f.Advisory), Summary: f.Summary, Severity: f.Severity,
+				Package: f.Package, Current: f.Current, Fixed: f.Suggested,
+			}
+			if len(f.Aliases) > 0 {
+				a.Aliases = strings.Join(f.Aliases, ", ")
+			}
+			row.Advisories = append(row.Advisories, a)
+		}
+	}
+
+	switch g.Bucket {
+	case deps.BucketDeploy:
+		row.Action = views.ActDeploy
+		if g.Target == deps.EdgeTarget {
+			row.Action = views.ActHangar
+		}
+	case deps.BucketTag:
+		row.Action, row.Tag = views.ActTag, g.RemedyTag
+		// One row for the whole image: the tag is the version.
+		if ref, ok := deps.ParseImage(g.Image); ok {
+			row.Packages = i18n.T(ctx, "deps.row.image", "name", ref.Name())
+			row.Current = ref.Tag
+		}
+		row.Fixed = g.RemedyTag
+		all, severe := g.Advisories()
+		row.Ecosystem = i18n.T(ctx, "deps.row.severe_other", "severe", severe, "other", all-severe)
+		row.IgnoreVersion = ""
+	case deps.BucketCode:
+		if cmd := deps.FixCommand(g.Source, top.Package, g.Fixed); cmd != "" {
+			row.Action, row.Code = views.ActCommand, cmd
+		} else {
+			f := top
+			f.Suggested = g.Fixed
+			row.Action = views.ActAdvice
+			row.Text, row.Code = actionFor(ctx, f)
+		}
+	case deps.BucketUpdates:
+		row.Severity, row.Kind, row.Fixed = "", top.Kind, top.Suggested
+		row.Ecosystem = i18n.T(ctx, "deps.kind."+top.Kind)
+		// Patch and minor of a service's image: the panel switches the tag;
+		// a major (may break) and the edge's image only get the advice.
+		if top.Kind != deps.KindMajor && g.ServiceID != "" && imageOf(g.Image) == top.Package {
+			row.Action, row.Tag = views.ActTag, top.Suggested
+		} else {
+			row.Action = views.ActAdvice
+			row.Text, row.Code = actionFor(ctx, top)
+		}
+	default: // waiting
+		switch reason := deps.WaitReason(top); {
+		case reason == deps.RemedyNoFix:
+			row.Action, row.Text = views.ActBadge, i18n.T(ctx, "deps.wait.no_fix")
+		case reason == deps.RemedyWaitImage:
+			row.Action, row.Text = views.ActBadge, i18n.T(ctx, "deps.wait.image")
+		case reason == deps.RemedyEdge:
+			row.Action, row.Text = views.ActBadge, i18n.T(ctx, "deps.wait.hangar")
+		case strings.HasPrefix(reason, deps.RemedyMajor):
+			row.Action, row.Text = views.ActBadge, i18n.T(ctx, "deps.wait.major", "tag", top.RemedyTag)
+		default: // not checked: the old advice, nothing claimed
+			f := top
+			f.Suggested = g.Fixed
+			row.Action = views.ActAdvice
+			row.Text, row.Code = actionFor(ctx, f)
+		}
+	}
 	return row
+}
+
+// imageOf is an image reference without its tag, as findings name it.
+func imageOf(image string) string {
+	if ref, ok := deps.ParseImage(image); ok {
+		return ref.Name()
+	}
+	return ""
+}
+
+// packagesLabel names a row's packages: up to three, and Go's standard
+// library with the binary it is compiled into ("stdlib (gosu)").
+func packagesLabel(g deps.Group) string {
+	names := make([]string, 0, 3)
+	for i, p := range g.Packages {
+		if i == 3 {
+			names = append(names, "…")
+			break
+		}
+		if p == "stdlib" && strings.HasPrefix(g.Ecosystem, "Go") && len(g.Packages) == 1 && g.Source != "" && g.Source != "/" {
+			p += " (" + path.Base(g.Source) + ")"
+		}
+		names = append(names, p)
+	}
+	return strings.Join(names, ", ")
+}
+
+// ecosystemLabel is the second line of a row: "Alpine 3.23", "Debian 13",
+// "Python · uv".
+func ecosystemLabel(ctx context.Context, eco, source string) string {
+	base, rest, _ := strings.Cut(eco, ":")
+	label := base
+	switch base {
+	case "PyPI":
+		label = "Python"
+	case "npm":
+		label = "Node.js"
+	case "Packagist":
+		label = "PHP"
+	case "crates.io":
+		label = "Rust"
+	case "RubyGems":
+		label = "Ruby"
+	case "image":
+		label = i18n.T(ctx, "deps.row.image_eco")
+	default:
+		if rest != "" {
+			label += " " + strings.TrimPrefix(strings.ReplaceAll(rest, ":", " "), "v")
+		}
+	}
+	if m := deps.Manager(source); m != "" {
+		label += " · " + m
+	}
+	return label
 }
 
 // actionFor is "the command or the line to change" (docs/14).
@@ -235,23 +408,27 @@ func depsActor(r *http.Request) deps.Actor {
 	return deps.Actor{UserID: p.UserID, IP: clientIP(r)}
 }
 
+// updatesIgnore hides a row: every package in it, with one reason.
 func (h *handlers) updatesIgnore(w http.ResponseWriter, r *http.Request) {
 	if h.deps == nil {
 		http.Error(w, i18n.T(r.Context(), "error.bad_request"), http.StatusBadRequest)
 		return
 	}
-	err := h.deps.Ignore(r.Context(), depsActor(r), r.PostFormValue("id"), r.PostFormValue("mode"), r.PostFormValue("reason"))
+	_ = r.ParseForm()
+	err := h.deps.IgnoreGroup(r.Context(), depsActor(r), r.PostForm["id"], r.PostFormValue("mode"), r.PostFormValue("reason"))
 	if err != nil {
 		code, msg := userError(r, err)
 		h.renderUpdates(w, r, code, msg, "")
 		return
 	}
-	// Back to the filter and page the finding was on (clamped on render
-	// if it was the last row of the last page).
-	q := updatesQuery(r.PostFormValue("level"))
-	q.Set("ok", "ignored")
-	if n, _ := strconv.Atoi(r.PostFormValue("page")); n > 1 {
-		q.Set("page", strconv.Itoa(n))
+	// Back to the section and page the row was on (clamped on render if
+	// it was the last row of the last page).
+	q := url.Values{"ok": {"ignored"}}
+	if b := r.PostFormValue("bucket"); validBucket(b) {
+		q.Set("bucket", b)
+		if n, _ := strconv.Atoi(r.PostFormValue("page")); n > 1 {
+			q.Set("page", strconv.Itoa(n))
+		}
 	}
 	redirectLocal(w, r, "/updates?"+q.Encode())
 }

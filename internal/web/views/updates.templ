@@ -3,20 +3,26 @@ package views
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
 )
 
-// UpdatesData feeds the "Updates and vulnerabilities" page (docs/14).
+// UpdatesData feeds the "Updates and vulnerabilities" page (docs/14): the
+// vulnerabilities sorted by what to do about them.
 type UpdatesData struct {
-	CSRF         string
-	CanOperate   bool
-	Running      bool
-	LastRun      string // "há 2 h"; "" = never
-	LastError    bool
-	Level        string // filter; "" = all
-	Counts       map[string]int
-	Findings     []FindingRow // only the rows of Pager.Page
-	Pager        Pager
+	CSRF       string
+	CanOperate bool
+	CanAdmin   bool
+	CanUpdate  bool // may open the Hangar update page (owner)
+	SudoActive bool
+	Running    bool
+	LastRun    string // "há 2 h"; "" = never
+	LastError  bool
+	Bucket     string // filter; "" = every section
+	Cards      []BucketCard
+	Sections   []UpdatesSection
+	// Empty: nothing pending at all (the sections are all empty).
+	Empty        bool
 	IgnoredCount int
 	Ignores      []IgnoreRow
 	Problems     []ScanProblem
@@ -24,25 +30,69 @@ type UpdatesData struct {
 	Flash        string
 }
 
-// FindingRow is one pending update or vulnerability.
-type FindingRow struct {
-	ID               string
-	Level            string // critical, security, minor, major
-	Where            string // project/service, or "edge"
-	Href             string
-	Package          string
-	Ecosystem        string
-	Current          string
-	Suggested        string
-	Severity         string
-	Kind             string
-	Advisory         string
-	AdvisoryURL      string
-	Aliases          string
-	Summary          string
-	Action           string
-	Code             string
-	CanIgnoreVersion bool
+// BucketCard is a counter at the top: rows of one bucket.
+type BucketCard struct {
+	Bucket string
+	Count  int
+}
+
+// UpdatesSection is one bucket's card.
+type UpdatesSection struct {
+	Bucket string
+	Rows   []GroupRow
+	Total  int
+	// More: the section shows only its first rows; the rest are behind the
+	// bucket filter.
+	More  bool
+	Pager Pager // when the page is filtered to this bucket
+}
+
+// Row actions.
+const (
+	ActDeploy  = "deploy"  // "Deploy" (operator)
+	ActHangar  = "hangar"  // "Update Hangar" (owner)
+	ActTag     = "tag"     // "Switch to <tag>" (admin + sudo)
+	ActCommand = "command" // the exact command for the app's code
+	ActAdvice  = "advice"  // a text, with Code when there is something to copy
+	ActBadge   = "badge"   // why it waits
+)
+
+// GroupRow is one row: the findings one action deals with.
+type GroupRow struct {
+	ID        string
+	IDs       []string
+	Severity  string // critical, high, medium, low, unknown; "" for tag updates
+	Kind      string // tag updates: patch, minor, major
+	Where     string
+	Href      string
+	Project   string
+	Service   string
+	Packages  string // "zlib, expat, libx11", "stdlib (gosu)", "imagem nginx"
+	Ecosystem string // second line: "Alpine 3.23", "Python · uv", "66 graves · 43 outras"
+	Current   string
+	Fixed     string
+	// Count and Advisories are the distinct advisories (none for tag
+	// updates).
+	Count      int
+	Advisories []AdvisoryRow
+	Action     string
+	Tag        string // ActTag
+	Code       string // ActCommand, ActAdvice
+	Text       string // ActAdvice, ActBadge
+	// IgnoreVersion is the "until a newer version" choice ("" = none).
+	IgnoreVersion string
+}
+
+// AdvisoryRow is one advisory in a row's list.
+type AdvisoryRow struct {
+	ID       string
+	URL      string
+	Aliases  string
+	Summary  string
+	Severity string
+	Package  string
+	Current  string
+	Fixed    string
 }
 
 // IgnoreRow is an ignore rule in force.
@@ -67,45 +117,35 @@ func SortScanProblems(p []ScanProblem) {
 	sort.Slice(p, func(i, j int) bool { return p[i].Where < p[j].Where })
 }
 
-// levelBadge is the Tucano badge of a level: 🔴 critical, 🟠 security,
-// 🟡 patch/minor, ⚪ major.
-func levelBadge(level string) string {
-	switch level {
-	case "critical":
+// sevBadge: critical and high in red, medium in yellow, the rest plain.
+func sevBadge(sev string) string {
+	switch sev {
+	case "critical", "high":
 		return "tuc-badge is-danger"
-	case "security":
+	case "medium":
 		return "tuc-badge is-warning"
-	case "minor":
-		return "tuc-badge is-info"
 	}
 	return "tuc-badge"
 }
 
-func levelTone(level string) string {
-	switch level {
-	case "critical":
+// bucketTone is the color of a card's number.
+func bucketTone(b string) string {
+	switch b {
+	case "deploy":
 		return "text-danger"
-	case "security":
+	case "tag":
 		return "text-warning"
-	case "minor":
+	case "code":
 		return "text-info"
 	}
 	return ""
 }
 
-func levelHref(level string) string {
-	if level == "" {
+func bucketHref(b string) string {
+	if b == "" {
 		return "/updates"
 	}
-	return "/updates?level=" + level
-}
-
-func totalCount(c map[string]int) int {
-	n := 0
-	for _, v := range c {
-		n += v
-	}
-	return n
+	return "/updates?bucket=" + url.QueryEscape(b)
 }
 
 // Updates is the updates and vulnerabilities page.
@@ -115,6 +155,12 @@ templ Updates(d UpdatesData) {
 			<meta http-equiv="refresh" content="5"/>
 		}
 		@pageHead(t(ctx, "deps.title"), d.subtitle(ctx)) {
+			if d.Bucket != "" {
+				<a class="tuc-btn is-ghost is-sm" href="/updates">
+					@Icon("x", "size-3.5")
+					{ t(ctx, "deps.show_all") }
+				</a>
+			}
 			if d.CanOperate {
 				<form method="post" action="/updates/scan">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
@@ -134,124 +180,41 @@ templ Updates(d UpdatesData) {
 			@errorAlert(d.Error)
 			@toast("success", d.Flash)
 			<div class="flex flex-wrap gap-3">
-				for _, lv := range []string{"critical", "security", "minor", "major"} {
-					<a class={ "flex flex-[1_1_180px] flex-col gap-0.5 rounded-md border bg-surface px-4 py-3.5 text-fg no-underline hover:border-border-strong", templ.KV("border-accent bg-accent-soft", d.Level == lv), templ.KV("border-border", d.Level != lv) } href={ templ.SafeURL(levelHref(lv)) } aria-current?={ d.Level == lv }>
-						<span class="text-xs text-muted">{ t(ctx, "deps.level." + lv) }</span>
-						<span class={ "text-[22px] leading-[30px] font-semibold tabular-nums " + levelTone(lv) }>{ fmt.Sprint(d.Counts[lv]) }</span>
-						<span class="text-xs text-subtle">{ t(ctx, "deps.level_hint." + lv) }</span>
+				for _, c := range d.Cards {
+					<a class={ "flex flex-[1_1_180px] flex-col gap-0.5 rounded-md border bg-surface px-4 py-3.5 text-fg no-underline hover:border-border-strong", templ.KV("border-accent bg-accent-soft", d.Bucket == c.Bucket), templ.KV("border-border", d.Bucket != c.Bucket) } href={ templ.SafeURL(bucketHref(c.Bucket)) } aria-current?={ d.Bucket == c.Bucket }>
+						<span class="text-xs text-muted">{ t(ctx, "deps.bucket." + c.Bucket) }</span>
+						<span class={ "text-[22px] leading-[30px] font-semibold tabular-nums " + bucketTone(c.Bucket) }>{ fmt.Sprint(c.Count) }</span>
+						<span class="text-xs text-subtle">{ t(ctx, "deps.bucket_sub." + c.Bucket) }</span>
 					</a>
 				}
 			</div>
-			<section class={ cardClass }>
-				@cardHead(t(ctx, "deps.pending")) {
-					if d.Level != "" {
-						<a class="tuc-btn is-ghost is-sm" href="/updates">
-							@Icon("x", "size-3.5")
-							{ t(ctx, "deps.show_all") }
-						</a>
-					}
-				}
-				<div class={ cardBodyClass }>
-					if len(d.Findings) == 0 {
-						if d.LastRun == "" && totalCount(d.Counts) == 0 {
+			if d.Empty {
+				<section class={ cardClass }>
+					<div class={ cardBodyClass }>
+						if d.LastRun == "" {
 							@emptyState("shield", t(ctx, "deps.never_scanned"))
 						} else {
 							@emptyState("shield-check", t(ctx, "deps.empty"))
 						}
-					} else {
-						<div class="tuc-table-wrap">
-							<table class="tuc-table is-compact w-full min-w-[860px]">
-								<thead>
-									<tr>
-										<th>{ t(ctx, "deps.col.level") }</th>
-										<th>{ t(ctx, "deps.col.where") }</th>
-										<th>{ t(ctx, "deps.col.package") }</th>
-										<th>{ t(ctx, "deps.col.version") }</th>
-										<th>{ t(ctx, "deps.col.advisory") }</th>
-										<th>{ t(ctx, "deps.col.action") }</th>
-										<th class="tuc-table__actions"></th>
-									</tr>
-								</thead>
-								<tbody>
-									for _, f := range d.Findings {
-										<tr>
-											<td><span class={ levelBadge(f.Level) }>{ t(ctx, "deps.level." + f.Level) }</span></td>
-											<td class="font-mono text-xs">
-												if f.Href != "" {
-													<a class="text-fg no-underline hover:text-accent-text hover:underline" href={ templ.SafeURL(f.Href) }>{ f.Where }</a>
-												} else {
-													{ f.Where }
-												}
-											</td>
-											<td>
-												<div class="flex flex-col">
-													<span class="font-mono text-xs">{ f.Package }</span>
-													<span class="text-xs text-subtle">{ f.Ecosystem }</span>
-												</div>
-											</td>
-											<td class="font-mono text-xs whitespace-nowrap">
-												{ f.Current }
-												if f.Suggested != "" {
-													<span class="text-muted">{ " → " }</span>
-													<span class="text-success">{ f.Suggested }</span>
-												}
-											</td>
-											<td class="max-w-[320px]">
-												if f.Advisory != "" {
-													<div class="flex flex-col gap-0.5">
-														<a class="inline-flex items-center gap-1 font-mono text-xs" href={ templ.SafeURL(f.AdvisoryURL) } target="_blank" rel="noopener noreferrer">
-															{ f.Advisory }
-															@Icon("external-link", "size-3")
-														</a>
-														if f.Aliases != "" {
-															<span class="font-mono text-[11px] text-subtle">{ f.Aliases }</span>
-														}
-														if f.Summary != "" {
-															<span class="text-xs text-muted">{ f.Summary }</span>
-														}
-														<span class="text-[11px] text-subtle">{ t(ctx, "deps.severity." + f.Severity) }</span>
-													</div>
-												} else {
-													<span class="text-xs text-muted">{ t(ctx, "deps.kind." + f.Kind) }</span>
-												}
-											</td>
-											<td class="max-w-[300px]">
-												<div class="flex flex-col gap-1">
-													<span class="text-xs text-muted">{ f.Action }</span>
-													if f.Code != "" {
-														<span class="flex items-center gap-1">
-															<code class="rounded-xs bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{ f.Code }</code>
-															<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ f.Code } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "deps.copy") }>
-																@Icon("copy", "size-3.5")
-															</button>
-														</span>
-													}
-												</div>
-											</td>
-											<td class="tuc-table__actions">
-												if d.CanOperate {
-													<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal={ "#ignore-" + f.ID }>
-														@Icon("eye-off", "size-3.5")
-														{ t(ctx, "deps.ignore.button") }
-													</button>
-												}
-											</td>
-										</tr>
-									}
-								</tbody>
-							</table>
-						</div>
-						@pagination(d.Pager)
+					</div>
+				</section>
+			}
+			for _, s := range d.Sections {
+				@updatesSection(d, s)
+			}
+			if d.IgnoredCount > 0 {
+				<p class="m-0 text-xs text-muted">{ t(ctx, "deps.ignored_count", "n", d.IgnoredCount) }</p>
+			}
+			for _, s := range d.Sections {
+				for _, r := range s.Rows {
+					@advisoriesDialog(r)
+					if d.CanOperate {
+						@ignoreDialog(d, r)
 					}
-					if d.IgnoredCount > 0 {
-						<p class="m-0 text-xs text-muted">{ t(ctx, "deps.ignored_count", "n", d.IgnoredCount) }</p>
-					}
-				</div>
-			</section>
-			if d.CanOperate {
-				for _, f := range d.Findings {
-					@ignoreDialog(d, f)
 				}
+			}
+			if d.CanAdmin {
+				@sudoModal(d.CSRF, "/updates", d.SudoActive)
 			}
 			if len(d.Problems) > 0 {
 				<section class={ cardClass }>
@@ -315,44 +278,269 @@ templ Updates(d UpdatesData) {
 	}
 }
 
-// ignoreDialog asks why and for how long a finding is ignored.
-// The form carries the filter and the page so the redirect comes back to
-// the same place.
-templ ignoreDialog(d UpdatesData, f FindingRow) {
-	<dialog class="tuc-modal is-md is-warning" id={ "ignore-" + f.ID } aria-labelledby={ "ignore-title-" + f.ID }>
+// updatesSection is one bucket: its title, one sentence and the rows.
+templ updatesSection(d UpdatesData, s UpdatesSection) {
+	<section class={ cardClass } id={ "bucket-" + s.Bucket }>
+		@cardHead(t(ctx, "deps.bucket."+s.Bucket)) {
+			<span class="text-xs text-muted tabular-nums">{ t(ctx, "deps.rows", "n", s.Total) }</span>
+		}
+		<div class={ cardBodyClass }>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "deps.bucket_hint." + s.Bucket) }</p>
+			if len(s.Rows) == 0 {
+				<p class="m-0 text-[13px] text-subtle">{ t(ctx, "deps.bucket_empty") }</p>
+			} else {
+				<div class="tuc-table-wrap">
+					<table class="tuc-table is-compact w-full min-w-[860px]">
+						<thead>
+							<tr>
+								<th>{ t(ctx, "deps.col.severity") }</th>
+								<th>{ t(ctx, "deps.col.where") }</th>
+								<th>{ t(ctx, "deps.col.package") }</th>
+								<th>{ t(ctx, "deps.col.version") }</th>
+								<th>{ t(ctx, "deps.col.flaws") }</th>
+								<th class="tuc-table__actions"></th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, r := range s.Rows {
+								@groupRow(d, r)
+							}
+						</tbody>
+					</table>
+				</div>
+				if s.More {
+					<a class="tuc-btn is-ghost is-sm self-start" href={ templ.SafeURL(bucketHref(s.Bucket)) }>{ t(ctx, "deps.show_bucket", "n", s.Total) }</a>
+				}
+				@pagination(s.Pager)
+			}
+		</div>
+	</section>
+}
+
+templ groupRow(d UpdatesData, r GroupRow) {
+	<tr>
+		<td>
+			if r.Kind != "" {
+				<span class={ kindBadge(r.Kind) }>{ t(ctx, "deps.kind_short." + r.Kind) }</span>
+			} else {
+				<span class={ sevBadge(r.Severity) }>{ t(ctx, "deps.sev." + r.Severity) }</span>
+			}
+		</td>
+		<td class="font-mono text-xs">
+			if r.Href != "" {
+				<a class="text-fg no-underline hover:text-accent-text hover:underline" href={ templ.SafeURL(r.Href) }>{ r.Where }</a>
+			} else {
+				{ r.Where }
+			}
+		</td>
+		<td class="max-w-[280px]">
+			<div class="flex min-w-0 flex-col">
+				<span class="truncate font-mono text-xs" title={ r.Packages }>{ r.Packages }</span>
+				<span class="text-xs text-subtle">{ r.Ecosystem }</span>
+			</div>
+		</td>
+		<td class="font-mono text-xs whitespace-nowrap">
+			if r.Current == "" && r.Fixed == "" {
+				<span class="text-muted">—</span>
+			} else {
+				<span class="text-muted">{ r.Current }</span>
+				<span class="text-muted">{ " → " }</span>
+				if r.Fixed != "" {
+					<span class="text-success">{ r.Fixed }</span>
+				} else {
+					<span class="text-muted">—</span>
+				}
+			}
+		</td>
+		<td class="whitespace-nowrap">
+			if r.Count > 0 {
+				<button type="button" class="tuc-btn is-link is-sm px-0 text-[13px]" data-tuc-modal={ "#flaws-" + r.ID }>{ t(ctx, "deps.flaws", "n", r.Count) }</button>
+			} else {
+				<span class="text-xs text-muted">—</span>
+			}
+		</td>
+		<td class="tuc-table__actions">
+			<span class="inline-flex flex-wrap items-center justify-end gap-1.5">
+				@rowAction(d, r)
+				if d.CanOperate {
+					<button type="button" class="tuc-btn is-ghost is-sm" data-tuc-modal={ "#ignore-" + r.ID }>
+						@Icon("eye-off", "size-3.5")
+						{ t(ctx, "deps.ignore.button") }
+					</button>
+				}
+			</span>
+		</td>
+	</tr>
+}
+
+// rowAction is the one button the panel can do for the row, or what to do
+// by hand, or why it waits.
+templ rowAction(d UpdatesData, r GroupRow) {
+	switch r.Action {
+		case ActDeploy:
+			if d.CanOperate {
+				<form class="inline-flex" method="post" action={ templ.SafeURL("/p/" + r.Project + "/s/" + r.Service + "/deploy") }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<button class="tuc-btn is-primary is-sm" type="submit">
+						@Icon("rocket", "size-3.5")
+						{ t(ctx, "deps.do.deploy") }
+					</button>
+				</form>
+			}
+		case ActHangar:
+			if d.CanUpdate {
+				<a class="tuc-btn is-primary is-sm" href="/update">
+					@Icon("download", "size-3.5")
+					{ t(ctx, "deps.do.hangar") }
+				</a>
+			} else {
+				<span class="text-xs text-muted">{ t(ctx, "deps.do.hangar_owner") }</span>
+			}
+		case ActTag:
+			if d.CanAdmin && d.SudoActive {
+				<form class="inline-flex" data-confirm={ t(ctx, "confirm.image.title", "name", r.Where) } data-confirm-text={ t(ctx, "confirm.image.text") } data-confirm-ok={ t(ctx, "confirm.image.ok") } data-tone="warning" method="post" action={ templ.SafeURL("/p/" + r.Project + "/s/" + r.Service + "/image") }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="tag" value={ r.Tag }/>
+					<button class="tuc-btn is-primary is-sm" type="submit">
+						@Icon("circle-arrow-up", "size-3.5")
+						{ t(ctx, "deps.do.tag", "tag", r.Tag) }
+					</button>
+				</form>
+			} else if d.CanAdmin {
+				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#sudo-dialog">
+					@Icon("circle-arrow-up", "size-3.5")
+					{ t(ctx, "deps.do.tag", "tag", r.Tag) }
+				</button>
+			} else {
+				<span class="text-xs text-muted">{ t(ctx, "deps.do.tag_admin", "tag", r.Tag) }</span>
+			}
+		case ActCommand, ActAdvice:
+			<span class="inline-flex max-w-[360px] flex-col items-end gap-1">
+				if r.Text != "" {
+					<span class="text-right text-xs text-muted">{ r.Text }</span>
+				}
+				if r.Code != "" {
+					<span class="flex items-center gap-1">
+						<code class="rounded-xs bg-surface-2 px-1.5 py-0.5 font-mono text-xs">{ r.Code }</code>
+						<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ r.Code } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "deps.copy") }>
+							@Icon("copy", "size-3.5")
+						</button>
+					</span>
+				}
+			</span>
+		case ActBadge:
+			<span class="tuc-badge">{ r.Text }</span>
+	}
+}
+
+func kindBadge(kind string) string {
+	if kind == "major" {
+		return "tuc-badge"
+	}
+	return "tuc-badge is-info"
+}
+
+// advisoriesDialog lists the row's advisories with their links.
+templ advisoriesDialog(r GroupRow) {
+	if r.Count > 0 {
+		<dialog class="tuc-modal is-lg" id={ "flaws-" + r.ID } aria-labelledby={ "flaws-title-" + r.ID }>
+			<div class="tuc-modal__panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id={ "flaws-title-" + r.ID }>{ t(ctx, "deps.flaws_title", "n", r.Count, "where", r.Where) }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						@Icon("x", "size-4")
+					</button>
+				</div>
+				<div class="tuc-modal__body">
+					<div class="tuc-table-wrap max-h-[60vh] overflow-y-auto">
+						<table class="tuc-table is-compact w-full">
+							<thead>
+								<tr>
+									<th>{ t(ctx, "deps.col.advisory") }</th>
+									<th>{ t(ctx, "deps.col.package") }</th>
+									<th>{ t(ctx, "deps.col.version") }</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, a := range r.Advisories {
+									<tr>
+										<td class="max-w-[360px]">
+											<div class="flex flex-col gap-0.5">
+												<span class="inline-flex flex-wrap items-center gap-1.5">
+													<a class="inline-flex items-center gap-1 font-mono text-xs" href={ templ.SafeURL(a.URL) } target="_blank" rel="noopener noreferrer">
+														{ a.ID }
+														@Icon("external-link", "size-3")
+													</a>
+													<span class={ sevBadge(a.Severity) }>{ t(ctx, "deps.sev." + a.Severity) }</span>
+												</span>
+												if a.Aliases != "" {
+													<span class="font-mono text-[11px] text-subtle">{ a.Aliases }</span>
+												}
+												if a.Summary != "" {
+													<span class="text-xs text-muted">{ a.Summary }</span>
+												}
+											</div>
+										</td>
+										<td class="font-mono text-xs">{ a.Package }</td>
+										<td class="font-mono text-xs whitespace-nowrap">
+											<span class="text-muted">{ a.Current + " → " }</span>
+											if a.Fixed != "" {
+												<span class="text-success">{ a.Fixed }</span>
+											} else {
+												<span class="text-muted">—</span>
+											}
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+		</dialog>
+	}
+}
+
+// ignoreDialog asks why and for how long a row is ignored. The form
+// carries the filter and the page so the redirect comes back to the same
+// place.
+templ ignoreDialog(d UpdatesData, r GroupRow) {
+	<dialog class="tuc-modal is-md is-warning" id={ "ignore-" + r.ID } aria-labelledby={ "ignore-title-" + r.ID }>
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
-				<h2 class="tuc-modal__title" id={ "ignore-title-" + f.ID }>{ t(ctx, "deps.ignore.title", "package", f.Package) }</h2>
+				<h2 class="tuc-modal__title" id={ "ignore-title-" + r.ID }>{ t(ctx, "deps.ignore.title", "package", r.Packages) }</h2>
 				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
 					@Icon("x", "size-4")
 				</button>
 			</div>
 			<form method="post" action="/updates/ignore" class="tuc-modal__body flex flex-col gap-4">
 				<input type="hidden" name="csrf" value={ d.CSRF }/>
-				<input type="hidden" name="id" value={ f.ID }/>
-				if d.Level != "" {
-					<input type="hidden" name="level" value={ d.Level }/>
+				for _, id := range r.IDs {
+					<input type="hidden" name="id" value={ id }/>
 				}
-				if d.Pager.Page > 1 {
-					<input type="hidden" name="page" value={ fmt.Sprint(d.Pager.Page) }/>
+				if d.Bucket != "" {
+					<input type="hidden" name="bucket" value={ d.Bucket }/>
+				}
+				if p := d.page(); p > 1 {
+					<input type="hidden" name="page" value={ fmt.Sprint(p) }/>
 				}
 				<p class="tuc-modal__text">{ t(ctx, "deps.ignore.text") }</p>
 				<fieldset class="flex flex-col gap-2 border-0 p-0">
 					<legend class="tuc-label mb-1.5">{ t(ctx, "deps.ignore.mode") }</legend>
 					<label class="tuc-choice">
-						<input class="tuc-radio" type="radio" name="mode" value="days" checked?={ !f.CanIgnoreVersion }/>
+						<input class="tuc-radio" type="radio" name="mode" value="days" checked?={ r.IgnoreVersion == "" }/>
 						{ t(ctx, "deps.ignore.days") }
 					</label>
-					if f.CanIgnoreVersion {
+					if r.IgnoreVersion != "" {
 						<label class="tuc-choice">
 							<input class="tuc-radio" type="radio" name="mode" value="version" checked/>
-							{ t(ctx, "deps.ignore.version", "version", f.Suggested) }
+							{ t(ctx, "deps.ignore.version", "version", r.IgnoreVersion) }
 						</label>
 					}
 				</fieldset>
 				<div class="flex min-w-0 flex-col gap-1.5">
-					<label class="tuc-label" for={ "reason-" + f.ID }>{ t(ctx, "deps.col.reason") }</label>
-					<input class="tuc-input" id={ "reason-" + f.ID } name="reason" required minlength="3" maxlength="300" placeholder={ t(ctx, "deps.ignore.reason_placeholder") }/>
+					<label class="tuc-label" for={ "reason-" + r.ID }>{ t(ctx, "deps.col.reason") }</label>
+					<input class="tuc-input" id={ "reason-" + r.ID } name="reason" required minlength="3" maxlength="300" placeholder={ t(ctx, "deps.ignore.reason_placeholder") }/>
 				</div>
 				<div class="flex justify-end gap-2">
 					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
@@ -364,6 +552,16 @@ templ ignoreDialog(d UpdatesData, f FindingRow) {
 			</form>
 		</div>
 	</dialog>
+}
+
+// page is the page of the filtered section (1 when not filtered).
+func (d UpdatesData) page() int {
+	for _, s := range d.Sections {
+		if s.Bucket == d.Bucket {
+			return s.Pager.Page
+		}
+	}
+	return 1
 }
 
 func (d UpdatesData) subtitle(ctx context.Context) string {

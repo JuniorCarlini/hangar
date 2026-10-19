@@ -53,6 +53,7 @@ type env struct {
 	bm     *backup.Manager
 	stats  *fakeStats
 	deps   *deps.Monitor
+	upd    *fakeUpdates
 	status *statuspage.Service
 	svc    *auth.Service
 	st     *store.Store
@@ -107,9 +108,10 @@ func newEnv(t *testing.T, opts ...func(*auth.Options)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	e.upd = &fakeUpdates{current: "v1.0.0"}
 	e.h, err = New(Deps{
 		Hosts: []string{testHost}, Log: discard, Audit: al, Auth: e.svc,
-		Updates: &fakeUpdates{current: "v1.0.0"}, UpdateDir: filepath.Join(dir, "update"), Projects: e.pm,
+		Updates: e.upd, UpdateDir: filepath.Join(dir, "update"), Projects: e.pm,
 		Metrics: e.mc, Deps: e.deps, Status: e.status, StatusHosts: []string{testStatusHost}, Alerts: e.alerts, Lock: e.lock, Backups: e.bm,
 		Brand: errpages.NewStore(st.DB), ErrorPages: func(p map[string][]byte) error { e.pages = p; return nil },
 	})

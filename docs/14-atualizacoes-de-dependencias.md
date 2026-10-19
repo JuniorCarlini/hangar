@@ -55,6 +55,26 @@ Detalhes: https://painel.../updates/abc123
 5. Tela "Atualizações" no painel: tudo que está pendente, por projeto,
    ordenado por gravidade.
 
+### O que resolve cada vulnerabilidade
+
+A tela agrupa as vulnerabilidades pelo que fazer (uma linha por pacote de
+cada serviço; uma troca de tag é uma linha da imagem inteira):
+
+| Grupo | Quando | Ação na tela |
+|---|---|---|
+| **Resolve com deploy** | O registry tem um build mais novo da **mesma tag** (digest diferente do que roda) e esse build traz a versão corrigida. No Caddy: há versão nova do Hangar. | "Fazer deploy" / "Atualizar Hangar" |
+| **Trocar a versão** | A tag parou, mas uma tag mais nova da mesma major traz a correção | "Trocar para X" (admin + sudo; se a nova não subir, a anterior continua e o serviço volta para a tag antiga) |
+| **No seu código** | Biblioteca de um app construído do Git | O comando do gerenciador detectado pelo lockfile (`uv lock --upgrade-package`, `npm install pkg@ver`…) |
+| **Aguardando correção** | Sem versão corrigida, nenhuma imagem traz a correção ainda, só uma major nova traz (dica, nunca botão; nunca para bancos) ou não deu para conferir | Nada |
+
+Para conferir se uma imagem traz a correção, a verificação baixa a imagem
+(pelo digest), lê os pacotes com o mesmo leitor das imagens que rodam (uma
+por vez, com limite de tamanho, de disco e de tempo) e a apaga de novo se ela
+não estava no servidor. O resultado fica guardado por digest: cada imagem é
+baixada no máximo uma vez. Se algo falhar (registry fora, disco cheio,
+imagem grande demais), a vulnerabilidade fica em "Aguardando correção" com o
+conselho de sempre — a tela nunca diz que um deploy resolve sem ter visto.
+
 ## O que ele **não** faz sozinho
 
 - Não atualiza nada automaticamente em produção. Atualizar biblioteca pode
