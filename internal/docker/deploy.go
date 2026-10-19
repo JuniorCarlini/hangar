@@ -23,7 +23,6 @@ const (
 	// defaultValidateTimeout bounds the validation command when the
 	// service sets none.
 	defaultValidateTimeout = 5 * time.Minute
-	stopGrace              = 30
 	// nextSuffix names the new container while both versions run.
 	nextSuffix      = "-next"
 	preDeploySuffix = "-predeploy"
@@ -215,8 +214,7 @@ func (l *Local) mayRestore(ctx context.Context, old, ref, policy string) bool {
 // stopAndKeep stops the previous container and moves it out of the way
 // under prevName, so the new one can take the service name.
 func (l *Local) stopAndKeep(ctx context.Context, id, prevName string) error {
-	timeout := stopGrace
-	if _, err := l.c.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: &timeout}); err != nil && !isNotFound(err) {
+	if _, err := l.c.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: l.stopTimeout(ctx, id)}); err != nil && !isNotFound(err) {
 		return err
 	}
 	if _, err := l.c.ContainerRename(ctx, id, client.ContainerRenameOptions{NewName: prevName}); err != nil {
@@ -408,8 +406,7 @@ func (w *lineWriter) flush() {
 }
 
 func (l *Local) stopAndRemove(ctx context.Context, id string) error {
-	timeout := stopGrace
-	if _, err := l.c.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: &timeout}); err != nil && !isNotFound(err) {
+	if _, err := l.c.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: l.stopTimeout(ctx, id)}); err != nil && !isNotFound(err) {
 		return err
 	}
 	if _, err := l.c.ContainerRemove(ctx, id, client.ContainerRemoveOptions{}); err != nil && !isNotFound(err) {

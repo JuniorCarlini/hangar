@@ -63,7 +63,20 @@ type ServiceSpec struct {
 	// Linked are other projects whose networks the container also joins, so
 	// both sides see each other by container name.
 	Linked []string
+	// StopGrace is how long a stop waits after SIGTERM before killing the
+	// container (0 = DefaultStopGrace, at most MaxStopGrace). It is kept on
+	// the container, so every stop of it — a deploy replacing it, the stop
+	// button, a delete, Docker shutting down — gives it the same time.
+	StopGrace time.Duration
 }
+
+// Stop grace periods.
+const (
+	DefaultStopGrace = 30 * time.Second
+	// MaxStopGrace bounds how long one container can hold up a deploy, a
+	// stop or the server's shutdown.
+	MaxStopGrace = 120 * time.Second
+)
 
 // Deploy strategies (docs/07).
 const (
@@ -382,6 +395,9 @@ func (s ServiceSpec) Validate() error {
 		if !SlugRE.MatchString(l) || l == s.Project {
 			return fmt.Errorf("invalid linked project: %q", l)
 		}
+	}
+	if s.StopGrace < 0 || s.StopGrace > MaxStopGrace {
+		return fmt.Errorf("stop grace period %s is outside 0 to %s", s.StopGrace, MaxStopGrace)
 	}
 	if s.Health != nil && len(s.Health.Test) == 0 {
 		return fmt.Errorf("healthcheck without a test")

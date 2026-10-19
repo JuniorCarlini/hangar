@@ -111,12 +111,26 @@ lista), `environment`, `volumes` (só volumes nomeados declarados em
 `volumes:` no topo, sem driver), `expose` (exatamente uma porta: a que o
 serviço escuta dentro da rede; é nela que você liga um domínio depois),
 `healthcheck` (`test`, `interval`, `timeout`, `start_period`, `retries`),
-`cap_add`, `read_only`, `deploy.resources.limits.{memory,cpus}` e
-`depends_on`. No topo, só `services` e `volumes`. Qualquer outra chave é
+`cap_add`, `read_only`, `stop_grace_period`,
+`deploy.resources.limits.{memory,cpus}` e `depends_on`. No topo, só
+`services` e `volumes`. Qualquer outra chave é
 erro com o nome dela: `ports`, `privileged`, `network_mode`, `pid`, `ipc`,
 `devices`, `build`, `entrypoint`, `user`, `env_file`, `secrets`... Sem
 `cap_add`, o serviço recebe as capabilities padrão do Hangar; `cap_add: []`
 significa nenhuma (o certo para imagens que já rodam sem root).
+
+`stop_grace_period` (`45s`, `1m30s`) é quanto o Hangar espera depois do
+`SIGTERM` antes de matar o container — em toda parada: deploy que troca o
+container, botão parar, reinício, exclusão do serviço e o próprio Docker
+desligando (o valor fica gravado no container). Sem a chave, 30 s. O teto é
+120 s: um valor maior vira 120 s e o `hangard template check` avisa (sem
+recusar). Servidores que salvam o estado ao desligar (jogos, bancos) são o
+caso de uso.
+
+O healthcheck também define quanto o deploy espera o container novo ficar
+saudável: `start_period + interval × retries + timeout`, no mínimo 2 min e
+no máximo 15 min ([07](07-deploy-e-builds.md)). Quem demora para subir
+declara um `start_period` honesto.
 
 ### Regras que o carregador confere (o template é recusado se falhar)
 

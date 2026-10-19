@@ -542,12 +542,20 @@ func (h *handlers) rebuildService(w http.ResponseWriter, r *http.Request) {
 	redirectLocal(w, r, h.serviceBase(r)+"?ok=deploy")
 }
 
+// allowStopGrace lets a request that stops a container outlive the
+// server's write timeout: a service may take up to node.MaxStopGrace to
+// stop after SIGTERM (its stop_grace_period).
+func allowStopGrace(w http.ResponseWriter) {
+	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(node.MaxStopGrace + time.Minute))
+}
+
 func (h *handlers) serviceAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PostFormValue("action")
 	if action != "start" && action != "stop" && action != "restart" {
 		http.Error(w, i18n.T(r.Context(), "error.bad_request"), http.StatusBadRequest)
 		return
 	}
+	allowStopGrace(w)
 	if err := h.projects.Action(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), action); err != nil {
 		code, msg := userError(r, err)
 		h.renderService(w, r, serviceView{status: code, errMsg: msg})
@@ -645,6 +653,7 @@ func (h *handlers) deleteService(w http.ResponseWriter, r *http.Request) {
 		h.renderService(w, r, serviceView{status: http.StatusUnprocessableEntity, errMsg: i18n.T(r.Context(), "service.danger.name_mismatch")})
 		return
 	}
+	allowStopGrace(w)
 	if err := h.projects.DeleteService(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service")); err != nil {
 		code, msg := userError(r, err)
 		h.renderService(w, r, serviceView{status: code, errMsg: msg})

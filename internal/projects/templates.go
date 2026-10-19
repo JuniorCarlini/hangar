@@ -165,7 +165,7 @@ func (m *Manager) insertRendered(ctx context.Context, q *dbq.Queries, p dbq.Proj
 			ID: id, ProjectID: p.ID, Slug: rs.Slug, Image: rs.Image, InternalPort: int64(rs.Port),
 			MemoryBytes: int64(rs.MemoryMB) << 20, NanoCpus: int64(rs.CPUs * 1e9), PidsLimit: DefaultPids,
 			ReadOnly: ro, CommandJson: string(cmd), Template: t.ID, Stateful: stateful,
-			HealthJson: health, CapAddJson: caps, CreatedAt: now, UpdatedAt: now,
+			HealthJson: health, CapAddJson: caps, StopGraceS: int64(rs.StopGraceS), CreatedAt: now, UpdatedAt: now,
 		}); err != nil {
 			return nil, err
 		}

@@ -489,6 +489,7 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 		Edge:    domains > 0 || s.DynamicDomains == 1,
 		Volumes: extras.volumes, Health: extras.health, CapAdd: extras.capAdd,
 		Ports: extras.ports, Linked: extras.linked,
+		StopGrace: min(time.Duration(s.StopGraceS)*time.Second, node.MaxStopGrace),
 	}
 	opt := node.DeployOptions{
 		Strategy: Strategy(s, extras), PreDeploy: preDeploy,

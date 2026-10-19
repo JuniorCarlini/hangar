@@ -114,7 +114,7 @@ func (m *Manager) CloneService(ctx context.Context, a Actor, projectSlug, source
 		ID: id, ProjectID: p.ID, Slug: newSlug, Image: src.Image, InternalPort: src.InternalPort,
 		MemoryBytes: src.MemoryBytes, NanoCpus: src.NanoCpus, PidsLimit: src.PidsLimit, ReadOnly: src.ReadOnly,
 		CommandJson: src.CommandJson, Template: src.Template, Stateful: src.Stateful,
-		HealthJson: src.HealthJson, CapAddJson: src.CapAddJson, CreatedAt: now, UpdatedAt: now,
+		HealthJson: src.HealthJson, CapAddJson: src.CapAddJson, StopGraceS: src.StopGraceS, CreatedAt: now, UpdatedAt: now,
 	}); err != nil {
 		return dbq.Service{}, err
 	}

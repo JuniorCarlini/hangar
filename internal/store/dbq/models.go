@@ -378,6 +378,7 @@ type Service struct {
 	ValidateJson         string
 	ValidateTimeoutS     int64
 	Maintenance          int64
+	StopGraceS           int64
 }
 
 type ServiceAlias struct {

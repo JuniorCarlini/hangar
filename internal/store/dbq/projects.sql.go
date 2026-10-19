@@ -63,8 +63,8 @@ func (q *Queries) CreateProject(ctx context.Context, arg CreateProjectParams) er
 
 const createService = `-- name: CreateService :exec
 INSERT INTO services (id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit,
-                      read_only, command_json, template, stateful, health_json, cap_add_json, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      read_only, command_json, template, stateful, health_json, cap_add_json, stop_grace_s, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateServiceParams struct {
@@ -82,6 +82,7 @@ type CreateServiceParams struct {
 	Stateful     int64
 	HealthJson   string
 	CapAddJson   string
+	StopGraceS   int64
 	CreatedAt    int64
 	UpdatedAt    int64
 }
@@ -102,6 +103,7 @@ func (q *Queries) CreateService(ctx context.Context, arg CreateServiceParams) er
 		arg.Stateful,
 		arg.HealthJson,
 		arg.CapAddJson,
+		arg.StopGraceS,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -236,7 +238,7 @@ func (q *Queries) GetProjectBySlug(ctx context.Context, slug string) (Project, e
 }
 
 const getService = `-- name: GetService :one
-SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance FROM services WHERE project_id = ? AND slug = ?
+SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance, stop_grace_s FROM services WHERE project_id = ? AND slug = ?
 `
 
 type GetServiceParams struct {
@@ -275,6 +277,7 @@ func (q *Queries) GetService(ctx context.Context, arg GetServiceParams) (Service
 		&i.ValidateJson,
 		&i.ValidateTimeoutS,
 		&i.Maintenance,
+		&i.StopGraceS,
 	)
 	return i, err
 }
@@ -345,7 +348,7 @@ func (q *Queries) LastLiveDeployment(ctx context.Context, serviceID string) (Dep
 }
 
 const listAllServices = `-- name: ListAllServices :many
-SELECT s.id, s.project_id, s.slug, s.image, s.internal_port, s.memory_bytes, s.nano_cpus, s.pids_limit, s.read_only, s.command_json, s.desired_state, s.created_at, s.updated_at, s.dynamic_domains, s.domain_check_path, s.domain_check_secret_enc, s.template, s.stateful, s.health_json, s.cap_add_json, s.predeploy_json, s.health_path, s.canvas_x, s.canvas_y, s.validate_json, s.validate_timeout_s, s.maintenance, p.slug AS project_slug FROM services s JOIN projects p ON p.id = s.project_id
+SELECT s.id, s.project_id, s.slug, s.image, s.internal_port, s.memory_bytes, s.nano_cpus, s.pids_limit, s.read_only, s.command_json, s.desired_state, s.created_at, s.updated_at, s.dynamic_domains, s.domain_check_path, s.domain_check_secret_enc, s.template, s.stateful, s.health_json, s.cap_add_json, s.predeploy_json, s.health_path, s.canvas_x, s.canvas_y, s.validate_json, s.validate_timeout_s, s.maintenance, s.stop_grace_s, p.slug AS project_slug FROM services s JOIN projects p ON p.id = s.project_id
 `
 
 type ListAllServicesRow struct {
@@ -376,6 +379,7 @@ type ListAllServicesRow struct {
 	ValidateJson         string
 	ValidateTimeoutS     int64
 	Maintenance          int64
+	StopGraceS           int64
 	ProjectSlug          string
 }
 
@@ -416,6 +420,7 @@ func (q *Queries) ListAllServices(ctx context.Context) ([]ListAllServicesRow, er
 			&i.ValidateJson,
 			&i.ValidateTimeoutS,
 			&i.Maintenance,
+			&i.StopGraceS,
 			&i.ProjectSlug,
 		); err != nil {
 			return nil, err
@@ -601,7 +606,7 @@ func (q *Queries) ListRunningDeployments(ctx context.Context) ([]ListRunningDepl
 }
 
 const listServices = `-- name: ListServices :many
-SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance FROM services WHERE project_id = ? ORDER BY slug
+SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance, stop_grace_s FROM services WHERE project_id = ? ORDER BY slug
 `
 
 func (q *Queries) ListServices(ctx context.Context, projectID string) ([]Service, error) {
@@ -641,6 +646,7 @@ func (q *Queries) ListServices(ctx context.Context, projectID string) ([]Service
 			&i.ValidateJson,
 			&i.ValidateTimeoutS,
 			&i.Maintenance,
+			&i.StopGraceS,
 		); err != nil {
 			return nil, err
 		}

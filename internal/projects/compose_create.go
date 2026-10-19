@@ -273,6 +273,7 @@ func (m *Manager) CreateFromCompose(ctx context.Context, a Actor, projectSlug st
 				in.CPUs = DefaultCPUs
 			}
 			params := m.serviceParams(p, in)
+			params.StopGraceS = int64(s.StopGrace)
 			if len(s.Command) > 0 {
 				b, _ := json.Marshal(s.Command)
 				params.CommandJson = string(b)

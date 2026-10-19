@@ -84,6 +84,7 @@ dezenas de módulos para recursos que o importador ignora de propósito.
 | `expose:` / porta do container em `ports:` | porta interna |
 | `command:` (texto ou lista) | comando |
 | `deploy.resources.limits` / `mem_limit` / `cpus` | memória e CPU |
+| `stop_grace_period` (`45s`, `1m30s`) | quanto o Hangar espera depois do `SIGTERM` antes de matar o container, em toda parada (deploy, botão parar, exclusão). Padrão 30 s; acima de 120 s fica em 120 s, com aviso na prévia. Num banco do catálogo vale o do template |
 | `depends_on` | só informativo |
 
 ### 2.2 O que fica de fora (e aparece na prévia)

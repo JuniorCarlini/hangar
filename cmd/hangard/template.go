@@ -57,12 +57,20 @@ func templateCheck(dirs []string, stdout, stderr io.Writer) error {
 			fmt.Fprintf(stderr, "%s/%s\n", prefix, line)
 		}
 	}
+	// Warnings do not fail the check: the loader adjusted something (a
+	// value above a cap) and says so.
+	warn := func(prefix string, t *templates.Template) {
+		for _, w := range t.Warnings {
+			fmt.Fprintf(stdout, "%s/%s (warning)\n", prefix, w)
+		}
+	}
 	for _, dir := range dirs {
 		dir = filepath.Clean(dir)
 		if _, err := os.Stat(filepath.Join(dir, templates.FileMeta)); err == nil { //nolint:gosec // directories named by the operator on the command line
-			if _, err := templates.ParseDir(os.DirFS(filepath.Dir(dir)), filepath.Base(dir)); err != nil {
+			if t, err := templates.ParseDir(os.DirFS(filepath.Dir(dir)), filepath.Base(dir)); err != nil {
 				report(dir, err)
 			} else {
+				warn(dir, t)
 				ok++
 			}
 			continue
@@ -70,6 +78,9 @@ func templateCheck(dirs []string, stdout, stderr io.Writer) error {
 		list, errs := templates.LoadEach(os.DirFS(dir), ".")
 		for _, err := range errs {
 			report(dir, err)
+		}
+		for _, t := range list {
+			warn(filepath.Join(dir, t.ID), t)
 		}
 		ok += len(list)
 		if len(list)+len(errs) == 0 {

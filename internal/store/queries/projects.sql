@@ -14,8 +14,8 @@ DELETE FROM projects WHERE id = ?;
 
 -- name: CreateService :exec
 INSERT INTO services (id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit,
-                      read_only, command_json, template, stateful, health_json, cap_add_json, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                      read_only, command_json, template, stateful, health_json, cap_add_json, stop_grace_s, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListServices :many
 SELECT * FROM services WHERE project_id = ? ORDER BY slug;

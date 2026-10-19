@@ -129,6 +129,13 @@ func (l *Local) createContainer(ctx context.Context, spec node.ServiceSpec, name
 	if len(spec.Command) > 0 {
 		cfg.Cmd = spec.Command
 	}
+	// Kept on the container: every stop of it (a deploy, the stop button,
+	// a delete, Docker shutting down) waits the same.
+	grace := int(node.DefaultStopGrace / time.Second)
+	if spec.StopGrace > 0 {
+		grace = int(spec.StopGrace / time.Second)
+	}
+	cfg.StopTimeout = &grace
 	if h := spec.Health; h != nil {
 		cfg.Healthcheck = &container.HealthConfig{
 			Test: h.Test, Interval: h.Interval, Timeout: h.Timeout, StartPeriod: h.StartPeriod, Retries: h.Retries,
@@ -373,15 +380,29 @@ func (l *Local) Start(ctx context.Context, project, service string) error {
 	return err
 }
 
-// Stop stops the container with a 30 s grace period.
+// Stop stops the container: SIGTERM, then its grace period (stopTimeout)
+// before it is killed.
 func (l *Local) Stop(ctx context.Context, project, service string) error {
 	id, err := l.managedID(ctx, project, service)
 	if err != nil {
 		return err
 	}
-	timeout := 30
-	_, err = l.c.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: &timeout})
+	_, err = l.c.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: l.stopTimeout(ctx, id)})
 	return err
+}
+
+// stopTimeout is the grace period kept on the container when it was
+// created (the service's stop_grace_period), or the default for containers
+// from before it was kept there.
+func (l *Local) stopTimeout(ctx context.Context, id string) *int {
+	secs := int(node.DefaultStopGrace / time.Second)
+	res, err := l.c.ContainerInspect(ctx, id, client.ContainerInspectOptions{})
+	if err == nil && res.Container.Config != nil && res.Container.Config.StopTimeout != nil {
+		if v := *res.Container.Config.StopTimeout; v >= 0 && v <= int(node.MaxStopGrace/time.Second) {
+			secs = v
+		}
+	}
+	return &secs
 }
 
 // Restart restarts the container.
@@ -392,7 +413,9 @@ func (l *Local) Restart(ctx context.Context, project, service string) error {
 	return l.Start(ctx, project, service)
 }
 
-// Remove deletes the container (volumes stay: deleting a volume is a separate action).
+// Remove deletes the container (volumes stay: deleting a volume is a
+// separate action). A running one is stopped first with its grace period,
+// so a server that saves its state on SIGTERM gets to do it.
 func (l *Local) Remove(ctx context.Context, project, service string) error {
 	id, err := l.managedID(ctx, project, service)
 	if errors.Is(err, errNoContainer) {
@@ -400,6 +423,11 @@ func (l *Local) Remove(ctx context.Context, project, service string) error {
 	}
 	if err != nil {
 		return err
+	}
+	if l.running(ctx, id) {
+		if _, err := l.c.ContainerStop(ctx, id, client.ContainerStopOptions{Timeout: l.stopTimeout(ctx, id)}); err != nil && !isNotFound(err) {
+			slog.Warn("stop before removing", "container", node.ContainerName(project, service), "error", err)
+		}
 	}
 	_, err = l.c.ContainerRemove(ctx, id, client.ContainerRemoveOptions{Force: true})
 	return err

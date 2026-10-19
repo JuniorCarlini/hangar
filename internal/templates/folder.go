@@ -115,6 +115,9 @@ func Parse(id string, files map[string][]byte) (*Template, error) {
 	for _, e := range m.Endpoints {
 		t.Endpoints = append(t.Endpoints, Endpoint(e))
 	}
+	for _, s := range services {
+		t.Warnings = append(t.Warnings, s.warnings...)
+	}
 	for _, k := range variableOrder(files[FileMeta], m.Variables) {
 		v := m.Variables[k]
 		at := FileMeta + ": variables." + k

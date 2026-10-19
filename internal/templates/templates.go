@@ -77,6 +77,9 @@ type Template struct {
 	// Remote is set for templates that came from the signed community
 	// catalog instead of this binary.
 	Remote bool
+	// Warnings are what the loader changed instead of refusing (a stop
+	// grace period above the cap); hangard template check prints them.
+	Warnings []string
 }
 
 // Input is a form field.
@@ -114,6 +117,11 @@ type Service struct {
 	Stateful  bool
 	ReadOnly  bool
 	DependsOn []string
+	// StopGraceS is stop_grace_period in seconds (0 = the panel's default).
+	StopGraceS int
+
+	// warnings collected while parsing (Template.Warnings).
+	warnings []string
 }
 
 // Volume is a named volume in template form.
@@ -305,6 +313,9 @@ func (t *Template) Validate() error {
 				return fmt.Errorf("%s.healthcheck: %w", at, err)
 			}
 		}
+		if s.StopGraceS < 0 || time.Duration(s.StopGraceS)*time.Second > node.MaxStopGrace {
+			return fmt.Errorf("%s.stop_grace_period: at most %s", at, node.MaxStopGrace)
+		}
 		for _, d := range s.DependsOn {
 			if !names[d] || d == s.Name {
 				return fmt.Errorf("%s.depends_on: unknown service %q", at, d)
@@ -414,6 +425,8 @@ type RenderedService struct {
 	Health   *node.Health
 	Stateful bool
 	ReadOnly bool
+	// StopGraceS is the stop grace period in seconds (0 = default).
+	StopGraceS int
 }
 
 // placeholderRE finds what Render replaces: "$$" (a literal dollar, as in
@@ -473,7 +486,7 @@ func (t *Template) Render(vals map[string]string) (Rendered, error) {
 		rs := RenderedService{
 			Slug: vals["name"] + s.Suffix, Image: s.Image, Port: s.Port, Env: map[string]string{},
 			MemoryMB: s.MemoryMB, CPUs: s.CPUs, CapAdd: s.CapAdd,
-			Stateful: s.Stateful, ReadOnly: s.ReadOnly,
+			Stateful: s.Stateful, ReadOnly: s.ReadOnly, StopGraceS: s.StopGraceS,
 		}
 		for k, v := range s.Env {
 			rv, err := r(at+".environment."+k, v)

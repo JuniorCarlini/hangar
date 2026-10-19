@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
@@ -220,6 +221,16 @@ func parseComposeService(at, name string, body *yaml.Node, declared map[string]b
 				fail(path, "expected true or false")
 			}
 			s.ReadOnly = b
+		case "stop_grace_period":
+			secs, clamped, ok := StopGrace(scalar(val))
+			if !ok {
+				fail(path, "%q: use a duration like 30s or 1m30s", scalar(val))
+				continue
+			}
+			if clamped {
+				s.warnings = append(s.warnings, fmt.Sprintf("compose.yaml: %s: %s is more than the panel allows; %s is used", path, scalar(val), node.MaxStopGrace))
+			}
+			s.StopGraceS = secs
 		case "deploy":
 			parseDeploy(path, val, &s, fail)
 		case "depends_on":
@@ -238,7 +249,7 @@ func parseComposeService(at, name string, body *yaml.Node, declared map[string]b
 			if r, ok := refusals[key]; ok {
 				fail(path, "%s", r)
 			} else {
-				fail(path, "not supported in templates (allowed: image, command, environment, volumes, expose, healthcheck, cap_add, read_only, deploy, depends_on)")
+				fail(path, "not supported in templates (allowed: image, command, environment, volumes, expose, healthcheck, cap_add, read_only, stop_grace_period, deploy, depends_on)")
 			}
 		}
 	}
@@ -250,6 +261,22 @@ func parseComposeService(at, name string, body *yaml.Node, declared map[string]b
 	}
 	s.Stateful = len(s.Volumes) > 0
 	return s, errs
+}
+
+// StopGrace reads a Compose stop_grace_period ("45s", "1m30s") as whole
+// seconds, rounded up. A value above node.MaxStopGrace becomes the cap and
+// clamped is true: one container must not hold a deploy, a stop or the
+// server's shutdown for longer. ok is false for anything that is not a
+// positive duration.
+func StopGrace(v string) (secs int, clamped, ok bool) {
+	d, err := time.ParseDuration(strings.TrimSpace(v))
+	if err != nil || d <= 0 {
+		return 0, false, false
+	}
+	if d > node.MaxStopGrace {
+		d, clamped = node.MaxStopGrace, true
+	}
+	return int((d + time.Second - 1) / time.Second), clamped, true
 }
 
 func parseEnvironment(path string, val *yaml.Node, env map[string]string, fail func(string, string, ...any)) {

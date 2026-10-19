@@ -97,7 +97,9 @@ type ComposeService struct {
 	Env        []ComposeEnv
 	Volumes    []node.Volume
 	DependsOn  []string
-	Notes      []ComposeNote
+	// StopGrace is stop_grace_period in seconds (0 = the default).
+	StopGrace int
+	Notes     []ComposeNote
 	// Problem blocks the import (a name already taken, a missing
 	// Dockerfile); the user fixes the file or the project and tries again.
 	Problem *i18n.Error
@@ -259,7 +261,7 @@ var silentKeys = map[string]bool{
 // infoKeys are ignored on purpose, with nothing for the user to do.
 var infoKeys = map[string]bool{
 	"container_name": true, "hostname": true, "restart": true, "labels": true, "logging": true,
-	"networks": true, "links": true, "init": true, "stop_signal": true, "stop_grace_period": true,
+	"networks": true, "links": true, "init": true, "stop_signal": true,
 	"pull_policy": true, "platform": true, "cap_drop": true, "ulimits": true, "shm_size": true,
 	"tmpfs": true, "dns": true, "dns_search": true, "extra_hosts": true, "domainname": true,
 	"read_only": true, "mem_reservation": true, "memswap_limit": true, "oom_score_adj": true,
@@ -338,10 +340,11 @@ func parseService(name string, raw map[string]any, fromRepo bool, bindVolumes ma
 		parseCommand(&s, raw["command"])
 		parseVolumes(&s, raw["volumes"], bindVolumes)
 		parseLimits(&s, raw)
+		parseStopGrace(&s, raw["stop_grace_period"])
 	} else {
 		templateFromEnv(&s)
 		var dropped []string
-		for _, k := range []string{"command", "volumes", "healthcheck", "deploy", "mem_limit", "cpus"} {
+		for _, k := range []string{"command", "volumes", "healthcheck", "deploy", "mem_limit", "cpus", "stop_grace_period"} {
 			if _, ok := raw[k]; ok {
 				dropped = append(dropped, k)
 			}
@@ -399,7 +402,7 @@ func parseService(name string, raw map[string]any, fromRepo bool, bindVolumes ma
 			continue
 		}
 		switch k {
-		case "entrypoint", "user", "working_dir", "env_file", "healthcheck", "extends", "profiles", "scale":
+		case "entrypoint", "user", "working_dir", "env_file", "healthcheck", "extends", "profiles", "scale", "stop_grace_period":
 			continue
 		}
 		ignored = append(ignored, k)
@@ -849,6 +852,25 @@ func memoryMB(v string) int {
 		return 0
 	}
 	return int(f * mult)
+}
+
+// parseStopGrace keeps stop_grace_period (how long a stop waits after
+// SIGTERM), capped at node.MaxStopGrace.
+func parseStopGrace(s *ComposeService, v any) {
+	if v == nil {
+		return
+	}
+	secs, clamped, ok := templates.StopGrace(str(v))
+	switch {
+	case !ok:
+		s.add(NoteWarn, i18n.E("compose.note.stop_grace_invalid", "value", str(v)))
+	case clamped:
+		s.StopGrace = secs
+		s.add(NoteWarn, i18n.E("compose.note.stop_grace_clamped", "value", str(v), "max", secs))
+	default:
+		s.StopGrace = secs
+		s.add(NoteOK, i18n.E("compose.note.stop_grace", "seconds", secs))
+	}
 }
 
 func dependsOn(d any) []string {
