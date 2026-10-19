@@ -140,6 +140,15 @@ JSON
 fi
 systemctl enable --now docker >/dev/null
 
+# Disk size limits (docs/05) format an ext4 image per volume. e2fsprogs is
+# only "important" in Debian: minimal and container images leave it out, and
+# the limit then fails with "mkfs.ext4 not found".
+if ! command -v mkfs.ext4 >/dev/null 2>&1; then
+  info "instalando e2fsprogs (limite de tamanho dos discos)"
+  apt-get update -qq
+  apt-get install -y -qq e2fsprogs >/dev/null
+fi
+
 # The docker group is root-equivalent on the server: only the panel user
 # joins it (docs/04, "residual risk").
 usermod -aG docker hangar
