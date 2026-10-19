@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	defaultHealthTimeout = 2 * time.Minute
-	preDeployTimeout     = 15 * time.Minute
+	preDeployTimeout = 15 * time.Minute
 	// defaultValidateTimeout bounds the validation command when the
 	// service sets none.
 	defaultValidateTimeout = 5 * time.Minute
@@ -51,7 +50,7 @@ func (l *Local) Deploy(ctx context.Context, spec node.ServiceSpec, opt node.Depl
 		progress = func(string, string) {}
 	}
 	if opt.HealthTimeout <= 0 {
-		opt.HealthTimeout = defaultHealthTimeout
+		opt.HealthTimeout = node.DefaultHealthTimeout
 	}
 	if opt.ValidateTimeout <= 0 {
 		opt.ValidateTimeout = defaultValidateTimeout

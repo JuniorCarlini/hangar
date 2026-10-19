@@ -230,6 +230,45 @@ type Health struct {
 	Retries     int
 }
 
+// DefaultHealthTimeout is how long a deploy waits for the new container to
+// be ready when nothing says otherwise.
+const DefaultHealthTimeout = 2 * time.Minute
+
+// Docker's own defaults for a healthcheck field left at zero.
+const (
+	dockerHealthInterval = 30 * time.Second
+	dockerHealthTimeout  = 30 * time.Second
+	dockerHealthRetries  = 3
+)
+
+// HealthWait is how long a deploy should wait for a container with this
+// healthcheck to report healthy: the time Docker itself may take to decide
+// (start period, then every retry at its interval, plus the last probe's
+// timeout), never less than DefaultHealthTimeout and never more than
+// limit. A server that loads a large world or database for minutes before
+// it answers is not a failed deploy, and in a recreate deploy giving up
+// early would remove a container that was about to become healthy.
+func HealthWait(h *Health, limit time.Duration) time.Duration {
+	wait := DefaultHealthTimeout
+	if h != nil {
+		interval, timeout, retries := h.Interval, h.Timeout, h.Retries
+		if interval <= 0 {
+			interval = dockerHealthInterval
+		}
+		if timeout <= 0 {
+			timeout = dockerHealthTimeout
+		}
+		if retries <= 0 {
+			retries = dockerHealthRetries
+		}
+		wait = max(wait, h.StartPeriod+interval*time.Duration(retries)+timeout)
+	}
+	if limit > 0 {
+		wait = min(wait, limit)
+	}
+	return wait
+}
+
 // Port is a port published on the host.
 type Port struct {
 	HostPort      int

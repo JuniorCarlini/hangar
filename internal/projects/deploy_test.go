@@ -2,10 +2,12 @@ package projects
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
@@ -155,5 +157,35 @@ func TestSetEnvBulk(t *testing.T) {
 	}
 	if env2, _ := f.m.ListEnv(ctx, id); len(env2) != 3 {
 		t.Error("nothing may be written when a line is invalid")
+	}
+}
+
+// The deploy waits as long as the service's own healthcheck may take: a
+// server that loads for minutes is not removed by a recreate halfway.
+func TestHealthWaitFollowsTheHealthcheck(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, id := f.service(t)
+	if got := f.n.lastOpt().HealthTimeout; got != node.DefaultHealthTimeout {
+		t.Errorf("no healthcheck: %s, want %s", got, node.DefaultHealthTimeout)
+	}
+	set := func(h node.Health) {
+		t.Helper()
+		b, _ := json.Marshal(h)
+		if _, err := f.st.DB.ExecContext(ctx, `UPDATE services SET health_json = ? WHERE id = ?`, string(b), id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.m.Deploy(ctx, f.who, "lab", "web", "manual"); err != nil {
+			t.Fatal(err)
+		}
+		f.m.Wait()
+	}
+	set(node.Health{Test: []string{"CMD", "true"}, StartPeriod: 6 * time.Minute, Interval: 30 * time.Second, Timeout: 10 * time.Second, Retries: 3})
+	if got, want := f.n.lastOpt().HealthTimeout, 7*time.Minute+40*time.Second; got != want {
+		t.Errorf("slow start: %s, want %s", got, want)
+	}
+	set(node.Health{Test: []string{"CMD", "true"}, StartPeriod: 2 * time.Hour})
+	if got := f.n.lastOpt().HealthTimeout; got != deployTimeout {
+		t.Errorf("capped by the deploy timeout: %s, want %s", got, deployTimeout)
 	}
 }

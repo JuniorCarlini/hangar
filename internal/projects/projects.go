@@ -493,6 +493,9 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 	opt := node.DeployOptions{
 		Strategy: Strategy(s, extras), PreDeploy: preDeploy,
 		Port: int(s.InternalPort), HealthPath: s.HealthPath,
+		// As long as the service's own healthcheck may take to decide
+		// (a game server loading its world, a database replaying its log).
+		HealthTimeout: node.HealthWait(extras.health, deployTimeout),
 		// Built images exist only here; pulling them by name could fetch
 		// someone else's image from a registry.
 		LocalImage: isGit,

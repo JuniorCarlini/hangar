@@ -79,7 +79,12 @@ um deployment novo apontando para a imagem antiga (sem rebuild).
   porta). A tela diz qual estratégia o serviço usa e por quê.
 - **Healthcheck:** o da imagem ou do template; senão `GET` no caminho
   configurado (resposta abaixo de 400); senão conexão TCP na porta; senão 5 s
-  rodando sem reiniciar. Timeout 2 min. Falhou: o novo é apagado, o antigo
+  rodando sem reiniciar. Timeout 2 min, ou mais quando o healthcheck
+  guardado no serviço (template, compose) pode demorar mais para decidir:
+  `start_period + interval × retries + timeout` (com os padrões do Docker
+  para o que faltar), no máximo os 15 min do deploy inteiro. Um servidor
+  que carrega o mundo ou o banco por minutos não é dado como falho no
+  meio da subida. Falhou: o novo é apagado, o antigo
   nunca saiu do ar, e as últimas linhas de log do novo vão para o log do
   deploy.
 - **Pré-deploy:** container temporário com a imagem nova, mesmas variáveis,
