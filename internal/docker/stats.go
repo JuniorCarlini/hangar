@@ -65,9 +65,10 @@ func memUsed(m container.MemoryStats) uint64 {
 }
 
 // DiskUsage is "docker system df" for images, volumes, containers and the
-// build cache.
+// build cache. Verbose: from API 1.52 on, Docker lists each volume (with
+// its size) only when asked to; without it the per-volume sizes are empty.
 func (l *Local) DiskUsage(ctx context.Context) (node.DiskUsage, error) {
-	r, err := l.c.DiskUsage(ctx, client.DiskUsageOptions{Containers: true, Images: true, Volumes: true, BuildCache: true})
+	r, err := l.c.DiskUsage(ctx, client.DiskUsageOptions{Containers: true, Images: true, Volumes: true, BuildCache: true, Verbose: true})
 	if err != nil {
 		return node.DiskUsage{}, err
 	}
