@@ -144,7 +144,55 @@ Três jeitos, em ordem de preferência:
 - Volume nomeado por serviço: `hangar_<projeto>_<serviço>_data`.
 - Apagar serviço **não** apaga volume por padrão; apagar volume é ação
   separada, em modo sudo, digitando o nome para confirmar.
-- Uso de disco por volume aparece no monitoramento.
+- Uso de disco por volume aparece no monitoramento e na aba Configurações ›
+  Discos ("3,2 GB usados"), medido pelo `docker system df` a cada 10 min.
+
+### Limite de tamanho por disco (opcional)
+
+Por padrão um disco não tem limite (como no Easypanel): cresce no disco do
+servidor. Em **Configurações › Discos › Limitar tamanho** (admin + sudo,
+auditado e com alerta de segurança) ele ganha um limite real:
+
+- O disco vira um **arquivo esparso** `/var/lib/hangar/volume-images/<volume>.img`
+  com ext4 (`mkfs.ext4 -m 0`), montado por loop em
+  `/var/lib/hangar/volume-mounts/<volume>` (`nodev,nosuid`). O volume do
+  Docker passa a ser `local` com `type=none,o=bind,device=<montagem>/data`.
+  O arquivo só ocupa o que o app grava; cheio, o app recebe "sem espaço"
+  **só nesse disco**.
+- **Quem faz o quê.** O painel continua sem privilégio: ele só escreve o
+  estado desejado em `/var/lib/hangar/volumes/desired.json`. A unit root
+  `hangar-volumes.service` (disparada por `hangar-volumes.path` e no boot,
+  `Before=docker.service`) valida tudo de novo e responde em `applied.json`.
+  O root só aceita nomes no formato `hangar_<projeto>_<serviço>_<volume>`,
+  tamanhos de 1 GB a 8 TB, caminhos derivados do nome dentro das duas pastas
+  fixas (do root, nunca link simbólico) e só copia dados de/para um volume
+  que nenhum container em execução usa.
+- **Disco que já tem dados:** o painel para os serviços que usam o disco, a
+  unit copia os dados para a imagem (`cp -a`, conferindo cada arquivo:
+  tipo, modo, dono, tamanho e destino de link), o painel troca o volume do
+  Docker pela montagem e sobe os serviços de novo. Cada passo fica gravado
+  (`volume_limits.state/step`): um painel reiniciado no meio continua de onde
+  parou, e cada passo pode rodar duas vezes. Falhou a cópia (ex.: sem espaço
+  livre)? O volume original nunca foi tocado: os serviços voltam nele e o
+  erro aparece no disco.
+- **Aumentar** é na hora, sem parar nada (`truncate` + `losetup -c` +
+  `resize2fs` com o disco montado). **Diminuir** é recusado.
+- **Remover o limite** faz a cópia de volta para um volume comum (os
+  serviços param durante a cópia) e apaga a imagem.
+- **Boot:** a unit monta as imagens antes do Docker. Se por algum motivo a
+  montagem faltar, a pasta `data` não existe e o Docker **recusa iniciar** o
+  container, em vez de rodá-lo numa pasta vazia do disco do servidor.
+- **Apagar o disco ou o serviço apaga o arquivo do disco** (diferente do
+  volume comum, que fica no servidor). Um disco limitado não pode ser só
+  "desligado": remova o limite antes ou apague o disco.
+- Disco compartilhado entre serviços de um template: o limite é do disco do
+  dono; os outros só mostram o uso.
+- Backups e restauração continuam iguais: os containers auxiliares montam o
+  volume pelo nome e o Docker liga a montagem.
+- Alertas: "Disco limitado quase cheio" (> 80%) e "Disco limitado cheio"
+  (> 95%), ajustáveis em Alertas › Regras ([06](06-monitoramento-e-logs.md)).
+- Sem a unit instalada (`hangard system install-units`), o painel não
+  oferece limites.
 
 ## Reserva de recursos do host
 

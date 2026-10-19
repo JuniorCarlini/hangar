@@ -436,6 +436,16 @@ func (c *Collector) ServiceDisk(serviceID string) (int64, bool) {
 	return n, ok
 }
 
+// VolumeDisk is one volume's bytes (by Docker name) from the same reading
+// as ServiceDisk. The bool is false when there is no reading of it yet.
+func (c *Collector) VolumeDisk(name string) (int64, bool) {
+	if c == nil {
+		return 0, false
+	}
+	n, ok := c.Latest().Disk.ByVolume[name]
+	return n, ok
+}
+
 // accum sums readings of one key within a minute.
 type accum struct {
 	n                   int

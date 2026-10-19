@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -1127,6 +1128,98 @@ type VolumeRow struct {
 	// are the other services that mount this one's (shared volumes).
 	Owner      string
 	SharedWith string
+	// Used is how much it holds ("3,2 GB"), "" while not measured yet.
+	Used string
+	// Limit is its size limit, nil when it has none.
+	Limit *VolumeLimitRow
+	// SuggestGB is what the limit dialog offers (twice what it holds, at
+	// least 10 GB); MinGB the smallest it accepts.
+	SuggestGB int
+	MinGB     int
+}
+
+// VolumeLimitRow is a disk's size limit.
+type VolumeLimitRow struct {
+	Size   string // "20 GB"
+	SizeGB int
+	Used   string // "3,2 GB"; "" while not measured yet
+	Pct    int    // of the size, 0–100
+	// State: "new" (the image is being made), "active", "migrate" (data
+	// moving in), "unlimit" (moving back out), "failed".
+	State   string
+	Pending bool // a new size not applied yet
+	Error   string
+	// Dismiss: a failed limit whose image is cleaned up; its notice can go.
+	Dismiss bool
+}
+
+func (l *VolumeLimitRow) busyText(ctx context.Context) string {
+	switch {
+	case l.State == "new":
+		return t(ctx, "volume.limit.preparing")
+	case l.State == "migrate":
+		return t(ctx, "volume.limit.moving")
+	case l.State == "unlimit":
+		return t(ctx, "volume.limit.removing")
+	case l.Pending:
+		return t(ctx, "volume.limit.pending")
+	}
+	return ""
+}
+
+// volumeUsage is the "Usage" cell: how much a disk holds and, with a limit,
+// a bar of how full it is.
+templ volumeUsage(v VolumeRow) {
+	if l := v.Limit; l != nil && l.State != "failed" {
+		if l.Used != "" {
+			<div class="flex items-center gap-2">
+				<div class="h-1 w-24 shrink-0 bg-surface-2" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ fmt.Sprint(l.Pct) } aria-label={ t(ctx, "volume.usage") }>
+					<div class={ "bar-fill h-1 " + toneBg(level(l.Pct)) + " " + pctWidth(l.Pct) }></div>
+				</div>
+				<span class={ "text-xs tabular-nums " + levelText(level(l.Pct)) }>{ fmt.Sprint(l.Pct) }%</span>
+			</div>
+			<span class="block text-[11px] text-muted tabular-nums">{ t(ctx, "volume.usage_of", "used", l.Used, "size", l.Size) }</span>
+		} else {
+			<span class="block text-xs tabular-nums">{ t(ctx, "volume.limit.of", "size", l.Size) }</span>
+		}
+		if busy := l.busyText(ctx); busy != "" {
+			<span class="tuc-badge is-info mt-1"><span class="tuc-spinner" aria-hidden="true"></span>{ busy }</span>
+		}
+		if l.Error != "" {
+			<span class="mt-1 block max-w-[260px] text-[11px] text-warning" title={ l.Error }>{ t(ctx, "volume.limit.warning", "error", truncateText(l.Error, 120)) }</span>
+		}
+	} else {
+		if v.Used != "" {
+			<span class="block text-xs tabular-nums">{ t(ctx, "volume.usage_used", "size", v.Used) }</span>
+		} else {
+			<span class="block text-xs text-subtle">{ t(ctx, "volume.usage_unknown") }</span>
+		}
+		<span class="block text-[11px] text-subtle">{ t(ctx, "volume.no_limit") }</span>
+		if l := v.Limit; l != nil {
+			<span class="mt-1 block max-w-[260px] text-[11px] text-danger" title={ l.Error }>{ t(ctx, "volume.limit.failed", "error", truncateText(l.Error, 120)) }</span>
+		}
+	}
+}
+
+// volumeLimitButton opens the limit (or increase) dialog of a disk, or
+// the identity check first: changing a limit needs sudo.
+templ volumeLimitButton(d ServiceData, v VolumeRow) {
+	if v.Limit == nil || v.Limit.State == "failed" {
+		<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal={ sudoOr(d, "#volume-limit-"+v.Name) } title={ t(ctx, "volume.limit.action") } aria-label={ t(ctx, "volume.limit.action_named", "name", v.Name) }>
+			@Icon("gauge", "size-3.5")
+		</button>
+	} else if v.Limit.State == "active" && !v.Limit.Pending {
+		<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal={ sudoOr(d, "#volume-grow-"+v.Name) } title={ t(ctx, "volume.limit.grow") } aria-label={ t(ctx, "volume.limit.grow_named", "name", v.Name) }>
+			@Icon("circle-arrow-up", "size-3.5")
+		</button>
+	}
+}
+
+func sudoOr(d ServiceData, modal string) string {
+	if d.SudoActive {
+		return modal
+	}
+	return "#sudo-dialog"
 }
 
 // volumesCard lists the service's disks and adds new ones.
@@ -1148,7 +1241,7 @@ templ volumesCard(d ServiceData) {
 			} else {
 				<div class="tuc-table-wrap">
 					<table class="tuc-table is-compact w-full">
-						<thead><tr><th>{ t(ctx, "volume.name") }</th><th>{ t(ctx, "volume.path") }</th><th class="tuc-table__actions"></th></tr></thead>
+						<thead><tr><th>{ t(ctx, "volume.disk") }</th><th>{ t(ctx, "volume.usage") }</th><th class="tuc-table__actions"></th></tr></thead>
 						<tbody>
 							for _, v := range d.Volumes {
 								<tr>
@@ -1160,10 +1253,8 @@ templ volumesCard(d ServiceData) {
 										if v.ReadOnly {
 											<span class="tuc-badge ml-1.5">{ t(ctx, "volume.read_only") }</span>
 										}
-									</td>
-									<td>
-										<span class="block font-mono text-xs">{ v.Path }</span>
-										<span class="block font-mono text-[11px] text-subtle" title={ t(ctx, "volume.docker") }>{ v.Docker }</span>
+										<span class="block font-mono text-xs font-normal">{ v.Path }</span>
+										<span class="block font-mono text-[11px] break-all text-subtle" title={ t(ctx, "volume.docker") }>{ v.Docker }</span>
 										if v.Owner != "" {
 											<span class="block text-[11px] text-muted">{ t(ctx, "volume.shared_from", "service", v.Owner) }</span>
 										}
@@ -1171,30 +1262,54 @@ templ volumesCard(d ServiceData) {
 											<span class="block text-[11px] text-muted">{ t(ctx, "volume.shared_with", "services", v.SharedWith) }</span>
 										}
 									</td>
+									<td>
+										@volumeUsage(v)
+									</td>
 									<td class="tuc-table__actions">
-										if d.CanAdmin && !v.Fixed {
+										if d.CanAdmin {
 											<span class="inline-flex items-center gap-1.5 [&_form]:inline-flex">
-												<form data-confirm={ t(ctx, "confirm.volume_remove.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_remove.text") } data-confirm-ok={ t(ctx, "confirm.volume_remove.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/volumes/remove") }>
-													<input type="hidden" name="csrf" value={ d.CSRF }/>
-													<input type="hidden" name="name" value={ v.Name }/>
-													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "volume.detach") } aria-label={ t(ctx, "volume.detach") }>
-														@Icon("unplug", "size-3.5")
-													</button>
-												</form>
-												if v.Owner != "" {
-													// Another service's disk: only its owner deletes the data.
-												} else if d.SudoActive {
-													<form data-confirm={ t(ctx, "confirm.volume_wipe.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_wipe.text") } data-confirm-ok={ t(ctx, "confirm.volume_wipe.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/volumes/wipe") }>
+												// The limit belongs to the disk's owner.
+												if d.LimitsAvailable && v.Owner == "" {
+													@volumeLimitButton(d, v)
+												}
+												if v.Owner == "" && v.Limit != nil && v.Limit.Dismiss {
+													if d.SudoActive {
+														<form method="post" action={ templ.SafeURL(d.base() + "/volumes/unlimit") }>
+															<input type="hidden" name="csrf" value={ d.CSRF }/>
+															<input type="hidden" name="name" value={ v.Name }/>
+															<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "volume.limit.dismiss") } aria-label={ t(ctx, "volume.limit.dismiss") }>
+																@Icon("x", "size-3.5")
+															</button>
+														</form>
+													} else {
+														<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" title={ t(ctx, "volume.limit.dismiss") } aria-label={ t(ctx, "volume.limit.dismiss") }>
+															@Icon("x", "size-3.5")
+														</button>
+													}
+												}
+												if !v.Fixed {
+													<form data-confirm={ t(ctx, "confirm.volume_remove.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_remove.text") } data-confirm-ok={ t(ctx, "confirm.volume_remove.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/volumes/remove") }>
 														<input type="hidden" name="csrf" value={ d.CSRF }/>
 														<input type="hidden" name="name" value={ v.Name }/>
-														<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "volume.wipe") } aria-label={ t(ctx, "volume.wipe") }>
-															@Icon("trash", "size-3.5")
+														<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "volume.detach") } aria-label={ t(ctx, "volume.detach") }>
+															@Icon("unplug", "size-3.5")
 														</button>
 													</form>
-												} else {
-													<button type="button" class="tuc-btn is-ghost is-icon is-sm text-danger" data-tuc-modal="#sudo-dialog" title={ t(ctx, "volume.wipe") } aria-label={ t(ctx, "volume.wipe") }>
-														@Icon("trash", "size-3.5")
-													</button>
+													if v.Owner != "" {
+														// Another service's disk: only its owner deletes the data.
+													} else if d.SudoActive {
+														<form data-confirm={ t(ctx, "confirm.volume_wipe.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_wipe.text") } data-confirm-ok={ t(ctx, "confirm.volume_wipe.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/volumes/wipe") }>
+															<input type="hidden" name="csrf" value={ d.CSRF }/>
+															<input type="hidden" name="name" value={ v.Name }/>
+															<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "volume.wipe") } aria-label={ t(ctx, "volume.wipe") }>
+																@Icon("trash", "size-3.5")
+															</button>
+														</form>
+													} else {
+														<button type="button" class="tuc-btn is-ghost is-icon is-sm text-danger" data-tuc-modal="#sudo-dialog" title={ t(ctx, "volume.wipe") } aria-label={ t(ctx, "volume.wipe") }>
+															@Icon("trash", "size-3.5")
+														</button>
+													}
 												}
 											</span>
 										}
@@ -1238,7 +1353,99 @@ templ volumesCard(d ServiceData) {
 				</form>
 			</div>
 		</dialog>
+		if d.LimitsAvailable && d.SudoActive {
+			for _, v := range d.Volumes {
+				if v.Owner == "" {
+					@volumeLimitDialogs(d, v)
+				}
+			}
+		}
 	}
+}
+
+// volumeLimitDialogs are a disk's "limit size" dialog, or, once it has a
+// limit, "increase" (with "remove limit").
+templ volumeLimitDialogs(d ServiceData, v VolumeRow) {
+	if v.Limit == nil || v.Limit.State == "failed" {
+		<dialog class="tuc-modal is-md" id={ "volume-limit-" + v.Name } aria-labelledby={ "volume-limit-title-" + v.Name }>
+			<div class="tuc-modal__panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id={ "volume-limit-title-" + v.Name }>{ t(ctx, "volume.limit.title", "name", v.Name) }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						@Icon("x", "size-4")
+					</button>
+				</div>
+				<form method="post" action={ templ.SafeURL(d.base() + "/volumes/limit") } class="tuc-modal__body" autocomplete="off">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="name" value={ v.Name }/>
+					<p class="tuc-modal__text">{ t(ctx, "volume.limit.text") }</p>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for={ "vol-size-" + v.Name }>{ t(ctx, "volume.limit.size") }</label>
+						<input class="tuc-input w-40 tabular-nums" id={ "vol-size-" + v.Name } name="size_gb" type="number" required min={ fmt.Sprint(v.MinGB) } max={ fmt.Sprint(max(v.MinGB, d.HostFreeGB)) } step="1" value={ fmt.Sprint(v.SuggestGB) }/>
+						<span class="tuc-hint">{ limitHint(ctx, v, d.HostFree) }</span>
+					</div>
+					@notice("warning", "triangle-alert", t(ctx, "volume.limit.moves"))
+					@notice("info", "info", t(ctx, "volume.limit.delete_note"))
+					<div class="flex justify-end gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("gauge", "size-3.5")
+							{ t(ctx, "volume.limit.submit") }
+						</button>
+					</div>
+				</form>
+			</div>
+		</dialog>
+	} else if v.Limit.State == "active" && !v.Limit.Pending {
+		<dialog class="tuc-modal is-md" id={ "volume-grow-" + v.Name } aria-labelledby={ "volume-grow-title-" + v.Name }>
+			<div class="tuc-modal__panel">
+				<div class="tuc-modal__header">
+					<h2 class="tuc-modal__title" id={ "volume-grow-title-" + v.Name }>{ t(ctx, "volume.limit.grow_title", "name", v.Name) }</h2>
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+						@Icon("x", "size-4")
+					</button>
+				</div>
+				<form method="post" action={ templ.SafeURL(d.base() + "/volumes/limit") } class="tuc-modal__body" autocomplete="off">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="name" value={ v.Name }/>
+					<p class="tuc-modal__text">{ t(ctx, "volume.limit.grow_text") }</p>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for={ "vol-grow-" + v.Name }>{ t(ctx, "volume.limit.size") }</label>
+						<input class="tuc-input w-40 tabular-nums" id={ "vol-grow-" + v.Name } name="size_gb" type="number" required min={ fmt.Sprint(v.Limit.SizeGB + 1) } max={ fmt.Sprint(v.Limit.SizeGB + max(1, d.HostFreeGB)) } step="1" value={ fmt.Sprint(v.SuggestGB) }/>
+						<span class="tuc-hint">{ t(ctx, "volume.limit.grow_hint", "size", v.Limit.Size, "used", orDash(v.Limit.Used), "free", d.HostFree) }</span>
+					</div>
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<button type="submit" form={ "volume-unlimit-" + v.Name } class="tuc-btn is-ghost text-warning">
+							@Icon("undo-2", "size-3.5")
+							{ t(ctx, "volume.limit.remove") }
+						</button>
+						<span class="flex gap-2">
+							<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+							<button class="tuc-btn is-primary" type="submit">
+								@Icon("circle-arrow-up", "size-3.5")
+								{ t(ctx, "volume.limit.grow_submit") }
+							</button>
+						</span>
+					</div>
+				</form>
+				<form id={ "volume-unlimit-" + v.Name } hidden data-confirm={ t(ctx, "confirm.volume_unlimit.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_unlimit.text") } data-confirm-ok={ t(ctx, "confirm.volume_unlimit.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/volumes/unlimit") }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="name" value={ v.Name }/>
+				</form>
+			</div>
+		</dialog>
+	}
+}
+
+func limitHint(ctx context.Context, v VolumeRow, free string) string {
+	return t(ctx, "volume.limit.hint", "used", orDash(v.Used), "free", free)
+}
+
+func truncateText(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
 }
 
 // terminalDialogs are the modals behind the drawer's Terminal button: the

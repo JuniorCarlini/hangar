@@ -1,5 +1,5 @@
 id = "mongodb"
-version = 1
+version = 2
 category = "database"
 tags = ["nosql", "document"]
 docs = "https://www.mongodb.com/docs/manual/"
@@ -45,3 +45,8 @@ value = "${database}"
 key = "PASSWORD"
 value = "${password}"
 secret = true
+
+# Suggested size limit of the data disk (docs/05): the creation form offers
+# it checked; the disk can be increased later with one click.
+[volumes.data]
+size = "10GB"

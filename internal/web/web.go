@@ -224,6 +224,10 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/volumes/remove", h.removeVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.remove", AuditByHandler: true})
 	// Deleting a disk's data cannot be undone.
 	rt.HandleFunc("POST "+svc+"/volumes/wipe", h.wipeVolume, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.volume.wipe", AuditByHandler: true})
+	// A size limit stops the services to move the data and becomes a disk
+	// image on the server: both ways need a fresh confirmation.
+	rt.HandleFunc("POST "+svc+"/volumes/limit", h.limitVolume, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.volume.limit", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/volumes/unlimit", h.unlimitVolume, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.volume.unlimit", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/credential", h.saveGitCredential, Policy{Role: auth.RoleAdmin, Audit: "service.git.token", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/token", h.saveGitToken, Policy{Role: auth.RoleAdmin, Audit: "service.git.token", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/token/reveal", h.revealGitToken, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal", AuditByHandler: true})

@@ -67,7 +67,22 @@ generate = "secret"
 key = "DATABASE_URL"
 value = "postgres://${user}:${password}@${service}:5432/${database}"
 secret = true
+
+[volumes.data]             # opcional: limite sugerido para o volume "data" do compose
+size = "10GB"              # número inteiro + GB ou TB (unidades binárias), de 1GB a 8TB
 ```
+
+`[volumes.<nome>] size` sugere um **limite de tamanho** para um volume
+declarado no `compose.yaml` (o do dono, se compartilhado; nome que nenhum
+serviço monta é recusado). No formulário de criação ele vem **marcado**,
+com o tamanho editável, e o admin pode desmarcar; sem a chave, o volume nasce
+sem limite e pode ganhar um depois. Como todo limite, só vale com a senha
+confirmada há pouco (sudo); sem isso o disco nasce sem limite
+([05](05-isolamento-e-recursos.md)). Use só onde faz sentido guardar muito
+dado (bancos, armazenamento): no catálogo embutido, PostgreSQL, MariaDB e
+MongoDB sugerem 10 GB e o RustFS 50 GB. Painéis anteriores a esta chave
+recusam o template (chave desconhecida): use `min_hangar` no catálogo da
+comunidade.
 
 O serviço `main` fica com o nome que o usuário escolheu (`db`); os outros
 ganham o sufixo com o nome do compose (`db` + serviço `cache` = `db-cache`).

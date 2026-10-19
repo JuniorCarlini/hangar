@@ -325,6 +325,8 @@ ports = "portas"
 rebuild = "do zero (sem cache)"
 
 [flash]
+volume-limit = "Limite pedido. O disco aparece com o novo tamanho em instantes; se tinha dados, os serviços que o usam param durante a cópia e voltam sozinhos."
+volume-unlimit = "Remoção do limite pedida. Os serviços que usam o disco param durante a cópia e voltam sozinhos."
 image = "Versão trocada e deploy iniciado. Se a nova não subir, o serviço continua na anterior."
 compose = "Serviços criados a partir do compose. Os deploys já começaram: os bancos primeiro."
 volume = "Disco adicionado. Vale a partir do próximo deploy."
@@ -445,6 +447,7 @@ delete = "Apagar serviço"
 name_mismatch = "O nome digitado não confere."
 
 [service.error]
+volume_moving = "Os dados de um disco deste serviço estão sendo movidos (limite de tamanho). O serviço volta sozinho ao terminar."
 name = "Use um nome com pelo menos duas letras ou números."
 volume_shared = "O disco {volumes} deste serviço também é usado por {services}. Apague esses serviços primeiro; até lá o disco fica com este."
 slug_taken ="Já existe um serviço com o endereço interno {slug} neste projeto. Escolha outro nome."
@@ -1624,6 +1627,8 @@ resolved_title = "Normalizado · {title}"
 resolved_text = "A condição voltou ao normal."
 
 [alert.title]
+volume_disk = "Disco quase cheio: {volume}"
+volume_full = "Disco cheio: {volume}"
 deps = "{title}"
 test = "Teste do Hangar"
 container_down = "Container fora do ar: {service}"
@@ -1649,6 +1654,8 @@ lockdown_released = "Painel destrancado"
 deploy_failed = "Deploy falhou: {service}"
 
 [alert.text]
+volume_disk = "O disco {volume} está {pct}% ocupado (alerta acima de {limit}%). Aumente o limite na aba Configurações do serviço."
+volume_full = "O disco {volume} está {pct}% ocupado (alerta acima de {limit}%): logo o app recebe \"sem espaço\" ao gravar. Aumente o limite na aba Configurações do serviço."
 deps = "{lines}\n\nDetalhes no painel: {path}"
 test = "Se você está lendo isto, o canal de alertas funciona."
 container_down = "O container {service} está parado há mais de 30 s sem que ninguém tenha pedido."
@@ -1680,6 +1687,8 @@ down = "O serviço ficou fora do ar: a versão anterior não voltou."
 none = "Não havia versão anterior no ar."
 
 [alert.action]
+service_volume_limit = "limitou ou aumentou o tamanho de um disco"
+service_volume_unlimit = "removeu o limite de tamanho de um disco"
 service_image_change = "trocou a versão da imagem de um serviço"
 user_invite_cancel = "cancelou um convite da equipe"
 user_invite = "convidou uma pessoa para a equipe"
@@ -1804,6 +1813,8 @@ attempts = "Tentativas"
 error = "Erro"
 
 [alerts.rule]
+volume_disk = "Disco limitado quase cheio"
+volume_full = "Disco limitado cheio"
 container_down = "Container caiu"
 restart_loop = "Loop de reinício"
 oom = "Memória esgotada (OOM)"
@@ -1813,6 +1824,8 @@ host_memory = "Memória do servidor alta"
 host_disk = "Disco do servidor"
 
 [alerts.rule_desc]
+volume_disk = "Ocupação de um disco com limite de tamanho acima do limite do alerta."
+volume_full = "Ocupação crítica de um disco com limite de tamanho: o app vai ficar sem espaço."
 container_down = "Parado por mais de 30 s sem ninguém ter pedido (deploys e paradas pelo painel não contam)."
 restart_loop = "Mais reinícios que o limite em 5 minutos."
 oom = "O Docker encerrou o container por falta de memória."
@@ -2588,6 +2601,12 @@ too_long = "O texto ficou grande demais: título até 120 caracteres, texto até
 write = "A marca foi salva, mas as páginas não puderam ser gravadas para o proxy. Veja o log do painel."
 
 [volume]
+disk = "Disco"
+usage = "Uso"
+usage_used = "{size} usados"
+usage_of = "{used} de {size}"
+usage_unknown = "medindo…"
+no_limit = "sem limite"
 title = "Discos"
 count = { one = "1 disco", other = "{n} discos" }
 hint = "O que o app grava num disco (uploads, arquivos gerados) continua lá depois de cada deploy. Com disco, o deploy para o container antigo antes de subir o novo: alguns segundos com a página \"Atualizando\"."
@@ -2606,6 +2625,7 @@ next_deploy = "Discos novos ou desligados valem a partir do próximo deploy."
 modal_text = "O app passa a gravar nesse caminho num volume que sobrevive aos deploys."
 
 [volume.error]
+limited_detach = "Este disco tem limite de tamanho: os dados ficam num arquivo próprio no servidor. Remova o limite antes de desligá-lo, ou apague o disco e os dados."
 name = "Use um nome curto em minúsculas, como media (letras, números e hífen)."
 path = "Use um caminho absoluto dentro do container, como /app/media."
 reserved = "{path} é uma pasta do sistema do container e não pode virar disco."
@@ -2787,6 +2807,10 @@ token = "O GitHub recusou o token desta credencial. Ele pode ter expirado ou sid
 unreachable = "Não foi possível falar com o GitHub agora. Tente de novo em instantes."
 
 [catalog]
+disk_limit = "{disk} · limite de {size}"
+limit = "Limitar o disco {volume}"
+limit_hint = "Sugerido pelo template. Sem limite, o disco cresce até encher o servidor; dá para aumentar depois com um clique."
+limit_needs_sudo = "Com a senha confirmada há pouco, o disco nasce com o limite sugerido. Sem isso, ele começa sem limite e você limita depois na aba Configurações."
 missing_text = "Os templates vêm da comunidade e qualquer pessoa pode enviar um."
 search = "Buscar template: postgres, fila, s3…"
 count = "{n} templates"
@@ -2916,3 +2940,45 @@ major = "só na {tag} (major)"
 image = "imagem {name}"
 image_eco = "imagem"
 severe_other = "{severe} graves · {other} outras"
+
+[volume.limit]
+action = "Limitar tamanho"
+action_named = "Limitar o tamanho de {name}"
+grow = "Aumentar"
+grow_named = "Aumentar o disco {name}"
+remove = "Remover limite"
+dismiss = "Dispensar o aviso"
+title = "Limitar o tamanho de {name}"
+grow_title = "Aumentar o disco {name}"
+text = "O disco passa a ser um arquivo de tamanho fixo no servidor, que só ocupa o que o app grava. Quando ele enche, o app recebe \"sem espaço\" só neste disco: o resto do servidor e os outros serviços não são afetados."
+size = "Tamanho (GB)"
+hint = "Usado agora: {used} · Livre no servidor: {free}"
+moves = "Se o disco já tem dados, eles são copiados para o disco limitado: os serviços que usam este disco param durante a cópia (alguns minutos para muitos GB) e voltam sozinhos."
+delete_note = "Ao apagar o disco ou o serviço, o arquivo do disco é apagado junto."
+submit = "Limitar"
+grow_text = "O disco cresce na hora, sem parar o serviço. Um limite não diminui depois."
+grow_hint = "Hoje: {size} · Usado: {used} · Livre no servidor: {free}"
+grow_submit = "Aumentar"
+of = "limite de {size}"
+preparing = "Preparando o disco…"
+moving = "Movendo os dados…"
+removing = "Removendo o limite…"
+pending = "Aplicando…"
+warning = "Atenção: {error}"
+failed = "O limite não foi aplicado: {error}"
+
+[volume.limit.error]
+unavailable = "Limites de tamanho precisam da unit hangar-volumes no servidor. Rode sudo hangard system install-units e tente de novo."
+size = "Escolha um tamanho entre 1 GB e {max} TB, em GB inteiros."
+too_small = "O disco já guarda {used}: escolha um limite maior, com folga."
+no_space = "O servidor não tem espaço livre para isso (livre: {free})."
+shrink = "Um limite só aumenta: escolha mais que {size}."
+busy = "O limite deste disco está mudando agora. Espere terminar e tente de novo."
+owner = "O limite é do disco de {service}: mude-o lá."
+sudo = "Limitar um disco pede sua senha de novo: confirme e crie de novo."
+not_ready = "O disco limitado não ficou pronto: {error}"
+
+[confirm.volume_unlimit]
+title = "Remover o limite de {name}?"
+text = "Os dados voltam para um disco comum, sem limite, que cresce no disco do servidor. Os serviços que usam este disco param durante a cópia e voltam sozinhos."
+ok = "Remover limite"

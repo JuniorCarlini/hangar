@@ -13,6 +13,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/templates"
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 )
 
 // SetTemplates replaces the embedded catalog with r, which the community
@@ -35,6 +36,19 @@ func exportAD(serviceID, key string) string { return "service_exports|" + servic
 // they go straight into encrypted, secret variables and exports. name is
 // what the user typed; the services' identifiers are derived from it.
 func (m *Manager) CreateFromTemplate(ctx context.Context, a Actor, projectSlug, templateID, name string, inputs map[string]string) ([]dbq.Service, error) {
+	return m.CreateFromTemplateWith(ctx, a, projectSlug, templateID, name, inputs, TemplateOptions{})
+}
+
+// TemplateOptions are the choices of the creation form beyond the inputs.
+type TemplateOptions struct {
+	// Limits are the size limits of the template's volumes, in bytes, by
+	// compose volume name (the form offers the template's suggestions).
+	// Setting one needs sudo, like any limit.
+	Limits map[string]int64
+}
+
+// CreateFromTemplateWith is CreateFromTemplate with the form's options.
+func (m *Manager) CreateFromTemplateWith(ctx context.Context, a Actor, projectSlug, templateID, name string, inputs map[string]string, opt TemplateOptions) ([]dbq.Service, error) {
 	if err := m.requireNode(); err != nil {
 		return nil, err
 	}
@@ -50,6 +64,9 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, a Actor, projectSlug, 
 	if err != nil {
 		return nil, err
 	}
+	if err := m.checkTemplateLimits(a, r, opt.Limits); err != nil {
+		return nil, err
+	}
 
 	// All rows in one transaction: a template is created whole or not at all.
 	tx, err := m.db.BeginTx(ctx, nil)
@@ -61,12 +78,40 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, a Actor, projectSlug, 
 	if err != nil {
 		return nil, err
 	}
+	// The volumes do not exist yet: each limited one is born on its image
+	// (the first deploy waits for it).
+	for i, rs := range r.Services {
+		for _, v := range rs.Volumes {
+			size, ok := opt.Limits[v.Name]
+			if !ok || v.Service != "" {
+				continue
+			}
+			if err := m.createLimit(ctx, m.q.WithTx(tx), a, p.ID, created[i], node.VolumeName(p.Slug, rs.Slug, v.Name), v.Name, size, limitNew, ""); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	out, err := m.recordCreated(ctx, a, p, created, nil)
+	var extra map[string]any
+	if len(opt.Limits) > 0 {
+		extra = map[string]any{"volume_limits": opt.Limits}
+		m.kickVolumes()
+	}
+	out, err := m.recordCreated(ctx, a, p, created, extra)
 	if err != nil {
 		return out, err
+	}
+	// Each limit is the same sensitive action as setting one later.
+	for i, rs := range r.Services {
+		for _, v := range rs.Volumes {
+			if size, ok := opt.Limits[v.Name]; ok && v.Service == "" && i < len(out) {
+				m.record(ctx, a, "service.volume.limit", "service", out[i].ID, audit.OK, map[string]any{
+					"service": p.Slug + "/" + rs.Slug, "volume": v.Name, "to": size, "template": t.ID,
+				})
+			}
+		}
 	}
 	m.ensureSharedVolumes(ctx, p, out)
 	// A template that is born public (n8n, Uptime Kuma) shows its link right
@@ -86,6 +131,43 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, a Actor, projectSlug, 
 		}
 	}
 	return out, nil
+}
+
+// checkTemplateLimits checks the size limits asked for a template: each
+// one on a volume a service of it owns, in range, all of them on the free
+// disk, and the creator confirmed the password moments ago.
+func (m *Manager) checkTemplateLimits(a Actor, r templates.Rendered, limits map[string]int64) error {
+	if len(limits) == 0 {
+		return nil
+	}
+	if !a.Sudo {
+		return i18n.E("volume.limit.error.sudo")
+	}
+	if !m.VolumeLimitsAvailable() {
+		return i18n.E("volume.limit.error.unavailable")
+	}
+	owned := map[string]bool{}
+	for _, rs := range r.Services {
+		for _, v := range rs.Volumes {
+			if v.Service == "" {
+				owned[v.Name] = true
+			}
+		}
+	}
+	var total int64
+	for name, size := range limits {
+		if !owned[name] {
+			return ErrNotFound
+		}
+		if size < volumes.MinSize || size > volumes.MaxSize {
+			return i18n.E("volume.limit.error.size", "max", volumes.MaxSize>>40)
+		}
+		total += size
+	}
+	if free := m.hostFree(); total > free {
+		return i18n.E("volume.limit.error.no_space", "free", gbText(free))
+	}
+	return nil
 }
 
 // renderTemplate checks the inputs, generates the secrets and fills the

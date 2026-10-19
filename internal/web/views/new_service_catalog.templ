@@ -215,12 +215,39 @@ templ templateDialog(d NewServiceData, tp NewTemplate) {
 							<input class="tuc-input font-mono" id={ id + "-" + in.Key } name={ "in_" + in.Key } pattern={ in.Pattern } value={ in.Value } required/>
 						</div>
 					}
+					for _, l := range tp.Limits {
+						@templateLimitField(id, l)
+					}
 					@notice("info", "lock", t(ctx, "template.generated_hint"))
 				</div>
 				@detailFooter("plus", t(ctx, "new_service.create"))
 			</div>
 		</form>
 	}
+}
+
+// templateLimitField is a suggested disk limit: a checkbox and the size.
+templ templateLimitField(id string, l TemplateLimit) {
+	{{ box := id + "-limit-" + l.Volume }}
+	<div class="flex min-w-0 flex-col gap-2">
+		<label class="tuc-choice">
+			<input type="checkbox" class="tuc-check" id={ box } name={ "limit_" + l.Volume } value="1" checked?={ l.On } disabled?={ l.NeedsSudo }/>
+			<span>
+				{ t(ctx, "catalog.limit", "volume", l.Volume) }
+				if l.NeedsSudo {
+					<span class="tuc-choice__hint">{ t(ctx, "catalog.limit_needs_sudo") }</span>
+				} else {
+					<span class="tuc-choice__hint">{ t(ctx, "catalog.limit_hint") }</span>
+				}
+			</span>
+		</label>
+		if !l.NeedsSudo {
+			<div class="flex min-w-0 flex-col gap-1.5 pl-6" data-shown-when={ box + "=1" }>
+				<label class="tuc-label" for={ box + "-size" }>{ t(ctx, "volume.limit.size") }</label>
+				<input class="tuc-input w-40 tabular-nums" id={ box + "-size" } name={ "size_" + l.Volume } type="number" min="1" max="8192" step="1" required value={ fmt.Sprint(l.SizeGB) }/>
+			</div>
+		}
+	</div>
 }
 
 templ myReposTab(d NewServiceData) {

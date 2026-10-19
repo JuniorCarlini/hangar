@@ -138,7 +138,7 @@ var dynamicPrefixes = map[string][]string{
 	"brand.error.": {"name", "contact", "color", "theme", "logo", "logo_size", "logo_dimensions", "page", "too_long"},
 	"flash.": {
 		"deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings",
-		"git", "git-token", "webhook-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed",
+		"git", "git-token", "webhook-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-limit", "volume-unlimit",
 	},
 	"flash.backups.":         {"key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued"},
 	"backups.kind.":          {"pg_dump", "pg_base", "panel"},
@@ -163,18 +163,18 @@ var dynamicPrefixes = map[string][]string{
 	"deps.bucket_hint.":      {"deploy", "tag", "code", "wait", "updates"},
 	"status.state.":          {"running", "degraded", "stopped"},
 	"statuslink.naming.":     {"alias", "generic", "hidden"},
-	"alert.title.":           {"test", "deps", "container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "login_new_ip", "login_failures", "account_locked", "totp_disabled", "sudo_action", "user_created", "port_public", "port_unknown", "channel_added", "update_applied", "update_failed", "lockdown", "lockdown_released", "deploy_failed"},
-	"alert.text.":            {"test", "deps", "container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "login_new_ip", "login_failures", "account_locked", "totp_disabled", "sudo_action", "user_created", "port_public", "port_unknown", "channel_added", "update_applied", "update_failed", "lockdown", "lockdown_released", "deploy_failed"},
+	"alert.title.":           {"test", "deps", "container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "volume_disk", "volume_full", "login_new_ip", "login_failures", "account_locked", "totp_disabled", "sudo_action", "user_created", "port_public", "port_unknown", "channel_added", "update_applied", "update_failed", "lockdown", "lockdown_released", "deploy_failed"},
+	"alert.text.":            {"test", "deps", "container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "volume_disk", "volume_full", "login_new_ip", "login_failures", "account_locked", "totp_disabled", "sudo_action", "user_created", "port_public", "port_unknown", "channel_added", "update_applied", "update_failed", "lockdown", "lockdown_released", "deploy_failed"},
 	"alert.previous.":        {"live", "restored", "down", "none"},
-	"alert.action.":          {"secret_reveal", "service_delete", "project_delete", "domain_dynamic_enable", "domain_dynamic_disable", "domain_dynamic_rotate_secret", "domain_add", "edge_dns_set", "domain_remove", "service_endpoint_public", "service_endpoint_sslip_on", "port_open", "project_link", "service_backup_download", "system_update_request", "alerts_channel_delete", "alerts_channel_toggle", "status_link_create", "status_link_revoke", "service_git_webhook", "backup_key_add", "backup_key_confirm", "backup_key_remove", "backup_restore_start", "backup_target_add", "backup_target_remove", "backup_download_link", "brand_save", "service_volume_wipe", "service_image_change", "service_terminal_open", "user_invite", "user_invite_cancel", "user_update", "user_remove"},
+	"alert.action.":          {"secret_reveal", "service_delete", "project_delete", "domain_dynamic_enable", "domain_dynamic_disable", "domain_dynamic_rotate_secret", "domain_add", "edge_dns_set", "domain_remove", "service_endpoint_public", "service_endpoint_sslip_on", "port_open", "project_link", "service_backup_download", "system_update_request", "alerts_channel_delete", "alerts_channel_toggle", "status_link_create", "status_link_revoke", "service_git_webhook", "backup_key_add", "backup_key_confirm", "backup_key_remove", "backup_restore_start", "backup_target_add", "backup_target_remove", "backup_download_link", "brand_save", "service_volume_wipe", "service_volume_limit", "service_volume_unlimit", "service_image_change", "service_terminal_open", "user_invite", "user_invite_cancel", "user_update", "user_remove"},
 	"alerts.flash.":          {"channel-added", "channel-deleted", "channel-paused", "channel-resumed", "tested", "rules", "muted", "unmuted"},
 	"alerts.kind.":           {"telegram", "email", "webhook"},
 	"alerts.new.":            {"telegram", "email", "webhook"},
 	"alerts.receives.":       {"info", "warning", "critical"},
 	"alerts.level.":          {"info", "warning", "critical"},
 	"alerts.status.":         {"sent", "failed", "dropped"},
-	"alerts.rule.":           {"container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk"},
-	"alerts.rule_desc.":      {"container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk"},
+	"alerts.rule.":           {"container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "volume_disk", "volume_full"},
+	"alerts.rule_desc.":      {"container_down", "restart_loop", "oom", "service_memory", "host_cpu", "host_memory", "host_disk", "volume_disk", "volume_full"},
 	"locale.":                nil, // one per catalog, checked below
 }
 

@@ -11,6 +11,8 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/projects"
+	"github.com/JuniorCarlini/hangar/internal/store/dbq"
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
@@ -77,10 +79,36 @@ func (h *handlers) createFromTemplate(w http.ResponseWriter, r *http.Request) {
 		inputs[in.Key] = r.PostFormValue("in_" + in.Key)
 	}
 	name := r.PostFormValue("name")
-	svcs, err := h.projects.CreateFromTemplate(r.Context(), actor(r), r.PathValue("project"), tp.ID, name, inputs)
+	// The template's suggested disk limits, as checked and sized in the form.
+	opt := projects.TemplateOptions{}
+	sent := map[string]string{}
+	var err error
+	for vol := range tp.Sizes {
+		if r.PostFormValue("limit_"+vol) != "1" {
+			if r.PostForm.Has("size_"+vol) || r.PostForm.Has("limit_"+vol) {
+				sent[vol] = ""
+			}
+			continue
+		}
+		gb := r.PostFormValue("size_" + vol)
+		sent[vol] = gb
+		size, ok := sizeGB(gb)
+		if !ok {
+			err = i18n.E("volume.limit.error.size", "max", volumes.MaxSize>>40)
+			continue
+		}
+		if opt.Limits == nil {
+			opt.Limits = map[string]int64{}
+		}
+		opt.Limits[vol] = size
+	}
+	var svcs []dbq.Service
+	if err == nil {
+		svcs, err = h.projects.CreateFromTemplateWith(r.Context(), actor(r), r.PathValue("project"), tp.ID, name, inputs, opt)
+	}
 	if err != nil && len(svcs) == 0 {
 		code, msg := userError(r, err)
-		h.renderNew(w, r, code, nsState{tab: "template", template: tp.ID, tplName: name, inputs: inputs, err: msg})
+		h.renderNew(w, r, code, nsState{tab: "template", template: tp.ID, tplName: name, inputs: inputs, limits: sent, err: msg})
 		return
 	}
 	h.placeNew(r, svcs[0].Slug)

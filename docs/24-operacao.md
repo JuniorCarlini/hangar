@@ -26,6 +26,7 @@ Convenções deste documento:
 | Cópia do banco antes de cada atualização | `/var/lib/hangar/backups/pre-update-*` |
 | "Estou no ar" | `/var/lib/hangar/run/ready` (contém a versão) |
 | Regras de firewall das portas | `/var/lib/hangar/firewall/desired.json` → `applied.json` |
+| Limites de tamanho dos discos | `/var/lib/hangar/volumes/desired.json` → `applied.json`; imagens em `/var/lib/hangar/volume-images/`, montadas em `/var/lib/hangar/volume-mounts/` |
 | Caddy (edge) | contêiner `hangar_caddy` na rede `hangar_edge`, dados em `/var/lib/hangar/edge/` |
 
 | Serviço systemd | Papel |
@@ -33,6 +34,7 @@ Convenções deste documento:
 | `hangard` | o painel (usuário `hangar`, sem privilégio, sandbox) |
 | `hangar-updater.path` / `.service` | aplica atualizações assinadas (root, só isso) |
 | `hangar-firewall.path` / `.timer` / `.service` | aplica as regras de porta (`DOCKER-USER`) e o acesso do Caddy ao painel (`INPUT`) quando mudam e a cada 3 minutos (root, só isso) |
+| `hangar-volumes.path` / `.service` | cria, monta, aumenta, copia e apaga as imagens dos discos com limite de tamanho quando o painel pede, e monta todas no boot antes do Docker (root, só isso; `journalctl -u hangar-volumes`) |
 
 Logs: `journalctl -u hangard -f` (JSON, uma linha por evento). O journald
 do Hangar tem limite próprio (`journald-hangar.conf`).

@@ -38,6 +38,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/templates"
 	"github.com/JuniorCarlini/hangar/internal/update"
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 	"github.com/JuniorCarlini/hangar/internal/web"
 )
 
@@ -238,6 +239,8 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	// is always measured.
 	src, _ := n.(metrics.Source)
 	mc := metrics.New(st.DB, src, cfg.DataDir, log)
+	// Size limits on volumes: the panel writes, a root unit applies.
+	pm.SetVolumeLimits(volumes.NewWriter(cfg.DataDir), mc.VolumeDisk)
 	// The dependency monitor scans the image each container runs (exported
 	// from Docker, read with OSV-SCALIBR) and falls back to reading the
 	// container through the node (fixed cat/find commands); without Docker
@@ -341,6 +344,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	if pm.DockerAvailable() {
 		go pm.RunReconciler(ctx, 30*time.Second)
 		go pm.RunPortExpiry(ctx, time.Minute)
+		go pm.RunVolumeLimits(ctx)
 	}
 	// The applier writes the result only after this version marked itself
 	// ready: wait for it in the background instead of reading it now.
@@ -503,7 +507,19 @@ func monitor(a *alerts.Service, pm *projects.Manager, mc *metrics.Collector) *al
 			return out, nil
 		}
 	}
-	return a.NewMonitor(states, mc.Latest)
+	m := a.NewMonitor(states, mc.Latest)
+	m.SetVolumes(func(ctx context.Context) ([]alerts.VolumeUsage, error) {
+		list, err := pm.LimitedVolumes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]alerts.VolumeUsage, 0, len(list))
+		for _, v := range list {
+			out = append(out, alerts.VolumeUsage{Key: v.Key, Name: v.Name, Used: v.Used, Total: v.Total})
+		}
+		return out, nil
+	})
+	return m
 }
 
 // NewBackups builds the backup engine (docs/09). Panel backups work without

@@ -29,6 +29,17 @@ type StatesFunc func(ctx context.Context) ([]ServiceState, error)
 // SnapshotFunc returns the latest metrics reading.
 type SnapshotFunc func() metrics.Snapshot
 
+// VolumeUsage is one volume with a size limit and how full it is.
+type VolumeUsage struct {
+	Key   string // the Docker volume name
+	Name  string // project/service/volume, as shown to the operator
+	Used  uint64
+	Total uint64
+}
+
+// VolumesFunc lists the volumes with a size limit.
+type VolumesFunc func(ctx context.Context) ([]VolumeUsage, error)
+
 // restartWindow is how far back restarts are counted (docs/06: > 3 in 5 min).
 const restartWindow = 5 * time.Minute
 
@@ -40,6 +51,7 @@ type Monitor struct {
 	svc      *Service
 	states   StatesFunc
 	snapshot SnapshotFunc
+	volumes  VolumesFunc
 	now      func() time.Time
 
 	since    map[string]time.Time // condition key → first seen
@@ -60,6 +72,10 @@ func (s *Service) NewMonitor(states StatesFunc, snapshot SnapshotFunc) *Monitor 
 		since: map[string]time.Time{}, firing: map[string]Event{}, restarts: map[string][]restartSample{},
 	}
 }
+
+// SetVolumes adds the size-limited volumes to the rules (volume_disk,
+// volume_full). Call it before Run.
+func (m *Monitor) SetVolumes(fn VolumesFunc) { m.volumes = fn }
 
 // Run checks every interval until ctx ends.
 func (m *Monitor) Run(ctx context.Context, every time.Duration) {
@@ -114,6 +130,13 @@ func (m *Monitor) Check(ctx context.Context) {
 	}
 	if m.snapshot != nil {
 		m.metricConditions(m.snapshot(), rules, current, unknown)
+	}
+	if m.volumes != nil {
+		if list, err := m.volumes(ctx); err != nil {
+			unknown["volume_disk"], unknown["volume_full"] = true, true
+		} else {
+			volumeConditions(list, rules, current)
+		}
 	}
 
 	for key, c := range current {
@@ -236,6 +259,27 @@ func (m *Monitor) metricConditions(snap metrics.Snapshot, rules map[string]RuleS
 			out["service_memory|"+c.Key] = condition{rule: r, params: map[string]string{
 				"service": name, "pct": strconv.Itoa(pct), "limit": strconv.Itoa(r.Value),
 			}}
+		}
+	}
+}
+
+// volumeConditions: each limited volume above a threshold. Above both, both
+// hold: the warning was sent on the way up and stays, the critical alert
+// comes once; each clears when the volume drops below its own threshold.
+func volumeConditions(list []VolumeUsage, rules map[string]RuleSetting, out map[string]condition) {
+	for _, v := range list {
+		if v.Total == 0 {
+			continue
+		}
+		pct := float64(v.Used) * 100 / float64(v.Total)
+		params := func(r RuleSetting) map[string]string {
+			return map[string]string{"volume": v.Name, "pct": strconv.Itoa(int(pct + 0.5)), "limit": strconv.Itoa(r.Value)}
+		}
+		if r, ok := rules["volume_full"]; ok && pct > float64(r.Value) {
+			out["volume_full|"+v.Key] = condition{rule: r, params: params(r)}
+		}
+		if r, ok := rules["volume_disk"]; ok && pct > float64(r.Value) {
+			out["volume_disk|"+v.Key] = condition{rule: r, params: params(r)}
 		}
 	}
 }

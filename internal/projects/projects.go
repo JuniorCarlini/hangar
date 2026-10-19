@@ -27,6 +27,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/secrets"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/templates"
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 )
 
 // Limits and defaults for a new service (docs/05).
@@ -97,6 +98,13 @@ type Manager struct {
 	// templates is the service catalog (SetTemplates); the embedded one
 	// until the community catalog is wired in.
 	templates *templates.Registry
+	// vols writes the volume limits for the root unit (SetVolumeLimits);
+	// volUsage reads a plain volume's size; volMu keeps the limit steps
+	// and the admin's requests apart; volKick wakes RunVolumeLimits.
+	vols     *volumes.Writer
+	volUsage func(name string) (int64, bool)
+	volMu    sync.Mutex
+	volKick  chan struct{}
 }
 
 // New creates the Manager. n may be nil when Docker is unavailable: the panel
@@ -457,6 +465,12 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 	if err != nil {
 		return "", err
 	}
+	// A volume whose data is moving to or from its size-limited image
+	// must not be mounted meanwhile; a new one waits for its image.
+	waitVolumes, err := m.checkVolumesFree(ctx, p, s, extras.volumes)
+	if err != nil {
+		return "", err
+	}
 	var cmd, preDeploy, validate []string
 	_ = json.Unmarshal([]byte(s.CommandJson), &cmd)
 	_ = json.Unmarshal([]byte(s.PredeployJson), &preDeploy)
@@ -517,7 +531,10 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 		opt.Progress = dl.progress
 		var res node.DeployResult
 		var err error
-		if build {
+		if len(waitVolumes) > 0 {
+			err = m.waitVolumesReady(bg, waitVolumes)
+		}
+		if build && err == nil {
 			spec.Image, err = m.buildFromGit(bg, p, s, src, depID, builder, dl, req.fresh)
 		}
 		if err == nil {
@@ -644,11 +661,19 @@ func (m *Manager) DeleteService(ctx context.Context, a Actor, projectSlug, servi
 	if err := m.sharedVolumeError(ctx, s); err != nil {
 		return err
 	}
+	if err := m.limitsMoving(ctx, s.ID); err != nil {
+		return err
+	}
 	if err := m.node.Remove(ctx, p.Slug, s.Slug); err != nil {
 		return err
 	}
 	if err := m.q.DeleteService(ctx, s.ID); err != nil {
 		return err
+	}
+	// A size-limited disk is a file of its own: it goes with the service
+	// (plain volumes stay on the server).
+	if err := m.forgetVolumeLimits(ctx, p, s, nil); err != nil {
+		m.log.Warn("remove the service's limited disks", "service", p.Slug+"/"+s.Slug, "error", err)
 	}
 	// Images built for it have no other use: free the disk.
 	if b, ok := m.node.(node.Builder); ok {

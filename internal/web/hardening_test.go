@@ -19,7 +19,7 @@ import (
 var criticalActions = []string{
 	"secret.reveal",
 	"service.delete", "project.delete",
-	"service.terminal.open", "service.volume.wipe",
+	"service.terminal.open", "service.volume.wipe", "service.volume.limit", "service.volume.unlimit",
 	"domain.add", "domain.remove", "domain.dynamic", "domain.dynamic.rotate_secret",
 	"port.open", "project.link",
 	"service.backup.download", "backup.download_link", "backup.restore.start",

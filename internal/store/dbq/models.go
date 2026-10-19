@@ -502,6 +502,21 @@ type UserProject struct {
 	ProjectID string
 }
 
+type VolumeLimit struct {
+	Volume      string
+	ProjectID   string
+	ServiceID   string
+	Name        string
+	SizeBytes   int64
+	State       string
+	Step        string
+	Error       string
+	RestartJson string
+	CreatedBy   sql.NullString
+	CreatedAt   int64
+	UpdatedAt   int64
+}
+
 type WalStatus struct {
 	ServiceID       string
 	LastArchivedWal string

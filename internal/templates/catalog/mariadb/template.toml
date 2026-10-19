@@ -1,5 +1,5 @@
 id = "mariadb"
-version = 1
+version = 2
 category = "database"
 tags = ["sql", "relational", "mysql"]
 docs = "https://mariadb.com/docs/server/"
@@ -53,3 +53,8 @@ secret = true
 key = "ROOT_PASSWORD"
 value = "${root_password}"
 secret = true
+
+# Suggested size limit of the data disk (docs/05): the creation form offers
+# it checked; the disk can be increased later with one click.
+[volumes.data]
+size = "10GB"

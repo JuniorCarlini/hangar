@@ -235,6 +235,11 @@ type ServiceData struct {
 	Validate        string // command run in the new container before it takes over
 	ValidateMinutes string
 	Volumes     []VolumeRow // disks: what survives deploys
+	// LimitsAvailable: disks can get a size limit here (the root unit
+	// hangar-volumes answered); HostFree is the server's free disk.
+	LimitsAvailable bool
+	HostFree        string
+	HostFreeGB      int
 	CSRF        string
 	Project     string
 	ProjectName string

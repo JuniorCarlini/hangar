@@ -63,6 +63,18 @@ type NewTemplate struct {
 	FormName string
 	FormSlug string
 	Inputs   []TemplateInput
+	// Limits are the disk size limits the template suggests.
+	Limits []TemplateLimit
+}
+
+// TemplateLimit is a suggested disk limit in the creation form: checked
+// unless the password was not confirmed moments ago (a limit needs sudo;
+// without it the disk starts with no limit and can get one later).
+type TemplateLimit struct {
+	Volume    string
+	SizeGB    int
+	On        bool
+	NeedsSudo bool
 }
 
 // TemplateService is what one service of a template will be, for the

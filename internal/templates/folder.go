@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 )
 
 // The files of a template folder; anything else in it is an error.
@@ -26,19 +28,28 @@ var folderFiles = []string{FileCompose, FileMeta, FileLogo, FileReadme}
 
 // manifest is template.toml.
 type manifest struct {
-	ID          string              `toml:"id"`
-	Version     int                 `toml:"version"`
-	Category    string              `toml:"category"`
-	Tags        []string            `toml:"tags"`
-	Docs        string              `toml:"docs"`
-	Backup      string              `toml:"backup"`
-	Main        string              `toml:"main"`
-	MinHangar   string              `toml:"min_hangar"`
-	Name        Text                `toml:"name"`
-	Description Text                `toml:"description"`
-	Variables   map[string]variable `toml:"variables"`
-	Exports     []Export            `toml:"exports"`
-	Endpoints   []endpointSpec      `toml:"endpoints"`
+	ID          string                `toml:"id"`
+	Version     int                   `toml:"version"`
+	Category    string                `toml:"category"`
+	Tags        []string              `toml:"tags"`
+	Docs        string                `toml:"docs"`
+	Backup      string                `toml:"backup"`
+	Main        string                `toml:"main"`
+	MinHangar   string                `toml:"min_hangar"`
+	Name        Text                  `toml:"name"`
+	Description Text                  `toml:"description"`
+	Variables   map[string]variable   `toml:"variables"`
+	Exports     []Export              `toml:"exports"`
+	Endpoints   []endpointSpec        `toml:"endpoints"`
+	Volumes     map[string]volumeMeta `toml:"volumes"`
+}
+
+// volumeMeta is a [volumes.<name>] table: what Compose cannot say about a
+// volume declared in compose.yaml.
+type volumeMeta struct {
+	// Size is the suggested size limit ("20GB"): the creation form offers
+	// it, checked, as the volume's limit (docs/05).
+	Size string `toml:"size"`
 }
 
 // endpointSpec is a [[endpoints]] entry: a container port the template
@@ -115,6 +126,20 @@ func Parse(id string, files map[string][]byte) (*Template, error) {
 	for _, e := range m.Endpoints {
 		t.Endpoints = append(t.Endpoints, Endpoint(e))
 	}
+	for name, v := range m.Volumes {
+		at := FileMeta + ": volumes." + name
+		if !volumeOwned(services, name) {
+			return nil, fmt.Errorf("%s: no service of %s mounts a volume %q", at, FileCompose, name)
+		}
+		size, err := volumes.ParseSize(v.Size)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", at, err)
+		}
+		if t.Sizes == nil {
+			t.Sizes = map[string]int64{}
+		}
+		t.Sizes[name] = size
+	}
 	for _, s := range services {
 		t.Warnings = append(t.Warnings, s.warnings...)
 	}
@@ -157,6 +182,19 @@ func variableOrder(raw []byte, vars map[string]variable) []string {
 	}
 	slices.Sort(rest)
 	return append(out, rest...)
+}
+
+// volumeOwned reports whether a service of the template owns the volume
+// name (a size belongs to the volume, which is its owner's).
+func volumeOwned(services []Service, name string) bool {
+	for _, s := range services {
+		for _, v := range s.Volumes {
+			if v.Name == name && v.Owner == "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // readFolder reads the files of fsys/dir (no subdirectories allowed).

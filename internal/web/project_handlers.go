@@ -20,6 +20,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
@@ -278,7 +279,8 @@ func (h *handlers) servicePage(w http.ResponseWriter, r *http.Request) {
 func flashFrom(r *http.Request) string {
 	switch ok := r.URL.Query().Get("ok"); ok {
 	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
-		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed":
+		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed",
+		"volume-limit", "volume-unlimit":
 		return i18n.T(r.Context(), "flash."+ok)
 	}
 	return ""
@@ -309,11 +311,11 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	}
 	d.Pending, _ = h.projects.PendingChanges(r.Context(), s.ID)
 	if vols, err := h.projects.ListServiceVolumes(r.Context(), p.Slug, s); err == nil {
+		d.LimitsAvailable = h.projects.VolumeLimitsAvailable()
+		free := h.projects.HostFree()
+		d.HostFree, d.HostFreeGB = fmtBytes(r.Context(), uint64(max(free, 0))), int(free/volumes.GiB)
 		for _, v := range vols {
-			d.Volumes = append(d.Volumes, views.VolumeRow{
-				Name: v.Name, Path: v.Path, Docker: v.Docker, Fixed: v.Fixed, ReadOnly: v.ReadOnly,
-				Owner: v.Owner, SharedWith: strings.Join(v.SharedWith, ", "),
-			})
+			d.Volumes = append(d.Volumes, volumeRow(r.Context(), v, d.HostFreeGB))
 		}
 	}
 	if deps, err := h.projects.Deployments(r.Context(), s.ID, 10); err == nil {
@@ -488,7 +490,7 @@ func inferTab(r *http.Request) string {
 		return "variables"
 	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed":
 		return "network"
-	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "maintenance-on", "maintenance-off":
+	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off":
 		return "settings"
 	case "backup-policy", "backup-queued", "backup-preparing", "restore-started":
 		return "backups"

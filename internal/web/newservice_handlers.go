@@ -26,9 +26,12 @@ type nsState struct {
 	template string
 	tplName  string
 	inputs   map[string]string
-	compose  views.ComposeView
-	open     bool
-	github   string // the GitHub credential "Meus repositórios" starts on
+	// limits are the template's disk limits as the form sent them, by
+	// volume: the size in GB, or "" for unchecked.
+	limits  map[string]string
+	compose views.ComposeView
+	open    bool
+	github  string // the GitHub credential "Meus repositórios" starts on
 }
 
 // newServiceData builds the dialog: every tab starts with a sensible name
@@ -56,6 +59,7 @@ func (h *handlers) newServiceData(r *http.Request, p dbq.Project, st nsState) *v
 	d.Advanced = f.Port+f.MemoryMB+f.CPUs+f.Branch+f.Subdir+f.Dockerfile != "" || (st.tab == "template" && st.err != "")
 
 	usedCats := map[string]bool{}
+	limitsOK := h.projects.VolumeLimitsAvailable()
 	for _, tp := range h.projects.Templates() {
 		nt := views.NewTemplate{
 			ID: tp.ID, Name: tp.Name.In(loc), Description: tp.Description.In(loc), Kind: templateKind(tp.ID, tp.Category),
@@ -71,7 +75,11 @@ func (h *handlers) newServiceData(r *http.Request, p dbq.Project, st nsState) *v
 				Limits: fmt.Sprintf("%d MB · %s CPU", s.MemoryMB, strconv.FormatFloat(s.CPUs, 'f', -1, 64)),
 			}
 			for _, v := range s.Volumes {
-				ts.Disks = append(ts.Disks, v.Name+" → "+v.Path)
+				disk := v.Name + " → " + v.Path
+				if size, ok := tp.Sizes[v.Name]; ok && v.Owner == "" {
+					disk = i18n.T(ctx, "catalog.disk_limit", "disk", disk, "size", fmtBytes(ctx, uint64(size))) //nolint:gosec // a validated size, positive
+				}
+				ts.Disks = append(ts.Disks, disk)
 			}
 			nt.Services = append(nt.Services, ts)
 		}
@@ -81,6 +89,27 @@ func (h *handlers) newServiceData(r *http.Request, p dbq.Project, st nsState) *v
 		// A template born public is so only for someone who confirmed the
 		// password moments ago (projects.Actor.Sudo); say what will happen.
 		sudo := time.Now().Before(pr.SudoUntil)
+		// The suggested disk limits come checked (a limit needs sudo too).
+		if limitsOK {
+			for _, s := range tp.Services {
+				for _, v := range s.Volumes {
+					size, ok := tp.Sizes[v.Name]
+					if !ok || v.Owner != "" {
+						continue
+					}
+					tl := views.TemplateLimit{Volume: v.Name, SizeGB: ceilGB(size), On: sudo, NeedsSudo: !sudo}
+					if tp.ID == st.template && st.limits != nil && sudo {
+						if gb, sent := st.limits[v.Name]; sent {
+							tl.On = gb != ""
+							if n, err := strconv.Atoi(gb); err == nil && n > 0 {
+								tl.SizeGB = n
+							}
+						}
+					}
+					nt.Limits = append(nt.Limits, tl)
+				}
+			}
+		}
 		for _, ep := range tp.Endpoints {
 			nt.Links = append(nt.Links, views.TemplateLink{Label: ep.Label.In(loc), Port: ep.Port, Public: ep.Public && sudo, NeedsSudo: ep.Public && !sudo})
 		}

@@ -70,6 +70,11 @@ type Template struct {
 	// Endpoints are the container ports the service exposes over HTTP and
 	// can get an external link (docs/28). Empty = no web page.
 	Endpoints []Endpoint
+	// Sizes are the suggested size limits of the template's volumes, by
+	// compose volume name ([volumes.<name>] size in template.toml). The
+	// creation form offers each one, checked; without one a volume has no
+	// limit.
+	Sizes map[string]int64
 	// Logo is the validated SVG (see CheckSVG).
 	Logo []byte
 	// Readme is the optional README.md, as Markdown.

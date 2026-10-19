@@ -325,6 +325,8 @@ rollback = "rollback"
 ports = "ports"
 
 [flash]
+volume-limit = "Limit requested. The disk shows its new size in a moment; if it held data, the services that use it stop during the copy and come back by themselves."
+volume-unlimit = "Limit removal requested. The services that use the disk stop during the copy and come back by themselves."
 image = "Version changed and deploy started. If the new one does not come up, the service stays on the previous one."
 compose = "Services created from the compose file. Their deploys have started: databases first."
 volume = "Disk added. It applies from the next deploy."
@@ -445,6 +447,7 @@ delete = "Delete service"
 name_mismatch = "The typed name does not match."
 
 [service.error]
+volume_moving = "The data of a disk of this service is being moved (size limit). The service comes back by itself when it ends."
 name = "Use a name with at least two letters or digits."
 volume_shared = "This service's disk {volumes} is also used by {services}. Delete those services first; the disk stays with this one until then."
 slug_taken ="This project already has a service with the internal address {slug}. Pick another name."
@@ -1624,6 +1627,8 @@ resolved_title = "Back to normal · {title}"
 resolved_text = "The condition is back to normal."
 
 [alert.title]
+volume_disk = "Disk almost full: {volume}"
+volume_full = "Disk full: {volume}"
 deps = "{title}"
 test = "Hangar test"
 container_down = "Container down: {service}"
@@ -1649,6 +1654,8 @@ lockdown_released = "Panel unlocked"
 deploy_failed = "Deploy failed: {service}"
 
 [alert.text]
+volume_disk = "Disk {volume} is {pct}% full (alert above {limit}%). Increase its limit in the service's Settings tab."
+volume_full = "Disk {volume} is {pct}% full (alert above {limit}%): soon the app gets \"no space left\" when writing. Increase its limit in the service's Settings tab."
 deps = "{lines}\n\nDetails in the panel: {path}"
 test = "If you are reading this, the alert channel works."
 container_down = "Container {service} has been stopped for more than 30 s without anyone asking for it."
@@ -1680,6 +1687,8 @@ down = "The service is down: the previous version did not come back."
 none = "There was no previous version live."
 
 [alert.action]
+service_volume_limit = "limited or increased the size of a disk"
+service_volume_unlimit = "removed the size limit of a disk"
 service_image_change = "changed the image version of a service"
 user_invite_cancel = "cancelled a team invitation"
 user_invite = "invited someone to the team"
@@ -1804,6 +1813,8 @@ attempts = "Attempts"
 error = "Error"
 
 [alerts.rule]
+volume_disk = "Limited disk almost full"
+volume_full = "Limited disk full"
 container_down = "Container down"
 restart_loop = "Restart loop"
 oom = "Out of memory (OOM)"
@@ -1813,6 +1824,8 @@ host_memory = "High server memory"
 host_disk = "Server disk"
 
 [alerts.rule_desc]
+volume_disk = "Usage of a disk with a size limit above the alert's threshold."
+volume_full = "Critical usage of a disk with a size limit: the app is about to run out of space."
 container_down = "Stopped for more than 30 s without anyone asking (deploys and stops from the panel do not count)."
 restart_loop = "More restarts than the limit within 5 minutes."
 oom = "Docker killed the container for lack of memory."
@@ -2587,6 +2600,12 @@ too_long = "Too long: title up to 120 characters, text up to 600 and HTML up to 
 write = "The brand was saved, but the pages could not be written for the proxy. See the panel log."
 
 [volume]
+disk = "Disk"
+usage = "Usage"
+usage_used = "{size} used"
+usage_of = "{used} of {size}"
+usage_unknown = "measuring…"
+no_limit = "no limit"
 title = "Disks"
 count = { one = "1 disk", other = "{n} disks" }
 hint = "What the app writes to a disk (uploads, generated files) stays there after every deploy. With a disk, a deploy stops the old container before starting the new one: a few seconds of the \"Updating\" page."
@@ -2605,6 +2624,7 @@ next_deploy = "New or detached disks apply from the next deploy."
 modal_text = "The app writes to that path on a volume that survives deploys."
 
 [volume.error]
+limited_detach = "This disk has a size limit: its data lives in a file of its own on the server. Remove the limit before detaching it, or delete the disk and its data."
 name = "Use a short lowercase name, like media (letters, numbers and hyphen)."
 path = "Use an absolute path inside the container, like /app/media."
 reserved = "{path} is a system folder of the container and cannot become a disk."
@@ -2786,6 +2806,10 @@ token = "GitHub refused this credential's token. It may have expired or been rev
 unreachable = "Could not reach GitHub right now. Try again in a moment."
 
 [catalog]
+disk_limit = "{disk} · {size} limit"
+limit = "Limit disk {volume}"
+limit_hint = "Suggested by the template. Without a limit, the disk grows until the server is full; you can increase it later with one click."
+limit_needs_sudo = "With your password confirmed moments ago, the disk starts with the suggested limit. Without it, it starts with no limit and you can limit it later in the Settings tab."
 missing_text = "Templates come from the community and anyone can send one."
 search = "Search templates: postgres, queue, s3…"
 count = "{n} templates"
@@ -2915,3 +2939,45 @@ major = "only in {tag} (major)"
 image = "image {name}"
 image_eco = "image"
 severe_other = "{severe} severe · {other} other"
+
+[volume.limit]
+action = "Limit size"
+action_named = "Limit the size of {name}"
+grow = "Increase"
+grow_named = "Increase disk {name}"
+remove = "Remove limit"
+dismiss = "Dismiss the notice"
+title = "Limit the size of {name}"
+grow_title = "Increase disk {name}"
+text = "The disk becomes a fixed-size file on the server, which only takes what the app writes. When it is full, the app gets \"no space left\" on this disk only: the rest of the server and the other services are not affected."
+size = "Size (GB)"
+hint = "Used now: {used} · Free on the server: {free}"
+moves = "If the disk already holds data, it is copied to the limited disk: the services that use this disk stop during the copy (a few minutes for many GB) and come back by themselves."
+delete_note = "When the disk or the service is deleted, the disk's file is deleted with it."
+submit = "Limit"
+grow_text = "The disk grows right away, without stopping the service. A limit never shrinks later."
+grow_hint = "Now: {size} · Used: {used} · Free on the server: {free}"
+grow_submit = "Increase"
+of = "{size} limit"
+preparing = "Preparing the disk…"
+moving = "Moving the data…"
+removing = "Removing the limit…"
+pending = "Applying…"
+warning = "Warning: {error}"
+failed = "The limit was not applied: {error}"
+
+[volume.limit.error]
+unavailable = "Size limits need the hangar-volumes unit on the server. Run sudo hangard system install-units and try again."
+size = "Choose a size between 1 GB and {max} TB, in whole GB."
+too_small = "The disk already holds {used}: choose a larger limit, with room to spare."
+no_space = "The server does not have the free space for that (free: {free})."
+shrink = "A limit only grows: choose more than {size}."
+busy = "This disk's limit is changing right now. Wait for it to finish and try again."
+owner = "The limit belongs to the disk of {service}: change it there."
+sudo = "Limiting a disk asks for your password again: confirm it and create again."
+not_ready = "The limited disk did not get ready: {error}"
+
+[confirm.volume_unlimit]
+title = "Remove the limit of {name}?"
+text = "The data goes back to a plain disk, with no limit, that grows on the server's disk. The services that use this disk stop during the copy and come back by themselves."
+ok = "Remove limit"

@@ -29,6 +29,10 @@ var Rules = []RuleDef{
 	{Kind: "host_cpu", Severity: Warning, Threshold: 90, Min: 50, Max: 100, For: 5 * time.Minute},
 	{Kind: "host_memory", Severity: Warning, Threshold: 90, Min: 50, Max: 99, For: 5 * time.Minute},
 	{Kind: "host_disk", Severity: Warning, Threshold: 85, Min: 50, Max: 99, For: time.Minute},
+	// A volume with a size limit (docs/05): a warning early, a critical
+	// alert when the app is about to get "no space left".
+	{Kind: "volume_disk", Severity: Warning, Threshold: 80, Min: 50, Max: 99, For: time.Minute},
+	{Kind: "volume_full", Severity: Critical, Threshold: 95, Min: 50, Max: 99, For: time.Minute},
 }
 
 // RuleSetting is a rule as configured.

@@ -68,6 +68,8 @@ tem limite, ajustada em **Alertas › Regras do servidor** (Admin+).
 | CPU do servidor | > 90% por 5 min | aviso |
 | Memória do servidor | > 90% por 5 min | aviso |
 | Disco do servidor | > 85% do disco de dados por 1 min | aviso |
+| Disco limitado quase cheio | disco com limite de tamanho ([05](05-isolamento-e-recursos.md)) > 80% por 1 min | aviso |
+| Disco limitado cheio | disco com limite de tamanho > 95% por 1 min | crítico |
 
 Quando a condição some, sai o aviso "Normalizado". Se o Docker não
 responde numa rodada, nada dispara nem normaliza (um soluço do Docker não

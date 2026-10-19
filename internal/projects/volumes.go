@@ -14,6 +14,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
+	"github.com/JuniorCarlini/hangar/internal/volumes"
 )
 
 // Disks (named Docker volumes) on any service: what the app writes there —
@@ -44,6 +45,12 @@ type ServiceVolume struct {
 	Owner string
 	// SharedWith are the other services that mount this service's volume.
 	SharedWith []string
+	// Used is the volume's size from the last measure (-1: not measured
+	// yet). For a limited volume, Limit says more.
+	Used int64
+	// Limit is its size limit (nil: none, it grows on the server's disk).
+	// On a volume shared from another service it is the owner's.
+	Limit *VolumeLimit
 }
 
 // ErrVolumeRemover means the node cannot delete volumes.
@@ -64,16 +71,35 @@ func (m *Manager) ListServiceVolumes(ctx context.Context, projectSlug string, s 
 	if err != nil {
 		return nil, err
 	}
+	var res map[string]volumes.Result
+	current := false
+	if m.vols != nil {
+		res, current, _ = m.vols.Results()
+	}
 	out := make([]ServiceVolume, 0, len(rows))
 	for _, v := range rows {
 		owner := s.Slug
 		if v.OwnerSlug != "" {
 			owner = v.OwnerSlug
 		}
-		out = append(out, ServiceVolume{
+		sv := ServiceVolume{
 			Name: v.Name, Path: v.Path, Docker: node.VolumeName(projectSlug, owner, v.Name), Fixed: s.Template != "",
-			ReadOnly: v.ReadOnly == 1, Owner: v.OwnerSlug, SharedWith: sharers[v.Name],
-		})
+			ReadOnly: v.ReadOnly == 1, Owner: v.OwnerSlug, SharedWith: sharers[v.Name], Used: -1,
+		}
+		if m.volUsage != nil {
+			if n, ok := m.volUsage(sv.Docker); ok {
+				sv.Used = n
+			}
+		}
+		if m.vols != nil {
+			if r, ok := m.limitOf(ctx, sv.Docker); ok && r.State != limitRemove {
+				sv.Limit = m.volumeLimitView(r, res, current)
+				if sv.Limit.Total > 0 {
+					sv.Used = int64(min(sv.Limit.Used, 1<<62)) //nolint:gosec // bounded
+				}
+			}
+		}
+		out = append(out, sv)
 	}
 	return out, nil
 }
@@ -129,7 +155,9 @@ func (m *Manager) ensureSharedVolumes(ctx context.Context, p dbq.Project, create
 		}
 		for _, v := range vols {
 			if _, shared := sharers[v.Name]; shared && !v.OwnerServiceID.Valid {
-				spec.Volumes = append(spec.Volumes, node.Volume{Name: v.Name, Path: v.Path})
+				spec.Volumes = append(spec.Volumes, node.Volume{
+					Name: v.Name, Path: v.Path, Device: m.volumeDevice(ctx, node.VolumeName(p.Slug, s.Slug, v.Name)),
+				})
 			}
 		}
 		if err := ve.EnsureVolumes(ctx, spec); err != nil {
@@ -238,6 +266,17 @@ func (m *Manager) RemoveServiceVolume(ctx context.Context, a Actor, projectSlug,
 	} else if list := sharers[name]; len(list) > 0 {
 		return i18n.E("volume.error.shared_owner", "services", strings.Join(list, ", "))
 	}
+	// A limited disk is a file of its own: detaching it would leave it
+	// mounted with nothing to show for it. Deleting it deletes the file.
+	limited, isLimited := m.limitOf(ctx, node.VolumeName(p.Slug, s.Slug, name))
+	if isLimited && limited.State != limitFailed && limited.State != limitRemove {
+		switch {
+		case limited.State == limitMigrate || limited.State == limitUnlimit:
+			return i18n.E("volume.limit.error.busy")
+		case !wipe:
+			return i18n.E("volume.error.limited_detach")
+		}
+	}
 	if wipe {
 		vr, ok := m.node.(volumeRemover)
 		if !ok {
@@ -245,6 +284,11 @@ func (m *Manager) RemoveServiceVolume(ctx context.Context, a Actor, projectSlug,
 		}
 		if err := vr.RemoveVolume(ctx, p.Slug, s.Slug, name); err != nil {
 			return i18n.E("volume.error.in_use")
+		}
+	}
+	if wipe && isLimited {
+		if err := m.forgetVolumeLimits(ctx, p, s, []string{name}); err != nil {
+			return err
 		}
 	}
 	n, err := m.q.DeleteVolume(ctx, dbq.DeleteVolumeParams{ServiceID: s.ID, Name: name})

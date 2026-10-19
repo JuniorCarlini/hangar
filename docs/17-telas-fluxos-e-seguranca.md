@@ -81,7 +81,7 @@ r.Handle("POST /services/{id}/env", h.UpdateEnv, policy{
 | Deploy, restart, rollback | ✅ | ✅ | ✅ | ❌ |
 | Editar variáveis (valores secretos ficam mascarados) | ✅ | ✅ | ✅ | ❌ |
 | Revelar segredo 🔒 | ✅ | ✅ | ❌ | ❌ |
-| Criar/apagar serviço, volume 🔒 | ✅ | ✅ | ❌ | ❌ |
+| Criar/apagar serviço, volume; limitar o tamanho de um disco 🔒 | ✅ | ✅ | ❌ | ❌ |
 | Domínios, portas, conexões entre projetos 🔒 | ✅ | ✅ | ❌ | ❌ |
 | Terminal no container 🔒 | ✅ | ✅ | ❌ | ❌ |
 | Backups: baixar/restaurar 🔒 | ✅ | ✅ | ❌ | ❌ |

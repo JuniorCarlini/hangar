@@ -74,21 +74,22 @@ func (l *Local) DiskUsage(ctx context.Context) (node.DiskUsage, error) {
 	}
 	// Sum each service's volumes from the same response (the volumes carry the
 	// service id as a label), so no extra Docker call is needed.
-	var byService map[string]int64
+	var byService, byVolume map[string]int64
 	for _, v := range r.Volumes.Items {
 		id := v.Labels[node.LabelServiceID]
 		if id == "" || v.UsageData == nil || v.UsageData.Size < 0 {
 			continue
 		}
 		if byService == nil {
-			byService = map[string]int64{}
+			byService, byVolume = map[string]int64{}, map[string]int64{}
 		}
 		byService[id] += v.UsageData.Size
+		byVolume[v.Name] = v.UsageData.Size
 	}
 	return node.DiskUsage{
 		Images: r.Images.TotalSize, Volumes: r.Volumes.TotalSize,
 		Containers: r.Containers.TotalSize, BuildCache: r.BuildCache.TotalSize,
-		ByService: byService,
+		ByService: byService, ByVolume: byVolume,
 	}, nil
 }
 

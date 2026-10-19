@@ -27,9 +27,14 @@ func (m *Manager) specExtras(ctx context.Context, p dbq.Project, s dbq.Service) 
 		return x, err
 	}
 	for _, v := range vols {
+		owner := s.Slug
+		if v.OwnerSlug != "" {
+			owner = v.OwnerSlug
+		}
 		x.volumes = append(x.volumes, node.Volume{
 			Name: v.Name, Path: v.Path, ReadOnly: v.ReadOnly == 1,
 			Service: v.OwnerSlug, ServiceID: v.OwnerServiceID.String,
+			Device: m.volumeDevice(ctx, node.VolumeName(p.Slug, owner, v.Name)),
 		})
 	}
 	if s.HealthJson != "" {

@@ -1,5 +1,5 @@
 id = "rustfs"
-version = 2
+version = 3
 category = "storage"
 tags = ["s3", "object-storage", "minio"]
 docs = "https://docs.rustfs.com/"
@@ -48,3 +48,8 @@ name = "cdn"
 port = 9000
 label = { en = "S3 / CDN", "pt-BR" = "S3 / CDN" }
 public = false
+
+# Suggested size limit of the data disk (docs/05): the creation form offers
+# it checked; the disk can be increased later with one click.
+[volumes.data]
+size = "50GB"

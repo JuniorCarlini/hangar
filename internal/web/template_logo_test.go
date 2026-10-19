@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -33,7 +34,7 @@ func TestTemplateLogo(t *testing.T) {
 			t.Errorf("%s = %q, want %q", k, got, want)
 		}
 	}
-	if !strings.Contains(tp.LogoETag(), "postgres-v1-") {
+	if !strings.Contains(tp.LogoETag(), "postgres-v"+strconv.Itoa(tp.Version)+"-") {
 		t.Errorf("the ETag carries the template version: %s", tp.LogoETag())
 	}
 
