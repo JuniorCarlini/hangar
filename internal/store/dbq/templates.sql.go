@@ -11,17 +11,23 @@ import (
 )
 
 const addVolume = `-- name: AddVolume :exec
-INSERT INTO service_volumes (service_id, name, path) VALUES (?, ?, ?)
+INSERT INTO service_volumes (service_id, name, path, read_only) VALUES (?, ?, ?, ?)
 `
 
 type AddVolumeParams struct {
 	ServiceID string
 	Name      string
 	Path      string
+	ReadOnly  int64
 }
 
 func (q *Queries) AddVolume(ctx context.Context, arg AddVolumeParams) error {
-	_, err := q.db.ExecContext(ctx, addVolume, arg.ServiceID, arg.Name, arg.Path)
+	_, err := q.db.ExecContext(ctx, addVolume,
+		arg.ServiceID,
+		arg.Name,
+		arg.Path,
+		arg.ReadOnly,
+	)
 	return err
 }
 
@@ -374,7 +380,7 @@ func (q *Queries) ListPorts(ctx context.Context, serviceID string) ([]Port, erro
 }
 
 const listVolumes = `-- name: ListVolumes :many
-SELECT service_id, name, path FROM service_volumes WHERE service_id = ? ORDER BY name
+SELECT service_id, name, path, read_only FROM service_volumes WHERE service_id = ? ORDER BY name
 `
 
 func (q *Queries) ListVolumes(ctx context.Context, serviceID string) ([]ServiceVolume, error) {
@@ -386,7 +392,12 @@ func (q *Queries) ListVolumes(ctx context.Context, serviceID string) ([]ServiceV
 	items := []ServiceVolume{}
 	for rows.Next() {
 		var i ServiceVolume
-		if err := rows.Scan(&i.ServiceID, &i.Name, &i.Path); err != nil {
+		if err := rows.Scan(
+			&i.ServiceID,
+			&i.Name,
+			&i.Path,
+			&i.ReadOnly,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -153,7 +153,7 @@ func (l *Local) createContainer(ctx context.Context, spec node.ServiceSpec, name
 		if err != nil {
 			return "", err
 		}
-		hc.Mounts = append(hc.Mounts, mount.Mount{Type: mount.TypeVolume, Source: name, Target: v.Path})
+		hc.Mounts = append(hc.Mounts, mount.Mount{Type: mount.TypeVolume, Source: name, Target: v.Path, ReadOnly: v.ReadOnly})
 	}
 	// The full name is also an alias on every network: during a zero-downtime
 	// deploy the old and the new container answer for it together.

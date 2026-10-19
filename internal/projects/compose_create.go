@@ -295,7 +295,7 @@ func (m *Manager) CreateFromCompose(ctx context.Context, a Actor, projectSlug st
 				}
 			}
 			for _, v := range s.Volumes {
-				if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path}); err != nil {
+				if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: boolInt(v.ReadOnly)}); err != nil {
 					return nil, err
 				}
 			}

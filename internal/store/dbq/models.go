@@ -428,6 +428,7 @@ type ServiceVolume struct {
 	ServiceID string
 	Name      string
 	Path      string
+	ReadOnly  int64
 }
 
 type Session struct {

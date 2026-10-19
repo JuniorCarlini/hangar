@@ -25,10 +25,11 @@ var volumeNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,29}$`)
 
 // ServiceVolume is a disk as the panel shows it.
 type ServiceVolume struct {
-	Name   string
-	Path   string
-	Docker string // the Docker volume's name
-	Fixed  bool   // part of the service's template (the database files)
+	Name     string
+	Path     string
+	Docker   string // the Docker volume's name
+	Fixed    bool   // part of the service's template (the database files)
+	ReadOnly bool   // mounted read-only
 }
 
 // ErrVolumeRemover means the node cannot delete volumes.
@@ -49,6 +50,7 @@ func (m *Manager) ListServiceVolumes(ctx context.Context, projectSlug string, s 
 	for _, v := range rows {
 		out = append(out, ServiceVolume{
 			Name: v.Name, Path: v.Path, Docker: node.VolumeName(projectSlug, s.Slug, v.Name), Fixed: s.Template != "",
+			ReadOnly: v.ReadOnly == 1,
 		})
 	}
 	return out, nil

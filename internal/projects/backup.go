@@ -119,7 +119,7 @@ func (m *Manager) CloneService(ctx context.Context, a Actor, projectSlug, source
 		return dbq.Service{}, err
 	}
 	for _, v := range vols {
-		if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path}); err != nil {
+		if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: v.ReadOnly}); err != nil {
 			return dbq.Service{}, err
 		}
 	}

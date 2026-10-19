@@ -81,6 +81,7 @@ dezenas de módulos para recursos que o importador ignora de propósito.
 | `redis://cache:6379/1` | `redis://:${{cache.PASSWORD}}@${{cache.HOST}}:${{cache.PORT}}/1` |
 | `DB_HOST=db`, `DB_PASSWORD=<a do arquivo>` | `${{db.HOST}}`, `${{db.PASSWORD}}` |
 | `volumes:` nomeado (`media:/app/media`) | disco do Hangar (`AddServiceVolume`: até 8, sem caminhos do sistema) |
+| `media:/app/media:ro`, ou `read_only: true` na forma longa | disco montado só para leitura (aparece como "só leitura" na aba Discos); outras opções (`z`, `nocopy`…) são ignoradas com aviso |
 | `expose:` / porta do container em `ports:` | porta interna |
 | `command:` (texto ou lista) | comando |
 | `deploy.resources.limits` / `mem_limit` / `cpus` | memória e CPU |

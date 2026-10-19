@@ -227,6 +227,9 @@ type DeployResult struct {
 type Volume struct {
 	Name string // short name inside the service, e.g. "data"
 	Path string // mount point in the container
+	// ReadOnly mounts it read-only: the app reads the files and cannot
+	// change them.
+	ReadOnly bool
 }
 
 // VolumeName is the Docker name of a service volume.

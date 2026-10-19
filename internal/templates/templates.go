@@ -128,6 +128,8 @@ type Service struct {
 type Volume struct {
 	Name string
 	Path string
+	// ReadOnly: name:/path:ro, or read_only: true in the long form.
+	ReadOnly bool
 }
 
 // Health is the healthcheck in template form.
@@ -503,7 +505,7 @@ func (t *Template) Render(vals map[string]string) (Rendered, error) {
 			rs.Command = append(rs.Command, rc)
 		}
 		for _, v := range s.Volumes {
-			rs.Volumes = append(rs.Volumes, node.Volume{Name: v.Name, Path: v.Path})
+			rs.Volumes = append(rs.Volumes, node.Volume{Name: v.Name, Path: v.Path, ReadOnly: v.ReadOnly})
 		}
 		if s.Health != nil {
 			h, err := s.Health.toNode()

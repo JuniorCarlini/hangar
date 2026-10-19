@@ -108,7 +108,9 @@ nada some sem aviso.
 
 **Só estas chaves existem** em cada serviço: `image`, `command` (em forma de
 lista), `environment`, `volumes` (só volumes nomeados declarados em
-`volumes:` no topo, sem driver), `expose` (exatamente uma porta: a que o
+`volumes:` no topo, sem driver; `nome:/caminho`, `nome:/caminho:ro` para
+só leitura, ou a forma longa com `type: volume`, `source`, `target` e
+`read_only: true`), `expose` (exatamente uma porta: a que o
 serviço escuta dentro da rede; é nela que você liga um domínio depois),
 `healthcheck` (`test`, `interval`, `timeout`, `start_period`, `retries`),
 `cap_add`, `read_only`, `stop_grace_period`,

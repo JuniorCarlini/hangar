@@ -310,7 +310,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.Pending, _ = h.projects.PendingChanges(r.Context(), s.ID)
 	if vols, err := h.projects.ListServiceVolumes(r.Context(), p.Slug, s); err == nil {
 		for _, v := range vols {
-			d.Volumes = append(d.Volumes, views.VolumeRow{Name: v.Name, Path: v.Path, Docker: v.Docker, Fixed: v.Fixed})
+			d.Volumes = append(d.Volumes, views.VolumeRow{Name: v.Name, Path: v.Path, Docker: v.Docker, Fixed: v.Fixed, ReadOnly: v.ReadOnly})
 		}
 	}
 	if deps, err := h.projects.Deployments(r.Context(), s.ID, 10); err == nil {

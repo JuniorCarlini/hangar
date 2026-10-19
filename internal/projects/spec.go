@@ -27,7 +27,7 @@ func (m *Manager) specExtras(ctx context.Context, p dbq.Project, s dbq.Service) 
 		return x, err
 	}
 	for _, v := range vols {
-		x.volumes = append(x.volumes, node.Volume{Name: v.Name, Path: v.Path})
+		x.volumes = append(x.volumes, node.Volume{Name: v.Name, Path: v.Path, ReadOnly: v.ReadOnly == 1})
 	}
 	if s.HealthJson != "" {
 		x.health = &node.Health{}

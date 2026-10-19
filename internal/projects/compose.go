@@ -725,6 +725,7 @@ func parseVolumes(s *ComposeService, vols any, bindVolumes map[string]bool) {
 	var binds []string
 	for _, v := range list {
 		src, dst, kind := "", "", "volume"
+		readOnly := false
 		switch x := v.(type) {
 		case string:
 			parts := strings.Split(x, ":")
@@ -734,6 +735,21 @@ func parseVolumes(s *ComposeService, vols any, bindVolumes map[string]bool) {
 			default:
 				src, dst = parts[0], parts[1]
 			}
+			if len(parts) > 2 {
+				var ignored []string
+				for _, o := range strings.Split(strings.Join(parts[2:], ":"), ",") {
+					switch o {
+					case "ro":
+						readOnly = true
+					case "rw", "":
+					default:
+						ignored = append(ignored, o)
+					}
+				}
+				if len(ignored) > 0 {
+					s.add(NoteInfo, i18n.E("compose.note.volume_options", "path", dst, "options", strings.Join(ignored, ",")))
+				}
+			}
 			if src != "" && (strings.HasPrefix(src, "/") || strings.HasPrefix(src, ".") || strings.HasPrefix(src, "~") || strings.Contains(src, "/")) {
 				kind = "bind"
 			}
@@ -742,6 +758,7 @@ func parseVolumes(s *ComposeService, vols any, bindVolumes map[string]bool) {
 			if kind == "" {
 				kind = "volume"
 			}
+			readOnly, _ = x["read_only"].(bool)
 		}
 		if strings.Contains(src, "docker.sock") || strings.Contains(dst, "docker.sock") {
 			s.add(NoteSkip, i18n.E("compose.note.docker_socket"))
@@ -775,8 +792,12 @@ func parseVolumes(s *ComposeService, vols any, bindVolumes map[string]bool) {
 			s.add(NoteWarn, i18n.E("compose.note.volume_path", "path", dst))
 			continue
 		}
-		s.Volumes = append(s.Volumes, node.Volume{Name: name, Path: mount})
-		s.add(NoteOK, i18n.E("compose.note.volume", "name", name, "path", mount))
+		s.Volumes = append(s.Volumes, node.Volume{Name: name, Path: mount, ReadOnly: readOnly})
+		if readOnly {
+			s.add(NoteOK, i18n.E("compose.note.volume_ro", "name", name, "path", mount))
+		} else {
+			s.add(NoteOK, i18n.E("compose.note.volume", "name", name, "path", mount))
+		}
 	}
 	if len(binds) > 0 {
 		s.add(NoteSkip, i18n.E("compose.note.bind", "mounts", strings.Join(binds, ", ")))

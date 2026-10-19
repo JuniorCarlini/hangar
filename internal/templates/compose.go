@@ -328,11 +328,16 @@ func parseServiceVolumes(path string, val *yaml.Node, declared map[string]bool, 
 	}
 	for _, item := range val.Content {
 		var src, target string
+		readOnly := false
 		switch item.Kind {
 		case yaml.ScalarNode:
 			parts := strings.Split(item.Value, ":")
+			if len(parts) == 3 && (parts[2] == "ro" || parts[2] == "rw") {
+				readOnly = parts[2] == "ro"
+				parts = parts[:2]
+			}
 			if len(parts) != 2 {
-				fail(path, "%q: use name:/path (no options, no anonymous volumes)", item.Value)
+				fail(path, "%q: use name:/path or name:/path:ro (no other options, no anonymous volumes)", item.Value)
 				continue
 			}
 			src, target = parts[0], parts[1]
@@ -343,13 +348,21 @@ func parseServiceVolumes(path string, val *yaml.Node, declared map[string]bool, 
 				continue
 			}
 			for k := range m {
-				if k != "type" && k != "source" && k != "target" {
-					fail(path, "%s: only type, source and target are allowed", k)
+				if k != "type" && k != "source" && k != "target" && k != "read_only" {
+					fail(path, "%s: only type, source, target and read_only are allowed", k)
 				}
 			}
 			if t := fmt.Sprint(m["type"]); t != "volume" {
 				fail(path, "type %q is not allowed: only named volumes (type: volume)", t)
 				continue
+			}
+			if v, ok := m["read_only"]; ok {
+				b, isBool := v.(bool)
+				if !isBool {
+					fail(path, "read_only: expected true or false")
+					continue
+				}
+				readOnly = b
 			}
 			src, target = fmt.Sprint(m["source"]), fmt.Sprint(m["target"])
 		default:
@@ -368,7 +381,7 @@ func parseServiceVolumes(path string, val *yaml.Node, declared map[string]bool, 
 		case !declared[src]:
 			fail(path, "%s: declare it under the top-level volumes:", src)
 		default:
-			s.Volumes = append(s.Volumes, Volume{Name: src, Path: target})
+			s.Volumes = append(s.Volumes, Volume{Name: src, Path: target, ReadOnly: readOnly})
 		}
 	}
 }

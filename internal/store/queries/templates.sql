@@ -1,5 +1,5 @@
 -- name: AddVolume :exec
-INSERT INTO service_volumes (service_id, name, path) VALUES (?, ?, ?);
+INSERT INTO service_volumes (service_id, name, path, read_only) VALUES (?, ?, ?, ?);
 
 -- name: ListVolumes :many
 SELECT * FROM service_volumes WHERE service_id = ? ORDER BY name;

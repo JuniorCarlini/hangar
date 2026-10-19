@@ -1121,6 +1121,8 @@ type VolumeRow struct {
 	Path   string
 	Docker string
 	Fixed  bool // the template's own (database files): not removable here
+	// ReadOnly: mounted read-only in the container.
+	ReadOnly bool
 }
 
 // volumesCard lists the service's disks and adds new ones.
@@ -1150,6 +1152,9 @@ templ volumesCard(d ServiceData) {
 										{ v.Name }
 										if v.Fixed {
 											<span class="tuc-badge ml-1.5">{ t(ctx, "volume.fixed") }</span>
+										}
+										if v.ReadOnly {
+											<span class="tuc-badge ml-1.5">{ t(ctx, "volume.read_only") }</span>
 										}
 									</td>
 									<td>

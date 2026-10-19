@@ -170,7 +170,7 @@ func (m *Manager) insertRendered(ctx context.Context, q *dbq.Queries, p dbq.Proj
 			return nil, err
 		}
 		for _, v := range rs.Volumes {
-			if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path}); err != nil {
+			if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: boolInt(v.ReadOnly)}); err != nil {
 				return nil, err
 			}
 		}
