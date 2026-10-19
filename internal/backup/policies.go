@@ -174,7 +174,11 @@ func (m *Manager) toRef(ctx context.Context, p dbq.Project, s dbq.Service) (svcR
 	}
 	for _, v := range vols {
 		if v.Name == pgwal.DataVolume {
-			r.DataPath, r.Volume = v.Path, node.VolumeName(p.Slug, s.Slug, v.Name)
+			owner := s.Slug
+			if v.OwnerSlug != "" { // the volume of another service it shares
+				owner = v.OwnerSlug
+			}
+			r.DataPath, r.Volume = v.Path, node.VolumeName(p.Slug, owner, v.Name)
 		}
 	}
 	return r, nil

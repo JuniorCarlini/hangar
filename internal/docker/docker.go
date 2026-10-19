@@ -39,6 +39,9 @@ type Local struct {
 	instance string
 	adopt    AdoptFunc
 	adopted  sync.Map
+	// volumeLocks holds one mutex per volume name: the services sharing a
+	// volume may deploy at the same time, and only one may create it.
+	volumeLocks sync.Map
 }
 
 // New connects to Docker (DOCKER_HOST or the default socket).
@@ -63,7 +66,10 @@ func New(ctx context.Context, host string) (*Local, error) {
 // Close closes the connection.
 func (l *Local) Close() error { return l.c.Close() }
 
-var _ node.Node = (*Local)(nil)
+var (
+	_ node.Node          = (*Local)(nil)
+	_ node.VolumeEnsurer = (*Local)(nil)
+)
 
 func (l *Local) managedLabels(projectID, project string) map[string]string {
 	return l.withInstance(map[string]string{node.LabelManaged: "true", node.LabelProjectID: projectID, node.LabelProject: project})
@@ -230,10 +236,21 @@ func containerPort(p node.Port) network.Port {
 	return network.MustParsePort(strconv.Itoa(p.ContainerPort) + "/" + p.Protocol)
 }
 
-// ensureVolume creates the service's named volume, or checks that an
-// existing one with that name is Hangar's.
+// labelChownPending marks a volume created before its owner's image was
+// here (by a service that shares it, or ahead of the deploys): the owner's
+// deploy gives it to the image's user (ownVolume) instead.
+const labelChownPending = "hangar.volume.chown-pending"
+
+// ensureVolume creates the named volume, or checks that an existing one
+// with that name is this panel's. A volume shared with another service of
+// the project carries the owner's name and labels, whichever service
+// creates it.
 func (l *Local) ensureVolume(ctx context.Context, spec node.ServiceSpec, v node.Volume) (string, error) {
-	name := node.VolumeName(spec.Project, spec.Service, v.Name)
+	owner, ownerID := spec.VolumeOwner(v)
+	name := node.VolumeName(spec.Project, owner, v.Name)
+	mu, _ := l.volumeLocks.LoadOrStore(name, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	defer mu.(*sync.Mutex).Unlock()
 	res, err := l.c.VolumeInspect(ctx, name, client.VolumeInspectOptions{})
 	if err == nil {
 		if res.Volume.Labels[node.LabelManaged] != "true" {
@@ -242,19 +259,55 @@ func (l *Local) ensureVolume(ctx context.Context, spec node.ServiceSpec, v node.
 		if err := l.checkOwner(ctx, name, res.Volume.Labels); err != nil {
 			return "", err
 		}
+		// Labels cannot change, so the mark stays: chown only touches the
+		// volume's top folder, and doing it again gives the same result.
+		if res.Volume.Labels[labelChownPending] == "true" && v.Service == "" && l.imageHere(ctx, spec.Image) {
+			l.ownVolume(ctx, spec.Image, name)
+		}
 		return name, nil
 	}
 	if !isNotFound(err) {
 		return "", err
 	}
 	labels := l.managedLabels(spec.ProjectID, spec.Project)
-	labels[node.LabelServiceID] = spec.ServiceID
-	labels[node.LabelService] = spec.Service
+	labels[node.LabelServiceID] = ownerID
+	labels[node.LabelService] = owner
+	// Only the owner's image says who the files belong to.
+	chownNow := v.Service == "" && l.imageHere(ctx, spec.Image)
+	if !chownNow {
+		labels[labelChownPending] = "true"
+	}
 	if _, err := l.c.VolumeCreate(ctx, client.VolumeCreateOptions{Name: name, Labels: labels}); err != nil {
 		return "", fmt.Errorf("create volume %s: %w", name, err)
 	}
-	l.ownVolume(ctx, spec.Image, name)
+	if chownNow {
+		l.ownVolume(ctx, spec.Image, name)
+	}
 	return name, nil
+}
+
+// imageHere reports whether the image is in the local store.
+func (l *Local) imageHere(ctx context.Context, image string) bool {
+	_, err := l.c.ImageInspect(ctx, image)
+	return err == nil
+}
+
+// EnsureVolumes creates the volumes spec owns before any service deploys
+// (node.VolumeEnsurer): the services of a template that share a volume
+// deploy at the same time, and the volume must carry the owner's labels.
+func (l *Local) EnsureVolumes(ctx context.Context, spec node.ServiceSpec) error {
+	if err := spec.Validate(); err != nil {
+		return err
+	}
+	for _, v := range spec.Volumes {
+		if v.Service != "" {
+			continue
+		}
+		if _, err := l.ensureVolume(ctx, spec, v); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ownVolume gives a new, empty volume to the user the image runs as: Docker

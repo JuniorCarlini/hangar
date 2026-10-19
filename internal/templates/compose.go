@@ -48,7 +48,7 @@ var refusals = map[string]string{
 	"extra_hosts":    "not allowed",
 	"sysctls":        "not allowed",
 	"ulimits":        "not allowed",
-	"volumes_from":   "not allowed; give each service its own named volume",
+	"volumes_from":   "not allowed; mount the same named volume in each service instead",
 	"secrets":        "use generated variables (generate = \"secret\" in template.toml)",
 	"configs":        "files from the host are not allowed",
 	"labels":         "the panel sets the labels itself",
@@ -114,7 +114,7 @@ func parseCompose(data []byte, main string) ([]Service, error) {
 	}
 
 	var list []Service
-	usedVolume := map[string]string{}
+	usedVolume := map[string]bool{}
 	for i := 0; i+1 < len(servicesNode.Content); i += 2 {
 		name, body := servicesNode.Content[i].Value, servicesNode.Content[i+1]
 		at := "services." + name
@@ -124,11 +124,12 @@ func parseCompose(data []byte, main string) ([]Service, error) {
 		}
 		s, serr := parseComposeService(at, name, body, declared)
 		errs = append(errs, serr...)
+		mounted := map[string]bool{}
 		for _, v := range s.Volumes {
-			if other, ok := usedVolume[v.Name]; ok {
-				errs = append(errs, keyErr(at+".volumes", "volume %s is already used by %s; services never share a volume", v.Name, other))
+			if mounted[v.Name] {
+				errs = append(errs, keyErr(at+".volumes", "volume %s is mounted twice", v.Name))
 			}
-			usedVolume[v.Name] = name
+			mounted[v.Name], usedVolume[v.Name] = true, true
 		}
 		list = append(list, s)
 	}
@@ -148,6 +149,7 @@ func parseCompose(data []byte, main string) ([]Service, error) {
 		for j := 1; j < len(list); j++ {
 			list[j].Suffix = "-" + list[j].Name
 		}
+		shareVolumes(list)
 	}
 	if cyc := dependencyCycle(list); cyc != "" {
 		errs = append(errs, keyErr("services."+cyc+".depends_on", "dependency cycle"))
@@ -259,8 +261,32 @@ func parseComposeService(at, name string, body *yaml.Node, declared map[string]b
 	if s.MemoryMB == 0 || s.CPUs == 0 {
 		fail(at+".deploy.resources.limits", "memory and cpus are required")
 	}
-	s.Stateful = len(s.Volumes) > 0
 	return s, errs
+}
+
+// shareVolumes decides, for each volume, which service owns it: the main
+// service when it mounts it, else the first service in the file that does
+// (list is already main first, then file order). The other services mount
+// the owner's volume. Only volumes declared in this compose.yaml exist, so
+// sharing never reaches outside the template, and every service with a
+// volume it owns or writes to is stateful (it needs a healthcheck, and a
+// deploy stops it before starting the new one).
+func shareVolumes(list []Service) {
+	owner := map[string]string{}
+	for i := range list {
+		s := &list[i]
+		for j := range s.Volumes {
+			v := &s.Volumes[j]
+			if o, ok := owner[v.Name]; ok {
+				v.Owner = o
+			} else {
+				owner[v.Name] = s.Name
+			}
+			if v.Owner == "" || !v.ReadOnly {
+				s.Stateful = true
+			}
+		}
+	}
 }
 
 // StopGrace reads a Compose stop_grace_period ("45s", "1m30s") as whole

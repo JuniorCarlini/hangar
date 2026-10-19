@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"net/url"
 	"path"
@@ -110,6 +111,10 @@ type ComposeService struct {
 	// The database's credentials as written in the file: an app variable
 	// holding one of them becomes a reference to the template's export.
 	creds map[string]string
+	// volumeSrc is, for each of Volumes, the named volume in the file it
+	// mounts ("" for an anonymous one): services mounting the same one
+	// share it (shareVolumes).
+	volumeSrc []string
 }
 
 // ComposePlan is the parsed file.
@@ -230,8 +235,53 @@ func ParseCompose(data []byte, fromRepo bool) (ComposePlan, error) {
 		}
 		plan.Services = append(plan.Services, s)
 	}
+	shareVolumes(&plan)
 	linkReferences(&plan)
 	return plan, nil
+}
+
+// shareVolumes lets the services that mount the same named volume of the
+// file share it, as docker compose does: the first service in the file
+// that mounts it owns it, and the others mount the owner's volume. Only
+// the file's own named volumes are shared (never a host path), only
+// between services that are created as written (a catalog database keeps
+// its own disk), and always inside the project.
+func shareVolumes(plan *ComposePlan) {
+	type owned struct{ slug, name string }
+	owners := map[string]owned{}
+	sharers := map[string][]string{}
+	for i := range plan.Services {
+		s := &plan.Services[i]
+		if s.Kind == ComposeSkip || s.Kind == ComposeTemplate || s.Slug == "" {
+			continue
+		}
+		for j := range s.Volumes {
+			src := s.volumeSrc[j]
+			if src == "" {
+				continue
+			}
+			o, ok := owners[src]
+			if !ok {
+				owners[src] = owned{slug: s.Slug, name: s.Name}
+				continue
+			}
+			if o.slug == s.Slug {
+				continue
+			}
+			// Same file volume, same disk name (volumeName) on both sides.
+			s.Volumes[j].Service = o.slug
+			sharers[src] = append(sharers[src], s.Name)
+			s.add(NoteOK, i18n.E("compose.note.volume_shared", "volume", src, "service", o.name))
+		}
+	}
+	for _, src := range slices.Sorted(maps.Keys(sharers)) {
+		list := sharers[src]
+		for i := range plan.Services {
+			if s := &plan.Services[i]; s.Slug == owners[src].slug {
+				s.add(NoteInfo, i18n.E("compose.note.volume_owner", "volume", src, "services", strings.Join(list, ", ")))
+			}
+		}
+	}
 }
 
 // yamlMessage keeps the parser's line information, without its prefix.
@@ -793,6 +843,7 @@ func parseVolumes(s *ComposeService, vols any, bindVolumes map[string]bool) {
 			continue
 		}
 		s.Volumes = append(s.Volumes, node.Volume{Name: name, Path: mount, ReadOnly: readOnly})
+		s.volumeSrc = append(s.volumeSrc, src)
 		if readOnly {
 			s.add(NoteOK, i18n.E("compose.note.volume_ro", "name", name, "path", mount))
 		} else {

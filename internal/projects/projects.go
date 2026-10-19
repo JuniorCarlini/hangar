@@ -639,6 +639,11 @@ func (m *Manager) DeleteService(ctx context.Context, a Actor, projectSlug, servi
 	if err != nil {
 		return err
 	}
+	// Its volumes stay on the server, but one another service mounts must
+	// keep its owner: delete the others first.
+	if err := m.sharedVolumeError(ctx, s); err != nil {
+		return err
+	}
 	if err := m.node.Remove(ctx, p.Slug, s.Slug); err != nil {
 		return err
 	}

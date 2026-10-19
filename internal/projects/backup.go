@@ -119,6 +119,8 @@ func (m *Manager) CloneService(ctx context.Context, a Actor, projectSlug, source
 		return dbq.Service{}, err
 	}
 	for _, v := range vols {
+		// The copy gets volumes of its own, even where the original
+		// mounts another service's: a restore must never write there.
 		if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: v.ReadOnly}); err != nil {
 			return dbq.Service{}, err
 		}

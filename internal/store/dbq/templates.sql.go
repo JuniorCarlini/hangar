@@ -11,14 +11,15 @@ import (
 )
 
 const addVolume = `-- name: AddVolume :exec
-INSERT INTO service_volumes (service_id, name, path, read_only) VALUES (?, ?, ?, ?)
+INSERT INTO service_volumes (service_id, name, path, read_only, owner_service_id) VALUES (?, ?, ?, ?, ?)
 `
 
 type AddVolumeParams struct {
-	ServiceID string
-	Name      string
-	Path      string
-	ReadOnly  int64
+	ServiceID      string
+	Name           string
+	Path           string
+	ReadOnly       int64
+	OwnerServiceID sql.NullString
 }
 
 func (q *Queries) AddVolume(ctx context.Context, arg AddVolumeParams) error {
@@ -27,6 +28,7 @@ func (q *Queries) AddVolume(ctx context.Context, arg AddVolumeParams) error {
 		arg.Name,
 		arg.Path,
 		arg.ReadOnly,
+		arg.OwnerServiceID,
 	)
 	return err
 }
@@ -379,24 +381,73 @@ func (q *Queries) ListPorts(ctx context.Context, serviceID string) ([]Port, erro
 	return items, nil
 }
 
-const listVolumes = `-- name: ListVolumes :many
-SELECT service_id, name, path, read_only FROM service_volumes WHERE service_id = ? ORDER BY name
+const listVolumeSharers = `-- name: ListVolumeSharers :many
+SELECT v.name, s.slug AS service_slug
+FROM service_volumes v JOIN services s ON s.id = v.service_id
+WHERE v.owner_service_id = ? ORDER BY v.name, s.slug
 `
 
-func (q *Queries) ListVolumes(ctx context.Context, serviceID string) ([]ServiceVolume, error) {
+type ListVolumeSharersRow struct {
+	Name        string
+	ServiceSlug string
+}
+
+// The other services that mount a volume of this one.
+func (q *Queries) ListVolumeSharers(ctx context.Context, ownerServiceID sql.NullString) ([]ListVolumeSharersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listVolumeSharers, ownerServiceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVolumeSharersRow{}
+	for rows.Next() {
+		var i ListVolumeSharersRow
+		if err := rows.Scan(&i.Name, &i.ServiceSlug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listVolumes = `-- name: ListVolumes :many
+SELECT v.service_id, v.name, v.path, v.read_only, v.owner_service_id, coalesce(o.slug, '') AS owner_slug
+FROM service_volumes v LEFT JOIN services o ON o.id = v.owner_service_id
+WHERE v.service_id = ? ORDER BY v.name
+`
+
+type ListVolumesRow struct {
+	ServiceID      string
+	Name           string
+	Path           string
+	ReadOnly       int64
+	OwnerServiceID sql.NullString
+	OwnerSlug      string
+}
+
+// owner_slug is the service whose Docker volume this one is (empty: its own).
+func (q *Queries) ListVolumes(ctx context.Context, serviceID string) ([]ListVolumesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listVolumes, serviceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ServiceVolume{}
+	items := []ListVolumesRow{}
 	for rows.Next() {
-		var i ServiceVolume
+		var i ListVolumesRow
 		if err := rows.Scan(
 			&i.ServiceID,
 			&i.Name,
 			&i.Path,
 			&i.ReadOnly,
+			&i.OwnerServiceID,
+			&i.OwnerSlug,
 		); err != nil {
 			return nil, err
 		}

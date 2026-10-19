@@ -1123,6 +1123,10 @@ type VolumeRow struct {
 	Fixed  bool // the template's own (database files): not removable here
 	// ReadOnly: mounted read-only in the container.
 	ReadOnly bool
+	// Owner is the service whose disk this is, when another one; SharedWith
+	// are the other services that mount this one's (shared volumes).
+	Owner      string
+	SharedWith string
 }
 
 // volumesCard lists the service's disks and adds new ones.
@@ -1160,6 +1164,12 @@ templ volumesCard(d ServiceData) {
 									<td>
 										<span class="block font-mono text-xs">{ v.Path }</span>
 										<span class="block font-mono text-[11px] text-subtle" title={ t(ctx, "volume.docker") }>{ v.Docker }</span>
+										if v.Owner != "" {
+											<span class="block text-[11px] text-muted">{ t(ctx, "volume.shared_from", "service", v.Owner) }</span>
+										}
+										if v.SharedWith != "" {
+											<span class="block text-[11px] text-muted">{ t(ctx, "volume.shared_with", "services", v.SharedWith) }</span>
+										}
 									</td>
 									<td class="tuc-table__actions">
 										if d.CanAdmin && !v.Fixed {
@@ -1171,7 +1181,9 @@ templ volumesCard(d ServiceData) {
 														@Icon("unplug", "size-3.5")
 													</button>
 												</form>
-												if d.SudoActive {
+												if v.Owner != "" {
+													// Another service's disk: only its owner deletes the data.
+												} else if d.SudoActive {
 													<form data-confirm={ t(ctx, "confirm.volume_wipe.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_wipe.text") } data-confirm-ok={ t(ctx, "confirm.volume_wipe.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/volumes/wipe") }>
 														<input type="hidden" name="csrf" value={ d.CSRF }/>
 														<input type="hidden" name="name" value={ v.Name }/>

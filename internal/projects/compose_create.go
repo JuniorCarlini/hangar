@@ -248,6 +248,7 @@ func (m *Manager) CreateFromCompose(ctx context.Context, a Actor, projectSlug st
 	q := m.q.WithTx(tx)
 	now := m.now().Unix()
 	var dbs, apps []string
+	idBySlug := map[string]string{}
 	for _, s := range plan.Services {
 		var id string
 		switch s.Kind {
@@ -294,8 +295,14 @@ func (m *Manager) CreateFromCompose(ctx context.Context, a Actor, projectSlug st
 					return nil, err
 				}
 			}
+			idBySlug[s.Slug] = id
 			for _, v := range s.Volumes {
-				if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: boolInt(v.ReadOnly)}); err != nil {
+				// A shared volume's owner comes earlier in the file.
+				owner, err := ownerID(idBySlug, v)
+				if err != nil {
+					return nil, err
+				}
+				if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: boolInt(v.ReadOnly), OwnerServiceID: owner}); err != nil {
 					return nil, err
 				}
 			}
@@ -328,6 +335,7 @@ func (m *Manager) CreateFromCompose(ctx context.Context, a Actor, projectSlug st
 	if err != nil {
 		return out, err
 	}
+	m.ensureSharedVolumes(ctx, p, out)
 	// Databases first: the apps' first deploy resolves references to them.
 	for _, s := range out {
 		if _, err := m.Deploy(ctx, a, p.Slug, s.Slug, "create"); err != nil {

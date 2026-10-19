@@ -425,10 +425,11 @@ type ServiceGit struct {
 }
 
 type ServiceVolume struct {
-	ServiceID string
-	Name      string
-	Path      string
-	ReadOnly  int64
+	ServiceID      string
+	Name           string
+	Path           string
+	ReadOnly       int64
+	OwnerServiceID sql.NullString
 }
 
 type Session struct {

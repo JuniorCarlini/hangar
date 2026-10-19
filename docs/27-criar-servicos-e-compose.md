@@ -81,6 +81,7 @@ dezenas de módulos para recursos que o importador ignora de propósito.
 | `redis://cache:6379/1` | `redis://:${{cache.PASSWORD}}@${{cache.HOST}}:${{cache.PORT}}/1` |
 | `DB_HOST=db`, `DB_PASSWORD=<a do arquivo>` | `${{db.HOST}}`, `${{db.PASSWORD}}` |
 | `volumes:` nomeado (`media:/app/media`) | disco do Hangar (`AddServiceVolume`: até 8, sem caminhos do sistema) |
+| o mesmo volume nomeado em vários serviços (`media:` no `web` e no `worker`) | um disco só, como no docker compose: o primeiro serviço do arquivo que o monta é o dono (o volume no Docker tem o nome dele) e os outros montam o mesmo volume. Banco do catálogo fica com o disco dele. O dono não pode ser apagado enquanto outro serviço monta o disco; quem só usa o disco de outro pode desligá-lo, mas não apagar os dados |
 | `media:/app/media:ro`, ou `read_only: true` na forma longa | disco montado só para leitura (aparece como "só leitura" na aba Discos); outras opções (`z`, `nocopy`…) são ignoradas com aviso |
 | `expose:` / porta do container em `ports:` | porta interna |
 | `command:` (texto ou lista) | comando |

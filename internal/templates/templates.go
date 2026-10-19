@@ -130,6 +130,9 @@ type Volume struct {
 	Path string
 	// ReadOnly: name:/path:ro, or read_only: true in the long form.
 	ReadOnly bool
+	// Owner is the compose service whose volume this is when several
+	// services mount it ("" for the owner itself; see shareVolumes).
+	Owner string
 }
 
 // Health is the healthcheck in template form.
@@ -472,6 +475,10 @@ func (t *Template) Render(vals map[string]string) (Rendered, error) {
 	for k, v := range vals {
 		all[k] = v
 	}
+	suffix := map[string]string{}
+	for _, s := range t.Services {
+		suffix[s.Name] = s.Suffix
+	}
 	for _, s := range t.Services[1:] {
 		all["service_"+s.Name] = node.ContainerName(vals["project"], vals["name"]+s.Suffix)
 	}
@@ -505,7 +512,11 @@ func (t *Template) Render(vals map[string]string) (Rendered, error) {
 			rs.Command = append(rs.Command, rc)
 		}
 		for _, v := range s.Volumes {
-			rs.Volumes = append(rs.Volumes, node.Volume{Name: v.Name, Path: v.Path, ReadOnly: v.ReadOnly})
+			nv := node.Volume{Name: v.Name, Path: v.Path, ReadOnly: v.ReadOnly}
+			if v.Owner != "" {
+				nv.Service = vals["name"] + suffix[v.Owner] // its id is set when the rows are written
+			}
+			rs.Volumes = append(rs.Volumes, nv)
 		}
 		if s.Health != nil {
 			h, err := s.Health.toNode()

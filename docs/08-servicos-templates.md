@@ -129,6 +129,20 @@ desligando (o valor fica gravado no container). Sem a chave, 30 s. O teto é
 recusar). Servidores que salvam o estado ao desligar (jogos, bancos) são o
 caso de uso.
 
+**Volume compartilhado entre serviços do template:** dois serviços podem
+montar o mesmo volume declarado no topo (um servidor e a ferramenta que lê
+os arquivos dele, por exemplo `world:/srv/world` num e `world:/data:ro` no
+outro). O volume pertence a um deles, o **dono**: o serviço principal se
+ele o monta, senão o primeiro do arquivo que o monta. No Docker o volume tem
+o nome e os labels do dono (`hangar_<projeto>_<dono>_<volume>`) e os outros
+montam esse mesmo volume; continua dentro do projeto, nunca é caminho do
+servidor e só vale para volumes declarados naquele `compose.yaml`. O painel
+cria o volume antes dos deploys (que rodam juntos), o backup lê o volume do
+dono, e o dono não pode ser apagado enquanto outro serviço monta o volume
+(apague os outros primeiro; apagar um deles só tira a montagem dele). Quem
+escreve no volume compartilhado precisa de healthcheck como o dono; quem só
+lê (`:ro`) não. A aba Discos mostra "o disco de …" e "também usado por …".
+
 O healthcheck também define quanto o deploy espera o container novo ficar
 saudável: `start_period + interval × retries + timeout`, no mínimo 2 min e
 no máximo 15 min ([07](07-deploy-e-builds.md)). Quem demora para subir
@@ -144,7 +158,9 @@ declara um `start_period` honesto.
 4. Senha nunca tem valor padrão: campo digitado com cara de segredo
    (`pass`, `secret`, `token`, `key`) é recusado; use `generate = "secret"`.
 5. Limites de memória (16M ou mais) e CPU obrigatórios.
-6. Serviço com volume precisa de healthcheck.
+6. Serviço com volume precisa de healthcheck (dono do volume ou quem
+   escreve num volume compartilhado; quem só lê um volume de outro serviço
+   do template fica dispensado).
 7. Porta pública: nenhum template publica porta. Expor é ação sua, na aba
    Portas ([05](05-isolamento-e-recursos.md)).
 8. Placeholder inexistente é erro; chave desconhecida no `template.toml`

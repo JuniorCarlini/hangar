@@ -230,6 +230,21 @@ type Volume struct {
 	// ReadOnly mounts it read-only: the app reads the files and cannot
 	// change them.
 	ReadOnly bool
+	// Service and ServiceID name the service of the same project that owns
+	// the volume when it is another one: services of one template or
+	// compose import may share a volume, which then keeps the owner's name
+	// (VolumeName(project, Service, Name)) and labels. Empty: the volume
+	// is this service's own.
+	Service   string
+	ServiceID string
+}
+
+// VolumeOwner is the service whose Docker volume v is, in spec.
+func (s ServiceSpec) VolumeOwner(v Volume) (slug, id string) {
+	if v.Service != "" {
+		return v.Service, v.ServiceID
+	}
+	return s.Service, s.ServiceID
 }
 
 // VolumeName is the Docker name of a service volume.
@@ -382,6 +397,11 @@ func (s ServiceSpec) Validate() error {
 		if !validMountPath(v.Path) {
 			return fmt.Errorf("invalid volume path: %q", v.Path)
 		}
+		// Another service's volume is always one of this project's: the
+		// name never leaves hangar_<project>_.
+		if v.Service != "" && (!SlugRE.MatchString(v.Service) || v.Service == s.Service || v.ServiceID == "") {
+			return fmt.Errorf("invalid owner of volume %q: %q", v.Name, v.Service)
+		}
 		seenVol[v.Name] = true
 	}
 	for _, p := range s.Ports {
@@ -416,6 +436,13 @@ func (s ServiceSpec) Validate() error {
 // DefaultCaps is the minimum common images (nginx, apps that switch users on
 // startup) need after cap_drop ALL.
 var DefaultCaps = []string{"CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID", "NET_BIND_SERVICE", "KILL"}
+
+// VolumeEnsurer is implemented by nodes that can create a service's
+// volumes ahead of its deploy (shared volumes of a template). Optional: a
+// node without it creates them at the first deploy that mounts them.
+type VolumeEnsurer interface {
+	EnsureVolumes(ctx context.Context, spec ServiceSpec) error
+}
 
 // Shell is an interactive terminal inside a service container: what is
 // written goes to the shell's input, what is read is its screen.

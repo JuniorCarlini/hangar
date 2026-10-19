@@ -1,8 +1,17 @@
 -- name: AddVolume :exec
-INSERT INTO service_volumes (service_id, name, path, read_only) VALUES (?, ?, ?, ?);
+INSERT INTO service_volumes (service_id, name, path, read_only, owner_service_id) VALUES (?, ?, ?, ?, ?);
 
 -- name: ListVolumes :many
-SELECT * FROM service_volumes WHERE service_id = ? ORDER BY name;
+-- owner_slug is the service whose Docker volume this one is (empty: its own).
+SELECT v.*, coalesce(o.slug, '') AS owner_slug
+FROM service_volumes v LEFT JOIN services o ON o.id = v.owner_service_id
+WHERE v.service_id = ? ORDER BY v.name;
+
+-- name: ListVolumeSharers :many
+-- The other services that mount a volume of this one.
+SELECT v.name, s.slug AS service_slug
+FROM service_volumes v JOIN services s ON s.id = v.service_id
+WHERE v.owner_service_id = ? ORDER BY v.name, s.slug;
 
 -- name: UpsertExport :exec
 INSERT INTO service_exports (service_id, key, value_enc, secret) VALUES (?, ?, ?, ?)

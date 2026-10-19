@@ -68,6 +68,7 @@ func (m *Manager) CreateFromTemplate(ctx context.Context, a Actor, projectSlug, 
 	if err != nil {
 		return out, err
 	}
+	m.ensureSharedVolumes(ctx, p, out)
 	// A template that is born public (n8n, Uptime Kuma) shows its link right
 	// away: the edge routes it now (to the "updating" page until the deploy
 	// ends), not at the next unrelated reload, even if a deploy fails.
@@ -138,8 +139,10 @@ func (m *Manager) renderTemplate(ctx context.Context, p dbq.Project, t *template
 func (m *Manager) insertRendered(ctx context.Context, q *dbq.Queries, p dbq.Project, t *templates.Template, r templates.Rendered, secrets []string, allowPublic bool) ([]string, error) {
 	now := m.now().Unix()
 	var created []string
+	idBySlug := map[string]string{}
 	for i, rs := range r.Services {
 		id := ids.New("svc_")
+		idBySlug[rs.Slug] = id
 		cmd, _ := json.Marshal(rs.Command)
 		if rs.Command == nil {
 			cmd = []byte("[]")
@@ -170,7 +173,12 @@ func (m *Manager) insertRendered(ctx context.Context, q *dbq.Queries, p dbq.Proj
 			return nil, err
 		}
 		for _, v := range rs.Volumes {
-			if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: boolInt(v.ReadOnly)}); err != nil {
+			// A shared volume's owner comes earlier in the template.
+			owner, err := ownerID(idBySlug, v)
+			if err != nil {
+				return nil, err
+			}
+			if err := q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: id, Name: v.Name, Path: v.Path, ReadOnly: boolInt(v.ReadOnly), OwnerServiceID: owner}); err != nil {
 				return nil, err
 			}
 		}
