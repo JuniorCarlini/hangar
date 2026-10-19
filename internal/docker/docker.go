@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -189,6 +190,21 @@ func (l *Local) createContainer(ctx context.Context, spec node.ServiceSpec, name
 
 // hostConfig holds the protections from docs/05. Nothing here is optional in
 // the UI: privileged, docker.sock and bind mounts simply do not exist.
+// withKill adds KILL to the capabilities: the container's init (docker-init,
+// PID 1, root) forwards the stop signal to the app, and most images drop to
+// an unprivileged user (postgres, redis, mariadb…). Without KILL that
+// forward fails, init exits and the app is killed without its chance to
+// shut down cleanly. KILL only reaches processes of the same container (its
+// own PID namespace).
+func withKill(caps []string) []string {
+	for _, c := range caps {
+		if strings.EqualFold(strings.TrimPrefix(strings.ToUpper(c), "CAP_"), "KILL") {
+			return caps
+		}
+	}
+	return append(slices.Clone(caps), "KILL")
+}
+
 func hostConfig(spec node.ServiceSpec) *container.HostConfig {
 	initProc := true
 	pids := spec.PidsLimit
@@ -196,6 +212,7 @@ func hostConfig(spec node.ServiceSpec) *container.HostConfig {
 	if caps == nil {
 		caps = node.DefaultCaps
 	}
+	caps = withKill(caps)
 	hc := &container.HostConfig{
 		Privileged:    false,
 		CapDrop:       []string{"ALL"},
