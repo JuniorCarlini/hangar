@@ -11,6 +11,71 @@
       }
     });
   });
+  // Names become identifiers the way the server derives them
+  // (projects.Slugify — keep both in step): lowercase, no accents, anything
+  // else a hyphen, at most 32 characters, "s-" before a leading digit.
+  var accents = { 'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a', 'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+    'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i', 'ó': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
+    'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u', 'ç': 'c', 'ñ': 'n', 'ý': 'y', 'ÿ': 'y' };
+  window.hangarSlugify = function (name) {
+    var s = (name || '').trim().toLowerCase().replace(/[^\x00-\x7f]/g, function (c) { return accents[c] || c; });
+    var out = '', dash = false;
+    for (var i = 0; i < s.length; i++) {
+      var c = s[i];
+      if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) { out += c; dash = false; }
+      else if (out.length && !dash) { out += '-'; dash = true; }
+    }
+    out = out.replace(/^-+|-+$/g, '');
+    if (/^[0-9]/.test(out)) out = 's-' + out;
+    if (out.length > 32) out = out.slice(0, 32).replace(/-+$/, '');
+    return /^[a-z][a-z0-9-]{0,30}[a-z0-9]$/.test(out) ? out : '';
+  };
+  // An input with data-slug-preview="#out" shows its identifier there as
+  // it is typed (the new-project dialog).
+  function slugPreview(input) {
+    var out = document.querySelector(input.dataset.slugPreview);
+    if (out) out.textContent = window.hangarSlugify(input.value) || out.dataset.empty || '—';
+  }
+  document.addEventListener('input', function (e) {
+    if (e.target.matches && e.target.matches('[data-slug-preview]')) slugPreview(e.target);
+  });
+  document.querySelectorAll('[data-slug-preview]').forEach(function (i) { if (i.value) slugPreview(i); });
+
+  // Toasts stay in front of an open modal or drawer: those live in the
+  // browser's top layer, above anything else on the page, so Tucano's toast
+  // region (a plain element in <body>) would land behind their backdrop.
+  // The region becomes a manual popover, which is in the top layer too, and
+  // is shown again on every new toast so it stacks above the last dialog.
+  function raiseToasts(region) {
+    if (!region.showPopover) return;
+    if (!region.hasAttribute('popover')) region.setAttribute('popover', 'manual');
+    try {
+      if (region.matches(':popover-open')) region.hidePopover();
+      region.showPopover();
+    } catch (_) {}
+  }
+  function raiseAll() {
+    document.querySelectorAll('.tuc-toasts').forEach(function (region) {
+      if (region.querySelector('.tuc-toast:not(.is-closing)')) raiseToasts(region);
+    });
+  }
+  new MutationObserver(function (records) {
+    records.forEach(function (r) {
+      // A dialog that opens after a toast (a drawer reopened by the page
+      // the save landed on) would cover it: put the toasts back on top.
+      if (r.type === 'attributes') {
+        if (r.target.tagName === 'DIALOG' && r.target.open) raiseAll();
+        return;
+      }
+      r.addedNodes.forEach(function (n) {
+        if (n.nodeType !== 1) return;
+        var region = n.classList.contains('tuc-toasts') ? n : n.classList.contains('tuc-toast') ? n.closest('.tuc-toasts') : null;
+        if (region) raiseToasts(region);
+      });
+    });
+  }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
+  raiseAll();
+
   // A dialog marked data-open (a form came back with an error) opens by
   // itself: through Tucano's own instance, which is what its triggers call
   // (a trigger may sit in a closed dropdown), else through the trigger.

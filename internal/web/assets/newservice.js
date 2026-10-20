@@ -9,23 +9,8 @@
   if (!dlg) return;
   var taken = (dlg.dataset.taken || '').split(' ').filter(Boolean);
   var MAX = 32;
-  var accents = { 'á': 'a', 'à': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a', 'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
-    'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i', 'ó': 'o', 'ò': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
-    'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u', 'ç': 'c', 'ñ': 'n', 'ý': 'y', 'ÿ': 'y' };
-
-  function slugify(name) {
-    var s = (name || '').trim().toLowerCase().replace(/[^\x00-\x7f]/g, function (c) { return accents[c] || c; });
-    var out = '', dash = false;
-    for (var i = 0; i < s.length; i++) {
-      var c = s[i];
-      if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) { out += c; dash = false; }
-      else if (out.length && !dash) { out += '-'; dash = true; }
-    }
-    out = out.replace(/^-+|-+$/g, '');
-    if (/^[0-9]/.test(out)) out = 's-' + out;
-    if (out.length > MAX) out = out.slice(0, MAX).replace(/-+$/, '');
-    return /^[a-z][a-z0-9-]{0,30}[a-z0-9]$/.test(out) ? out : '';
-  }
+  // ui.js (loaded first) holds the one copy of the name → identifier rule.
+  var slugify = window.hangarSlugify;
 
   function unique(base) {
     base = slugify(base) || 'web';

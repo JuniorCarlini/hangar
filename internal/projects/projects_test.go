@@ -361,3 +361,24 @@ func TestReconcileDetectsMissingContainer(t *testing.T) {
 		t.Fatalf("Reconcile = %+v, %v", d, err)
 	}
 }
+
+func TestCreateProjectNamedDerivesTheIdentifier(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	for _, c := range []struct{ name, slug string }{
+		{"Notícias Portal", "noticias-portal"},
+		{"Notícias  portal!", "noticias-portal-2"},
+		{"Hangar", "hangar-2"}, // reserved: Hangar's own containers
+	} {
+		p, err := f.m.CreateProjectNamed(ctx, f.who, c.name)
+		if err != nil {
+			t.Fatalf("%q: %v", c.name, err)
+		}
+		if p.Slug != c.slug || p.Name != strings.TrimSpace(c.name) {
+			t.Errorf("%q: got %s / %q, want %s", c.name, p.Slug, p.Name, c.slug)
+		}
+	}
+	if _, err := f.m.CreateProjectNamed(ctx, f.who, " ! "); err == nil {
+		t.Error("a name with nothing usable should be refused")
+	}
+}

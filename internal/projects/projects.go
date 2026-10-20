@@ -215,6 +215,28 @@ func (m *Manager) CreateProject(ctx context.Context, a Actor, slug, name string)
 	return p, nil
 }
 
+// CreateProjectNamed creates a project from the name alone: its identifier
+// (container prefix, network) is derived from the name, as for services,
+// with -2, -3… when another project or a reserved name already has it.
+func (m *Manager) CreateProjectNamed(ctx context.Context, a Actor, name string) (dbq.Project, error) {
+	name = strings.TrimSpace(name)
+	if Slugify(name) == "" {
+		return dbq.Project{}, i18n.E("project.error.name")
+	}
+	rows, err := m.q.ListProjects(ctx)
+	if err != nil {
+		return dbq.Project{}, err
+	}
+	taken := map[string]bool{}
+	for k := range reservedProjects {
+		taken[k] = true
+	}
+	for _, p := range rows {
+		taken[p.Slug] = true
+	}
+	return m.CreateProject(ctx, a, UniqueName(name, taken), name)
+}
+
 // DeleteProject deletes an empty project and its network.
 func (m *Manager) DeleteProject(ctx context.Context, a Actor, slug string) error {
 	p, err := m.GetProject(ctx, slug)

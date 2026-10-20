@@ -87,9 +87,9 @@ func pctWidth(pct int) string {
 
 // NewProjectForm keeps the "new project" dialog's state.
 type NewProjectForm struct {
-	Open       bool
-	Error      string
-	Slug, Name string
+	Open  bool
+	Error string
+	Name  string
 }
 
 // NavProject is a project in the sidebar.

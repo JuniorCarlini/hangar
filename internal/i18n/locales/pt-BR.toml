@@ -267,7 +267,6 @@ docker_down = "Docker indisponível: o painel não conseguiu falar com o Docker;
 [projects.form]
 name = "Nome"
 name_placeholder = "Laboratório multidomínio"
-slug = "Nome técnico"
 slug_hint = "Vira o prefixo dos containers:"
 submit = "Criar projeto"
 
@@ -289,6 +288,7 @@ submit = "Criar e fazer deploy"
 number_invalid = "Número inválido em porta, memória ou CPU."
 
 [project.error]
+name = "Dê um nome ao projeto com pelo menos duas letras ou números."
 slug = "Nome técnico inválido: use letras minúsculas, números e hífen (2 a 32 caracteres)."
 name_too_long = "Nome muito longo (máximo {max})."
 has_services = "O projeto ainda tem serviços."

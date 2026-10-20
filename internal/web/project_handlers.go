@@ -54,13 +54,13 @@ func userError(r *http.Request, err error) (int, string) {
 // --- projects ---------------------------------------------------------------
 
 func (h *handlers) createProject(w http.ResponseWriter, r *http.Request) {
-	slug, name := r.PostFormValue("slug"), r.PostFormValue("name")
-	p, err := h.projects.CreateProject(r.Context(), actor(r), slug, name)
+	name := r.PostFormValue("name")
+	p, err := h.projects.CreateProjectNamed(r.Context(), actor(r), name)
 	if err != nil {
 		code, msg := userError(r, err)
 		// Back on the overview with the dialog open, showing the error.
 		n := views.NavFrom(r.Context())
-		n.NewProject = views.NewProjectForm{Open: true, Error: msg, Slug: slug, Name: name}
+		n.NewProject = views.NewProjectForm{Open: true, Error: msg, Name: name}
 		h.renderOverview(w, r.WithContext(views.WithNav(r.Context(), n)), code)
 		return
 	}

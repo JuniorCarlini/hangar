@@ -189,9 +189,9 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 .canvas.is-moving .edge path { transition: none; }
 .canvas-zoom { position: absolute; left: 16px; bottom: 16px; z-index: 4; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--p-border); border-radius: 8px; background: var(--p-surface); box-shadow: var(--p-shadow-pop); }
 
-/* A service card being opened: dimmed and pulsing until its drawer comes. */
-.node.is-loading { animation: hg-loading 1s ease-in-out infinite; }
-@keyframes hg-loading { 50% { opacity: .55; } }
+/* A service card being opened: marked at once, still (a pulsing card read
+   as the service itself changing while the drawer came). */
+.node.is-loading { border-color: var(--p-accent); box-shadow: 0 0 0 3px var(--p-accent-soft); }
 html.is-busy, html.is-busy .node { cursor: progress; }
 
 /* Screen animations. Between pages the content cross-fades (View
@@ -420,3 +420,8 @@ html.is-busy, html.is-busy .node { cursor: progress; }
   .ns-detail__grid { grid-template-columns: minmax(0, 1fr); }
   .ns-detail__side { border-right: 0; border-bottom: 1px solid var(--p-border); max-height: none; }
 }
+
+/* The toast region as a top-layer popover (ui.js): drop the browser's
+   popover box (centered, framed, painted) and keep Tucano's placement;
+   :where keeps this below Tucano's own position rules. */
+:where(.tuc-toasts[popover]) { inset: auto; margin: 0; border: 0; background: transparent; color: inherit; overflow: visible; }

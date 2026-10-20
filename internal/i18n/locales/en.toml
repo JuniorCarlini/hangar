@@ -267,7 +267,6 @@ docker_down = "Docker unavailable: the panel could not reach Docker; projects an
 [projects.form]
 name = "Name"
 name_placeholder = "Multi-domain lab"
-slug = "Technical name"
 slug_hint = "Becomes the container prefix:"
 submit = "Create project"
 
@@ -289,6 +288,7 @@ submit = "Create and deploy"
 number_invalid = "Invalid number in port, memory or CPU."
 
 [project.error]
+name = "Give the project a name with at least two letters or digits."
 slug = "Invalid technical name: use lowercase letters, digits and hyphens (2 to 32 characters)."
 name_too_long = "Name too long (at most {max})."
 has_services = "The project still has services."

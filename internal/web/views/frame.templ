@@ -416,12 +416,8 @@ templ newProjectDialog(n Nav) {
 				@errorAlert(n.NewProject.Error)
 				<div class="flex min-w-0 flex-col gap-1.5">
 					<label class="tuc-label" for="np-name">{ t(ctx, "projects.form.name") }</label>
-					<input class="tuc-input" id="np-name" name="name" maxlength="80" autofocus placeholder={ t(ctx, "projects.form.name_placeholder") } value={ n.NewProject.Name }/>
-				</div>
-				<div class="flex min-w-0 flex-col gap-1.5">
-					<label class="tuc-label" for="np-slug">{ t(ctx, "projects.form.slug") }</label>
-					<input class="tuc-input font-mono" id="np-slug" name="slug" required pattern="[a-z][a-z0-9\-]{0,30}[a-z0-9]" placeholder="lab" value={ n.NewProject.Slug }/>
-					<span class="tuc-hint">{ t(ctx, "projects.form.slug_hint") } <span class="font-mono">lab_web</span>, <span class="font-mono">lab_postgres</span>.</span>
+					<input class="tuc-input" id="np-name" name="name" required maxlength="80" autofocus autocomplete="off" placeholder={ t(ctx, "projects.form.name_placeholder") } value={ n.NewProject.Name } data-slug-preview="#np-slug-out"/>
+					<span class="tuc-hint">{ t(ctx, "projects.form.slug_hint") } <span class="font-mono"><span id="np-slug-out" data-empty="lab">lab</span>_web</span></span>
 				</div>
 				<div class="flex justify-end gap-2">
 					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
