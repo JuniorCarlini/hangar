@@ -142,11 +142,18 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 	if err := m.keyOpens(ctx, probe, req.Identities); err != nil {
 		return "", err
 	}
-	if unlock, ok := m.tryLock("restore:" + s.label()); !ok {
+	// Held from here to the end of the restore, so a second request (a
+	// second click) cannot slip in before the first one starts.
+	unlock, ok := m.tryLock("restore:" + s.label())
+	if !ok {
 		return "", ErrBusy
-	} else {
-		unlock()
 	}
+	started := false
+	defer func() {
+		if !started {
+			unlock()
+		}
+	}()
 
 	id := ids.New("bkr_")
 	point := req.Key
@@ -164,9 +171,11 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 		"service": s.label(), "mode": req.Mode, "point": point, "destination": req.Destination,
 		"new_service": req.NewService, "private_key_used": true, "restore": id,
 	})
+	started = true
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
+		defer unlock()
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), restoreTimeout)
 		defer cancel()
 		err := m.runRestore(rctx, a, id, s, req)
@@ -211,6 +220,7 @@ func (m *Manager) step(ctx context.Context, id, step string) {
 	}
 }
 
+// runRestore runs with the service's restore lock held (StartRestore).
 func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, req RestoreRequest) error {
 	if req.Destination == DestOverwrite {
 		// docs/09: overwriting first backs up the current state.
@@ -219,8 +229,6 @@ func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, 
 			return fmt.Errorf("backup of the current state failed, nothing was changed: %w", err)
 		}
 	}
-	unlock := m.lock("restore:" + s.label())
-	defer unlock()
 	t := s
 	if req.Destination == DestNew {
 		m.step(ctx, id, "create")

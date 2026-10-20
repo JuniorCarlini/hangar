@@ -76,6 +76,10 @@ type Status struct {
 	At      time.Time `json:"at"`
 }
 
+// ErrPending: an update is already being downloaded or waits for the
+// applier.
+var ErrPending = &i18n.Error{Key: "update.error.pending"}
+
 // Checker looks up and stages updates. Safe for concurrent use.
 type Checker struct {
 	cfg     Config
@@ -85,6 +89,10 @@ type Checker struct {
 	mu     sync.Mutex
 	latest *Available
 	err    error
+
+	// staging is held while a version downloads, so a second click on the
+	// button cannot download into the same directory meanwhile.
+	staging sync.Mutex
 }
 
 // NewChecker creates the checker for the running version.
@@ -200,6 +208,13 @@ func (c *Checker) latestRelease(ctx context.Context) (ghRelease, error) {
 func (c *Checker) Stage(ctx context.Context, version, requestedBy string) error {
 	if !c.cfg.Applier {
 		return i18n.E("update.error.no_applier")
+	}
+	if !c.staging.TryLock() {
+		return ErrPending
+	}
+	defer c.staging.Unlock()
+	if Pending(c.cfg.Dir) {
+		return ErrPending
 	}
 	rel, err := c.latestRelease(ctx)
 	if err != nil {

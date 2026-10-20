@@ -457,6 +457,7 @@ port = "Invalid port."
 memory = "Memory between 16 MB and 64 GB."
 cpus = "CPU between 0.05 and 64."
 deploy_running = "A deploy is already running for this service."
+busy = "Something is already running on this service. Wait for it to finish."
 
 [env.error]
 key = "Invalid variable name: letters, digits and _ (cannot start with a digit)."
@@ -888,6 +889,7 @@ title = "Backup"
 format = ".dump file (pg_restore custom format)"
 
 [backup.error]
+queued = "A backup of this is already queued or running. Wait for it to finish."
 not_ready = "Set up the recovery kit (confirmed) and a destination in Backups first."
 busy = "A backup or restore of this service is already running. Try again shortly."
 label = "Give the key a name (up to 60 characters)."
@@ -2271,6 +2273,7 @@ policy = "Automatic backup"
 on = "on"
 off = "off"
 run_now = "Back up now"
+running_now = "Backing up…"
 enabled = "Back up this database"
 enabled_hint = "pg_dump tested in a throwaway Postgres before it is sent."
 every = "Frequency"

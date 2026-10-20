@@ -70,6 +70,14 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 		Started:  m.now(), Expires: m.now().Add(time.Hour),
 	}
 	m.dlMu.Lock()
+	for _, old := range m.downloads {
+		// Still being prepared: a second click waits for that one instead
+		// of starting another dump and throwing the first away.
+		if old.UserID == a.UserID && old.ServiceID == s.ID && !old.Ready && old.Error == "" {
+			m.dlMu.Unlock()
+			return nil
+		}
+	}
 	for k, old := range m.downloads {
 		if old.UserID == a.UserID && old.ServiceID == s.ID {
 			m.dropLocked(k)

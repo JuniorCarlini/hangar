@@ -457,6 +457,7 @@ port = "Porta inválida."
 memory = "Memória entre 16 MB e 64 GB."
 cpus = "CPU entre 0,05 e 64."
 deploy_running = "Já há um deploy em andamento para este serviço."
+busy = "Já tem uma ação em andamento neste serviço. Aguarde ela terminar."
 
 [env.error]
 key = "Nome de variável inválido: letras, números e _ (não pode começar com número)."
@@ -888,6 +889,7 @@ title = "Backup"
 format = "Arquivo .dump (formato custom do pg_restore)"
 
 [backup.error]
+queued = "Já tem um backup deste na fila ou rodando. Aguarde ele terminar."
 not_ready = "Configure o kit de recuperação (confirmado) e um destino em Backups primeiro."
 busy = "Já há um backup ou restauração deste serviço em andamento. Tente de novo em instantes."
 label = "Dê um nome à chave (até 60 caracteres)."
@@ -2272,6 +2274,7 @@ policy = "Backup automático"
 on = "ligado"
 off = "desligado"
 run_now = "Fazer backup agora"
+running_now = "Fazendo backup…"
 enabled = "Fazer backup deste banco"
 enabled_hint = "pg_dump testado num Postgres descartável antes de ser enviado."
 every = "Frequência"

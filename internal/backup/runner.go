@@ -15,6 +15,44 @@ type job struct {
 	trigger string
 	kind    string // archive.KindDump, KindBase or KindPanel
 	service string // service id ("" for the panel)
+	manual  bool   // counted in queued until it ran
+}
+
+// Queued reports whether a manual backup of the service ("" = the panel)
+// waits in the queue or runs.
+func (m *Manager) Queued(serviceID string) bool {
+	m.queuedMu.Lock()
+	defer m.queuedMu.Unlock()
+	return m.queued[serviceID] > 0
+}
+
+// pushManual queues the jobs of one "back up now", unless the previous one
+// of the same service has not finished.
+func (m *Manager) pushManual(key string, jobs ...job) error {
+	m.queuedMu.Lock()
+	defer m.queuedMu.Unlock()
+	if m.queued[key] > 0 {
+		return ErrQueued
+	}
+	if m.queued == nil {
+		m.queued = map[string]int{}
+	}
+	for _, j := range jobs {
+		j.manual = true
+		if err := m.push(j); err != nil {
+			return err
+		}
+		m.queued[key]++
+	}
+	return nil
+}
+
+func (m *Manager) doneManual(key string) {
+	m.queuedMu.Lock()
+	defer m.queuedMu.Unlock()
+	if m.queued[key]--; m.queued[key] <= 0 {
+		delete(m.queued, key)
+	}
 }
 
 // Enqueue asks for a backup now (button "Fazer backup agora"). It runs in
@@ -24,7 +62,7 @@ func (m *Manager) Enqueue(ctx context.Context, a Actor, projectSlug, serviceSlug
 		return ErrNotReady
 	}
 	if projectSlug == "" {
-		return m.push(job{actor: a, trigger: TriggerManual, kind: archive.KindPanel})
+		return m.pushManual("", job{actor: a, trigger: TriggerManual, kind: archive.KindPanel})
 	}
 	s, err := m.ref(ctx, projectSlug, serviceSlug)
 	if err != nil {
@@ -33,13 +71,11 @@ func (m *Manager) Enqueue(ctx context.Context, a Actor, projectSlug, serviceSlug
 	if !m.running(ctx, s) {
 		return ErrNotRunning
 	}
-	if err := m.push(job{actor: a, trigger: TriggerManual, kind: archive.KindDump, service: s.ID}); err != nil {
-		return err
-	}
+	jobs := []job{{actor: a, trigger: TriggerManual, kind: archive.KindDump, service: s.ID}}
 	if p, ok := m.ServicePolicy(ctx, s.ID); ok && p.WAL && m.archivingActive(ctx, s) {
-		return m.push(job{actor: a, trigger: TriggerManual, kind: archive.KindBase, service: s.ID})
+		jobs = append(jobs, job{actor: a, trigger: TriggerManual, kind: archive.KindBase, service: s.ID})
 	}
-	return nil
+	return m.pushManual(s.ID, jobs...)
 }
 
 func (m *Manager) push(j job) error {
@@ -77,6 +113,9 @@ func (m *Manager) Run(ctx context.Context) {
 func (m *Manager) Wait() { m.wg.Wait() }
 
 func (m *Manager) runJob(ctx context.Context, j job) {
+	if j.manual {
+		defer m.doneManual(j.service)
+	}
 	jctx, cancel := context.WithTimeout(ctx, restoreTimeout)
 	defer cancel()
 	if j.kind == archive.KindPanel {

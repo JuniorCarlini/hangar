@@ -152,7 +152,8 @@ func bucketHref(b string) string {
 templ Updates(d UpdatesData) {
 	@shell(t(ctx, "deps.page_title")) {
 		if d.Running {
-			<meta http-equiv="refresh" content="5"/>
+			// ui.js reloads once the scan is over (data-busy-poll).
+			<span hidden data-busy-poll></span>
 		}
 		@pageHead(t(ctx, "deps.title"), d.subtitle(ctx)) {
 			if d.Bucket != "" {

@@ -64,7 +64,8 @@ templ tabBackups(d ServiceData) {
 		</section>
 	} else {
 		if d.Backups.Busy {
-			<meta http-equiv="refresh" content="5"/>
+			// ui.js reloads once the backup is over (data-busy-poll).
+			<span hidden data-busy-poll></span>
 		}
 		if !d.Backups.Ready {
 			<div class="tuc-alert is-info">
@@ -137,9 +138,14 @@ templ svcBackupPolicy(d ServiceData) {
 			if d.CanOperate && d.Backups.Ready {
 				<form method="post" action={ templ.SafeURL(d.base() + "/backups/run") }>
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<button class="tuc-btn is-outline is-sm" type="submit">
-						@Icon("database-backup", "size-3.5")
-						{ t(ctx, "svcbackup.run_now") }
+					<button class="tuc-btn is-outline is-sm" type="submit" disabled?={ d.Backups.Busy }>
+						if d.Backups.Busy {
+							<span class="tuc-spinner" aria-hidden="true"></span>
+							{ t(ctx, "svcbackup.running_now") }
+						} else {
+							@Icon("database-backup", "size-3.5")
+							{ t(ctx, "svcbackup.run_now") }
+						}
 					</button>
 				</form>
 			}

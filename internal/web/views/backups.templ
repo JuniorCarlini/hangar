@@ -13,6 +13,8 @@ type BackupsData struct {
 	CanOwner   bool
 	SudoActive bool
 	Ready      bool
+	// PanelQueued: the panel's own "back up now" waits or runs.
+	PanelQueued bool
 	Status     string // "ok", "warning", "danger", "setup"
 	Alerts     []BackupAlert
 	Keys       []BackupKeyRow
@@ -122,14 +124,23 @@ templ backupStatusBadge(status string) {
 // Backups is the backups overview (docs/09 "Tela de Backups").
 templ Backups(d BackupsData) {
 	@shell(t(ctx, "backups.page_title")) {
+		if d.PanelQueued {
+			// ui.js reloads once the backup is over (data-busy-poll).
+			<span hidden data-busy-poll></span>
+		}
 		@pageHead(t(ctx, "backups.title"), "") {
 			@backupStatusBadge(d.Status)
 			if d.CanOperate && d.Ready {
 				<form method="post" action="/backups/panel">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<button class="tuc-btn is-outline" type="submit">
-						@Icon("database-backup", "size-3.5")
-						{ t(ctx, "backups.panel_now") }
+					<button class="tuc-btn is-outline" type="submit" disabled?={ d.PanelQueued }>
+						if d.PanelQueued {
+							<span class="tuc-spinner" aria-hidden="true"></span>
+							{ t(ctx, "svcbackup.running_now") }
+						} else {
+							@Icon("database-backup", "size-3.5")
+							{ t(ctx, "backups.panel_now") }
+						}
 					</button>
 				</form>
 			}

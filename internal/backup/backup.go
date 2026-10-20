@@ -35,6 +35,7 @@ var (
 	ErrUnsupported = &i18n.Error{Key: "backup.error.unsupported"}
 	ErrNotRunning  = &i18n.Error{Key: "backup.error.not_running"}
 	ErrBusy        = &i18n.Error{Key: "backup.error.busy"}
+	ErrQueued      = &i18n.Error{Key: "backup.error.queued"}
 	ErrNoDocker    = &i18n.Error{Key: "error.docker_unavailable"}
 )
 
@@ -71,6 +72,10 @@ type Manager struct {
 	locks   map[string]*sync.Mutex
 	jobs    chan job
 	wg      sync.WaitGroup
+	// queued counts the manual jobs of each service ("" = the panel) not
+	// finished yet: one "back up now" at a time per service.
+	queuedMu sync.Mutex
+	queued   map[string]int
 
 	dlMu      sync.Mutex
 	downloads map[string]*download

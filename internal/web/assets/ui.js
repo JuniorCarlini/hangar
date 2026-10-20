@@ -123,6 +123,81 @@
       f.requestSubmit(submitter && submitter.form === f ? submitter : undefined);
     });
   }, true);
+  // One request at a time per form: once a form is on its way, its buttons
+  // are disabled (the clicked one shows a spinner) until the page answers,
+  // so a second click cannot start the same job again or skip the confirm
+  // dialog. Runs last (bubble phase on document), after anything that
+  // handles the submit itself (confirm dialog, fetch-based forms).
+  function unlock(f) {
+    delete f.dataset.sending;
+    f.removeAttribute('aria-busy');
+    f.querySelectorAll('[data-sending-off]').forEach(function (b) {
+      b.disabled = false;
+      b.removeAttribute('data-sending-off');
+      var sp = b.querySelector('.tuc-spinner[data-sending]');
+      if (sp) sp.remove();
+    });
+  }
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (e.defaultPrevented || !f.matches || f.target || f.hasAttribute('data-no-lock')) return;
+    if (f.dataset.sending === '1') { e.preventDefault(); return; }
+    f.dataset.sending = '1';
+    f.setAttribute('aria-busy', 'true');
+    var submitter = e.submitter;
+    // Disabled after the event: a disabled button would drop out of the
+    // data being sent (its name and value).
+    setTimeout(function () {
+      delete f.dataset.confirmed;
+      f.querySelectorAll('button[type=submit], button:not([type]), input[type=submit]').forEach(function (b) {
+        if (b.disabled) return;
+        b.disabled = true;
+        b.setAttribute('data-sending-off', '');
+      });
+      if (submitter && submitter.tagName === 'BUTTON' && !submitter.querySelector('.tuc-spinner')) {
+        var sp = document.createElement('span');
+        sp.className = 'tuc-spinner';
+        sp.setAttribute('aria-hidden', 'true');
+        sp.setAttribute('data-sending', '');
+        submitter.prepend(sp);
+      }
+    }, 0);
+    // A response that is not a page (a file download) leaves this page in
+    // place: give the form back after a while.
+    setTimeout(function () { unlock(f); }, 20000);
+  });
+  // Back/forward cache: a page restored as it was left keeps its locks.
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted) document.querySelectorAll('form[data-sending]').forEach(unlock);
+  });
+
+  // The "done" notice of a redirect (?ok=…) is shown once: take it out of
+  // the address so a reload, a refresh while something runs or the back
+  // button does not show it again.
+  (function () {
+    var u = new URL(location.href);
+    if (!u.searchParams.has('ok')) return;
+    u.searchParams.delete('ok');
+    history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+  })();
+
+  // A page showing a job in progress ([data-busy-poll], e.g. a dependency
+  // scan or a backup) checks every few seconds and reloads once the job is
+  // over, instead of reloading itself (and its notice) the whole time.
+  // Checked on every tick, so content swapped in later (the drawer) counts.
+  var polling = false;
+  setInterval(function () {
+    if (polling || document.hidden || !document.querySelector('[data-busy-poll]')) return;
+    polling = true;
+    fetch(location.pathname + location.search, { credentials: 'same-origin', headers: { Accept: 'text/html' } })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (html) {
+        if (html && html.indexOf('data-busy-poll') < 0) location.reload();
+      })
+      .catch(function () {})
+      .finally(function () { polling = false; });
+  }, 3000);
+
   // Tucano paints the color picker's swatches with a style attribute, which
   // the panel's CSP blocks: paint them through the CSSOM (allowed) as they
   // appear.

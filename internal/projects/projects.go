@@ -45,6 +45,7 @@ var (
 	ErrExists         = &i18n.Error{Key: "error.exists"}
 	ErrHasServices    = &i18n.Error{Key: "project.error.has_services"}
 	ErrDeployRunning  = &i18n.Error{Key: "service.error.deploy_running"}
+	ErrServiceBusy    = &i18n.Error{Key: "service.error.busy"}
 	ErrDockerDisabled = &i18n.Error{Key: "error.docker_unavailable"}
 )
 
@@ -81,6 +82,10 @@ type Manager struct {
 	buildDir string
 	queueMu  sync.Mutex
 	queued   map[string]queuedDeploy
+	// busy holds the services with a start, stop, restart or the start of
+	// a deploy under way (claim), so a second click cannot run the same
+	// thing alongside.
+	busy sync.Map
 	// notifier hears about failed deploys (SetDeployNotifier).
 	notifier DeployNotifier
 	// repos caches what each Git credential can list (github_repos.go).
@@ -118,6 +123,14 @@ func New(db *sql.DB, box *secrets.Box, n node.Node, al *audit.Logger, log *slog.
 
 // DockerAvailable reports whether Docker is connected.
 func (m *Manager) DockerAvailable() bool { return m.node != nil }
+
+// claim marks a service busy; false when it already is.
+func (m *Manager) claim(serviceID string) bool {
+	_, taken := m.busy.LoadOrStore(serviceID, struct{}{})
+	return !taken
+}
+
+func (m *Manager) release(serviceID string) { m.busy.Delete(serviceID) }
 
 // Wait waits for in-flight deploys to finish (shutdown and tests).
 func (m *Manager) Wait() { m.wg.Wait() }
@@ -462,6 +475,12 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 	if isGit {
 		shown = gitsrc.Display(src.RepoUrl) + "@" + src.Branch
 	}
+	// From the check to the deployment row (which then answers the
+	// check), no other deploy or action of this service may start.
+	if !m.claim(s.ID) {
+		return "", ErrServiceBusy
+	}
+	defer m.release(s.ID)
 	if n, err := m.q.HasRunningDeployment(ctx, s.ID); err != nil {
 		return "", err
 	} else if n > 0 {
@@ -640,6 +659,10 @@ func (m *Manager) Action(ctx context.Context, a Actor, projectSlug, serviceSlug,
 	if err != nil {
 		return err
 	}
+	if !m.claim(s.ID) {
+		return ErrServiceBusy
+	}
+	defer m.release(s.ID)
 	switch action {
 	case "start":
 		m.markDeploying(p.Slug, s.Slug, true)

@@ -184,12 +184,15 @@ func (m *Monitor) Run(ctx context.Context, hour int) {
 }
 
 // ScanAsync starts a scan in the background; false when one is running.
+// The scan is marked running before this returns, so the page the caller
+// shows next already sees it.
 func (m *Monitor) ScanAsync(ctx context.Context) bool {
-	if m == nil || m.Running() {
+	if m == nil || !m.running.CompareAndSwap(false, true) {
 		return false
 	}
 	go func() {
-		if err := m.Scan(context.WithoutCancel(ctx)); err != nil {
+		defer m.running.Store(false)
+		if err := m.runScan(context.WithoutCancel(ctx)); err != nil {
 			m.o.Log.Warn("dependency scan", "error", err)
 		}
 	}()
@@ -249,6 +252,11 @@ func (m *Monitor) Scan(ctx context.Context) error {
 		return errBusy
 	}
 	defer m.running.Store(false)
+	return m.runScan(ctx)
+}
+
+// runScan scans and records the result; the caller holds running.
+func (m *Monitor) runScan(ctx context.Context) error {
 	err := m.scan(ctx)
 	m.mu.Lock()
 	m.lastRun, m.lastErr = m.now(), ""

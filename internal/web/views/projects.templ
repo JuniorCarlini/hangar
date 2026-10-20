@@ -375,9 +375,14 @@ templ serviceActions(d ServiceData) {
 	if d.CanOperate {
 		<form method="post" action={ templ.SafeURL(d.base() + "/deploy") }>
 			<input type="hidden" name="csrf" value={ d.CSRF }/>
-			<button class="tuc-btn is-primary w-full" type="submit">
-				@Icon("rocket", "size-4")
-				{ t(ctx, "service.deploy") }
+			<button class="tuc-btn is-primary w-full" type="submit" disabled?={ d.Deploying }>
+				if d.Deploying {
+					<span class="tuc-spinner" aria-hidden="true"></span>
+					{ t(ctx, "state.deploying") }
+				} else {
+					@Icon("rocket", "size-4")
+					{ t(ctx, "service.deploy") }
+				}
 			</button>
 		</form>
 		<form data-confirm={ t(ctx, "confirm.restart.title") } data-confirm-text={ t(ctx, "confirm.restart.text") } data-confirm-ok={ t(ctx, "confirm.restart.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/action") }>

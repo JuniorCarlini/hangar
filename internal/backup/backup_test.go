@@ -460,3 +460,30 @@ func TestKitCheckComesBackEveryFewMonths(t *testing.T) {
 		t.Error("confirming again must restart the count")
 	}
 }
+
+func TestManualBackupIsQueuedOnce(t *testing.T) {
+	m := &Manager{jobs: make(chan job, 8)}
+	if err := m.pushManual("svc_1", job{kind: archive.KindDump, service: "svc_1"}, job{kind: archive.KindBase, service: "svc_1"}); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Queued("svc_1") {
+		t.Fatal("the backup should show as queued")
+	}
+	if err := m.pushManual("svc_1", job{kind: archive.KindDump, service: "svc_1"}); !errors.Is(err, ErrQueued) {
+		t.Fatalf("a second click while queued: %v, want ErrQueued", err)
+	}
+	if err := m.pushManual("", job{kind: archive.KindPanel}); err != nil {
+		t.Fatalf("the panel's backup is independent: %v", err)
+	}
+	m.doneManual("svc_1")
+	if !m.Queued("svc_1") {
+		t.Fatal("the base backup of the same click still waits")
+	}
+	m.doneManual("svc_1")
+	if m.Queued("svc_1") {
+		t.Fatal("both jobs ran: nothing queued")
+	}
+	if err := m.pushManual("svc_1", job{kind: archive.KindDump, service: "svc_1"}); err != nil {
+		t.Fatalf("after it finished a new one is accepted: %v", err)
+	}
+}

@@ -3,10 +3,12 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/release"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/update"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
@@ -77,11 +79,18 @@ func (h *handlers) updateCheck(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) updateApply(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
 	version := r.PostFormValue("version")
-	if update.Pending(h.updateDir) {
-		h.renderUpdate(w, r, http.StatusConflict, i18n.T(r.Context(), "update.error.pending"), true)
+	// A click that comes while that update is on its way, or after it was
+	// applied (a second click, a page left open), just shows where it is:
+	// the request is already in, there is nothing to refuse.
+	if up, err := release.IsUpgrade(h.updates.Current(), version); update.Pending(h.updateDir) || (err == nil && !up) {
+		http.Redirect(w, r, "/update", http.StatusSeeOther)
 		return
 	}
 	if err := h.updates.Stage(r.Context(), version, p.UserID); err != nil {
+		if errors.Is(err, update.ErrPending) {
+			http.Redirect(w, r, "/update", http.StatusSeeOther)
+			return
+		}
 		h.renderUpdate(w, r, http.StatusUnprocessableEntity, i18n.T(r.Context(), "update.error.refused", "error", i18n.Message(i18n.Locale(r.Context()), err)), true)
 		return
 	}

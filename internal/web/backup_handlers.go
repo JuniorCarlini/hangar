@@ -41,6 +41,7 @@ func (h *handlers) renderBackups(w http.ResponseWriter, r *http.Request, status 
 	d := views.BackupsData{
 		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
 		CanOwner: pr.Role >= auth.RoleOwner, SudoActive: time.Now().Before(pr.SudoUntil), Error: errMsg, Flash: flash,
+		PanelQueued: h.backups.Queued(""),
 	}
 	o, err := h.backups.Overview(ctx)
 	if err != nil {
@@ -345,6 +346,7 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 		} //nolint:gosec // sizes are never negative
 		b.Busy = !dl.Ready && dl.Error == ""
 	}
+	b.Busy = b.Busy || h.backups.Queued(s.ID)
 	if runs, err := h.backups.ServiceRuns(ctx, s.ID, 15); err == nil {
 		for _, run := range runs {
 			if run.Kind == archive.KindBase && run.Status == "ok" && b.LastBase == "" {

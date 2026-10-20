@@ -396,7 +396,11 @@ func (h *handlers) updatesScan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, i18n.T(r.Context(), "error.bad_request"), http.StatusBadRequest)
 		return
 	}
-	h.deps.ScanAsync(r.Context())
+	// One scan at a time: a click while one runs just shows it running.
+	if !h.deps.ScanAsync(r.Context()) {
+		redirectLocal(w, r, "/updates")
+		return
+	}
 	redirectLocal(w, r, "/updates?ok=scan")
 }
 

@@ -382,3 +382,20 @@ func TestCreateProjectNamedDerivesTheIdentifier(t *testing.T) {
 		t.Error("a name with nothing usable should be refused")
 	}
 }
+
+func TestClaimKeepsOneActionPerService(t *testing.T) {
+	m := &Manager{}
+	if !m.claim("svc_1") {
+		t.Fatal("a free service should be claimed")
+	}
+	if m.claim("svc_1") {
+		t.Fatal("a second action on the same service should wait for the first")
+	}
+	if !m.claim("svc_2") {
+		t.Fatal("another service is independent")
+	}
+	m.release("svc_1")
+	if !m.claim("svc_1") {
+		t.Fatal("released: the service takes a new action")
+	}
+}

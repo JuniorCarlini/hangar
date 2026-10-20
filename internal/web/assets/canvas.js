@@ -438,15 +438,6 @@
   });
   window.addEventListener('popstate', function () { swap(location.pathname + location.search, false); });
 
-  // The "done" notice of a redirect (?ok=…) is shown once: take it out of
-  // the address so a reload or the back button does not show it again.
-  (function () {
-    var u = new URL(location.href);
-    if (!u.searchParams.has('ok')) return;
-    u.searchParams.delete('ok');
-    history.replaceState(history.state, '', u.pathname + u.search + u.hash);
-  })();
-
   // While something deploys, the cards follow it without reloading the
   // page: every 2 s the project page is fetched and only the cards that
   // changed are updated, so the zoom, the open drawer (or a closed one)
