@@ -5,6 +5,7 @@
 expand = "Abrir em tela grande"
 language = "Idioma"
 copied = "Copiado"
+copy_name = "Copiar {name}"
 
 [locale]
 pt-BR = "Português (Brasil)"
@@ -23,6 +24,7 @@ light = "Claro"
 
 [nav]
 team = "Equipe"
+security = "Segurança"
 new_version = "nova versão"
 updates = "Atualizações"
 status_links = "Links de status"
@@ -220,7 +222,7 @@ to_login = "Ir para o login"
 confirm = "Confirmar"
 password_label = "Confirme sua senha para continuar"
 title = "Confirme que é você"
-text = "Ações sensíveis pedem a confirmação de novo; ela vale por 5 minutos e fica registrada na auditoria."
+text = "Esta ação pede a sua senha de novo. A confirmação vale por alguns minutos (o nível de segurança decide quanto) e fica registrada na auditoria."
 
 [sudo.error]
 wrong_password = "Senha incorreta."
@@ -1698,6 +1700,7 @@ user_invite_cancel = "cancelou um convite da equipe"
 user_invite = "convidou uma pessoa para a equipe"
 user_update = "mudou o acesso de uma pessoa da equipe"
 user_remove = "removeu uma pessoa da equipe"
+security_level = "mudou o nível de segurança do painel"
 backup_key_add = "adicionou uma chave de backup"
 backup_key_confirm = "confirmou uma chave de backup"
 backup_key_remove = "removeu uma chave de backup"
@@ -2310,7 +2313,7 @@ dest_new_hint = "Padrão: confira lá e depois troque a referência do app."
 new_name = "Nome do serviço novo"
 dest_overwrite = "Sobrescrever o atual"
 dest_overwrite_hint = "Faz um backup do estado atual antes. Se a restauração falhar, os dados voltam como estavam."
-confirm_name = "Para sobrescrever, digite {name}"
+confirm_name = "Para sobrescrever, digite"
 kit = "Kit de recuperação"
 kit_hint = "A chave vai só nesta requisição, fica na memória durante a restauração e é descartada no fim."
 passphrase = "Frase-senha do kit"
@@ -2988,3 +2991,38 @@ not_ready = "O disco limitado não ficou pronto: {error}"
 title = "Remover o limite de {name}?"
 text = "Os dados voltam para um disco comum, sem limite, que cresce no disco do servidor. Os serviços que usam este disco param durante a cópia e voltam sozinhos."
 ok = "Remover limite"
+
+[security]
+page_title = "Segurança · Hangar"
+title = "Segurança"
+subtitle = "Quando o painel pede a sua senha de novo, depois do login"
+level = "Nível de segurança"
+recommended = "recomendado"
+current = "atual"
+save = "Salvar nível"
+saved = "Nível de segurança salvo."
+always = "Mudar o nível sempre pede a sua senha, em qualquer nível: senão, quem achasse o painel aberto baixaria o nível primeiro. A troca fica registrada na auditoria e vira alerta de segurança."
+
+[security.basic]
+name = "Básico"
+for = "Para quem usa sozinho, no próprio computador."
+asks = "Pede a senha só no login. Ações perigosas continuam pedindo a confirmação de sempre (digitar o nome, por exemplo)."
+window = "Nenhuma ação pede a senha de novo."
+idle = "Você continua logado por até 12 horas, mesmo parado."
+
+[security.standard]
+name = "Médio"
+for = "Para a maioria das pessoas."
+asks = "Pede a senha de novo só no que não tem volta ou mostra segredos: apagar projeto, serviço ou disco, restaurar ou baixar backup, ver senhas e tokens, terminal e equipe."
+window = "Depois de confirmar, fica liberado por 30 minutos."
+idle = "Sai sozinho depois de 2 horas parado."
+
+[security.strict]
+name = "Avançado"
+for = "Para equipes e servidores com dados sensíveis."
+asks = "Pede a senha de novo em toda ação sensível: também domínios, portas, troca de imagem, limites de disco, marca, alertas e atualização."
+window = "A confirmação vale só 5 minutos."
+idle = "Sai sozinho depois de 30 minutos parado."
+
+[security.error]
+level = "Escolha um dos três níveis."

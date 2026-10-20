@@ -1,0 +1,83 @@
+package views
+
+// SecurityData feeds the security level page.
+type SecurityData struct {
+	CSRF  string
+	Level string // the current level: basic, standard or strict
+	// SudoActive: the owner confirmed the password moments ago, so the
+	// level may change now (it always asks, at every level).
+	SudoActive bool
+	Error      string
+	Flash      string
+}
+
+// securityLevel is one of the three choices on the page; its texts are
+// security.<value>.name, .for, .asks, .window and .idle.
+type securityLevel struct {
+	Value string
+	Icon  string
+}
+
+var securityLevels = []securityLevel{
+	{Value: "basic", Icon: "shield"},
+	{Value: "standard", Icon: "shield-check"},
+	{Value: "strict", Icon: "lock"},
+}
+
+// Security is the "how often do we ask for the password" page.
+templ Security(d SecurityData) {
+	@shell(t(ctx, "security.page_title")) {
+		@pageHead(t(ctx, "security.title"), t(ctx, "security.subtitle"))
+		@pageBody() {
+			if d.Error != "" {
+				@errorAlert(d.Error)
+			}
+			if d.Flash != "" {
+				@toast("success", d.Flash)
+			}
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "security.level"))
+				<form class={ cardBodyClass } method="post" action="/security">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<fieldset class="m-0 grid gap-3 border-0 p-0 lg:grid-cols-3">
+						<legend class="sr-only">{ t(ctx, "security.level") }</legend>
+						for _, l := range securityLevels {
+							<label class="flex cursor-pointer flex-col gap-3 rounded-md border border-border bg-surface p-4 has-checked:border-accent has-checked:ring-1 has-checked:ring-accent">
+								<span class="flex items-center gap-2.5">
+									<input type="radio" class="tuc-radio" name="level" value={ l.Value } checked?={ d.Level == l.Value }/>
+									@Icon(l.Icon, "size-4 text-muted")
+									<b class="text-sm font-semibold">{ t(ctx, "security."+l.Value+".name") }</b>
+									if l.Value == "standard" {
+										<span class="tuc-badge is-plain">{ t(ctx, "security.recommended") }</span>
+									}
+									<span class="grow"></span>
+									if d.Level == l.Value {
+										<span class="tuc-badge is-success">{ t(ctx, "security.current") }</span>
+									}
+								</span>
+								<span class="text-[13px] text-muted">{ t(ctx, "security."+l.Value+".for") }</span>
+								<ul class="m-0 flex list-disc flex-col gap-1.5 pl-4 text-[13px] marker:text-subtle">
+									<li>{ t(ctx, "security."+l.Value+".asks") }</li>
+									<li>{ t(ctx, "security."+l.Value+".window") }</li>
+									<li>{ t(ctx, "security."+l.Value+".idle") }</li>
+								</ul>
+							</label>
+						}
+					</fieldset>
+					@notice("info", "info", t(ctx, "security.always"))
+					<div class="flex justify-end">
+						if d.SudoActive {
+							<button class="tuc-btn is-primary" type="submit">
+								@Icon("check", "size-3.5")
+								{ t(ctx, "security.save") }
+							</button>
+						} else {
+							@sudoButton(t(ctx, "security.save"))
+						}
+					</div>
+				</form>
+			</section>
+			@sudoModal(d.CSRF, "/security", d.SudoActive)
+		}
+	}
+}

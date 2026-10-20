@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -531,9 +532,9 @@ func TestSessionExpiry(t *testing.T) {
 	_, secret := f.userWithTOTP(t, "a@hangar.dev", RoleAdmin)
 
 	idle := f.login(t, "a@hangar.dev", secret)
-	f.clock.advance(SessionIdle)
+	f.clock.advance(DefaultLevel.SessionIdle())
 	if p, _ := f.svc.Authenticate(ctx, idle); p != nil {
-		t.Error("session idle for 30 min stayed valid")
+		t.Error("session idle past the level's limit stayed valid")
 	}
 
 	f.clock.advance(totpStep * time.Second)
@@ -575,10 +576,61 @@ func TestSudoRotatesSession(t *testing.T) {
 	if np == nil || !np.SudoUntil.After(f.clock.t) {
 		t.Fatal("new session should be in sudo")
 	}
-	f.clock.advance(SudoTTL)
+	f.clock.advance(LevelStandard.SudoTTL())
 	np, _ = f.svc.Authenticate(ctx, newToken)
 	if np == nil || np.SudoUntil.After(f.clock.t) {
-		t.Error("sudo should expire after 5 min, keeping the session")
+		t.Error("sudo should expire after the level's window, keeping the session")
+	}
+}
+
+// The level decides which tiers ask again and for how long a confirmation
+// lasts; the strict window stays the short one.
+func TestLevelDecidesWhatAsksAgain(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if got := f.svc.Level(ctx); got != DefaultLevel {
+		t.Fatalf("a new panel is at %q, want %q", got, DefaultLevel)
+	}
+	want := map[Level][]bool{ // strict, critical, always
+		LevelBasic:    {false, false, true},
+		LevelStandard: {false, true, true},
+		LevelStrict:   {true, true, true},
+	}
+	for l, w := range want {
+		got := []bool{l.Requires(SudoStrict), l.Requires(SudoCritical), l.Requires(SudoAlways)}
+		if !slices.Equal(got, w) {
+			t.Errorf("%s asks %v, want %v", l, got, w)
+		}
+		if l.Requires(SudoNone) {
+			t.Errorf("%s asks on a route without sudo", l)
+		}
+	}
+	if LevelStrict.SessionIdle() != SessionIdle || LevelBasic.SessionIdle() != SessionMax {
+		t.Errorf("idle: strict %v, basic %v", LevelStrict.SessionIdle(), LevelBasic.SessionIdle())
+	}
+	if LevelStrict.SudoTTL() != SudoTTL || LevelStandard.SudoTTL() != 30*time.Minute {
+		t.Errorf("windows: strict %v, standard %v", LevelStrict.SudoTTL(), LevelStandard.SudoTTL())
+	}
+
+	if err := f.svc.SetLevel(ctx, "usr_x", "lax", Client{}); !errors.Is(err, ErrUnknownLevel) {
+		t.Fatalf("unknown level: %v", err)
+	}
+	if err := f.svc.SetLevel(ctx, "usr_x", LevelBasic, Client{}); err != nil {
+		t.Fatal(err)
+	}
+	// A new Service over the same database reads the stored level.
+	box, _ := secrets.NewBox(bytes.Repeat([]byte{9}, 32))
+	again, err := NewService(f.st.DB, box, nil, Options{Argon: cheap, Now: f.clock.now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := again.Level(ctx); got != LevelBasic {
+		t.Errorf("stored level %q, want basic", got)
+	}
+
+	p := &Principal{Level: LevelBasic}
+	if !p.SudoFor(SudoCritical, f.clock.t) || p.SudoFor(SudoAlways, f.clock.t) {
+		t.Error("basic: critical runs without a confirmation, lowering the level does not")
 	}
 }
 
@@ -597,6 +649,9 @@ func TestTOTPSecretIsEncryptedAtRest(t *testing.T) {
 func TestStillValidDoesNotExtendIdle(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
+	if err := f.svc.SetLevel(ctx, "", LevelStrict, Client{}); err != nil { // 30 min idle
+		t.Fatal(err)
+	}
 	_, secret := f.userWithTOTP(t, "a@hangar.dev", RoleAdmin)
 	token := f.login(t, "a@hangar.dev", secret)
 

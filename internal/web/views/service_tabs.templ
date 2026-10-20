@@ -39,7 +39,7 @@ func refWarnings(ctx context.Context, ws []RefWarning, key string) string {
 
 // sudoDialog is the "Confirm it's you" modal of the panel.
 templ sudoDialog(d ServiceData) {
-	if d.CanAdmin && !d.SudoActive {
+	if d.CanAdmin && !d.SudoCritical {
 		<dialog class="tuc-modal is-warning" id="sudo-dialog" aria-labelledby="sudo-title">
 			<div class="tuc-modal__panel sudo-panel">
 				<div class="tuc-modal__header">
@@ -132,7 +132,7 @@ templ tabVariables(d ServiceData) {
 									if v.Secret && !v.Revealed {
 										<span class="tuc-reveal">
 											<span class="text-muted">••••••••••••</span>
-											if d.CanAdmin && d.SudoActive {
+											if d.CanAdmin && d.SudoCritical {
 												<form method="post" action={ templ.SafeURL(d.base() + "/env/reveal") }>
 													<input type="hidden" name="csrf" value={ d.CSRF }/>
 													<input type="hidden" name="key" value={ v.Key }/>
@@ -333,7 +333,7 @@ templ tabConnection(d ServiceData) {
 									if e.Secret && !e.Revealed {
 										<span class="tuc-reveal">
 											<span class="text-muted">••••••••••••</span>
-											if d.CanAdmin && d.SudoActive {
+											if d.CanAdmin && d.SudoCritical {
 												<form method="post" action={ templ.SafeURL(d.base() + "/exports/reveal") }>
 													<input type="hidden" name="csrf" value={ d.CSRF }/>
 													<input type="hidden" name="key" value={ e.Key }/>
@@ -778,7 +778,7 @@ templ dynamicDomains(d ServiceData) {
 					<span class="tuc-label">{ t(ctx, "domain.dynamic.secret_env") }</span>
 					<span class="flex flex-wrap items-center gap-1.5 [&_form]:inline-flex">
 						<code class="font-mono text-xs">HANGAR_DOMAIN_CHECK_SECRET</code>
-						if d.Domains.CheckSecret == "" && d.CanAdmin && d.SudoActive {
+						if d.Domains.CheckSecret == "" && d.CanAdmin && d.SudoCritical {
 							<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret") }>
 								<input type="hidden" name="csrf" value={ d.CSRF }/>
 								<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "domain.dynamic.reveal") } aria-label={ t(ctx, "domain.dynamic.reveal") }>
@@ -995,12 +995,12 @@ templ tabSettings(d ServiceData) {
 	@maintenanceCard(d)
 	if d.CanAdmin {
 		@dangerZone(t(ctx, "service.danger.title"), t(ctx, "service.danger.hint")) {
-			<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteServiceModal(d.SudoActive) }>
+			<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteServiceModal(d.SudoCritical) }>
 				@Icon("trash", "size-3.5")
 				{ t(ctx, "service.danger.delete") }…
 			</button>
 		}
-		if d.SudoActive {
+		if d.SudoCritical {
 			<dialog class="tuc-modal is-md is-danger" id="service-delete" aria-labelledby="service-delete-title">
 				<div class="tuc-modal__panel">
 					<div class="tuc-modal__header">
@@ -1012,10 +1012,7 @@ templ tabSettings(d ServiceData) {
 					<form method="post" action={ templ.SafeURL(d.base() + "/delete") } class="tuc-modal__body">
 						<input type="hidden" name="csrf" value={ d.CSRF }/>
 						<p class="tuc-modal__text">{ t(ctx, "service.danger.hint") }</p>
-						<div class="flex flex-col gap-1.5">
-							<label class="tuc-label" for="confirm">{ t(ctx, "service.danger.type_name") } <span class="font-mono">{ d.Slug }</span></label>
-							<input class="tuc-input font-mono" id="confirm" name="confirm" required autocomplete="off"/>
-						</div>
+						@confirmName("confirm", t(ctx, "service.danger.type_name"), d.Slug, true)
 						<div class="flex justify-end gap-2">
 							<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
 							<button class="tuc-btn is-danger" type="submit">
@@ -1297,7 +1294,7 @@ templ volumesCard(d ServiceData) {
 													</form>
 													if v.Owner != "" {
 														// Another service's disk: only its owner deletes the data.
-													} else if d.SudoActive {
+													} else if d.SudoCritical {
 														<form data-confirm={ t(ctx, "confirm.volume_wipe.title", "name", v.Name) } data-confirm-text={ t(ctx, "confirm.volume_wipe.text") } data-confirm-ok={ t(ctx, "confirm.volume_wipe.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/volumes/wipe") }>
 															<input type="hidden" name="csrf" value={ d.CSRF }/>
 															<input type="hidden" name="name" value={ v.Name }/>
@@ -1455,7 +1452,7 @@ func truncateText(s string, n int) string {
 // the identity check that comes back with the terminal open.
 templ terminalDialogs(d ServiceData) {
 	if d.CanAdmin && d.State == "running" {
-		if d.SudoActive {
+		if d.SudoCritical {
 			<dialog class="tuc-modal is-full terminal-modal" id="terminal-modal" aria-labelledby="terminal-title" data-open={ boolAttr(d.OpenTerminal) }>
 				<div class="tuc-modal__panel">
 					<div class="terminal-modal__head">

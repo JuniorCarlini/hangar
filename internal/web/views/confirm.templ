@@ -1,0 +1,19 @@
+package views
+
+// confirmName is the "type the name to confirm" field of a destructive
+// action: the name sits in a chip with a copy button, so it can be pasted
+// into the field below instead of typed letter by letter.
+templ confirmName(id, label, name string, required bool) {
+	<div class="flex flex-col gap-1.5">
+		<div class="flex flex-wrap items-center gap-1.5">
+			<label class="tuc-label" for={ id }>{ label }</label>
+			<span class="inline-flex items-center gap-0.5 rounded-sm border border-border bg-surface-2 py-px pr-0.5 pl-1.5">
+				<code class="font-mono text-xs">{ name }</code>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm size-6" data-copy={ name } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "common.copy_name", "name", name) } title={ t(ctx, "common.copy_name", "name", name) }>
+					@Icon("copy", "size-3.5")
+				</button>
+			</span>
+		</div>
+		<input class="tuc-input font-mono" id={ id } name="confirm" required?={ required } autocomplete="off" maxlength="64"/>
+	</div>
+}

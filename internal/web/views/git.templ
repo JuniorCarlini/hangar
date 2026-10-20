@@ -144,7 +144,7 @@ templ gitCards(d ServiceData) {
 				</div>
 				if d.CanAdmin {
 					if g.HasToken && g.Token == "" && g.CredentialID == "" {
-						if d.SudoActive {
+						if d.SudoCritical {
 							<form method="post" action={ templ.SafeURL(d.base() + "/git/token/reveal") }>
 								<input type="hidden" name="csrf" value={ d.CSRF }/>
 								<button class="tuc-btn is-ghost is-sm" type="submit">
@@ -210,7 +210,7 @@ templ gitWebhookCard(d ServiceData) {
 							@sudoButton(t(ctx, "git.webhook.enable"))
 						}
 					} else if g.Webhook {
-						if g.HookURL == "" {
+						if g.HookURL == "" && d.SudoCritical {
 							<form method="post" action={ templ.SafeURL(d.base() + "/git/webhook/reveal") }>
 								<input type="hidden" name="csrf" value={ d.CSRF }/>
 								<button class="tuc-btn is-outline is-sm" type="submit">
@@ -218,6 +218,8 @@ templ gitWebhookCard(d ServiceData) {
 									{ t(ctx, "git.webhook.show") }
 								</button>
 							</form>
+						} else if g.HookURL == "" {
+							@sudoButton(t(ctx, "git.webhook.show"))
 						}
 						<form data-confirm={ t(ctx, "confirm.git_webhook_rotate.title") } data-confirm-text={ t(ctx, "confirm.git_webhook_rotate.text") } data-confirm-ok={ t(ctx, "confirm.git_webhook_rotate.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/git/webhook") }>
 							<input type="hidden" name="csrf" value={ d.CSRF }/>

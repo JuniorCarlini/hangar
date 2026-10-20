@@ -26,7 +26,7 @@ import (
 
 func actor(r *http.Request) projects.Actor {
 	p := PrincipalFrom(r.Context())
-	return projects.Actor{UserID: p.UserID, IP: clientIP(r), Sudo: time.Now().Before(p.SudoUntil)}
+	return projects.Actor{UserID: p.UserID, IP: clientIP(r), Sudo: p.SudoFor(auth.SudoStrict, time.Now())}
 }
 
 // userError turns an error into a status and a message in the user's
@@ -145,7 +145,7 @@ func (h *handlers) renderProjectPage(w http.ResponseWriter, r *http.Request, sta
 	}
 	d := views.ProjectData{
 		CSRF: pr.CSRFToken, Slug: p.Slug, Name: p.Name, CanCreate: pr.Role >= auth.RoleAdmin, Error: errMsg,
-		SudoActive: time.Now().Before(pr.SudoUntil), CredOpen: credOpen, Flash: credFlash(r),
+		SudoActive: pr.SudoFor(auth.SudoStrict, time.Now()), SudoCritical: pr.SudoFor(auth.SudoCritical, time.Now()), CredOpen: credOpen, Flash: credFlash(r),
 	}
 	if creds, err := h.projects.ListGitCredentials(r.Context()); err == nil {
 		var own []projects.GitCredential
@@ -297,7 +297,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		CSRF: pr.CSRFToken, Project: p.Slug, ProjectName: p.Name, Slug: s.Slug, Image: s.Image,
 		Port: s.InternalPort, MemoryMB: s.MemoryBytes >> 20, CPUs: strconv.FormatFloat(float64(s.NanoCpus)/1e9, 'f', -1, 64),
 		CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
-		SudoActive: time.Now().Before(pr.SudoUntil), Error: v.errMsg, Flash: v.flash,
+		SudoActive: pr.SudoFor(auth.SudoStrict, time.Now()), SudoCritical: pr.SudoFor(auth.SudoCritical, time.Now()), Error: v.errMsg, Flash: v.flash,
 	}
 	if d.Git = h.gitView(r, s.ID, s.ProjectID, v); d.Git != nil {
 		d.Image = d.Git.Display + "@" + d.Git.Branch

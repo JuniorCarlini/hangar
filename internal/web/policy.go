@@ -22,8 +22,9 @@ type Policy struct {
 	Public bool
 	// Role is the minimum role (required when not public).
 	Role auth.Role
-	// Sudo requires recent re-authentication (2FA within the last minutes).
-	Sudo bool
+	// Sudo is which security levels require recent re-authentication
+	// (password or 2FA within the last minutes) for this route.
+	Sudo auth.SudoTier
 	// Audit is the action name in the audit log. Required on every route
 	// that changes state.
 	Audit string
@@ -117,7 +118,7 @@ func checkPolicy(method string, p Policy) error {
 		if p.Role != auth.RoleNone {
 			return errors.New("public route cannot require a role")
 		}
-		if p.Sudo {
+		if p.Sudo != auth.SudoNone {
 			return errors.New("public route cannot require sudo")
 		}
 	} else if p.Role < auth.RoleViewer || p.Role > auth.RoleOwner {
@@ -186,7 +187,7 @@ func (rt *Router) enforce(method, pattern string, p Policy, h http.Handler) http
 				rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "project_access"})
 				http.NotFound(w, r)
 				return
-			case p.Sudo && !rt.now().Before(principal.SudoUntil):
+			case !principal.SudoFor(p.Sudo, rt.now()):
 				rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "sudo_required"})
 				http.Error(w, i18n.T(r.Context(), "error.sudo_required"), http.StatusForbidden)
 				return

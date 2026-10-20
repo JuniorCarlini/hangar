@@ -27,7 +27,7 @@ func (h *handlers) teamPage(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) renderTeam(w http.ResponseWriter, r *http.Request, status int, d views.TeamData) {
 	ctx := r.Context()
 	p := PrincipalFrom(ctx)
-	d.CSRF, d.SudoActive = p.CSRFToken, time.Now().Before(p.SudoUntil)
+	d.CSRF, d.SudoActive = p.CSRFToken, p.SudoFor(auth.SudoCritical, time.Now())
 	members, invites, err := h.auth.Team(ctx)
 	if err != nil {
 		loggerFrom(ctx).Error("team", "error", err)

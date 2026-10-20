@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/errpages"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
@@ -31,7 +32,7 @@ func (h *handlers) renderBrand(w http.ResponseWriter, r *http.Request, status in
 		status, errMsg = userError(r, err)
 	}
 	d := views.BrandData{
-		CSRF: pr.CSRFToken, SudoActive: time.Now().Before(pr.SudoUntil), Error: errMsg, Flash: flash,
+		CSRF: pr.CSRFToken, SudoActive: pr.SudoFor(auth.SudoStrict, time.Now()), Error: errMsg, Flash: flash,
 		EdgeOff: h.errorPages == nil, Name: b.Name, Contact: b.Contact, Color: b.Color, Theme: b.Theme,
 		LogoLight: b.LogoLight, LogoDark: b.LogoDark, Version: time.Now().Unix(),
 	}

@@ -13,46 +13,61 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/projects"
 )
 
-// criticalActions are the actions docs/17 § 1.3 marks with 🔒: their routes
-// must require sudo. Listing them by audit name (not by path) keeps a
+// criticalActions are the actions docs/17 § 1.3 marks with 🔒 that cannot
+// be undone or show a secret: they ask for the password again from the
+// standard level up. Listing them by audit name (not by path) keeps a
 // renamed or new route for the same action under the rule.
 var criticalActions = []string{
 	"secret.reveal",
 	"service.delete", "project.delete",
-	"service.terminal.open", "service.volume.wipe", "service.volume.limit", "service.volume.unlimit",
-	"domain.add", "domain.remove", "domain.dynamic", "domain.dynamic.rotate_secret",
-	"port.open", "project.link",
+	"service.terminal.open", "service.volume.wipe",
 	"service.backup.download", "backup.download_link", "backup.restore.start",
 	"backup.key.add", "backup.key.confirm", "backup.key.remove",
 	"backup.target.add", "backup.target.remove",
+	"user.invite", "user.invite.cancel", "user.update", "user.remove",
+}
+
+// guardedActions are the other 🔒 actions: they open a way in or change
+// what the panel shows, so the strict level asks again; below it their
+// confirmation dialog is the guard.
+var guardedActions = []string{
+	"service.volume.limit", "service.volume.unlimit",
+	"domain.add", "domain.remove", "domain.dynamic", "domain.dynamic.rotate_secret",
+	"port.open", "project.link",
 	"status_link.create", "status_link.revoke",
 	"service.git.webhook",
 	"alerts.channel.toggle", "alerts.channel.delete",
 	"system.update.request",
 }
 
-// TestCriticalActionsNeedSudo is the "critical action without sudo" lock of
+// TestSensitiveActionsNeedSudo is the "critical action without sudo" lock of
 // docs/17 § 1.2: the build fails if one of them is reachable without a
-// fresh confirmation.
-func TestCriticalActionsNeedSudo(t *testing.T) {
+// fresh confirmation at the level its tier promises.
+func TestSensitiveActionsNeedSudo(t *testing.T) {
 	rt := newRouter(nil, nil)
 	routes(rt, &handlers{})
+	want := map[string]auth.SudoTier{}
+	for _, a := range criticalActions {
+		want[a] = auth.SudoCritical
+	}
+	for _, a := range guardedActions {
+		want[a] = auth.SudoStrict
+	}
 	seen := map[string]bool{}
 	for _, r := range rt.Routes() {
-		for _, a := range criticalActions {
-			if r.Policy.Audit != a {
-				continue
-			}
-			seen[a] = true
-			if !r.Policy.Sudo {
-				t.Errorf("route %s (%s) is critical and does not require sudo", r.Pattern, a)
-			}
-			if r.Policy.Role < auth.RoleAdmin {
-				t.Errorf("route %s (%s) is critical and open to %s", r.Pattern, a, r.Policy.Role)
-			}
+		tier, ok := want[r.Policy.Audit]
+		if !ok {
+			continue
+		}
+		seen[r.Policy.Audit] = true
+		if r.Policy.Sudo < tier {
+			t.Errorf("route %s (%s) asks for sudo at tier %d, want at least %d", r.Pattern, r.Policy.Audit, r.Policy.Sudo, tier)
+		}
+		if r.Policy.Role < auth.RoleAdmin {
+			t.Errorf("route %s (%s) is critical and open to %s", r.Pattern, r.Policy.Audit, r.Policy.Role)
 		}
 	}
-	for _, a := range criticalActions {
+	for a := range want {
 		if !seen[a] {
 			t.Errorf("no route audits %q any more: update the list (and check the replacement needs sudo)", a)
 		}

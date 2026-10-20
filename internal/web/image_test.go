@@ -15,7 +15,7 @@ import (
 // audited with the old and the new image.
 func TestChangeImageNeedsAdminAndSudo(t *testing.T) {
 	route := routeFor(t, "POST /p/{project}/s/{service}/image")
-	if route.Policy.Role != auth.RoleAdmin || !route.Policy.Sudo || route.Policy.Audit != "service.image.change" {
+	if route.Policy.Role != auth.RoleAdmin || route.Policy.Sudo != auth.SudoStrict || route.Policy.Audit != "service.image.change" {
 		t.Fatalf("policy = %+v", route.Policy)
 	}
 

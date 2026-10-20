@@ -83,6 +83,11 @@ func newEnv(t *testing.T, opts ...func(*auth.Options)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The tests below were written for the strictest level, where every
+	// sensitive action asks again; the lower levels have their own tests.
+	if err := e.svc.SetLevel(context.Background(), "", auth.LevelStrict, auth.Client{}); err != nil {
+		t.Fatal(err)
+	}
 	e.node = newFakeNode()
 	e.pm = projects.New(st.DB, box, e.node, al, discard)
 	e.stats = &fakeStats{}
@@ -258,7 +263,7 @@ func TestPolicyValidation(t *testing.T) {
 		{"no role", "GET /x", Policy{}, "minimum role"},
 		{"write without audit", "POST /x", Policy{Role: auth.RoleAdmin}, "audit name"},
 		{"public write without audit", "POST /login", Policy{Public: true}, "audit name"},
-		{"public with sudo", "GET /x", Policy{Public: true, Sudo: true}, "sudo"},
+		{"public with sudo", "GET /x", Policy{Public: true, Sudo: auth.SudoStrict}, "sudo"},
 		{"public with role", "GET /x", Policy{Public: true, Role: auth.RoleViewer}, "role"},
 	}
 	for _, c := range cases {
@@ -476,7 +481,7 @@ func TestRoleAndSudoEnforcement(t *testing.T) {
 
 	post := func(p *auth.Principal) int {
 		rt := newRouter(fixedAuth{p}, al)
-		rt.HandleFunc("POST /secret/reveal", ok, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal"})
+		rt.HandleFunc("POST /secret/reveal", ok, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal"})
 		if err := rt.Validate(); err != nil {
 			t.Fatal(err)
 		}

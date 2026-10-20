@@ -50,6 +50,7 @@ var SensitiveActions = []string{
 	"user.invite.cancel",
 	"user.update",
 	"user.remove",
+	"security.level",
 }
 
 // SecurityKinds are the alerts that cannot be turned off.

@@ -20,6 +20,9 @@ type ProjectData struct {
 	Linked     []string
 	Linkable   []string
 	SudoActive bool
+	// SudoCritical: the critical actions (secrets, deleting data) may run
+	// now. SudoActive covers the rest; the level decides each one.
+	SudoCritical bool
 	Flash      string
 	// Git credentials: the project's own (settings), how many server-wide
 	// ones it can also use, and what the new-service form can pick.
@@ -142,14 +145,14 @@ templ ProjectSettings(d ProjectData) {
 			@projectGitCreds(d)
 			if d.CanCreate {
 				@dangerZone(t(ctx, "project.danger.title"), t(ctx, "project.danger.hint")) {
-					<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteProjectModal(d.SudoActive) } disabled?={ len(d.Services) > 0 }>
+					<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteProjectModal(d.SudoCritical) } disabled?={ len(d.Services) > 0 }>
 						@Icon("trash", "size-3.5")
 						{ t(ctx, "project.danger.delete") }…
 					</button>
 				}
-				@sudoModal(d.CSRF, "/p/"+d.Slug+"/settings", d.SudoActive)
+				@sudoModal(d.CSRF, "/p/"+d.Slug+"/settings", d.SudoCritical)
 			}
-			if d.CanCreate && d.SudoActive {
+			if d.CanCreate && d.SudoCritical {
 				<dialog class="tuc-modal is-md is-danger" id="delete-project" aria-labelledby="delete-project-title" data-open={ fmt.Sprint(d.Error != "") }>
 					<div class="tuc-modal__panel">
 						<div class="tuc-modal__header">
@@ -161,10 +164,7 @@ templ ProjectSettings(d ProjectData) {
 						<div class="tuc-modal__body">
 							<form method="post" action={ templ.SafeURL("/p/" + d.Slug + "/delete") } class="flex flex-col gap-3">
 								<input type="hidden" name="csrf" value={ d.CSRF }/>
-								<div class="flex flex-col gap-1.5">
-									<label class="tuc-label" for="confirm">{ t(ctx, "service.danger.type_name") } <span class="font-mono">{ d.Slug }</span></label>
-									<input class="tuc-input font-mono" id="confirm" name="confirm" required autocomplete="off"/>
-								</div>
+								@confirmName("confirm", t(ctx, "service.danger.type_name"), d.Slug, true)
 								<div class="flex justify-end gap-2">
 									<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
 									<button class="tuc-btn is-danger" type="submit">
@@ -282,6 +282,9 @@ type ServiceData struct {
 	CanOperate  bool
 	CanAdmin    bool
 	SudoActive  bool
+	// SudoCritical: the critical actions (secrets, deleting data) may run
+	// now. SudoActive covers the rest; the level decides each one.
+	SudoCritical bool
 	Error       string
 	Flash       string
 }
@@ -423,7 +426,7 @@ templ serviceActions(d ServiceData) {
 					@Icon("square-terminal", "size-4")
 					{ t(ctx, "terminal.title") }
 				</button>
-			} else if d.SudoActive {
+			} else if d.SudoCritical {
 				<button type="button" class="tuc-btn is-outline w-full" data-tuc-modal="#terminal-modal">
 					@Icon("square-terminal", "size-4")
 					{ t(ctx, "terminal.title") }

@@ -100,16 +100,16 @@ func TestBackupRoutesPolicies(t *testing.T) {
 	}
 	want := map[string]struct {
 		role auth.Role
-		sudo bool
+		sudo auth.SudoTier
 	}{
-		"POST /backups/keys":                            {auth.RoleOwner, true},
-		"POST /backups/keys/delete":                     {auth.RoleOwner, true},
-		"POST /backups/targets":                         {auth.RoleOwner, true},
-		"POST /backups/targets/delete":                  {auth.RoleOwner, true},
-		"POST /p/{project}/s/{service}/backups/restore": {auth.RoleAdmin, true},
-		"POST /p/{project}/s/{service}/backup":          {auth.RoleAdmin, true},
-		"GET /backups/download/{token}":                 {auth.RoleAdmin, true},
-		"GET /backups/runs/{id}/download":               {auth.RoleAdmin, true},
+		"POST /backups/keys":                            {auth.RoleOwner, auth.SudoCritical},
+		"POST /backups/keys/delete":                     {auth.RoleOwner, auth.SudoCritical},
+		"POST /backups/targets":                         {auth.RoleOwner, auth.SudoCritical},
+		"POST /backups/targets/delete":                  {auth.RoleOwner, auth.SudoCritical},
+		"POST /p/{project}/s/{service}/backups/restore": {auth.RoleAdmin, auth.SudoCritical},
+		"POST /p/{project}/s/{service}/backup":          {auth.RoleAdmin, auth.SudoCritical},
+		"GET /backups/download/{token}":                 {auth.RoleAdmin, auth.SudoCritical},
+		"GET /backups/runs/{id}/download":               {auth.RoleAdmin, auth.SudoCritical},
 	}
 	for pattern, w := range want {
 		p, ok := registered[pattern]

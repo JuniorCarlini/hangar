@@ -14,6 +14,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
@@ -24,6 +25,7 @@ import (
 
 // Session lifetimes and attempt limits (docs/17 § 1.4).
 const (
+	// SessionIdle is the idle limit of the strict level (Level.SessionIdle).
 	SessionIdle = 30 * time.Minute
 	SessionMax  = 12 * time.Hour
 	PendingTTL  = 5 * time.Minute
@@ -114,6 +116,10 @@ type Service struct {
 	// no user, until setupUntil.
 	firstRun   bool
 	setupUntil setupDeadline
+
+	// level caches the panel's security level ("" = not read yet).
+	levelMu sync.Mutex
+	level   Level
 }
 
 // Options tunes the Service (tests use cheap argon and a fixed clock).
@@ -525,7 +531,7 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 	// already passed every factor stay: otherwise anyone who knows the
 	// owner's email could log them out of every browser, again and again.
 	if sess.Stage != "active" ||
-		now.Unix() >= sess.ExpiresAt || now.Sub(time.Unix(sess.LastSeenAt, 0)) >= SessionIdle {
+		now.Unix() >= sess.ExpiresAt || now.Sub(time.Unix(sess.LastSeenAt, 0)) >= s.Level(ctx).SessionIdle() {
 		if sess.Stage == "active" {
 			_ = s.q.DeleteSession(ctx, sess.IDHash)
 		}
@@ -546,6 +552,7 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 		CSRFToken: sess.CsrfToken, SessionToken: token,
 		Email: sess.Email, Name: sess.Name, Locale: sess.Locale.String, Theme: sess.Theme, HasTOTP: sess.HasTotp == 1,
 		AllProjects: sess.AllProjects == 1 || role >= RoleAdmin,
+		Level:       s.Level(ctx),
 	}
 	if !p.AllProjects {
 		slugs, err := s.q.UserProjectSlugs(ctx, sess.UserID)
@@ -561,7 +568,7 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 }
 
 // Sudo checks 2FA again and swaps the session for a new one with sudo valid
-// for SudoTTL. The old token stops working.
+// for the level's SudoTTL. The old token stops working.
 func (s *Service) Sudo(ctx context.Context, p *Principal, code string, c Client) (string, error) {
 	key := "sudo:" + p.UserID
 	if err := s.checkLimits(key); err != nil {
@@ -583,7 +590,7 @@ func (s *Service) Sudo(ctx context.Context, p *Principal, code string, c Client)
 	// Keep the same CSRF token: rotating the session token already defeats
 	// fixation, and reusing the CSRF token means the forms on pages the person
 	// already had open do not start failing with "request refused".
-	token, err := s.createSession(ctx, p.UserID, "active", c, time.Unix(old.ExpiresAt, 0), s.now().Add(SudoTTL).Unix(), old.CsrfToken)
+	token, err := s.createSession(ctx, p.UserID, "active", c, time.Unix(old.ExpiresAt, 0), s.now().Add(s.Level(ctx).SudoTTL()).Unix(), old.CsrfToken)
 	if err != nil {
 		return "", err
 	}
@@ -853,7 +860,7 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 func (s *Service) CleanupSessions(ctx context.Context) (int64, error) {
 	now := s.now()
 	return s.q.DeleteExpiredSessions(ctx, dbq.DeleteExpiredSessionsParams{
-		Now: now.Unix(), IdleBefore: now.Add(-SessionIdle).Unix(),
+		Now: now.Unix(), IdleBefore: now.Add(-s.Level(ctx).SessionIdle()).Unix(),
 	})
 }
 

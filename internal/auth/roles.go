@@ -51,6 +51,9 @@ type Principal struct {
 	UserID    string
 	Role      Role
 	SudoUntil time.Time
+	// Level is the panel's security level: it decides which actions need
+	// SudoUntil to be in the future (see SudoFor).
+	Level     Level
 	CSRFToken string
 	Email     string
 	// Name is the display name ("" = not set).

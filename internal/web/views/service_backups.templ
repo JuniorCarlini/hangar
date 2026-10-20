@@ -93,7 +93,7 @@ templ tabBackups(d ServiceData) {
 				@emptyState("history", t(ctx, "backups.history.empty"))
 			}
 			if len(d.Backups.Runs) > 0 {
-				@backupRunsTable(d.Backups.Runs, false, d.CanAdmin && d.SudoActive)
+				@backupRunsTable(d.Backups.Runs, false, d.CanAdmin && d.SudoCritical)
 			}
 			if len(d.Backups.Restores) > 0 {
 				<div class="border-t border-border">
@@ -233,9 +233,9 @@ templ svcBackupDownload(d ServiceData) {
 					}
 				</div>
 				if d.Backups.Download != nil {
-					@svcDownloadState(*d.Backups.Download, d.SudoActive)
+					@svcDownloadState(*d.Backups.Download, d.SudoCritical)
 				}
-				if d.SudoActive {
+				if d.SudoCritical {
 					<form method="post" action={ templ.SafeURL(d.base() + "/backup") }>
 						<input type="hidden" name="csrf" value={ d.CSRF }/>
 						<button class="tuc-btn is-primary" type="submit">
@@ -325,9 +325,8 @@ templ svcBackupRestore(d ServiceData) {
 					<input type="radio" class="tuc-radio" name="destination" value="overwrite"/>
 					<span>{ t(ctx, "svcbackup.dest_overwrite") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_overwrite_hint") }</span></span>
 				</label>
-				<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
-					<label class="tuc-label" for="rs-confirm">{ t(ctx, "svcbackup.confirm_name", "name", d.Slug) }</label>
-					<input class="tuc-input font-mono" id="rs-confirm" name="confirm" autocomplete="off" maxlength="32"/>
+				<div class="ml-7 max-w-[320px]">
+					@confirmName("rs-confirm", t(ctx, "svcbackup.confirm_name"), d.Slug, false)
 				</div>
 			</fieldset>
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
@@ -343,7 +342,7 @@ templ svcBackupRestore(d ServiceData) {
 				</div>
 			</div>
 			<div class="flex justify-end">
-				if d.SudoActive {
+				if d.SudoCritical {
 					<button class="tuc-btn is-danger" type="submit">
 						@Icon("archive-restore", "size-3.5")
 						{ t(ctx, "svcbackup.restore") }

@@ -50,7 +50,7 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 	pr := PrincipalFrom(ctx)
 	d := views.UpdatesData{
 		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
-		CanUpdate: pr.Role >= auth.RoleOwner, SudoActive: time.Now().Before(pr.SudoUntil),
+		CanUpdate: pr.Role >= auth.RoleOwner, SudoActive: pr.SudoFor(auth.SudoStrict, time.Now()),
 		Error: errMsg, Flash: flash, Bucket: r.FormValue("bucket"), Running: h.deps.Running(),
 	}
 	if !validBucket(d.Bucket) {

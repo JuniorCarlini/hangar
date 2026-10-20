@@ -22,7 +22,7 @@ func TestSudoRoutesRaiseSecurityAlerts(t *testing.T) {
 	rt := newRouter(nil, nil)
 	routes(rt, &handlers{})
 	for _, r := range rt.Routes() {
-		if !r.Policy.Sudo {
+		if r.Policy.Sudo == auth.SudoNone {
 			continue
 		}
 		ok := slices.ContainsFunc(alerts.SensitiveActions, func(a string) bool {

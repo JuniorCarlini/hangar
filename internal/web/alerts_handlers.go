@@ -85,7 +85,7 @@ func (h *handlers) renderAlerts(w http.ResponseWriter, r *http.Request, v alerts
 	p := PrincipalFrom(ctx)
 	admin := p.Role >= auth.RoleAdmin
 	d := views.AlertsData{
-		CSRF: p.CSRFToken, CanAdmin: admin, SudoActive: time.Now().Before(p.SudoUntil),
+		CSRF: p.CSRFToken, CanAdmin: admin, SudoActive: p.SudoFor(auth.SudoStrict, time.Now()), SudoCritical: p.SudoFor(auth.SudoCritical, time.Now()),
 		Security: alerts.SecurityKinds, Revealed: v.revealed, Form: v.form, Error: v.errMsg, Flash: v.flash,
 	}
 	if until := h.alerts.MutedUntil(ctx); !until.IsZero() {

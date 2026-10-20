@@ -90,7 +90,16 @@ r.Handle("POST /services/{id}/env", h.UpdateEnv, policy{
 | Configurações do servidor, modo de acesso 🔒 | ✅ | ❌ | ❌ | ❌ |
 | Auditoria (ver) | ✅ | ✅ | ❌ | ❌ |
 
-🔒 = exige **modo sudo** (2FA/passkey de novo nos últimos 5 min).
+🔒 = pode exigir **modo sudo** (senha ou 2FA de novo, há pouco). Quanto, o dono escolhe em
+Servidor → Segurança (`auth.Level`):
+
+| Nível | Pede de novo | Confirmação vale | Sai parado após |
+|---|---|---|---|
+| Básico | nada (só o login; ações perigosas mantêm a confirmação digitada) | — | 12 h |
+| Médio (padrão) | o que não tem volta ou mostra segredo (`auth.SudoCritical`): apagar projeto/serviço/disco, revelar segredos, terminal, baixar/restaurar backup, chaves e destinos de backup, equipe | 30 min | 2 h |
+| Avançado | todo 🔒, inclusive domínios, portas, imagem, limites, marca, alertas, links de status e atualização (`auth.SudoStrict`) | 5 min | 30 min |
+
+Trocar o nível pede a senha em qualquer nível (`auth.SudoAlways`) e vira alerta de segurança.
 
 Permissão por projeto (pós-MVP): um operador pode ver só o projeto "minhaloja".
 

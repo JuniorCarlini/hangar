@@ -5,6 +5,7 @@
 expand = "Open full screen"
 language = "Language"
 copied = "Copied"
+copy_name = "Copy {name}"
 
 [locale]
 pt-BR = "Português (Brasil)"
@@ -23,6 +24,7 @@ light = "Light"
 
 [nav]
 team = "Team"
+security = "Security"
 new_version = "new version"
 updates = "Updates"
 status_links = "Status links"
@@ -220,7 +222,7 @@ to_login = "Go to sign in"
 confirm = "Confirm"
 password_label = "Confirm your password to continue"
 title = "Confirm it's you"
-text = "Sensitive actions ask for confirmation again; it lasts 5 minutes and is recorded in the audit log."
+text = "This action asks for your password again. The confirmation lasts a few minutes (the security level decides how long) and is recorded in the audit log."
 
 [sudo.error]
 wrong_password = "Incorrect password."
@@ -1698,6 +1700,7 @@ user_invite_cancel = "cancelled a team invitation"
 user_invite = "invited someone to the team"
 user_update = "changed the access of a team member"
 user_remove = "removed a team member"
+security_level = "changed the panel's security level"
 backup_key_add = "added a backup key"
 backup_key_confirm = "confirmed a backup key"
 backup_key_remove = "removed a backup key"
@@ -2309,7 +2312,7 @@ dest_new_hint = "Default: check it there, then switch the app's reference."
 new_name = "New service name"
 dest_overwrite = "Overwrite the current one"
 dest_overwrite_hint = "Backs up the current state first. If the restore fails, the data goes back as it was."
-confirm_name = "To overwrite, type {name}"
+confirm_name = "To overwrite, type"
 kit = "Recovery kit"
 kit_hint = "The key goes only with this request, stays in memory during the restore and is dropped at the end."
 passphrase = "Kit passphrase"
@@ -2987,3 +2990,38 @@ not_ready = "The limited disk did not get ready: {error}"
 title = "Remove the limit of {name}?"
 text = "The data goes back to a plain disk, with no limit, that grows on the server's disk. The services that use this disk stop during the copy and come back by themselves."
 ok = "Remove limit"
+
+[security]
+page_title = "Security · Hangar"
+title = "Security"
+subtitle = "When the panel asks for your password again, after login"
+level = "Security level"
+recommended = "recommended"
+current = "current"
+save = "Save level"
+saved = "Security level saved."
+always = "Changing the level always asks for your password, at every level: otherwise whoever found the panel open would lower it first. The change is recorded in the audit log and raises a security alert."
+
+[security.basic]
+name = "Basic"
+for = "For someone working alone, on their own computer."
+asks = "Asks for the password only at login. Dangerous actions keep their usual confirmation (typing the name, for example)."
+window = "No action asks for the password again."
+idle = "You stay logged in for up to 12 hours, even when idle."
+
+[security.standard]
+name = "Standard"
+for = "For most people."
+asks = "Asks for the password again only for what cannot be undone or shows secrets: deleting a project, service or disk, restoring or downloading a backup, seeing passwords and tokens, the terminal and the team."
+window = "After you confirm, it stays unlocked for 30 minutes."
+idle = "Logs you out after 2 hours idle."
+
+[security.strict]
+name = "Advanced"
+for = "For teams and servers with sensitive data."
+asks = "Asks for the password again on every sensitive action: also domains, ports, image changes, disk limits, branding, alerts and updates."
+window = "The confirmation lasts only 5 minutes."
+idle = "Logs you out after 30 minutes idle."
+
+[security.error]
+level = "Pick one of the three levels."

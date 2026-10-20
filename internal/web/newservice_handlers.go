@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/gitsrc"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/node"
@@ -88,7 +89,7 @@ func (h *handlers) newServiceData(r *http.Request, p dbq.Project, st nsState) *v
 		}
 		// A template born public is so only for someone who confirmed the
 		// password moments ago (projects.Actor.Sudo); say what will happen.
-		sudo := time.Now().Before(pr.SudoUntil)
+		sudo := pr.SudoFor(auth.SudoStrict, time.Now())
 		// The suggested disk limits come checked (a limit needs sudo too).
 		if limitsOK {
 			for _, s := range tp.Services {

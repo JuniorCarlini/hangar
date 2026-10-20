@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/release"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
@@ -41,7 +42,7 @@ func (h *handlers) renderUpdate(w http.ResponseWriter, r *http.Request, status i
 		Current:    h.updates.Current(),
 		NoApplier:  !h.updates.CanApply(),
 		Pending:    update.Pending(h.updateDir),
-		SudoActive: time.Now().Before(p.SudoUntil),
+		SudoActive: p.SudoFor(auth.SudoStrict, time.Now()),
 		Flash:      flash,
 		FlashError: flashErr,
 	}

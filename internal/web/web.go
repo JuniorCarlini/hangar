@@ -157,7 +157,7 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/deploy", h.deployService, Policy{Role: auth.RoleOperator, Audit: "service.deploy", AuditByHandler: true})
 	// Changing the image's tag changes what runs (a version nobody reviewed
 	// may come with it): admin and sudo, like opening a way in.
-	rt.HandleFunc("POST "+svc+"/image", h.changeImage, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.image.change", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/image", h.changeImage, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.image.change", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/rebuild", h.rebuildService, Policy{Role: auth.RoleOperator, Audit: "service.deploy", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/position", h.moveCard, Policy{Role: auth.RoleOperator, Audit: "service.move"})
 	rt.HandleFunc("POST "+svc+"/action", h.serviceAction, Policy{Role: auth.RoleOperator, Audit: "service.action", AuditByHandler: true})
@@ -167,32 +167,32 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/env/bulk", h.setEnvBulk, Policy{Role: auth.RoleOperator, Audit: "service.env.set", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/env/suggestions/dismiss", h.dismissEnvSuggestions, Policy{Role: auth.RoleOperator, Audit: "service.env.suggestions_dismiss", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/env/delete", h.deleteEnv, Policy{Role: auth.RoleOperator, Audit: "service.env.delete", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/env/reveal", h.revealEnv, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/delete", h.deleteService, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.delete", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/env/reveal", h.revealEnv, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/delete", h.deleteService, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.delete", AuditByHandler: true})
 
-	rt.HandleFunc("POST "+svc+"/domains", h.addDomain, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "domain.add", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/domains/dns-token", h.rotateDNSToken, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "edge.dns.set", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/domains/delete", h.removeDomain, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "domain.remove", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/domains/dynamic", h.dynamicDomains, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "domain.dynamic", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains", h.addDomain, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "domain.add", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/dns-token", h.rotateDNSToken, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "edge.dns.set", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/delete", h.removeDomain, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "domain.remove", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/dynamic", h.dynamicDomains, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "domain.dynamic", AuditByHandler: true})
 	// Putting a port on the internet takes what adding a domain takes;
 	// taking it off only lowers exposure.
-	rt.HandleFunc("POST "+svc+"/endpoints/public", h.setEndpointPublic, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.endpoint.public", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/endpoints/public", h.setEndpointPublic, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.endpoint.public", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/endpoints/internal", h.setEndpointInternal, Policy{Role: auth.RoleOperator, Audit: "service.endpoint.internal", AuditByHandler: true})
 	// Turning an automatic link on adds a new address on the internet (as
 	// publishing does); turning it off only removes one.
-	rt.HandleFunc("POST "+svc+"/endpoints/sslip-on", h.endpointSslipOn, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.endpoint.sslip_on", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/endpoints/sslip-on", h.endpointSslipOn, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.endpoint.sslip_on", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/endpoints/sslip-off", h.endpointSslipOff, Policy{Role: auth.RoleOperator, Audit: "service.endpoint.sslip_off", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/domains/secret", h.revealCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/domains/secret/rotate", h.rotateCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "domain.dynamic.rotate_secret", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/exports/reveal", h.revealExport, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/backup", h.downloadBackup, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.backup.download", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/ports", h.addPort, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "port.open", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/secret", h.revealCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/secret/rotate", h.rotateCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "domain.dynamic.rotate_secret", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/exports/reveal", h.revealExport, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/backup", h.downloadBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.backup.download", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/ports", h.addPort, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "port.open", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/ports/delete", h.removePort, Policy{Role: auth.RoleAdmin, Audit: "port.close", AuditByHandler: true})
 	rt.HandleFunc("POST /p/{project}/tidy", h.tidyCanvas, Policy{Role: auth.RoleOperator, Audit: "project.tidy"})
 	rt.HandleFunc("POST /p/{project}/deploy-pending", h.deployPending, Policy{Role: auth.RoleOperator, Audit: "service.deploy", AuditByHandler: true})
 	rt.HandleFunc("GET /p/{project}/new", h.newServicePage, Policy{Role: auth.RoleAdmin})
 	rt.HandleFunc("GET /p/{project}/settings", h.projectSettingsPage, viewer)
-	rt.HandleFunc("POST /p/{project}/delete", h.deleteProject, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "project.delete", AuditByHandler: true})
+	rt.HandleFunc("POST /p/{project}/delete", h.deleteProject, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "project.delete", AuditByHandler: true})
 	rt.HandleFunc("GET /p/{project}/new/{template}", h.templatePage, Policy{Role: auth.RoleAdmin})
 	rt.HandleFunc("GET /p/{project}/github/repos", h.githubRepos, Policy{Role: auth.RoleAdmin})
 	rt.HandleFunc("GET /p/{project}/github/branches", h.githubBranches, Policy{Role: auth.RoleAdmin})
@@ -206,7 +206,7 @@ func routes(rt *Router, h *handlers) {
 	// Opening a way in (port, domain, link to another project) needs sudo
 	// (docs/17 § 1.3); closing one does not: in a hurry, reducing exposure
 	// must stay one click away.
-	rt.HandleFunc("POST /p/{project}/links", h.projectLink, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "project.link", AuditByHandler: true})
+	rt.HandleFunc("POST /p/{project}/links", h.projectLink, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "project.link", AuditByHandler: true})
 	rt.HandleFunc("POST /p/{project}/links/delete", h.projectUnlink, Policy{Role: auth.RoleAdmin, Audit: "project.unlink", AuditByHandler: true})
 	rt.HandleFunc("GET /overview", h.overviewRedirect, viewer)
 	rt.HandleFunc("GET /ports", h.openPortsPage, viewer)
@@ -214,7 +214,7 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/deploy-settings", h.saveDeploySettings, Policy{Role: auth.RoleAdmin, Audit: "service.deploy_settings", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git", h.saveGitSource, Policy{Role: auth.RoleAdmin, Audit: "service.git.source", AuditByHandler: true})
 	// A shell in the container: full access to it, so admin and sudo.
-	rt.HandleFunc("GET "+svc+"/terminal/ws", h.terminalWS, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.terminal.open", AuditByHandler: true})
+	rt.HandleFunc("GET "+svc+"/terminal/ws", h.terminalWS, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.terminal.open", AuditByHandler: true})
 	// The terminal page opens nothing by itself (the WebSocket above does);
 	// saved commands run only through it, so saving one needs no sudo.
 	rt.HandleFunc("GET "+svc+"/terminal", h.terminalPage, Policy{Role: auth.RoleAdmin})
@@ -223,16 +223,16 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/volumes", h.addVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.add", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/volumes/remove", h.removeVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.remove", AuditByHandler: true})
 	// Deleting a disk's data cannot be undone.
-	rt.HandleFunc("POST "+svc+"/volumes/wipe", h.wipeVolume, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.volume.wipe", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/volumes/wipe", h.wipeVolume, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.volume.wipe", AuditByHandler: true})
 	// A size limit stops the services to move the data and becomes a disk
 	// image on the server: both ways need a fresh confirmation.
-	rt.HandleFunc("POST "+svc+"/volumes/limit", h.limitVolume, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.volume.limit", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/volumes/unlimit", h.unlimitVolume, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.volume.unlimit", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/volumes/limit", h.limitVolume, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.volume.limit", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/volumes/unlimit", h.unlimitVolume, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.volume.unlimit", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/credential", h.saveGitCredential, Policy{Role: auth.RoleAdmin, Audit: "service.git.token", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/token", h.saveGitToken, Policy{Role: auth.RoleAdmin, Audit: "service.git.token", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/git/token/reveal", h.revealGitToken, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/git/webhook", h.gitWebhook, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.git.webhook", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/git/webhook/reveal", h.revealWebhook, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/git/token/reveal", h.revealGitToken, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/git/webhook", h.gitWebhook, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.git.webhook", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/git/webhook/reveal", h.revealWebhook, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("GET /domains", h.domainsPage, viewer)
 	rt.HandleFunc("POST /domains/block", h.blockHostname, Policy{Role: auth.RoleAdmin, Audit: "domain.block", AuditByHandler: true})
 	rt.HandleFunc("POST /domains/unblock", h.unblockHostname, Policy{Role: auth.RoleAdmin, Audit: "domain.unblock", AuditByHandler: true})
@@ -253,11 +253,11 @@ func routes(rt *Router, h *handlers) {
 	// domain of the server, so changing them needs sudo.
 	rt.HandleFunc("GET /brand", h.brandPage, Policy{Role: auth.RoleAdmin})
 	rt.HandleFunc("GET /brand/preview/{kind}", h.brandPreview, Policy{Role: auth.RoleAdmin})
-	rt.HandleFunc("POST /brand", h.saveBrand, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "brand.save"})
-	rt.HandleFunc("POST /brand/pages/{kind}", h.saveBrandPage, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "brand.save"})
+	rt.HandleFunc("POST /brand", h.saveBrand, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "brand.save"})
+	rt.HandleFunc("POST /brand/pages/{kind}", h.saveBrandPage, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "brand.save"})
 	rt.HandleFunc("GET /status-links", h.statusLinksPage, Policy{Role: auth.RoleAdmin})
-	rt.HandleFunc("POST /status-links", h.createStatusLink, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "status_link.create", AuditByHandler: true})
-	rt.HandleFunc("POST /status-links/revoke", h.revokeStatusLink, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "status_link.revoke", AuditByHandler: true})
+	rt.HandleFunc("POST /status-links", h.createStatusLink, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "status_link.create", AuditByHandler: true})
+	rt.HandleFunc("POST /status-links/revoke", h.revokeStatusLink, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "status_link.revoke", AuditByHandler: true})
 	rt.HandleFunc("POST /status-links/alias", h.setStatusAlias, Policy{Role: auth.RoleAdmin, Audit: "status_link.alias", AuditByHandler: true})
 
 	// Public status links (docs/15): no session, unguessable token, rate
@@ -270,9 +270,9 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST /alerts/seen", h.markAlertsSeen, Policy{Role: auth.RoleViewer, Audit: "alerts.seen"})
 	rt.HandleFunc("POST /alerts/channels", h.createChannel, Policy{Role: auth.RoleAdmin, Audit: "alerts.channel.create", AuditByHandler: true})
 	rt.HandleFunc("POST /alerts/channels/{id}/test", h.testChannel, Policy{Role: auth.RoleAdmin, Audit: "alerts.channel.test", AuditByHandler: true})
-	rt.HandleFunc("POST /alerts/channels/{id}/reveal", h.revealChannel, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "secret.reveal", AuditByHandler: true})
-	rt.HandleFunc("POST /alerts/channels/{id}/toggle", h.toggleChannel, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "alerts.channel.toggle", AuditByHandler: true})
-	rt.HandleFunc("POST /alerts/channels/{id}/delete", h.deleteChannel, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "alerts.channel.delete", AuditByHandler: true})
+	rt.HandleFunc("POST /alerts/channels/{id}/reveal", h.revealChannel, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
+	rt.HandleFunc("POST /alerts/channels/{id}/toggle", h.toggleChannel, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "alerts.channel.toggle", AuditByHandler: true})
+	rt.HandleFunc("POST /alerts/channels/{id}/delete", h.deleteChannel, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "alerts.channel.delete", AuditByHandler: true})
 	rt.HandleFunc("POST /alerts/rules", h.saveAlertRules, Policy{Role: auth.RoleAdmin, Audit: "alerts.rules.update", AuditByHandler: true})
 	rt.HandleFunc("POST /alerts/mute", h.muteAlerts, Policy{Role: auth.RoleAdmin, Audit: "alerts.mute", AuditByHandler: true})
 	rt.HandleFunc("POST /lock", h.lockPanel, Policy{Role: auth.RoleOwner, Audit: "system.lockdown", AuditByHandler: true})
@@ -283,18 +283,18 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET /backups", h.backupsPage, viewer)
 	rt.HandleFunc("POST /backups/panel", h.backupPanelNow, Policy{Role: auth.RoleOperator, Audit: "backup.run.request"})
 	rt.HandleFunc("GET /backups/kit", h.kitPage, Policy{Role: auth.RoleOwner})
-	rt.HandleFunc("POST /backups/keys", h.addKey, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "backup.key.add", AuditByHandler: true})
-	rt.HandleFunc("POST /backups/keys/confirm", h.confirmKey, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "backup.key.confirm", AuditByHandler: true})
-	rt.HandleFunc("POST /backups/keys/delete", h.deleteKey, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "backup.key.remove", AuditByHandler: true})
+	rt.HandleFunc("POST /backups/keys", h.addKey, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.key.add", AuditByHandler: true})
+	rt.HandleFunc("POST /backups/keys/confirm", h.confirmKey, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.key.confirm", AuditByHandler: true})
+	rt.HandleFunc("POST /backups/keys/delete", h.deleteKey, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.key.remove", AuditByHandler: true})
 	rt.HandleFunc("GET /backups/targets/new", h.targetPage, Policy{Role: auth.RoleOwner})
-	rt.HandleFunc("POST /backups/targets", h.addTarget, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "backup.target.add", AuditByHandler: true})
+	rt.HandleFunc("POST /backups/targets", h.addTarget, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.target.add", AuditByHandler: true})
 	rt.HandleFunc("POST /backups/targets/check", h.checkTarget, Policy{Role: auth.RoleAdmin, Audit: "backup.target.check", AuditByHandler: true})
-	rt.HandleFunc("POST /backups/targets/delete", h.deleteTarget, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "backup.target.remove", AuditByHandler: true})
-	rt.HandleFunc("GET /backups/runs/{id}/download", h.runDownload, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "backup.download_link", AuditByHandler: true})
-	rt.HandleFunc("GET /backups/download/{token}", h.takeDownload, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "service.backup.download", AuditByHandler: true})
+	rt.HandleFunc("POST /backups/targets/delete", h.deleteTarget, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.target.remove", AuditByHandler: true})
+	rt.HandleFunc("GET /backups/runs/{id}/download", h.runDownload, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "backup.download_link", AuditByHandler: true})
+	rt.HandleFunc("GET /backups/download/{token}", h.takeDownload, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.backup.download", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backups/policy", h.setBackupPolicy, Policy{Role: auth.RoleAdmin, Audit: "backup.policy.set", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backups/run", h.runBackupNow, Policy{Role: auth.RoleOperator, Audit: "backup.run.request"})
-	rt.HandleFunc("POST "+svc+"/backups/restore", h.restoreBackup, Policy{Role: auth.RoleAdmin, Sudo: true, Audit: "backup.restore.start", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/backups/restore", h.restoreBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "backup.restore.start", AuditByHandler: true})
 
 	rt.HandleFunc("GET /_pista", h.pistaPage, viewer)
 
@@ -306,13 +306,18 @@ func routes(rt *Router, h *handlers) {
 
 	// The team: owners invite people and choose what each one reaches.
 	rt.HandleFunc("GET /team", h.teamPage, Policy{Role: auth.RoleOwner})
-	rt.HandleFunc("POST /team/invites", h.teamInvite, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.invite", AuditByHandler: true})
-	rt.HandleFunc("POST /team/invites/{id}/cancel", h.teamCancelInvite, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.invite.cancel", AuditByHandler: true})
-	rt.HandleFunc("POST /team/users/{id}", h.teamUpdate, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.update", AuditByHandler: true})
-	rt.HandleFunc("POST /team/users/{id}/delete", h.teamRemove, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "user.remove", AuditByHandler: true})
+	rt.HandleFunc("POST /team/invites", h.teamInvite, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.invite", AuditByHandler: true})
+	rt.HandleFunc("POST /team/invites/{id}/cancel", h.teamCancelInvite, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.invite.cancel", AuditByHandler: true})
+	rt.HandleFunc("POST /team/users/{id}", h.teamUpdate, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.update", AuditByHandler: true})
+	rt.HandleFunc("POST /team/users/{id}/delete", h.teamRemove, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.remove", AuditByHandler: true})
+	// The security level: how often the panel asks for the password again.
+	// Changing it always asks, or whoever finds the panel open would lower
+	// it first.
+	rt.HandleFunc("GET /security", h.securityPage, Policy{Role: auth.RoleOwner})
+	rt.HandleFunc("POST /security", h.saveSecurity, Policy{Role: auth.RoleOwner, Sudo: auth.SudoAlways, Audit: "security.level", AuditByHandler: true})
 	rt.HandleFunc("GET /update", h.updatePage, Policy{Role: auth.RoleOwner})
 	rt.HandleFunc("POST /update/check", h.updateCheck, Policy{Role: auth.RoleOwner, Audit: "system.update.check"})
-	rt.HandleFunc("POST /update", h.updateApply, Policy{Role: auth.RoleOwner, Sudo: true, Audit: "system.update.request"})
+	rt.HandleFunc("POST /update", h.updateApply, Policy{Role: auth.RoleOwner, Sudo: auth.SudoStrict, Audit: "system.update.request"})
 }
 
 func healthz(w http.ResponseWriter, _ *http.Request) {

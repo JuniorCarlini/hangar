@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/statuspage"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
@@ -62,7 +63,7 @@ func (h *handlers) renderStatusLinks(w http.ResponseWriter, r *http.Request, v s
 	ctx := r.Context()
 	pr := PrincipalFrom(ctx)
 	d := views.StatusLinksData{
-		CSRF: pr.CSRFToken, SudoActive: time.Now().Before(pr.SudoUntil), Error: v.errMsg, Flash: v.flash,
+		CSRF: pr.CSRFToken, SudoActive: pr.SudoFor(auth.SudoStrict, time.Now()), Error: v.errMsg, Flash: v.flash,
 		Open: v.open, Enabled: h.status != nil,
 	}
 	refs, _ := h.serviceRefs(ctx)

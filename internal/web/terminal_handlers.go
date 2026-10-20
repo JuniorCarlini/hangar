@@ -11,6 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
@@ -60,7 +61,7 @@ func (h *handlers) renderTerminal(w http.ResponseWriter, r *http.Request, status
 	}
 	d := views.TerminalData{
 		CSRF: pr.CSRFToken, Project: p.Slug, Slug: s.Slug, Error: errMsg,
-		SudoActive: time.Now().Before(pr.SudoUntil),
+		SudoActive: pr.SudoFor(auth.SudoCritical, time.Now()),
 		Running:    h.serviceState(r.Context(), p.Slug, s) == "running",
 	}
 	if d.SudoActive && d.Running {

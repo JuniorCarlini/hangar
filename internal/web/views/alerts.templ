@@ -10,6 +10,9 @@ type AlertsData struct {
 	CSRF       string
 	CanAdmin   bool
 	SudoActive bool
+	// SudoCritical: the critical actions (secrets, deleting data) may run
+	// now. SudoActive covers the rest; the level decides each one.
+	SudoCritical bool
 	MutedUntil string // "" when not muted
 	Channels   []ChannelRow
 	Rules      []RuleRow
@@ -203,7 +206,7 @@ templ Alerts(d AlertsData) {
 			@alertHistory(d)
 			if d.CanAdmin {
 				@alertDeliveries(d)
-				@sudoModal(d.CSRF, "/alerts", d.SudoActive)
+				@sudoModal(d.CSRF, "/alerts", d.SudoCritical)
 				for _, k := range ChannelKinds {
 					@channelDialog(d, k)
 				}
@@ -276,13 +279,19 @@ templ alertChannels(d AlertsData) {
 													{ t(ctx, "alerts.test") }
 												</button>
 											</form>
-											if d.SudoActive {
+											if d.SudoCritical {
 												<form method="post" action={ templ.SafeURL("/alerts/channels/" + c.ID + "/reveal") }>
 													<input type="hidden" name="csrf" value={ d.CSRF }/>
 													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "alerts.reveal_named", "name", c.Name) } title={ t(ctx, "alerts.reveal") }>
 														@Icon("eye", "size-3.5")
 													</button>
 												</form>
+											} else {
+												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "alerts.reveal_named", "name", c.Name) } title={ t(ctx, "alerts.reveal") }>
+													@Icon("eye", "size-3.5")
+												</button>
+											}
+											if d.SudoActive {
 												<form method="post" action={ templ.SafeURL("/alerts/channels/" + c.ID + "/toggle") }>
 													<input type="hidden" name="csrf" value={ d.CSRF }/>
 													if c.Enabled {
@@ -304,9 +313,6 @@ templ alertChannels(d AlertsData) {
 													</button>
 												</form>
 											} else {
-												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "alerts.reveal_named", "name", c.Name) } title={ t(ctx, "alerts.reveal") }>
-													@Icon("eye", "size-3.5")
-												</button>
 												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "alerts.pause_named", "name", c.Name) } title={ t(ctx, "alerts.sudo_hint") }>
 													@Icon("lock", "size-3.5")
 												</button>

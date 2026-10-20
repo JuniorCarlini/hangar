@@ -40,7 +40,7 @@ func (h *handlers) renderBackups(w http.ResponseWriter, r *http.Request, status 
 	pr := PrincipalFrom(ctx)
 	d := views.BackupsData{
 		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
-		CanOwner: pr.Role >= auth.RoleOwner, SudoActive: time.Now().Before(pr.SudoUntil), Error: errMsg, Flash: flash,
+		CanOwner: pr.Role >= auth.RoleOwner, SudoActive: pr.SudoFor(auth.SudoCritical, time.Now()), Error: errMsg, Flash: flash,
 		PanelQueued: h.backups.Queued(""),
 	}
 	o, err := h.backups.Overview(ctx)
@@ -222,7 +222,7 @@ func (h *handlers) renderKit(w http.ResponseWriter, r *http.Request, status int,
 		label = i18n.T(r.Context(), "kit.spare_label")
 	}
 	render(w, r, status, views.BackupKit(views.KitData{
-		CSRF: pr.CSRFToken, SudoActive: time.Now().Before(pr.SudoUntil), DefaultLabel: label,
+		CSRF: pr.CSRFToken, SudoActive: pr.SudoFor(auth.SudoCritical, time.Now()), DefaultLabel: label,
 		Template: i18n.T(r.Context(), "kit.file_text"), Error: errMsg,
 	}))
 }
@@ -256,7 +256,7 @@ func (h *handlers) targetPage(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) renderTarget(w http.ResponseWriter, r *http.Request, status int, errMsg string, d views.TargetFormData) {
 	pr := PrincipalFrom(r.Context())
-	d.CSRF, d.SudoActive, d.Error, d.Providers = pr.CSRFToken, time.Now().Before(pr.SudoUntil), errMsg, backup.Providers
+	d.CSRF, d.SudoActive, d.Error, d.Providers = pr.CSRFToken, pr.SudoFor(auth.SudoCritical, time.Now()), errMsg, backup.Providers
 	render(w, r, status, views.BackupTargetForm(d))
 }
 
