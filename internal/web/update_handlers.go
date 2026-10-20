@@ -18,6 +18,7 @@ type updates interface {
 	Latest() (*update.Available, error)
 	Check(ctx context.Context) (*update.Available, error)
 	Stage(ctx context.Context, version, requestedBy string) error
+	CanApply() bool
 }
 
 func (h *handlers) updatePage(w http.ResponseWriter, r *http.Request) {
@@ -26,9 +27,17 @@ func (h *handlers) updatePage(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) renderUpdate(w http.ResponseWriter, r *http.Request, status int, flash string, flashErr bool) {
 	p := PrincipalFrom(r.Context())
+	// A request left where no applier looks (a panel run by hand) would
+	// keep the page waiting forever.
+	if !h.updates.CanApply() && update.Pending(h.updateDir) {
+		if err := update.DropRequest(h.updateDir); err != nil {
+			loggerFrom(r.Context()).Error("drop update request", "error", err)
+		}
+	}
 	d := views.UpdateData{
 		CSRF:       p.CSRFToken,
 		Current:    h.updates.Current(),
+		NoApplier:  !h.updates.CanApply(),
 		Pending:    update.Pending(h.updateDir),
 		SudoActive: time.Now().Before(p.SudoUntil),
 		Flash:      flash,

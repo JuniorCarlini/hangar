@@ -88,6 +88,9 @@ func TestIsUpgrade(t *testing.T) {
 		{"v1.10.0", "v1.9.9", false, false},
 		{"dev", "v0.1.0", true, false},
 		{"ece7230-dirty", "v0.1.0", true, false},
+		{"v0.5.13-1-gc34d8c1", "v0.5.13", false, false},
+		{"v0.5.13-4-gc34d8c1-dirty", "v0.5.13", false, false},
+		{"v0.5.13-1-gc34d8c1", "v0.5.14", true, false},
 		{"v1.2.3", "v1.2.4-rc1", false, true},
 		{"v1.2.3", "latest", false, true},
 	}

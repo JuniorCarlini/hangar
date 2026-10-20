@@ -21,6 +21,10 @@ import (
 // UpdateDir is where the panel and the applier exchange request and result.
 func UpdateDir(cfg config.Config) string { return filepath.Join(cfg.DataDir, "update") }
 
+// updaterPathUnit starts the root applier when a request appears
+// (installed by `hangard system install`).
+const updaterPathUnit = "/etc/systemd/system/hangar-updater.path"
+
 // FirewallDir holds the port rules the panel writes and the root unit applies.
 func FirewallDir(cfg config.Config) string { return filepath.Join(cfg.DataDir, "firewall") }
 
@@ -43,6 +47,7 @@ func NewChecker(cfg config.Config, version string) (*update.Checker, error) {
 	}
 	return update.NewChecker(update.Config{
 		Repo: cfg.Update.Repo, APIBase: cfg.Update.APIBase, Token: token, Dir: UpdateDir(cfg),
+		Applier: update.ApplierWatches(updaterPathUnit, UpdateDir(cfg)),
 	}, version), nil
 }
 

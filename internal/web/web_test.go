@@ -513,7 +513,10 @@ type fakeUpdates struct {
 	current   string
 	available *update.Available
 	staged    string
+	noApplier bool
 }
+
+func (f *fakeUpdates) CanApply() bool { return !f.noApplier }
 
 func (f *fakeUpdates) Current() string                                  { return f.current }
 func (f *fakeUpdates) Latest() (*update.Available, error)               { return f.available, nil }

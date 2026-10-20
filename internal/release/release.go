@@ -140,12 +140,21 @@ func (v Version) Newer(o Version) bool {
 
 func (v Version) String() string { return fmt.Sprintf("v%d.%d.%d", v.Major, v.Minor, v.Patch) }
 
+// describeRE is a build made after a release tag, as `git describe` names
+// it: v0.5.13-1-gc34d8c1, optionally -dirty.
+var describeRE = regexp.MustCompile(`^(v\d{1,6}\.\d{1,6}\.\d{1,6})-\d+-g[0-9a-f]{4,40}(-dirty)?$`)
+
 // IsUpgrade reports whether candidate is a valid upgrade over current. A
-// development build ("dev" or with a suffix) accepts any stable version.
+// build made after a tag is ahead of that tag, so only a newer release
+// upgrades it; any other development build ("dev", a bare commit) accepts
+// any stable version.
 func IsUpgrade(current, candidate string) (bool, error) {
 	cand, err := ParseVersion(candidate)
 	if err != nil {
 		return false, err
+	}
+	if m := describeRE.FindStringSubmatch(current); m != nil {
+		current = m[1]
 	}
 	cur, err := ParseVersion(current)
 	if err != nil {

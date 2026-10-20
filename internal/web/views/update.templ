@@ -14,6 +14,9 @@ type UpdateData struct {
 	// for the new version (ui.js) instead of offering another one.
 	Busy bool
 	SudoActive bool
+	// NoApplier: this panel was not installed with the applier (run by
+	// hand, a development machine); the button would never be applied.
+	NoApplier bool
 	// History is every update applied here, newest first (an update still
 	// being applied comes first).
 	History []UpdateStatus
@@ -89,7 +92,9 @@ templ Update(d UpdateData) {
 							@Icon("shield", "size-4")
 							<div class="tuc-alert__body"><p>{ t(ctx, "update.safety") }</p></div>
 						</div>
-						if d.SudoActive {
+						if d.NoApplier {
+							@notice("warning", "triangle-alert", t(ctx, "update.no_applier"))
+						} else if d.SudoActive {
 							<div class="flex flex-wrap justify-end gap-2">
 								<form method="post" action="/update/check">
 									<input type="hidden" name="csrf" value={ d.CSRF }/>

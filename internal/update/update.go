@@ -45,6 +45,10 @@ type Config struct {
 	APIBase string // "https://api.github.com"
 	Token   string // needed while the repository is private
 	Dir     string // data_dir/update
+	// Applier: the root applier (hangar-updater.path) watches Dir. Without
+	// it (a panel run by hand, a development machine) a request would wait
+	// forever, so the button is not offered.
+	Applier bool
 }
 
 // Available is a newer version that was found.
@@ -93,6 +97,25 @@ func NewChecker(cfg Config, current string) *Checker {
 
 // Current is the running version.
 func (c *Checker) Current() string { return c.current }
+
+// CanApply reports whether a staged update would be applied here.
+func (c *Checker) CanApply() bool { return c.cfg.Applier }
+
+// ApplierWatches reports whether the systemd path unit at unitPath starts
+// the applier for requests left in dir.
+func ApplierWatches(unitPath, dir string) bool {
+	b, err := os.ReadFile(unitPath) //nolint:gosec // fixed system path
+	if err != nil {
+		return false
+	}
+	want := "PathExists=" + filepath.Join(dir, requestFile)
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.TrimSpace(line) == want {
+			return true
+		}
+	}
+	return false
+}
 
 // Latest returns the last newer version found (nil when up to date) and the
 // error from the last lookup.
@@ -175,6 +198,9 @@ func (c *Checker) latestRelease(ctx context.Context) (ghRelease, error) {
 // Stage downloads and verifies the version and leaves the request for the
 // applier. It only succeeds if signature, version and hash all check out.
 func (c *Checker) Stage(ctx context.Context, version, requestedBy string) error {
+	if !c.cfg.Applier {
+		return i18n.E("update.error.no_applier")
+	}
 	rel, err := c.latestRelease(ctx)
 	if err != nil {
 		return err
@@ -264,6 +290,15 @@ func ReadStatus(dir string) (*Status, error) {
 func Pending(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, requestFile))
 	return err == nil
+}
+
+// DropRequest removes a request nobody will apply (no applier here).
+func DropRequest(dir string) error {
+	err := os.Remove(filepath.Join(dir, requestFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 func (c *Checker) get(ctx context.Context, u, accept string, limit int64) ([]byte, error) {

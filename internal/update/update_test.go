@@ -84,7 +84,7 @@ func fakeGitHub(t *testing.T, rel *fakeRelease) *httptest.Server {
 func newChecker(t *testing.T, srv *httptest.Server, current string) (*Checker, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "update")
-	return NewChecker(Config{Repo: "JuniorCarlini/hangar", APIBase: srv.URL, Dir: dir}, current), dir
+	return NewChecker(Config{Repo: "JuniorCarlini/hangar", APIBase: srv.URL, Dir: dir, Applier: true}, current), dir
 }
 
 func TestCheckFindsNewerVersion(t *testing.T) {
@@ -188,7 +188,7 @@ func stagedApplier(t *testing.T, newBinary []byte) (*Applier, *fakeService) {
 	srv := fakeGitHub(t, &rel)
 
 	data := t.TempDir()
-	c := NewChecker(Config{Repo: "JuniorCarlini/hangar", APIBase: srv.URL, Dir: filepath.Join(data, "update")}, "v1.0.0")
+	c := NewChecker(Config{Repo: "JuniorCarlini/hangar", APIBase: srv.URL, Dir: filepath.Join(data, "update"), Applier: true}, "v1.0.0")
 	if err := c.Stage(context.Background(), "v1.1.0", "usr_1"); err != nil {
 		t.Fatal(err)
 	}
@@ -480,5 +480,32 @@ func TestRestoreFileReplacesThroughRename(t *testing.T) {
 	}
 	if got := read(t, dst); got != "copia boa" {
 		t.Errorf("file touched by a failed restore: %q", got)
+	}
+}
+
+func TestStageNeedsTheApplier(t *testing.T) {
+	c := NewChecker(Config{Repo: "JuniorCarlini/hangar", APIBase: "http://127.0.0.1:9", Dir: t.TempDir()}, "v1.0.0")
+	if c.CanApply() {
+		t.Fatal("no applier configured, CanApply should be false")
+	}
+	if err := c.Stage(context.Background(), "v1.0.1", "usr"); err == nil {
+		t.Fatal("Stage without an applier should refuse: the request would wait forever")
+	}
+}
+
+func TestApplierWatches(t *testing.T) {
+	dir := t.TempDir()
+	unit := filepath.Join(dir, "hangar-updater.path")
+	if ApplierWatches(unit, "/var/lib/hangar/update") {
+		t.Error("missing unit: no applier")
+	}
+	if err := os.WriteFile(unit, []byte("[Path]\nPathExists=/var/lib/hangar/update/request.json\nUnit=hangar-updater.service\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !ApplierWatches(unit, "/var/lib/hangar/update") {
+		t.Error("the unit watches this directory")
+	}
+	if ApplierWatches(unit, "/home/dev/hangar/.data/update") {
+		t.Error("the unit watches another directory: no applier for this one")
 	}
 }
