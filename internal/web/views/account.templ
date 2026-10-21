@@ -12,6 +12,8 @@ type AccountData struct {
 	Error  string
 	TOTP     TOTPSection
 	Sessions []SessionRow
+	// Security is the panel's security level card (owner only, else nil).
+	Security *SecurityData
 }
 
 // SessionRow is an open session of the account.
@@ -84,6 +86,9 @@ templ Account(d AccountData) {
 					</div>
 				</form>
 			</section>
+			if d.Security != nil {
+				@securityCard(*d.Security)
+			}
 			@totpCard(d)
 			@sessionsCard(d)
 		}

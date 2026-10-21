@@ -41,7 +41,7 @@ templ shell(title string) {
 var PaletteIcons = []string{
 	"gauge", "globe", "plug", "shield-alert", "wifi", "refresh-cw", "user", "folder", "folder-plus", "plus", "box",
 	"layers", "braces", "link", "file-text", "terminal", "settings", "rocket", "rotate-ccw",
-	"monitor", "moon", "sun", "log-out", "bell", "database-backup",
+	"monitor", "moon", "sun", "log-out", "bell", "database-backup", "users",
 }
 
 // lockShortcut is the lock's shortcut for aria-keyshortcuts (ui.js).
@@ -348,7 +348,6 @@ templ sidebar(n Nav) {
 				}
 				if n.IsOwner {
 					@navLink(n, "team", "/team", "users", t(ctx, "nav.team"))
-					@navLink(n, "security", "/security", "shield-check", t(ctx, "nav.security"))
 					@navLink(n, "update", "/update", "refresh-cw", t(ctx, "nav.update")) {
 						if n.Update {
 							<span class="tuc-menu__count"><span class="tuc-badge is-info is-plain">1</span></span>

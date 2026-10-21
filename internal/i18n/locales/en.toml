@@ -24,7 +24,6 @@ light = "Light"
 
 [nav]
 team = "Team"
-security = "Security"
 new_version = "new version"
 updates = "Updates"
 status_links = "Status links"
@@ -2992,8 +2991,6 @@ text = "The data goes back to a plain disk, with no limit, that grows on the ser
 ok = "Remove limit"
 
 [security]
-page_title = "Security · Hangar"
-title = "Security"
 subtitle = "When the panel asks for your password again, after login"
 level = "Security level"
 recommended = "recommended"

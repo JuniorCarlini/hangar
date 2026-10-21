@@ -91,7 +91,7 @@ r.Handle("POST /services/{id}/env", h.UpdateEnv, policy{
 | Auditoria (ver) | ✅ | ✅ | ❌ | ❌ |
 
 🔒 = pode exigir **modo sudo** (senha ou 2FA de novo, há pouco). Quanto, o dono escolhe em
-Servidor → Segurança (`auth.Level`):
+Minha conta → Nível de segurança, acima da verificação em duas etapas (`auth.Level`):
 
 | Nível | Pede de novo | Confirmação vale | Sai parado após |
 |---|---|---|---|

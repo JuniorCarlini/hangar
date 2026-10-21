@@ -54,22 +54,26 @@ func TestLevelDecidesWhichActionsAsk(t *testing.T) {
 	}
 }
 
-// Changing the level asks for the password at every level, or whoever
-// finds the panel open would lower it first.
+// The level lives on "My account", above 2FA, for the owner. Changing it
+// asks for the password at every level, or whoever finds the panel open
+// would lower it first.
 func TestChangingTheLevelAlwaysAsks(t *testing.T) {
 	e := newEnv(t)
 	e.setLevel(t, auth.LevelBasic)
 	c, p := e.session(t, auth.RoleOwner)
 	post := func(c *http.Cookie, csrf, level string) int {
 		form := url.Values{"csrf": {csrf}, "level": {level}}
-		return e.do(req{method: "POST", target: "/security", form: form, cookies: []*http.Cookie{c}}).Code
+		return e.do(req{method: "POST", target: "/account/security", form: form, cookies: []*http.Cookie{c}}).Code
 	}
 
-	page := e.do(req{method: "GET", target: "/security", cookies: []*http.Cookie{c}}).Body.String()
+	page := e.do(req{method: "GET", target: "/account", cookies: []*http.Cookie{c}}).Body.String()
 	for _, want := range []string{`value="basic" checked`, `value="standard"`, `value="strict"`, `id="sudo-dialog"`} {
 		if !strings.Contains(page, want) {
-			t.Errorf("security page lacks %q", want)
+			t.Errorf("account page lacks %q", want)
 		}
+	}
+	if sec, totp := strings.Index(page, `id="security"`), strings.Index(page, `id="totp"`); sec < 0 || sec > totp {
+		t.Error("the security card should come right before 2FA")
 	}
 	if code := post(c, p.CSRFToken, "strict"); code != http.StatusForbidden {
 		t.Fatalf("change without sudo at basic: %d, want 403", code)
@@ -86,10 +90,8 @@ func TestChangingTheLevelAlwaysAsks(t *testing.T) {
 		t.Errorf("level %q, want strict", got)
 	}
 
-	// Only the owner reaches the page and the change.
-	for _, pattern := range []string{"GET /security", "POST /security"} {
-		if r := routeFor(t, pattern); r.Policy.Role != auth.RoleOwner {
-			t.Errorf("%s is open to %s", pattern, r.Policy.Role)
-		}
+	// Only the owner changes it (and sees the card: securityCard).
+	if r := routeFor(t, "POST /account/security"); r.Policy.Role != auth.RoleOwner {
+		t.Errorf("the change is open to %s", r.Policy.Role)
 	}
 }

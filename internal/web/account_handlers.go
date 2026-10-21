@@ -21,6 +21,8 @@ func (h *handlers) accountPage(w http.ResponseWriter, r *http.Request) {
 		flash = i18n.T(r.Context(), "account.totp.disabled")
 	case "session-ended":
 		flash = i18n.T(r.Context(), "account.sessions.ended")
+	case "security":
+		flash = i18n.T(r.Context(), "security.saved")
 	}
 	h.renderAccount(w, r, http.StatusOK, flash, "", nil)
 }
@@ -30,7 +32,8 @@ func (h *handlers) renderAccount(w http.ResponseWriter, r *http.Request, status 
 	d := views.AccountData{
 		CSRF: p.CSRFToken, Email: p.Email, Name: p.Name, Role: p.Role.String(),
 		Locale: p.Locale, Theme: p.Theme, Flash: flash, Error: errMsg,
-		TOTP: views.TOTPSection{On: p.HasTOTP || len(recovery) > 0, Required: h.auth.Require2FA(), Recovery: recovery},
+		TOTP:     views.TOTPSection{On: p.HasTOTP || len(recovery) > 0, Required: h.auth.Require2FA(), Recovery: recovery},
+		Security: h.securityCard(r),
 	}
 	if list, err := h.auth.ListSessions(r.Context(), p); err == nil {
 		for _, ss := range list {

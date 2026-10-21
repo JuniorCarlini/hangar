@@ -48,8 +48,6 @@ func (h *handlers) navFor(r *http.Request, p *auth.Principal) views.Nav {
 		n.Active = "update"
 	case strings.HasPrefix(path, "/alerts"):
 		n.Active = "alerts"
-	case strings.HasPrefix(path, "/security"):
-		n.Active = "security"
 	case strings.HasPrefix(path, "/team"):
 		n.Active = "team"
 	case strings.HasPrefix(path, "/account"):

@@ -2,7 +2,10 @@ package web
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
+	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -149,5 +152,23 @@ func TestPaletteInFrame(t *testing.T) {
 	page = e.do(req{method: "GET", target: "/", cookies: []*http.Cookie{c}, header: map[string]string{"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"}}).Body.String()
 	if !strings.Contains(page, "Ctrl K") || strings.Contains(page, "⌘K") {
 		t.Error("off Apple devices the hint should read Ctrl K")
+	}
+}
+
+// Every icon palette.go names is in the palette's <template>, whatever role
+// would see the item (the tests above only list some roles' items).
+func TestPaletteIconsAreRendered(t *testing.T) {
+	raw, err := os.ReadFile("palette.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := slices.Collect(maps.Values(tabIcons))
+	for _, m := range regexp.MustCompile(`Icon: "([a-z0-9-]+)"`).FindAllStringSubmatch(string(raw), -1) {
+		names = append(names, m[1])
+	}
+	for _, name := range names {
+		if !slices.Contains(views.PaletteIcons, name) {
+			t.Errorf("palette.go uses icon %q, not rendered in the palette template", name)
+		}
 	}
 }

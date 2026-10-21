@@ -303,6 +303,10 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST /account/totp/enable", h.enableTOTP, Policy{Role: auth.RoleViewer, Audit: "auth.totp.enable", AuditByHandler: true})
 	rt.HandleFunc("POST /account/totp/disable", h.disableTOTP, Policy{Role: auth.RoleViewer, Audit: "auth.totp.disable", AuditByHandler: true})
 	rt.HandleFunc("POST /account/preferences", h.savePreferences, Policy{Role: auth.RoleViewer, Audit: "user.preferences", AuditByHandler: true})
+	// The panel's security level (owner, on "My account"): how often it asks
+	// for the password again. Changing it always asks, or whoever finds the
+	// panel open would lower it first.
+	rt.HandleFunc("POST /account/security", h.saveSecurity, Policy{Role: auth.RoleOwner, Sudo: auth.SudoAlways, Audit: "security.level", AuditByHandler: true})
 
 	// The team: owners invite people and choose what each one reaches.
 	rt.HandleFunc("GET /team", h.teamPage, Policy{Role: auth.RoleOwner})
@@ -310,11 +314,6 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST /team/invites/{id}/cancel", h.teamCancelInvite, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.invite.cancel", AuditByHandler: true})
 	rt.HandleFunc("POST /team/users/{id}", h.teamUpdate, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.update", AuditByHandler: true})
 	rt.HandleFunc("POST /team/users/{id}/delete", h.teamRemove, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.remove", AuditByHandler: true})
-	// The security level: how often the panel asks for the password again.
-	// Changing it always asks, or whoever finds the panel open would lower
-	// it first.
-	rt.HandleFunc("GET /security", h.securityPage, Policy{Role: auth.RoleOwner})
-	rt.HandleFunc("POST /security", h.saveSecurity, Policy{Role: auth.RoleOwner, Sudo: auth.SudoAlways, Audit: "security.level", AuditByHandler: true})
 	rt.HandleFunc("GET /update", h.updatePage, Policy{Role: auth.RoleOwner})
 	rt.HandleFunc("POST /update/check", h.updateCheck, Policy{Role: auth.RoleOwner, Audit: "system.update.check"})
 	rt.HandleFunc("POST /update", h.updateApply, Policy{Role: auth.RoleOwner, Sudo: auth.SudoStrict, Audit: "system.update.request"})

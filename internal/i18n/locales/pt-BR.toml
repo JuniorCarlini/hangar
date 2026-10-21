@@ -24,7 +24,6 @@ light = "Claro"
 
 [nav]
 team = "Equipe"
-security = "Segurança"
 new_version = "nova versão"
 updates = "Atualizações"
 status_links = "Links de status"
@@ -2993,8 +2992,6 @@ text = "Os dados voltam para um disco comum, sem limite, que cresce no disco do 
 ok = "Remover limite"
 
 [security]
-page_title = "Segurança · Hangar"
-title = "Segurança"
 subtitle = "Quando o painel pede a sua senha de novo, depois do login"
 level = "Nível de segurança"
 recommended = "recomendado"

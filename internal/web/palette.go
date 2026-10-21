@@ -94,7 +94,6 @@ func (h *handlers) paletteFor(ctx context.Context, p *auth.Principal) paletteDat
 	}
 	if owner {
 		add(paletteItem{Group: "pages", Label: tr("nav.team"), Icon: "users", Href: "/team"})
-		add(paletteItem{Group: "pages", Label: tr("nav.security"), Icon: "shield-check", Href: "/security"})
 		add(paletteItem{Group: "pages", Label: tr("nav.update"), Icon: "refresh-cw", Href: "/update"})
 	}
 	add(paletteItem{Group: "pages", Label: tr("nav.account"), Icon: "user", Href: "/account"})
