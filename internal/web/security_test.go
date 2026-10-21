@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -93,5 +94,18 @@ func TestChangingTheLevelAlwaysAsks(t *testing.T) {
 	// Only the owner changes it (and sees the card: securityCard).
 	if r := routeFor(t, "POST /account/security"); r.Policy.Role != auth.RoleOwner {
 		t.Errorf("the change is open to %s", r.Policy.Role)
+	}
+}
+
+// Only the owner sees the security card on "My account".
+func TestSecurityCardIsForTheOwner(t *testing.T) {
+	e := newEnv(t)
+	h := &handlers{auth: e.svc}
+	for role, want := range map[auth.Role]bool{auth.RoleOwner: true, auth.RoleAdmin: false, auth.RoleViewer: false} {
+		r := httptest.NewRequest(http.MethodGet, "/account", nil)
+		r = r.WithContext(context.WithValue(r.Context(), principalKey{}, &auth.Principal{Role: role, Level: auth.LevelStandard}))
+		if got := h.securityCard(r) != nil; got != want {
+			t.Errorf("%s sees the card: %v, want %v", role, got, want)
+		}
 	}
 }
