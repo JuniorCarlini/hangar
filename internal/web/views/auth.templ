@@ -43,9 +43,7 @@ templ layout(title string) {
 
 templ brand(step string) {
 	<div class="flex items-center gap-2.5">
-		<div class="flex size-7 items-center justify-center rounded-md bg-accent text-on-accent">
-			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 4v16M18 4v16M6 12h12"></path></svg>
-		</div>
+		<svg class="size-7 shrink-0 text-accent" viewBox="24 24 208 208" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M80 24H176A56 56 0 0 1 232 80V176A56 56 0 0 1 176 232H80A56 56 0 0 1 24 176V80A56 56 0 0 1 80 24ZM84 232V150A44 44 0 0 1 172 150V232Z"></path><path d="M110 196H146V232H110Z"></path></svg>
 		<span class="text-base font-semibold tracking-tight">Hangar</span>
 		if step != "" {
 			<span class="ml-auto text-xs text-subtle">{ step }</span>

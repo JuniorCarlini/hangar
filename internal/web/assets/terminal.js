@@ -13,7 +13,7 @@
     fontFamily: color('--p-mono', 'ui-monospace, Menlo, monospace'),
     theme: {
       background: color('--p-log-bg', '#08090b'), foreground: color('--p-log-fg', '#c9cdd3'),
-      cursor: color('--p-accent', '#5b57f0'), selectionBackground: 'rgba(91, 87, 240, .35)'
+      cursor: color('--p-accent', '#d93235'), selectionBackground: 'rgba(217, 50, 53, .35)'
     }
   });
   var fit = new window.FitAddon.FitAddon();

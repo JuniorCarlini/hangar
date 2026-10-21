@@ -275,7 +275,7 @@ html.is-busy, html.is-busy .node { cursor: progress; }
   .kit-paper { position: static; width: 100%; background: var(--p-paper); color: var(--p-ink); font-family: var(--p-font); font-size: 12px; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .kit-paper__head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 2px solid var(--p-ink); }
   .kit-paper__brand { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; }
-  .kit-paper__logo { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border: 2px solid var(--p-ink); border-radius: 6px; color: var(--p-ink); }
+  .kit-paper__logo { display: inline-flex; width: 26px; height: 26px; color: var(--p-ink); }
   .kit-paper__tag { padding: 3px 8px; border: 1.5px solid var(--p-ink); border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
   .kit-paper h1 { margin: 18px 0 4px; font-size: 22px; font-weight: 600; }
   .kit-paper__lead { margin: 0 0 14px; font-size: 13px; }

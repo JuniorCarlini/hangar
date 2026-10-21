@@ -3992,7 +3992,7 @@ func BackupKit(d KitData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 319, "</button></div></form></section><div class=\"kit-paper\" aria-hidden=\"true\"><header class=\"kit-paper__head\"><div class=\"kit-paper__brand\"><span class=\"kit-paper__logo\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" aria-hidden=\"true\"><path d=\"M6 4v16M18 4v16M6 12h12\"></path></svg></span> <span>Hangar</span></div><span class=\"kit-paper__tag\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 319, "</button></div></form></section><div class=\"kit-paper\" aria-hidden=\"true\"><header class=\"kit-paper__head\"><div class=\"kit-paper__brand\"><span class=\"kit-paper__logo\"><svg width=\"26\" height=\"26\" viewBox=\"24 24 208 208\" fill=\"currentColor\" aria-hidden=\"true\"><path fill-rule=\"evenodd\" d=\"M80 24H176A56 56 0 0 1 232 80V176A56 56 0 0 1 176 232H80A56 56 0 0 1 24 176V80A56 56 0 0 1 80 24ZM84 232V150A44 44 0 0 1 172 150V232Z\"></path><path d=\"M110 196H146V232H110Z\"></path></svg></span> <span>Hangar</span></div><span class=\"kit-paper__tag\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

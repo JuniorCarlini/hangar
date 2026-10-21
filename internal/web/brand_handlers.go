@@ -100,7 +100,7 @@ func (h *handlers) saveBrand(w http.ResponseWriter, r *http.Request) {
 	b.Name = strings.TrimSpace(r.FormValue("name"))
 	b.Contact = strings.TrimSpace(r.FormValue("contact"))
 	b.Color = strings.TrimSpace(r.FormValue("color"))
-	if strings.EqualFold(b.Color, "#5b57f0") {
+	if strings.EqualFold(b.Color, "#d93235") {
 		b.Color = "" // the default
 	}
 	b.Theme = r.FormValue("theme")

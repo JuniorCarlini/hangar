@@ -57,9 +57,9 @@ Escala neutra levemente fria (como o Render), base para tudo:
 
 | Token | Escuro | Claro | Uso |
 |---|---|---|---|
-| `--p-accent` | `#6E6BFF` | `#4F46E5` | Ação principal, seleção, link, foco |
-| `--p-accent-hover` | `#827FFF` | `#4338CA` | |
-| `--p-accent-soft` | `#6E6BFF1F` | `#4F46E514` | Fundo de item selecionado |
+| `--p-accent` | `#D93235` | `#D93235` | Ação principal, seleção, link, foco |
+| `--p-accent-hover` | `#C62A2D` | `#B8262A` | |
+| `--p-accent-soft` | `#E5383B24` | `#E5383B14` | Fundo de item selecionado |
 | `--p-success` | `#3DD68C` | `#11845B` | Rodando, saudável, backup ok |
 | `--p-warning` | `#F5B83D` | `#A86400` | Degradado, reiniciando, atenção |
 | `--p-danger` | `#FF6369` | `#D1242F` | Parado, falhou, perigo (texto) |
@@ -67,7 +67,7 @@ Escala neutra levemente fria (como o Render), base para tudo:
 | `--p-info` | `#4CB3FF` | `#0969DA` | Em andamento (build, deploy) |
 | `--p-*-soft` | cor + `1F` de alfa | cor + `14` | Fundo de etiqueta/alerta do tom |
 
-> O destaque (`--p-accent`) é configurável. O padrão é índigo; trocar é
+> O destaque (`--p-accent`) é configurável. O padrão é o vermelho do logo (a porta do hangar); trocar é
 > mudar uma variável.
 
 ### 2.3 Tipografia

@@ -39,7 +39,7 @@ type BrandPage struct {
 
 func orColor(c string) string {
 	if c == "" {
-		return "#5b57f0"
+		return "#d93235"
 	}
 	return c
 }
@@ -413,7 +413,7 @@ func BrandSettings(d BrandData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" data-tuc-color data-format=\"hex\" data-alpha=\"false\" data-swatches=\"#5b57f0,#2563eb,#0ea5e9,#0d9488,#16a34a,#65a30d,#ca8a04,#ea580c,#dc2626,#db2777,#9333ea,#475569,#0f172a,#78716c,#000000\"> <span class=\"tuc-hint\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" data-tuc-color data-format=\"hex\" data-alpha=\"false\" data-swatches=\"#d93235,#2563eb,#0ea5e9,#0d9488,#16a34a,#65a30d,#ca8a04,#ea580c,#5b57f0,#db2777,#9333ea,#475569,#0f172a,#78716c,#000000\"> <span class=\"tuc-hint\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

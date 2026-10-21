@@ -279,7 +279,7 @@ func renderOne(b Brand, kind string) ([]byte, error) {
 	}
 	accent := b.Color
 	if accent == "" {
-		accent = "#5b57f0"
+		accent = "#d93235"
 	}
 	data.AccentCSS = template.CSS(":root{--accent:" + accent + "}") //nolint:gosec // validated #rrggbb
 	data.ContactHref = contactHref(b.Contact)
