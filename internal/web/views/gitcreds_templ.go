@@ -1715,7 +1715,7 @@ func gitCredPicker(prefix string, opts []GitCredOption, selected string) templ.C
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "</legend><div class=\"flex flex-wrap gap-3\"><label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-radio\" name=\"cred_scope\" value=\"server\" checked> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 129, "</legend><div class=\"flex flex-wrap gap-3\"><label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-check\" name=\"cred_scope\" value=\"server\" checked> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1728,7 +1728,7 @@ func gitCredPicker(prefix string, opts []GitCredOption, selected string) templ.C
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</label> <label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-radio\" name=\"cred_scope\" value=\"project\"> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 130, "</label> <label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-check\" name=\"cred_scope\" value=\"project\"> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

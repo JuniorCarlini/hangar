@@ -529,12 +529,12 @@ templ ignoreDialog(d UpdatesData, r GroupRow) {
 				<fieldset class="flex flex-col gap-2 border-0 p-0">
 					<legend class="tuc-label mb-1.5">{ t(ctx, "deps.ignore.mode") }</legend>
 					<label class="tuc-choice">
-						<input class="tuc-radio" type="radio" name="mode" value="days" checked?={ r.IgnoreVersion == "" }/>
+						<input class="tuc-check" type="radio" name="mode" value="days" checked?={ r.IgnoreVersion == "" }/>
 						{ t(ctx, "deps.ignore.days") }
 					</label>
 					if r.IgnoreVersion != "" {
 						<label class="tuc-choice">
-							<input class="tuc-radio" type="radio" name="mode" value="version" checked/>
+							<input class="tuc-check" type="radio" name="mode" value="version" checked/>
 							{ t(ctx, "deps.ignore.version", "version", r.IgnoreVersion) }
 						</label>
 					}

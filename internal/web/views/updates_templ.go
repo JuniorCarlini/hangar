@@ -2529,7 +2529,7 @@ func ignoreDialog(d UpdatesData, r GroupRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "</legend> <label class=\"tuc-choice\"><input class=\"tuc-radio\" type=\"radio\" name=\"mode\" value=\"days\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 210, "</legend> <label class=\"tuc-choice\"><input class=\"tuc-check\" type=\"radio\" name=\"mode\" value=\"days\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2557,7 +2557,7 @@ func ignoreDialog(d UpdatesData, r GroupRow) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if r.IgnoreVersion != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "<label class=\"tuc-choice\"><input class=\"tuc-radio\" type=\"radio\" name=\"mode\" value=\"version\" checked> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 214, "<label class=\"tuc-choice\"><input class=\"tuc-check\" type=\"radio\" name=\"mode\" value=\"version\" checked> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

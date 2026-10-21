@@ -1647,7 +1647,7 @@ func svcBackupRestore(d ServiceData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if d.Backups.WindowOK {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "<label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-radio\" name=\"mode\" value=\"pitr\" checked> <span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 138, "<label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-check\" name=\"mode\" value=\"pitr\" checked> <span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1704,7 +1704,7 @@ func svcBackupRestore(d ServiceData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "<label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-radio\" name=\"mode\" value=\"dump\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 143, "<label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-check\" name=\"mode\" value=\"dump\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1818,7 +1818,7 @@ func svcBackupRestore(d ServiceData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "</legend> <label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-radio\" name=\"destination\" value=\"new\" checked> <span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 156, "</legend> <label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-check\" name=\"destination\" value=\"new\" checked> <span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1870,7 +1870,7 @@ func svcBackupRestore(d ServiceData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "\" pattern=\"[a-z][a-z0-9\\-]{0,30}[a-z0-9]\" maxlength=\"32\"></div><label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-radio\" name=\"destination\" value=\"overwrite\"> <span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 160, "\" pattern=\"[a-z][a-z0-9\\-]{0,30}[a-z0-9]\" maxlength=\"32\"></div><label class=\"tuc-choice\"><input type=\"radio\" class=\"tuc-check\" name=\"destination\" value=\"overwrite\"> <span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

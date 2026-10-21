@@ -288,7 +288,7 @@ templ svcBackupRestore(d ServiceData) {
 				<legend class="tuc-label">{ t(ctx, "svcbackup.restore_point") }</legend>
 				if d.Backups.WindowOK {
 					<label class="tuc-choice">
-						<input type="radio" class="tuc-radio" name="mode" value="pitr" checked/>
+						<input type="radio" class="tuc-check" name="mode" value="pitr" checked/>
 						<span>{ t(ctx, "svcbackup.mode_pitr") } <span class="tuc-choice__hint">{ d.Backups.Window }</span></span>
 					</label>
 					<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
@@ -297,7 +297,7 @@ templ svcBackupRestore(d ServiceData) {
 					</div>
 				}
 				<label class="tuc-choice">
-					<input type="radio" class="tuc-radio" name="mode" value="dump" checked?={ !d.Backups.WindowOK } disabled?={ len(d.Backups.Dumps) == 0 }/>
+					<input type="radio" class="tuc-check" name="mode" value="dump" checked?={ !d.Backups.WindowOK } disabled?={ len(d.Backups.Dumps) == 0 }/>
 					<span>{ t(ctx, "svcbackup.mode_dump") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.mode_dump_hint") }</span></span>
 				</label>
 				if len(d.Backups.Dumps) > 0 {
@@ -314,7 +314,7 @@ templ svcBackupRestore(d ServiceData) {
 			<fieldset class="tuc-choices">
 				<legend class="tuc-label">{ t(ctx, "svcbackup.restore_dest") }</legend>
 				<label class="tuc-choice">
-					<input type="radio" class="tuc-radio" name="destination" value="new" checked/>
+					<input type="radio" class="tuc-check" name="destination" value="new" checked/>
 					<span>{ t(ctx, "svcbackup.dest_new") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_new_hint") }</span></span>
 				</label>
 				<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
@@ -322,7 +322,7 @@ templ svcBackupRestore(d ServiceData) {
 					<input class="tuc-input font-mono" id="rs-new" name="new_service" value={ d.Backups.DefaultNew } pattern="[a-z][a-z0-9\-]{0,30}[a-z0-9]" maxlength="32"/>
 				</div>
 				<label class="tuc-choice">
-					<input type="radio" class="tuc-radio" name="destination" value="overwrite"/>
+					<input type="radio" class="tuc-check" name="destination" value="overwrite"/>
 					<span>{ t(ctx, "svcbackup.dest_overwrite") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_overwrite_hint") }</span></span>
 				</label>
 				<div class="ml-7 max-w-[320px]">

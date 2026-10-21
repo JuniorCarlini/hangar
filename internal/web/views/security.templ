@@ -35,7 +35,7 @@ templ securityCard(d SecurityData) {
 				for _, l := range securityLevels {
 					<label class="flex cursor-pointer flex-col gap-3 rounded-md border border-border bg-surface p-4 has-checked:border-accent has-checked:ring-1 has-checked:ring-accent">
 						<span class="flex items-center gap-2.5">
-							<input type="radio" class="tuc-radio" name="level" value={ l.Value } checked?={ d.Level == l.Value }/>
+							<input type="radio" class="tuc-check" name="level" value={ l.Value } checked?={ d.Level == l.Value }/>
 							@Icon(l.Icon, "size-4 text-muted")
 							<b class="text-sm font-semibold">{ t(ctx, "security."+l.Value+".name") }</b>
 							if l.Value == "standard" {

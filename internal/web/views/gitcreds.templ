@@ -308,11 +308,11 @@ templ gitCredPicker(prefix string, opts []GitCredOption, selected string) {
 				<legend class="tuc-label mb-1.5">{ t(ctx, "gitcred.col.scope") }</legend>
 				<div class="flex flex-wrap gap-3">
 					<label class="tuc-choice">
-						<input type="radio" class="tuc-radio" name="cred_scope" value="server" checked/>
+						<input type="radio" class="tuc-check" name="cred_scope" value="server" checked/>
 						{ t(ctx, "gitcred.scope.server_long") }
 					</label>
 					<label class="tuc-choice">
-						<input type="radio" class="tuc-radio" name="cred_scope" value="project"/>
+						<input type="radio" class="tuc-check" name="cred_scope" value="project"/>
 						{ t(ctx, "gitcred.scope.this_project") }
 					</label>
 				</div>

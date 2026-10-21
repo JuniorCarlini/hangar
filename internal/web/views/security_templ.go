@@ -141,7 +141,7 @@ func securityCard(d SecurityData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		for _, l := range securityLevels {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<label class=\"flex cursor-pointer flex-col gap-3 rounded-md border border-border bg-surface p-4 has-checked:border-accent has-checked:ring-1 has-checked:ring-accent\"><span class=\"flex items-center gap-2.5\"><input type=\"radio\" class=\"tuc-radio\" name=\"level\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<label class=\"flex cursor-pointer flex-col gap-3 rounded-md border border-border bg-surface p-4 has-checked:border-accent has-checked:ring-1 has-checked:ring-accent\"><span class=\"flex items-center gap-2.5\"><input type=\"radio\" class=\"tuc-check\" name=\"level\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
