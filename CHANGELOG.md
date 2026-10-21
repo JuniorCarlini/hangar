@@ -12,6 +12,20 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.15] - 2026-10-20
+
+### Novo
+
+- **Tema vermelho e logo novo**: o painel ganha o vermelho do logo novo, a
+  porta de um hangar, no login, na barra de cima, no ícone da aba e no kit
+  de recuperação impresso. A cor padrão da Marca e das páginas de erro dos
+  sites acompanha; o roxo antigo continua entre as cores para escolher.
+
+### Mudou
+
+- **Projetos sobem no menu**: logo abaixo da Visão geral, antes de Acesso,
+  Operação e Sistema.
+
 ## [0.5.14] - 2026-10-20
 
 ### Novo
