@@ -312,6 +312,25 @@ templ sidebar(n Nav) {
 		<nav class="tuc-menu" aria-label={ t(ctx, "nav.menu") }>
 			<div class="tuc-menu__section">{ t(ctx, "nav.server") }</div>
 			@navLink(n, "overview", "/", "gauge", t(ctx, "nav.overview"))
+			// Projects come right after the overview: they are where the daily
+			// work happens; the server settings sit below them.
+			<div class="tuc-menu__section">{ t(ctx, "nav.projects") }</div>
+			for _, p := range n.Projects {
+				<a class={ navItem(n, "p:"+p.Slug) } href={ templ.SafeURL("/p/" + p.Slug) }>
+					<span class="tuc-menu__icon">
+						<span class="size-2 rounded-xs bg-success" aria-hidden="true"></span>
+					</span>
+					<span class="truncate">{ p.Slug }</span>
+					<span class="tuc-menu__count">{ fmt.Sprint(p.Services) }</span>
+				</a>
+			}
+			if n.CanCreate {
+				<a class="tuc-btn is-outline mt-1.5 w-full" href="/?new=1" data-tuc-modal="#new-project">
+					@Icon("folder-plus", "size-3.5")
+					{ t(ctx, "nav.new_project") }
+				</a>
+			}
+			<hr class="tuc-menu__separator"/>
 			if !n.Limited {
 				<div class="tuc-menu__section">{ t(ctx, "nav.section_access") }</div>
 				@navLink(n, "domains", "/domains", "globe", t(ctx, "nav.domains"))
@@ -354,23 +373,6 @@ templ sidebar(n Nav) {
 						}
 					}
 				}
-			}
-			<hr class="tuc-menu__separator"/>
-			<div class="tuc-menu__section">{ t(ctx, "nav.projects") }</div>
-			for _, p := range n.Projects {
-				<a class={ navItem(n, "p:"+p.Slug) } href={ templ.SafeURL("/p/" + p.Slug) }>
-					<span class="tuc-menu__icon">
-						<span class="size-2 rounded-xs bg-success" aria-hidden="true"></span>
-					</span>
-					<span class="truncate">{ p.Slug }</span>
-					<span class="tuc-menu__count">{ fmt.Sprint(p.Services) }</span>
-				</a>
-			}
-			if n.CanCreate {
-				<a class="tuc-btn is-outline mt-1.5 w-full" href="/?new=1" data-tuc-modal="#new-project">
-					@Icon("folder-plus", "size-3.5")
-					{ t(ctx, "nav.new_project") }
-				</a>
 			}
 		</nav>
 		@serverFooter(n)
