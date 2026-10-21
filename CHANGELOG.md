@@ -12,6 +12,48 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.14] - 2026-10-20
+
+### Novo
+
+- **Níveis de segurança**: em **Minha conta → Nível de segurança** (só o
+  dono), você escolhe quando o painel pede a senha de novo depois do login.
+  - **Básico**: só no login. Ações perigosas continuam com a confirmação de
+    sempre (digitar o nome). Fica logado até 12 h, mesmo parado.
+  - **Médio** (padrão): só no que não tem volta ou mostra segredos (apagar
+    projeto, serviço ou disco; restaurar ou baixar backup; ver senhas e
+    tokens; terminal; equipe). Vale por 30 min; sai depois de 2 h parado.
+  - **Avançado**: toda ação sensível pede, por 5 min; sai depois de 30 min
+    parado (era o comportamento de antes).
+
+  Mudar o nível sempre pede a senha e vira alerta de segurança.
+- **Copiar o nome na confirmação**: ao apagar projeto ou serviço e ao
+  sobrescrever numa restauração, o nome aparece com um botão de copiar; é só
+  colar no campo.
+- **Novo projeto com um campo só**: você digita o nome e o identificador
+  (`noticias-portal`) sai dele, com a prévia na hora.
+
+### Corrigido
+
+- **Botões aceitavam vários cliques**: verificar vulnerabilidades, deploy,
+  iniciar/parar/reiniciar, backup agora, baixar e restaurar backup e
+  atualizar o Hangar agora fazem uma coisa por clique. O botão mostra que
+  está trabalhando e libera quando termina; a página se atualiza sozinha só
+  no fim.
+- **Atualizar Hangar**: não oferece mais "nova versão" a um painel mais novo
+  que a última publicada, não fica preso em "Aplicando a atualização…" onde
+  nada aplica a atualização e não diz mais "já atualizado" a um segundo
+  clique.
+- **Avisos atrás do painel lateral**: as notificações ficam sempre na frente,
+  nítidas.
+- **Card do canvas "se mexendo"**: ao abrir um serviço, o card só fica
+  destacado, sem piscar.
+- **Vulnerabilidades**: achados antigos ganham a classificação certa logo
+  depois de atualizar, e a coluna de ação não quebra mais o texto.
+- O ícone da **Equipe** faltava na busca (⌘K).
+- As escolhas de uma opção usam o quadradinho com check, como o resto do
+  painel.
+
 ## [0.5.13] - 2026-10-19
 
 ### Novo
