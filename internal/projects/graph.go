@@ -112,12 +112,13 @@ func (m *Manager) ProjectGraph(ctx context.Context, p dbq.Project) (Graph, error
 				}
 			}
 		}
-		exps, err := m.q.ListExports(ctx, s.ID)
+		// What it offers: a card offering nothing takes no connection.
+		offers, err := m.Offers(ctx, s.ID)
 		if err != nil {
 			return err
 		}
-		for _, e := range exps {
-			n.Exports = append(n.Exports, e.Key)
+		for _, o := range offers {
+			n.Exports = append(n.Exports, o.Key)
 		}
 		nodes[s.ID] = len(g.Nodes)
 		g.Nodes = append(g.Nodes, n)

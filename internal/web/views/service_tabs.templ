@@ -3,6 +3,7 @@ package views
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -11,6 +12,30 @@ import (
 // need a re-confirmed identity open the sudo dialog when it is not active.
 
 func isRef(v string) bool { return strings.Contains(v, "${{") }
+
+// offeredVars are the variables a service made by hand offers.
+func offeredVars(env []EnvRow) []string {
+	var out []string
+	for _, v := range env {
+		if v.Offered {
+			out = append(out, v.Key)
+		}
+	}
+	return out
+}
+
+// wholeRefRE is a value that is exactly one reference: a connection.
+var wholeRefRE = regexp.MustCompile(`^\$\{\{\s*((?:[a-z][a-z0-9-]*\.)?[a-z][a-z0-9-]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$`)
+
+// connection returns the service and key a variable is connected to ("" =
+// it is a plain value, or a text mixing references).
+func connection(v string) (string, string) {
+	g := wholeRefRE.FindStringSubmatch(v)
+	if g == nil {
+		return "", ""
+	}
+	return g[1], g[2]
+}
 
 // refWarning explains a broken reference in plain words.
 func refWarning(ctx context.Context, w RefWarning) string {
@@ -21,6 +46,8 @@ func refWarning(ctx context.Context, w RefWarning) string {
 		return t(ctx, "service.env.broken.service_in", "key", w.Key, "service", w.Service, "project", w.Project)
 	case w.Problem == "service":
 		return t(ctx, "service.env.broken.service", "key", w.Key, "service", w.Service)
+	case w.Problem == "cycle":
+		return t(ctx, "service.env.broken.cycle", "key", w.Key, "service", w.Service, "target", w.TargetKey)
 	}
 	return t(ctx, "service.env.broken.key", "key", w.Key, "service", w.Service, "target", w.TargetKey)
 }
@@ -96,6 +123,17 @@ templ tabVariables(d ServiceData) {
 	<section class={ cardClass }>
 		@cardHead(t(ctx, "service.tab.variables")) {
 			if d.CanOperate {
+				if len(d.ConnectTargets) > 0 {
+					<button type="button" class="tuc-btn is-outline is-sm" data-connect-from={ d.Slug } data-connect-targets={ strings.Join(d.ConnectTargets, " ") }>
+						@Icon("cable", "size-3.5")
+						{ t(ctx, "connect.open") }
+					</button>
+				} else {
+					<button type="button" class="tuc-btn is-outline is-sm" disabled title={ t(ctx, "connect.no_targets") }>
+						@Icon("cable", "size-3.5")
+						{ t(ctx, "connect.open") }
+					</button>
+				}
 				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#env-bulk" aria-label={ t(ctx, "service.env.bulk") }>
 					@Icon("file-text", "size-3.5")
 					.env
@@ -127,7 +165,14 @@ templ tabVariables(d ServiceData) {
 					<tbody>
 						for _, v := range d.Env {
 							<tr>
-								<td class="font-mono text-[13px]">{ v.Key }</td>
+								<td class="font-mono text-[13px]">
+									<span class="inline-flex items-center gap-1.5">
+										{ v.Key }
+										if v.Offered {
+											<span class="tuc-badge is-info is-plain" title={ t(ctx, "connect.offered_hint") }>{ t(ctx, "connect.offered") }</span>
+										}
+									</span>
+								</td>
 								<td class="max-w-[260px] truncate font-mono text-[13px] [&_form]:inline-flex">
 									if v.Secret && !v.Revealed {
 										<span class="tuc-reveal">
@@ -149,6 +194,14 @@ templ tabVariables(d ServiceData) {
 									} else if broken := refWarnings(ctx, d.RefWarnings, v.Key); broken != "" {
 										<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
 										<span class="ref-text">{ v.Value }</span>
+									} else if svc, key := connection(v.Value); svc != "" {
+										<span class="inline-flex items-center gap-1.5 font-sans" title={ v.Value }>
+											@Icon("cable", "size-3.5 text-accent-text")
+											<span class="text-muted">{ t(ctx, "connect.from") }</span>
+											<span class="font-mono">{ svc }</span>
+											<span class="text-subtle">·</span>
+											<span class="font-mono">{ key }</span>
+										</span>
 									} else if isRef(v.Value) {
 										<span class="tuc-badge is-info ref-badge">ref</span>
 										<span class="ref-text">{ v.Value }</span>
@@ -157,7 +210,33 @@ templ tabVariables(d ServiceData) {
 									}
 								</td>
 								<td class="tuc-table__actions">
-									if d.CanOperate {
+									<span class="inline-flex items-center justify-end gap-1 [&_form]:inline-flex">
+									if d.CanAdmin && !d.HasExports && !isRef(v.Value) {
+										<form method="post" action={ templ.SafeURL(d.base() + "/env/offer") }>
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<input type="hidden" name="key" value={ v.Key }/>
+											if v.Offered {
+												<input type="hidden" name="on" value="0"/>
+												<button class="tuc-btn is-ghost is-icon is-sm text-accent-text" type="submit" aria-label={ t(ctx, "connect.unoffer_named", "key", v.Key) } title={ t(ctx, "connect.unoffer") }>
+													@Icon("cable", "size-3.5")
+												</button>
+											} else {
+												<input type="hidden" name="on" value="1"/>
+												<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.offer_named", "key", v.Key) } title={ t(ctx, "connect.offer") }>
+													@Icon("cable", "size-3.5")
+												</button>
+											}
+										</form>
+									}
+									if svc, _ := connection(v.Value); svc != "" && d.CanOperate {
+										<form data-confirm={ t(ctx, "confirm.disconnect.title", "key", v.Key) } data-confirm-text={ t(ctx, "confirm.disconnect.text", "service", svc) } data-confirm-ok={ t(ctx, "confirm.disconnect.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<input type="hidden" name="key" value={ v.Key }/>
+											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.disconnect_named", "key", v.Key) } title={ t(ctx, "connect.disconnect") }>
+												@Icon("unlink", "size-3.5")
+											</button>
+										</form>
+									} else if d.CanOperate {
 										<form data-confirm={ t(ctx, "confirm.env_delete.title") } data-confirm-text={ t(ctx, "confirm.env_delete.text") } data-confirm-ok={ t(ctx, "confirm.env_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
 											<input type="hidden" name="csrf" value={ d.CSRF }/>
 											<input type="hidden" name="key" value={ v.Key }/>
@@ -166,6 +245,7 @@ templ tabVariables(d ServiceData) {
 											</button>
 										</form>
 									}
+									</span>
 								</td>
 							</tr>
 						}
@@ -174,6 +254,12 @@ templ tabVariables(d ServiceData) {
 			</div>
 		} else {
 			@emptyState("braces", t(ctx, "service.env.empty"))
+		}
+		if len(d.UsedBy) > 0 {
+			<div class="flex items-start gap-2 border-t border-border px-4 py-3 text-[13px] text-muted">
+				@Icon("cable", "size-3.5 mt-0.5 shrink-0")
+				<span>{ t(ctx, "connect.used_by", "list", strings.Join(d.UsedBy, ", ")) }</span>
+			</div>
 		}
 	</section>
 	if d.CanOperate && d.EnvSuggest != nil {
@@ -313,7 +399,13 @@ templ tabConnection(d ServiceData) {
 	if len(d.Exports) == 0 {
 		<section class={ cardClass }>
 			@cardHead(t(ctx, "export.title"))
-			@emptyState("cable", t(ctx, "export.empty"))
+			if offered := offeredVars(d.Env); len(offered) > 0 {
+				<div class={ cardBodyClass }>
+					@notice("info", "cable", t(ctx, "export.offered_vars", "list", strings.Join(offered, ", ")))
+				</div>
+			} else {
+				@emptyState("cable", t(ctx, "export.empty"))
+			}
 		</section>
 	}
 	if len(d.Exports) > 0 {
@@ -1012,6 +1104,9 @@ templ tabSettings(d ServiceData) {
 					<form method="post" action={ templ.SafeURL(d.base() + "/delete") } class="tuc-modal__body">
 						<input type="hidden" name="csrf" value={ d.CSRF }/>
 						<p class="tuc-modal__text">{ t(ctx, "service.danger.hint") }</p>
+						if len(d.UsedBy) > 0 {
+							@notice("warning", "unlink", t(ctx, "connect.delete_used", "list", strings.Join(d.UsedBy, ", ")))
+						}
 						@confirmName("confirm", t(ctx, "service.danger.type_name"), d.Slug, true)
 						<div class="flex justify-end gap-2">
 							<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>

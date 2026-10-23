@@ -298,6 +298,34 @@ Organizado em levas. Cada leva só entra depois da anterior estar testada.
 Pedidos de template novo passam pelo checklist de segurança de
 [04](04-seguranca.md) e pelo teste automático acima.
 
+## Conectar serviços
+
+Uma conexão é uma variável do serviço que **usa** apontando para um valor que
+o outro **oferece**: no app, `DB_HOST = ${{db.HOST}}`. O nome é do app e o
+valor é do banco, então nomes diferentes dos dois lados se ligam sem
+renomear nada. Nada é copiado: o valor é lido a cada deploy.
+
+- **O que um serviço oferece:** um template declara (`[[exports]]`: Postgres
+  oferece `DATABASE_URL`, `HOST`, `PORT`, `USER`, `PASSWORD`, `DATABASE`). Um
+  serviço feito por imagem ou Git oferece as variáveis que um admin marca
+  (ícone de cabo na linha da variável; tabela `service_offers`). Quem não
+  oferece nada não recebe conexão: o canvas avisa e não salva.
+- **Conectar:** arrastar de um card a outro no canvas, ou **Conectar a…** na
+  aba Variáveis. A janela lista o que o outro oferece e, para cada valor, a
+  variável que o recebe. O nome sugerido é um que o app já usa ou que o
+  `.env.example` dele documenta (`PGHOST`, `POSTGRES_PASSWORD`, `DB_NAME`…);
+  senão, `DATABASE_URL` mantém o nome e as partes viram `DB_HOST`,
+  `REDIS_PASSWORD` ou `API_TOKEN`. Dá para digitar outro nome ou escolher
+  uma variável existente. A janela marca o que já está conectado e o que vai
+  substituir um valor atual.
+- **Desconectar:** o ícone na linha da variável conectada a apaga.
+- **Quando o banco muda:** trocar a variável de onde um valor oferecido
+  saiu (a senha do Postgres) atualiza o que ele oferece (`PASSWORD`,
+  `DATABASE_URL`), e os serviços conectados aparecem com "alterações para
+  aplicar".
+- **Quem usa quem:** a aba Variáveis do banco lista os serviços que o usam,
+  e apagar um serviço usado por outros mostra quem vai falhar.
+
 ## Vários bancos na mesma VPS
 
 Cada instância é um container com volume, rede e limite próprios. Cinco
@@ -343,9 +371,9 @@ extras numa instância existente).
   segredos mascarados (revelar exige 2FA e fica na auditoria).
 - **Referências** `${{servico.CHAVE}}` (mesmo projeto) e
   `${{projeto.servico.CHAVE}}` (projeto conectado), resolvidas a cada deploy.
-  Só um nível: um valor referenciado é usado como está, então referências
-  nunca entram em loop. Referência quebrada faz o deploy falhar com a
-  mensagem certa, em vez de subir com valor vazio.
+  Uma cadeia (o app usa a api, que usa o banco) é seguida até 5 níveis; um
+  ciclo é avisado e falha o deploy. Referência quebrada faz o deploy falhar
+  com a mensagem certa, em vez de subir com valor vazio.
 
 **Ficou para depois:** PgBouncer; backup com um clique para MariaDB e
 MongoDB; fixar a imagem por digest na

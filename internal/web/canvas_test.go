@@ -94,10 +94,14 @@ func TestBrokenReferencesWarn(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.pm.Wait()
-	tab = e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{c}}).Body.String()
+	tab = html.UnescapeString(e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{c}}).Body.String())
 	canvas = e.do(req{method: "GET", target: "/p/lab", cookies: []*http.Cookie{c}}).Body.String()
-	if strings.Contains(tab, "referência quebrada") || strings.Contains(canvas, "node-warn") || !strings.Contains(tab, "tuc-badge is-info ref-badge") {
+	if strings.Contains(tab, "referência quebrada") || strings.Contains(canvas, "node-warn") {
 		t.Error("a resolvable reference must not warn")
+	}
+	// A whole reference shows as a connection: where the value comes from.
+	if !strings.Contains(tab, `title="${{db.DATABASE_URL}}"`) || !strings.Contains(tab, `<span class="font-mono">db</span>`) {
+		t.Error("the variable does not show its connection")
 	}
 }
 

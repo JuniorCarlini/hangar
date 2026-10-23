@@ -63,3 +63,17 @@ ORDER BY pt.host_port;
 
 -- name: DeleteVolume :execrows
 DELETE FROM service_volumes WHERE service_id = ? AND name = ?;
+
+-- name: AddOffer :exec
+INSERT INTO service_offers (service_id, key) VALUES (?, ?) ON CONFLICT DO NOTHING;
+
+-- name: DeleteOffer :exec
+DELETE FROM service_offers WHERE service_id = ? AND key = ?;
+
+-- name: ListOffers :many
+SELECT key FROM service_offers WHERE service_id = ? ORDER BY key;
+
+-- name: ListOfferedVars :many
+-- The offered variables of a service, with their stored value.
+SELECT e.* FROM env_vars e JOIN service_offers o ON o.service_id = e.service_id AND o.key = e.key
+WHERE e.service_id = ? ORDER BY e.key;

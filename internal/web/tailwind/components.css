@@ -96,6 +96,8 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 .node.is-pending { border-color: var(--p-accent-text); }
 .node.is-external { border-style: dashed; }
 .node.is-drop { border-color: var(--p-accent); box-shadow: 0 0 0 3px var(--p-accent-soft); }
+/* A card that offers nothing: no connection lands there. */
+.node.is-nodrop { border-style: dashed; border-color: var(--p-border-strong); opacity: .6; cursor: not-allowed; }
 .node-link { display: flex; flex-direction: column; gap: 6px; height: 100%; padding: 12px 14px; box-sizing: border-box; color: var(--p-fg); text-decoration: none; }
 .node-icon { width: 24px; height: 24px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--p-border); border-radius: 6px; background: var(--p-surface-2); color: var(--p-muted); }
 .node-icon svg { width: 14px; height: 14px; }
@@ -129,12 +131,6 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 .node-internet > span { display: flex; flex-direction: column; }
 .node-internet b { color: var(--p-fg); font-weight: 600; }
 
-.connect-chooser { position: fixed; z-index: 30; width: 320px; box-sizing: border-box; padding: 14px; border: 1px solid var(--p-border-strong); border-radius: 6px; background: var(--p-surface); box-shadow: var(--p-shadow-pop); }
-.connect-chooser form { display: flex; flex-direction: column; gap: 8px; }
-.connect-title { margin: 0; font-weight: 600; font-size: 13px; }
-.connect-chooser p { margin: 0; }
-.connect-options { display: flex; flex-direction: column; gap: 4px; }
-.connect-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* ---------------------------------------------------------------- Service panel */
 /* The service opens in a Tucano drawer (right side). */
@@ -157,7 +153,6 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
   .hg-in, .hg-pop, .hg-pulse, .edge-flow, .node-progress-bar { animation: none !important; }
   .node, .edge-line, .node-port, .node-progress-bar { transition: none !important; }
 }
-.connect-options:not(:empty) ~ .connect-none { display: none; }
 .timeline-head { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 0; }
 .timeline-head .tuc-timeline__time { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .timeline-head .row-end { margin-left: auto; flex-shrink: 0; }

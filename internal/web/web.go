@@ -167,6 +167,12 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/env/bulk", h.setEnvBulk, Policy{Role: auth.RoleOperator, Audit: "service.env.set", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/env/suggestions/dismiss", h.dismissEnvSuggestions, Policy{Role: auth.RoleOperator, Audit: "service.env.suggestions_dismiss", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/env/delete", h.deleteEnv, Policy{Role: auth.RoleOperator, Audit: "service.env.delete", AuditByHandler: true})
+	// Connecting: what another service offers goes into this one's
+	// variables as references; a service made by hand offers the variables
+	// an admin marks.
+	rt.HandleFunc("GET "+svc+"/connect", h.connectForm, Policy{Role: auth.RoleOperator})
+	rt.HandleFunc("POST "+svc+"/connect", h.connect, Policy{Role: auth.RoleOperator, Audit: "service.connect", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/env/offer", h.setOffered, Policy{Role: auth.RoleAdmin, Audit: "service.env.offer", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/env/reveal", h.revealEnv, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/delete", h.deleteService, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.delete", AuditByHandler: true})
 

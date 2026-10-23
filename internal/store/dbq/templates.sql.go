@@ -10,6 +10,20 @@ import (
 	"database/sql"
 )
 
+const addOffer = `-- name: AddOffer :exec
+INSERT INTO service_offers (service_id, key) VALUES (?, ?) ON CONFLICT DO NOTHING
+`
+
+type AddOfferParams struct {
+	ServiceID string
+	Key       string
+}
+
+func (q *Queries) AddOffer(ctx context.Context, arg AddOfferParams) error {
+	_, err := q.db.ExecContext(ctx, addOffer, arg.ServiceID, arg.Key)
+	return err
+}
+
 const addVolume = `-- name: AddVolume :exec
 INSERT INTO service_volumes (service_id, name, path, read_only, owner_service_id) VALUES (?, ?, ?, ?, ?)
 `
@@ -64,6 +78,20 @@ func (q *Queries) CreatePort(ctx context.Context, arg CreatePortParams) error {
 		arg.CreatedBy,
 		arg.CreatedAt,
 	)
+	return err
+}
+
+const deleteOffer = `-- name: DeleteOffer :exec
+DELETE FROM service_offers WHERE service_id = ? AND key = ?
+`
+
+type DeleteOfferParams struct {
+	ServiceID string
+	Key       string
+}
+
+func (q *Queries) DeleteOffer(ctx context.Context, arg DeleteOfferParams) error {
+	_, err := q.db.ExecContext(ctx, deleteOffer, arg.ServiceID, arg.Key)
 	return err
 }
 
@@ -333,6 +361,68 @@ func (q *Queries) ListExports(ctx context.Context, serviceID string) ([]ServiceE
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOfferedVars = `-- name: ListOfferedVars :many
+SELECT e.service_id, e."key", e.value_enc, e.secret, e.updated_at FROM env_vars e JOIN service_offers o ON o.service_id = e.service_id AND o.key = e.key
+WHERE e.service_id = ? ORDER BY e.key
+`
+
+// The offered variables of a service, with their stored value.
+func (q *Queries) ListOfferedVars(ctx context.Context, serviceID string) ([]EnvVar, error) {
+	rows, err := q.db.QueryContext(ctx, listOfferedVars, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EnvVar{}
+	for rows.Next() {
+		var i EnvVar
+		if err := rows.Scan(
+			&i.ServiceID,
+			&i.Key,
+			&i.ValueEnc,
+			&i.Secret,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOffers = `-- name: ListOffers :many
+SELECT key FROM service_offers WHERE service_id = ? ORDER BY key
+`
+
+func (q *Queries) ListOffers(ctx context.Context, serviceID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listOffers, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

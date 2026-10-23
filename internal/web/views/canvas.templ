@@ -154,6 +154,7 @@ templ ProjectCanvas(d CanvasData, s *ServiceData) {
 						data-project={ d.Project }
 						data-csrf={ d.CSRF }
 						data-can-connect={ fmt.Sprint(d.CanOperate) }
+						data-nothing={ t(ctx, "connect.nothing") }
 						data-deploying={ fmt.Sprint(d.Deploying) }
 						role="group"
 						aria-label={ t(ctx, "canvas.label") }
@@ -315,7 +316,7 @@ templ ProjectCanvas(d CanvasData, s *ServiceData) {
 			}
 		}
 		if d.CanOperate {
-			@connectChooser(d)
+			@connectModal(d.Project)
 		}
 		<script src={ asset("canvas.js") } defer></script>
 		<script src={ asset("logs.js") } defer></script>
@@ -387,40 +388,6 @@ templ nodeMenu(d CanvasData, n CanvasNode) {
 		<a class="tuc-dropdown__item" href={ templ.SafeURL(n.Href + "?tab=network") }><span class="tuc-dropdown__text">{ t(ctx, "canvas.menu.port") }</span></a>
 		<hr class="tuc-dropdown__separator"/>
 		<a class="tuc-dropdown__item is-danger" href={ templ.SafeURL(n.Href + "?tab=settings") }><span class="tuc-dropdown__text">{ t(ctx, "canvas.menu.delete") }</span></a>
-	</div>
-}
-
-// connectChooser is filled by canvas.js after a drag from one card's port
-// to another card: it posts a variable holding the reference.
-templ connectChooser(d CanvasData) {
-	<div
-		class="connect-chooser hg-pop"
-		id="connect-chooser"
-		hidden
-		role="dialog"
-		aria-labelledby="connect-title"
-		data-title={ t(ctx, "canvas.connect.title") }
-	>
-		<form method="post" id="connect-form">
-			<input type="hidden" name="csrf" value={ d.CSRF }/>
-			<input type="hidden" name="value" id="connect-value"/>
-			<p class="connect-title" id="connect-title"></p>
-			<p class="text-xs text-muted">{ t(ctx, "canvas.connect.pick") }</p>
-			<p class="text-xs text-muted connect-none">{ t(ctx, "canvas.connect.none") }</p>
-			<div class="connect-options" id="connect-options"></div>
-			<div class="flex min-w-0 flex-col gap-1.5">
-				<label class="tuc-label" for="connect-key">{ t(ctx, "canvas.connect.var") }</label>
-				<input class="tuc-input font-mono text-[13px]" id="connect-key" name="key" required pattern="[A-Za-z_][A-Za-z0-9_]{0,127}"/>
-			</div>
-			<p class="tuc-hint">{ t(ctx, "canvas.connect.hint") }</p>
-			<div class="connect-actions">
-				<button class="tuc-btn is-ghost is-sm" type="button" id="connect-cancel">{ t(ctx, "tucano.cancel") }</button>
-				<button class="tuc-btn is-primary is-sm" type="submit">
-					@Icon("link", "size-4")
-					{ t(ctx, "canvas.connect.save") }
-				</button>
-			</div>
-		</form>
 	</div>
 }
 

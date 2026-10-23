@@ -326,6 +326,9 @@ rollback = "rollback"
 ports = "ports"
 
 [flash]
+connected = "Connected. It applies from this service's next deploy."
+offered = "Variable offered: the project's other services can connect to it now."
+unoffered = "The variable is no longer offered. Services already connected keep it until disconnected."
 volume-limit = "Limit requested. The disk shows its new size in a moment; if it held data, the services that use it stop during the copy and come back by themselves."
 volume-unlimit = "Limit removal requested. The services that use the disk stop during the copy and come back by themselves."
 image = "Version changed and deploy started. If the new one does not come up, the service stays on the previous one."
@@ -417,6 +420,7 @@ broken_title = { one = "1 broken reference", other = "{n} broken references" }
 broken_hint = "This service's next deploy will fail until the reference is fixed or removed."
 
 [service.env.broken]
+cycle = "{key} points to {target} of service {service}, which leads back to itself (a reference loop)."
 service = "{key} points to the service {service}, which does not exist in this project."
 service_in = "{key} points to the service {service}, which does not exist in the project {project}."
 key = "{key} points to {target} of the service {service}, but it neither offers nor has a variable with that name."
@@ -881,7 +885,8 @@ hint = "Use these values in other services with a reference such as {example}; i
 key = "Key"
 reference = "Reference"
 copy = "Copy {ref}"
-empty = "This service offers no values to others. Templates (Postgres, Redis) offer the ready internal URL."
+empty = "This service offers nothing to the others yet. To offer a variable, use the cable icon on its row in the Variables above. Templates such as Postgres and Redis already offer the connection."
+offered_vars = "Offers to the project's other services: {list}. They connect through \"Connect to…\" or by dragging on the canvas."
 
 [backup]
 hint = "Runs pg_dump right now and downloads it in the browser, with no port opened."
@@ -1175,6 +1180,11 @@ title = "Close this port?"
 text = "Whoever connects through it from outside loses the connection."
 ok = "Close port"
 
+[confirm.disconnect]
+title = "Disconnect {key}?"
+text = "The variable stops using {service}'s value and is deleted. It applies at the next deploy."
+ok = "Disconnect"
+
 [confirm.env_delete]
 title = "Delete this variable?"
 text = "It becomes a pending change, applied by the next deploy."
@@ -1244,14 +1254,6 @@ cache = "Cache"
 rollback = "Roll back…"
 port = "Open a port…"
 delete = "Delete service…"
-
-[canvas.connect]
-title = "Connect {from} → {to}"
-pick = "Which value will it use?"
-none = "This service exports no values. Use the service's variables to connect by hand."
-var = "Variable name"
-hint = "Saved as a pending change; applies on the next deploy."
-save = "Connect"
 
 [new_service]
 subtitle = "A name is enough: everything else starts with safe defaults."
@@ -3022,3 +3024,44 @@ idle = "Logs you out after 30 minutes idle."
 
 [security.error]
 level = "Pick one of the three levels."
+
+[connect]
+title = "Connect {from}"
+loading = "Loading what the service offers…"
+failed = "Could not load it. Close and try again."
+pick = "Connect to"
+intro = "{from} will use what {to} offers. Tick the values and pick the {from} variable that receives each one: it can be one that already exists, even under another name."
+use = "Use"
+use_named = "Use {key}"
+offers = "{service} offers"
+receives = "Variable in {service}"
+secret = "Secret value: never shown here."
+var_for = "Variable that receives {key}"
+linked = "Already connected to this value."
+replaces = "Exists with another value: it will be replaced."
+known = "The app already uses this name."
+hint = "Nothing is copied: {from} reads {to}'s value at every deploy and follows it when it changes. It applies from {from}'s next deploy."
+save = "Connect"
+nothing = "{service} offers no value to connect to. In its variables, mark what it offers."
+open = "Connect to…"
+no_targets = "No other service in this project offers values. On a service built from an image or Git, mark in its variables what it offers."
+offered = "offered"
+offered_hint = "The project's other services can connect to this variable."
+offer = "Offer to the other services"
+offer_named = "Offer {key} to the other services"
+unoffer = "Stop offering"
+unoffer_named = "Stop offering {key}"
+from = "from"
+disconnect = "Disconnect"
+disconnect_named = "Disconnect {key}"
+used_by = "Used by: {list}."
+used_by_item = "{service} ({var} ← {key})"
+delete_used = "These services use this one and will fail at their next deploy: {list}. Disconnect them or point them at another service first."
+
+[connect.error]
+nothing_offered = "This service offers no value to connect to."
+self = "A service does not connect to itself."
+none = "Tick at least one value to connect."
+not_offered = "{service} does not offer {key}."
+duplicate = "{var} appears twice: each variable receives a single value."
+exists = "{var} already exists with another value."

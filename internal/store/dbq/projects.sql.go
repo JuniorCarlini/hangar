@@ -220,6 +220,23 @@ func (q *Queries) GetEnv(ctx context.Context, arg GetEnvParams) (EnvVar, error) 
 	return i, err
 }
 
+const getProjectByID = `-- name: GetProjectByID :one
+SELECT id, slug, name, created_at, updated_at FROM projects WHERE id = ?
+`
+
+func (q *Queries) GetProjectByID(ctx context.Context, id string) (Project, error) {
+	row := q.db.QueryRowContext(ctx, getProjectByID, id)
+	var i Project
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getProjectBySlug = `-- name: GetProjectBySlug :one
 SELECT id, slug, name, created_at, updated_at FROM projects WHERE slug = ?
 `

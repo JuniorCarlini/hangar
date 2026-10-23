@@ -424,6 +424,11 @@ type ServiceGit struct {
 	CredentialID     sql.NullString
 }
 
+type ServiceOffer struct {
+	ServiceID string
+	Key       string
+}
+
 type ServiceVolume struct {
 	ServiceID      string
 	Name           string

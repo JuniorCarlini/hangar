@@ -326,6 +326,9 @@ ports = "portas"
 rebuild = "do zero (sem cache)"
 
 [flash]
+connected = "Conectado. Vale a partir do próximo deploy deste serviço."
+offered = "Variável oferecida: os outros serviços do projeto já podem se conectar a ela."
+unoffered = "A variável não é mais oferecida. Quem já estava conectado continua até ser desconectado."
 volume-limit = "Limite pedido. O disco aparece com o novo tamanho em instantes; se tinha dados, os serviços que o usam param durante a cópia e voltam sozinhos."
 volume-unlimit = "Remoção do limite pedida. Os serviços que usam o disco param durante a cópia e voltam sozinhos."
 image = "Versão trocada e deploy iniciado. Se a nova não subir, o serviço continua na anterior."
@@ -417,6 +420,7 @@ broken_title = { one = "1 referência quebrada", other = "{n} referências quebr
 broken_hint = "O próximo deploy deste serviço vai falhar até a referência ser corrigida ou removida."
 
 [service.env.broken]
+cycle = "{key} aponta para {target} do serviço {service}, que volta para ele mesmo (um ciclo de referências)."
 service = "{key} aponta para o serviço {service}, que não existe neste projeto."
 service_in = "{key} aponta para o serviço {service}, que não existe no projeto {project}."
 key = "{key} aponta para {target} do serviço {service}, mas ele não oferece nem tem uma variável com esse nome."
@@ -881,7 +885,8 @@ hint = "Use estes valores em outros serviços com uma referência, como {example
 key = "Chave"
 reference = "Referência"
 copy = "Copiar {ref}"
-empty = "Este serviço não oferece valores para outros. Modelos (Postgres, Redis) oferecem a URL interna pronta."
+empty = "Este serviço ainda não oferece nada aos outros. Para oferecer uma variável, use o ícone de cabo na linha dela, nas Variáveis acima. Templates como Postgres e Redis já oferecem a conexão pronta."
+offered_vars = "Oferece aos outros serviços do projeto: {list}. Eles se conectam pelo botão \"Conectar a…\" ou arrastando no canvas."
 
 [backup]
 hint = "Gera um pg_dump na hora e baixa pelo navegador, sem abrir porta."
@@ -1175,6 +1180,11 @@ title = "Fechar esta porta?"
 text = "Quem acessa de fora por ela perde a conexão."
 ok = "Fechar porta"
 
+[confirm.disconnect]
+title = "Desconectar {key}?"
+text = "A variável deixa de usar o valor de {service} e é apagada. Vale no próximo deploy."
+ok = "Desconectar"
+
 [confirm.env_delete]
 title = "Apagar esta variável?"
 text = "Entra como alteração pendente e vale no próximo deploy."
@@ -1244,14 +1254,6 @@ cache = "Cache"
 rollback = "Voltar versão…"
 port = "Abrir porta…"
 delete = "Apagar serviço…"
-
-[canvas.connect]
-title = "Ligar {from} → {to}"
-pick = "Qual valor ele vai usar?"
-none = "Este serviço não exporta valores. Use as variáveis do serviço para ligar à mão."
-var = "Nome da variável"
-hint = "Entra como alteração pendente; vale no próximo deploy."
-save = "Ligar"
 
 [new_service]
 subtitle = "Um nome basta: o resto já vem com padrões seguros."
@@ -3023,3 +3025,44 @@ idle = "Sai sozinho depois de 30 minutos parado."
 
 [security.error]
 level = "Escolha um dos três níveis."
+
+[connect]
+title = "Conectar {from}"
+loading = "Carregando o que o serviço oferece…"
+failed = "Não deu para carregar. Feche e tente de novo."
+pick = "Conectar a"
+intro = "{from} vai usar o que {to} oferece. Marque os valores e escolha a variável de {from} que recebe cada um: pode ser uma que já existe, mesmo com outro nome."
+use = "Usar"
+use_named = "Usar {key}"
+offers = "{service} oferece"
+receives = "Variável em {service}"
+secret = "Valor secreto: nunca aparece aqui."
+var_for = "Variável que recebe {key}"
+linked = "Já conectada a este valor."
+replaces = "Já existe com outro valor: será substituída."
+known = "O app já usa este nome."
+hint = "Nada é copiado: {from} lê o valor de {to} a cada deploy e acompanha quando ele muda. Vale a partir do próximo deploy de {from}."
+save = "Conectar"
+nothing = "{service} não oferece nenhum valor para conectar. Nas variáveis dele, marque o que ele oferece."
+open = "Conectar a…"
+no_targets = "Nenhum outro serviço deste projeto oferece valores. Num serviço feito por imagem ou Git, marque nas variáveis o que ele oferece."
+offered = "oferecida"
+offered_hint = "Os outros serviços do projeto podem se conectar a esta variável."
+offer = "Oferecer aos outros serviços"
+offer_named = "Oferecer {key} aos outros serviços"
+unoffer = "Parar de oferecer"
+unoffer_named = "Parar de oferecer {key}"
+from = "de"
+disconnect = "Desconectar"
+disconnect_named = "Desconectar {key}"
+used_by = "Usado por: {list}."
+used_by_item = "{service} ({var} ← {key})"
+delete_used = "Estes serviços usam este e vão falhar no próximo deploy: {list}. Desconecte-os ou aponte para outro serviço antes."
+
+[connect.error]
+nothing_offered = "Este serviço não oferece nenhum valor para conectar."
+self = "Um serviço não se conecta a ele mesmo."
+none = "Marque pelo menos um valor para conectar."
+not_offered = "{service} não oferece {key}."
+duplicate = "{var} aparece duas vezes: cada variável recebe um valor só."
+exists = "{var} já existe com outro valor."

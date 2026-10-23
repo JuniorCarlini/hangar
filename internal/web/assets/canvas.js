@@ -1,17 +1,61 @@
 // Project canvas: drag from a card's port to another card to connect them.
-// The drop opens a small form that saves a variable holding a reference
-// (e.g. DATABASE_URL = ${{db.DATABASE_URL}}); it shows up as a pending
-// change, applied by the next deploy. Texts come from data-* attributes.
+// A card that offers nothing takes no connection (a toast says so); one that
+// does opens the connect dialog, where each offered value gets the variable
+// of the dragged service that receives it (a reference such as
+// DB_HOST = ${{db.HOST}}), applied by the next deploy. The Variables tab
+// opens the same dialog from "Connect to…". Texts come from data-*.
+(function () {
+  var modal = document.getElementById('connect-modal');
+  if (!modal) return;
+  var project = modal.dataset.project;
+  var body = document.getElementById('connect-body');
+  var pick = document.getElementById('connect-pick');
+  var select = document.getElementById('connect-to');
+  var title = document.getElementById('connect-modal-title');
+  var from = '';
+
+  function load(to) {
+    body.textContent = '';
+    var p = document.createElement('p');
+    p.className = 'm-0 text-[13px] text-muted';
+    p.textContent = modal.dataset.loading;
+    body.appendChild(p);
+    fetch('/p/' + project + '/s/' + encodeURIComponent(from) + '/connect?to=' + encodeURIComponent(to), { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function (html) { body.innerHTML = html; })
+      .catch(function () { p.textContent = modal.dataset.failed; });
+  }
+  function open() { if (modal._tucano) modal._tucano.open(); else modal.showModal(); }
+
+  // window.hangarConnect opens the dialog: to is the target ("db") or empty,
+  // targets the services to pick from (the Variables tab).
+  window.hangarConnect = function (fromSlug, to, targets) {
+    from = fromSlug;
+    title.textContent = modal.dataset.title.replace('{from}', from);
+    select.textContent = '';
+    (targets || []).forEach(function (t) {
+      var o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      select.appendChild(o);
+    });
+    pick.hidden = !targets || targets.length < 2;
+    var first = to || (targets && targets[0]) || '';
+    if (first) { select.value = first; load(first); } else { body.textContent = ''; }
+    open();
+  };
+  select.addEventListener('change', function () { load(select.value); });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-connect-from]');
+    if (!b) return;
+    e.preventDefault();
+    window.hangarConnect(b.dataset.connectFrom, '', (b.dataset.connectTargets || '').split(' ').filter(Boolean));
+  });
+})();
+
 (function () {
   var svg = document.getElementById('canvas');
-  var chooser = document.getElementById('connect-chooser');
-  if (!svg || !chooser || svg.dataset.canConnect !== 'true') return;
+  if (!svg || svg.dataset.canConnect !== 'true') return;
   var line = document.getElementById('drag-line');
-  var form = document.getElementById('connect-form');
-  var options = document.getElementById('connect-options');
-  var keyInput = document.getElementById('connect-key');
-  var valueInput = document.getElementById('connect-value');
-  var title = document.getElementById('connect-title');
   var project = svg.dataset.project;
   var drag = null;
 
@@ -28,17 +72,9 @@
     var el = document.elementFromPoint(x, y);
     return el ? el.closest('.node') : null;
   }
+  function offers(node) { return (node.dataset.exports || '').trim() !== ''; }
   function clearDrop() {
-    var prev = svg.querySelector('.node.is-drop');
-    if (prev) prev.classList.remove('is-drop');
-  }
-  function envName(slug, key) {
-    if (/_URL$/.test(key)) return key;
-    return slug.toUpperCase().replace(/[^A-Z0-9]/g, '_') + '_' + key;
-  }
-  function close() {
-    chooser.hidden = true;
-    clearDrop();
+    svg.querySelectorAll('.node.is-drop, .node.is-nodrop').forEach(function (n) { n.classList.remove('is-drop', 'is-nodrop'); });
   }
 
   svg.addEventListener('pointerdown', function (e) {
@@ -58,7 +94,7 @@
     line.setAttribute('d', curve(drag.start, toSvg(e.clientX, e.clientY)));
     clearDrop();
     var target = nodeAt(e.clientX, e.clientY);
-    if (target && target.dataset.slug !== drag.from) target.classList.add('is-drop');
+    if (target && target.dataset.slug !== drag.from) target.classList.add(offers(target) ? 'is-drop' : 'is-nodrop');
   });
 
   svg.addEventListener('pointerup', function (e) {
@@ -69,6 +105,7 @@
     drag = null;
     line.classList.remove('is-on');
     var target = nodeAt(e.clientX, e.clientY);
+    clearDrop();
     if (!target) {
       // Dropped on empty space: create a service there, connected to this
       // one (the new-service dialog knows where and from whom).
@@ -79,47 +116,15 @@
         if (window.hangarNewService) window.hangarNewService(from, x, y);
         else location.href = '/p/' + project + '/new?from=' + encodeURIComponent(from) + '&x=' + x + '&y=' + y;
       }
-      clearDrop();
       return;
     }
-    if (target.dataset.slug === from) { clearDrop(); return; }
-    open(from, target, e.clientX, e.clientY);
-  });
-
-  function open(from, target, x, y) {
-    var ref = target.dataset.ref;
-    var keys = (target.dataset.exports || '').split(' ').filter(Boolean);
-    title.textContent = chooser.dataset.title.replace('{from}', from).replace('{to}', target.dataset.slug);
-    form.action = '/p/' + project + '/s/' + from + '/env';
-    options.textContent = '';
-    keys.forEach(function (k, i) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'tuc-btn is-outline is-sm';
-      var name = document.createElement('span');
-      name.className = 'mono';
-      name.textContent = k;
-      b.appendChild(name);
-      b.addEventListener('click', function () { pick(k); });
-      options.appendChild(b);
-      if (i === 0) pick(k);
-    });
-    function pick(k) {
-      Array.prototype.forEach.call(options.children, function (b) {
-        b.classList.toggle('is-current', b.textContent === k);
-      });
-      keyInput.value = envName(target.dataset.slug, k);
-      valueInput.value = '${{' + ref + '.' + k + '}}';
+    if (target.dataset.slug === from) return;
+    if (!offers(target)) {
+      if (window.Tucano) window.Tucano.toast({ type: 'warning', text: svg.dataset.nothing.replace('{service}', target.dataset.slug) });
+      return;
     }
-    chooser.hidden = false;
-    var w = chooser.offsetWidth, h = chooser.offsetHeight;
-    chooser.style.left = Math.min(x + 12, window.innerWidth - w - 12) + 'px';
-    chooser.style.top = Math.min(y + 12, window.innerHeight - h - 12) + 'px';
-    (options.firstChild || keyInput).focus();
-  }
-
-  document.getElementById('connect-cancel').addEventListener('click', close);
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !chooser.hidden) close(); });
+    if (window.hangarConnect) window.hangarConnect(from, target.dataset.ref, null);
+  });
 })();
 
 // Moving cards, zoom and opening a service without reloading the page.

@@ -204,6 +204,8 @@ type EnvRow struct {
 	Value    string
 	Secret   bool
 	Revealed bool
+	// Offered: the other services can connect to this variable.
+	Offered bool
 }
 
 // RefWarning is a reference in the variables that the next deploy cannot
@@ -261,6 +263,15 @@ type ServiceData struct {
 	Deploys     []DeployRow
 	Env         []EnvRow
 	RefWarnings []RefWarning // broken references in Env
+	// HasExports: a template declares what it offers (the Exports card);
+	// else the variables marked as offered are what it offers.
+	HasExports bool
+	// UsedBy are the variables of other services that reference this one
+	// ("app (DATABASE_URL ← DATABASE_URL)").
+	UsedBy []string
+	// ConnectTargets are the other services of the project that offer
+	// something, for the "Connect to…" picker.
+	ConnectTargets []string
 	EnvSuggest  *EnvSuggest  // nil when the repository suggests nothing new
 	Domains     DomainsSection
 	Exports     []ExportRow

@@ -280,7 +280,7 @@ func flashFrom(r *http.Request) string {
 	switch ok := r.URL.Query().Get("ok"); ok {
 	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
 		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed",
-		"volume-limit", "volume-unlimit":
+		"volume-limit", "volume-unlimit", "connected", "offered", "unoffered":
 		return i18n.T(r.Context(), "flash."+ok)
 	}
 	return ""
@@ -335,9 +335,22 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	if ds.ValidateTimeout > 0 {
 		d.ValidateMinutes = strconv.Itoa(int(ds.ValidateTimeout.Minutes()))
 	}
+	offered := map[string]bool{}
+	if offers, err := h.projects.Offers(r.Context(), s.ID); err == nil {
+		for _, o := range offers {
+			offered[o.Key] = o.Variable
+			if !o.Variable {
+				d.HasExports = true
+			}
+		}
+	}
+	if deps, err := h.projects.Dependents(r.Context(), p.Slug, s.Slug); err == nil {
+		d.UsedBy = dependentsLabel(r, deps)
+	}
+	d.ConnectTargets = h.connectTargets(r, p.ID, s.Slug)
 	if env, err := h.projects.ListEnv(r.Context(), s.ID); err == nil {
 		for _, e := range env {
-			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret}
+			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret, Offered: offered[e.Key]}
 			if e.Key == v.revealKey {
 				row.Value, row.Revealed = v.revealValue, true
 			}
@@ -475,7 +488,7 @@ func inferTab(r *http.Request) string {
 	}
 	path := r.URL.Path
 	switch {
-	case strings.Contains(path, "/env"), strings.Contains(path, "/exports"):
+	case strings.Contains(path, "/env"), strings.Contains(path, "/exports"), strings.HasSuffix(path, "/connect"):
 		return "variables"
 	case strings.Contains(path, "/domains"), strings.Contains(path, "/ports"):
 		return "network"
@@ -486,7 +499,7 @@ func inferTab(r *http.Request) string {
 		return "settings"
 	}
 	switch r.URL.Query().Get("ok") {
-	case "env", "env-deleted":
+	case "env", "env-deleted", "connected", "offered", "unoffered":
 		return "variables"
 	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed":
 		return "network"

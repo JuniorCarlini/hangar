@@ -9,6 +9,9 @@ FROM projects p ORDER BY p.name;
 -- name: GetProjectBySlug :one
 SELECT * FROM projects WHERE slug = ?;
 
+-- name: GetProjectByID :one
+SELECT * FROM projects WHERE id = ?;
+
 -- name: DeleteProject :exec
 DELETE FROM projects WHERE id = ?;
 

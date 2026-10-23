@@ -22,7 +22,12 @@ const (
 	RefNoProject RefProblem = "project" // the project is not connected (or is gone)
 	RefNoService RefProblem = "service" // no service with that name
 	RefNoKey     RefProblem = "key"     // the service neither offers nor has that key
+	RefCycle     RefProblem = "cycle"   // the value leads back to itself, or too deep
 )
+
+// maxRefDepth bounds a chain of references (app → api → db): deeper is a
+// mistake, not a design.
+const maxRefDepth = 5
 
 // BrokenRef is a variable whose reference the next deploy cannot resolve.
 type BrokenRef struct {
@@ -124,9 +129,20 @@ func (l *refLookup) load(ctx context.Context, projectSlug, serviceSlug string) (
 }
 
 // resolve finds the value of one reference; problem says why there is none.
+// A value that is itself a reference (the api offers ${{db.HOST}}) is
+// followed, relative to its own project, up to maxRefDepth; a loop is a
+// RefCycle, never an endless deploy.
 func (l *refLookup) resolve(ctx context.Context, project, service, key string) (string, RefProblem, error) {
+	return l.resolveIn(ctx, project, service, key, map[string]bool{}, 0)
+}
+
+func (l *refLookup) resolveIn(ctx context.Context, project, service, key string, seen map[string]bool, depth int) (string, RefProblem, error) {
 	if project == "" {
 		project = l.p.Slug
+	}
+	id := project + "/" + service + "/" + key
+	if seen[id] || depth >= maxRefDepth {
+		return "", RefCycle, nil
 	}
 	t, err := l.target(ctx, project, service)
 	if err != nil || t.problem != "" {
@@ -136,13 +152,43 @@ func (l *refLookup) resolve(ctx context.Context, project, service, key string) (
 	if !ok {
 		return "", RefNoKey, nil
 	}
-	return v, "", nil
+	if !refRE.MatchString(v) {
+		return v, "", nil
+	}
+	seen[id] = true
+	defer delete(seen, id)
+	var problem RefProblem
+	var failed error
+	out := refRE.ReplaceAllStringFunc(v, func(ref string) string {
+		if problem != "" || failed != nil {
+			return ref
+		}
+		g := refRE.FindStringSubmatch(ref)
+		inner := g[1]
+		if inner == "" {
+			inner = project // relative to the service that holds the value
+		}
+		got, p, err := l.resolveIn(ctx, inner, g[2], g[3], seen, depth+1)
+		if err != nil {
+			failed = err
+			return ref
+		}
+		if p != "" {
+			problem = p
+			return ref
+		}
+		return got
+	})
+	if failed != nil || problem != "" {
+		return "", problem, failed
+	}
+	return out, "", nil
 }
 
 // resolveRefs replaces references in the variable values with the target's
-// export or variable. Only one level: a referenced value is used as stored,
-// so references can never loop. A reference to a project that is not
-// connected, or to something that does not exist, fails the deploy.
+// export or variable, following chains (see resolve). A reference to a
+// project that is not connected, to something that does not exist, or one
+// that loops fails the deploy.
 func (m *Manager) resolveRefs(ctx context.Context, p dbq.Project, env map[string]string) (map[string]string, error) {
 	l := m.newRefLookup(p)
 	out := make(map[string]string, len(env))

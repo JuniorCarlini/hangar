@@ -819,8 +819,26 @@ func (m *Manager) SetEnv(ctx context.Context, a Actor, serviceID, key, value str
 	if secret {
 		sec = 1
 	}
+	old, hadOld := "", false
+	if cur, err := m.q.GetEnv(ctx, dbq.GetEnvParams{ServiceID: serviceID, Key: key}); err == nil {
+		if plain, err := m.box.Open(cur.ValueEnc, envAD(serviceID, key)); err == nil {
+			old, hadOld = string(plain), true
+		}
+	}
 	if err := m.q.UpsertEnv(ctx, dbq.UpsertEnvParams{ServiceID: serviceID, Key: key, ValueEnc: sealed, Secret: sec, UpdatedAt: m.now().Unix()}); err != nil {
 		return err
+	}
+	// The services that use this one follow the new value: what it offers
+	// built from the old one is updated, and they show changes to apply.
+	if hadOld && old != value {
+		changed := m.syncExports(ctx, serviceID, old, value)
+		if changed == nil {
+			changed = map[string]bool{}
+		}
+		changed[key] = true
+		if s, err := m.q.GetServiceByID(ctx, serviceID); err == nil {
+			m.touchDependents(ctx, s, changed)
+		}
 	}
 	// Never the value in the audit log: only the name and whether it is secret.
 	m.record(ctx, a, "service.env.set", "service", serviceID, audit.OK, map[string]any{"key": key, "secret": secret})
