@@ -26,9 +26,13 @@
   var paused = false;
   var queue = [];
 
+  // Only the colour changes: the dot keeps its size and shape classes from
+  // the template (replacing className used to leave it with no size at all).
+  var dotColors = ["bg-success", "bg-warning", "bg-border"];
   function setStatus(text, cls) {
     status.textContent = text;
-    dot.className = "dot " + cls;
+    dot.classList.remove.apply(dot.classList, dotColors);
+    dot.classList.add(cls);
   }
 
   // The colour follows the level written in the line, not the stream: many
@@ -97,8 +101,8 @@
 
   var src = new EventSource(box.getAttribute("data-src"));
   current = src;
-  src.onopen = function () { setStatus(text.live, "dot-success"); };
-  src.onerror = function () { setStatus(text.reconnecting, "dot-muted"); };
+  src.onopen = function () { setStatus(text.live, "bg-success"); };
+  src.onerror = function () { setStatus(text.reconnecting, "bg-warning"); };
   src.onmessage = function (e) {
     var d;
     try { d = JSON.parse(e.data); } catch (_) { return; }
@@ -119,7 +123,7 @@
     });
   }
   src.addEventListener("end", function (e) {
-    setStatus(text.ended, "dot-muted");
+    setStatus(text.ended, "bg-border");
     src.close();
   });
   pauseBtn.addEventListener("click", function () {
