@@ -114,15 +114,18 @@ templ commandPalette(n Nav) {
 // topBar stays free of page context: brand on the left, search, alerts,
 // lock and the account on the right.
 templ topBar(n Nav) {
-	<header class="topbar sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-border bg-surface pr-6 pl-4">
-		<a class="flex w-[188px] shrink-0 items-center gap-2.5 text-fg no-underline hover:text-fg" href="/">
+	<header class="topbar sticky top-0 z-20 flex h-12 items-center gap-2 border-b border-border bg-surface px-3 lg:gap-3 lg:pr-6 lg:pl-4">
+		<button type="button" class="tuc-btn is-ghost is-icon lg:hidden" data-tuc-drawer="#nav-drawer" aria-label={ t(ctx, "nav.menu_open") }>
+			@Icon("menu", "size-5")
+		</button>
+		<a class="flex shrink-0 items-center gap-2.5 text-fg no-underline hover:text-fg lg:w-[188px]" href="/">
 			@brand("")
 		</a>
 		<span class="grow"></span>
-		<button type="button" class="flex h-(--tuc-control-height) w-[300px] min-w-0 shrink cursor-pointer items-center gap-2 rounded-(--tuc-radius-md) border border-border bg-surface-2 pr-1.5 pl-2.5 text-left text-[13px] text-subtle transition hover:border-border-strong hover:text-muted" data-palette-open aria-haspopup="dialog" aria-keyshortcuts={ paletteShortcut(n) } aria-label={ t(ctx, "palette.open") }>
+		<button type="button" class="flex h-(--tuc-control-height) min-w-0 shrink cursor-pointer items-center gap-2 rounded-(--tuc-radius-md) border border-border bg-surface-2 text-left text-[13px] text-subtle transition hover:border-border-strong hover:text-muted max-md:w-(--tuc-control-height) max-md:justify-center md:w-[300px] md:pr-1.5 md:pl-2.5" data-palette-open aria-haspopup="dialog" aria-keyshortcuts={ paletteShortcut(n) } aria-label={ t(ctx, "palette.open") }>
 			@Icon("search", "size-4 text-muted")
-			<span class="min-w-0 grow truncate">{ t(ctx, "nav.search_placeholder") }</span>
-			<kbd class="shrink-0 rounded-xs border border-border bg-surface px-1.5 font-sans text-[11px] leading-[18px] text-muted">{ n.ModKey }{ "K" }</kbd>
+			<span class="min-w-0 grow truncate max-md:hidden">{ t(ctx, "nav.search_placeholder") }</span>
+			<kbd class="shrink-0 max-md:hidden rounded-xs border border-border bg-surface px-1.5 font-sans text-[11px] leading-[18px] text-muted">{ n.ModKey }{ "K" }</kbd>
 		</button>
 		@alertsBell(n)
 		@userMenu(n)
@@ -132,10 +135,10 @@ templ topBar(n Nav) {
 // pageHead is the bar under the top bar: title, subtitle and the page's
 // actions.
 templ pageHead(title, sub string) {
-	<div class="flex min-h-[52px] shrink-0 flex-wrap items-center gap-3 border-b border-border px-6 py-2.5">
+	<div class="page-head flex min-h-[52px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-4 py-2.5 lg:px-6">
 		<h1 class="m-0 text-base leading-6 font-semibold">{ title }</h1>
 		if sub != "" {
-			<span class="text-xs text-muted">{ sub }</span>
+			<span class="min-w-0 text-xs break-words text-muted">{ sub }</span>
 		}
 		<span class="grow"></span>
 		{ children... }
@@ -144,7 +147,7 @@ templ pageHead(title, sub string) {
 
 // pageBody is the content under the bar, full width.
 templ pageBody() {
-	<div class="page-body flex w-full flex-col gap-4 p-6">
+	<div class="page-body flex w-full min-w-0 flex-col gap-4 p-4 lg:p-6">
 		{ children... }
 	</div>
 }
@@ -191,7 +194,7 @@ templ userMenu(n Nav) {
 				<span class="absolute -top-1 -right-1 size-2.5 rounded-[2px] border-2 border-surface bg-warning"></span>
 			}
 		</span>
-		<span class="flex min-w-0 flex-col leading-tight">
+		<span class="flex min-w-0 flex-col leading-tight max-sm:hidden">
 			<span class="text-[11px] text-muted">{ t(ctx, "menu.hello") }</span>
 			<span class="max-w-[140px] truncate text-[13px] font-semibold">{ displayName(n) }</span>
 		</span>
@@ -308,8 +311,33 @@ templ navLink(n Nav, key, href, icon, label string) {
 }
 
 templ sidebar(n Nav) {
-	<aside class="sidebar sticky top-12 flex h-[calc(100vh-48px)] w-[232px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-surface px-2 py-3">
-		<nav class="tuc-menu" aria-label={ t(ctx, "nav.menu") }>
+	<aside class="sidebar sticky top-12 flex h-[calc(100vh-48px)] w-[232px] shrink-0 flex-col gap-3 overflow-y-auto border-r border-border bg-surface px-2 py-3 max-lg:hidden">
+		@sidebarMenu(n)
+		@serverFooter(n)
+	</aside>
+	// On a phone the same menu lives in a drawer opened from the top bar.
+	<dialog class="tuc-drawer is-left nav-drawer lg:hidden" id="nav-drawer" aria-label={ t(ctx, "nav.menu") }>
+		<div class="tuc-drawer__panel">
+			<div class="tuc-drawer__header flex flex-row items-center justify-between gap-3">
+				<span class="flex items-center gap-2.5">
+					@brand("")
+				</span>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-drawer__close" data-tuc-drawer-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<div class="tuc-drawer__body flex min-h-0 flex-col gap-3 overflow-y-auto">
+				@sidebarMenu(n)
+				@serverFooter(n)
+			</div>
+		</div>
+	</dialog>
+}
+
+// sidebarMenu is the menu itself: in the sidebar on a large screen, in the
+// nav drawer on a phone.
+templ sidebarMenu(n Nav) {
+	<nav class="tuc-menu" aria-label={ t(ctx, "nav.menu") }>
 			<div class="tuc-menu__section">{ t(ctx, "nav.server") }</div>
 			@navLink(n, "overview", "/", "gauge", t(ctx, "nav.overview"))
 			// Projects come right after the overview: they are where the daily
@@ -400,8 +428,6 @@ templ sidebar(n Nav) {
 				}
 			}
 		</nav>
-		@serverFooter(n)
-	</aside>
 }
 
 // serverFooter is the server's IP (copied with a click) and the Hangar

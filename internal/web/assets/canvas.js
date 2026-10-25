@@ -314,9 +314,13 @@
     view.y = scroll.clientHeight / 2 - (b.y + b.b) / 2 * zoom;
     applyView();
   }
+  // A phone shows the whole drawing on arrival: the desktop zoom would leave
+  // the cards outside the screen.
+  var narrow = function () { return scroll.clientWidth < 640; };
   function fit() {
     var bb = bounds();
-    var z = Math.min(1.2, (scroll.clientWidth - 96) / (bb.r - bb.x), (scroll.clientHeight - 96) / (bb.b - bb.y));
+    var pad = narrow() ? 32 : 96;
+    var z = Math.min(1.2, (scroll.clientWidth - pad) / (bb.r - bb.x), (scroll.clientHeight - pad) / (bb.b - bb.y));
     zoom = Math.max(0.3, Math.round(z * 100) / 100);
     if (label) label.textContent = Math.round(zoom * 100) + '%';
     center();
@@ -346,7 +350,7 @@
     if (saved) zoom = Math.min(2, Math.max(0.3, saved));
   } catch (_) {}
   if (label) label.textContent = Math.round(zoom * 100) + '%';
-  center();
+  if (narrow()) fit(); else center();
   window.addEventListener('resize', function () { if (!pan) center(); });
 
   // Open a service in the side drawer without reloading: fetch the page and

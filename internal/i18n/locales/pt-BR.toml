@@ -23,6 +23,7 @@ dark = "Escuro"
 light = "Claro"
 
 [nav]
+menu_open = "Abrir o menu"
 pinned = "Fixado no topo"
 pin = "Fixar no topo"
 pin_named = "Fixar {project} no topo"

@@ -37,7 +37,7 @@ templ ConnectForm(d ConnectFormData) {
 			<input type="hidden" name="to" value={ d.Target }/>
 			<p class="m-0 text-[13px] text-muted">{ t(ctx, "connect.intro", "from", d.From, "to", d.Target) }</p>
 			<div class="tuc-table-wrap">
-				<table class="tuc-table is-compact w-full">
+				<table class="tuc-table is-compact connect-table w-full">
 					<thead>
 						<tr>
 							<th class="w-8"><span class="sr-only">{ t(ctx, "connect.use") }</span></th>

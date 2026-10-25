@@ -23,6 +23,7 @@ dark = "Dark"
 light = "Light"
 
 [nav]
+menu_open = "Open the menu"
 pinned = "Pinned to the top"
 pin = "Pin to the top"
 pin_named = "Pin {project} to the top"
