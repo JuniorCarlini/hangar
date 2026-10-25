@@ -426,6 +426,14 @@ html.is-busy, html.is-busy .node { cursor: progress; }
    The browser must not enlarge text on its own (Android's font boosting,
    iOS in landscape): sizes stay the ones the design sets. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Tucano raises buttons and tabs to 16px and 44px on a phone; next to the
+   panel's 13px text they look blown up. Buttons and tabs stay close to the
+   desktop proportion; inputs keep 16px (iOS zooms into smaller ones). */
+@media (max-width: 40rem) {
+  :root { --tuc-control-height: 2.5rem; }
+  .tuc-btn, .tuc-tabs, .tuc-pagination, .tuc-choice, .tuc-choices { --tuc-text: .875rem; }
+  .topbar { --tuc-control-height: 2.25rem; }
+}
 .nav-drawer .tuc-drawer__panel { width: min(300px, 86vw); }
 .nav-drawer .tuc-menu { padding: 0; flex: none; overflow: visible; }
 @media (max-width: 639px) {
@@ -446,10 +454,18 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .page-head > form:not(.flex) > .tuc-btn { width: 100%; }
   .page-head > form.flex { flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
   .page-head > form.flex > :not([type=hidden]) { flex: 1 1 100%; min-width: 0; }
-  /* Segmented choices (1 h · 24 h · 7 d, theme) scroll inside their row
-     instead of pushing the page sideways. */
-  .tuc-btn-group { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .tuc-btn-group > .tuc-btn { flex-shrink: 0; }
+  /* Segmented choices (1 h · 24 h · 7 d) take the whole row, the options
+     sharing it equally. */
+  :is(.page-body, .page-head, .svc-body) .tuc-btn-group { display: flex; width: 100%; }
+  :is(.page-body, .page-head, .svc-body) .tuc-btn-group > .tuc-btn { flex: 1 1 0; min-width: 0; }
+  /* Buttons standing on their own take the full width; icon buttons, the
+     ones inside a table row and the quiet inline ones keep their size. */
+  :is(.page-body, .svc-body) .tuc-btn:not(.is-icon):not(.is-link):not(.is-ghost):not(.tuc-table .tuc-btn):not(.tuc-btn-group .tuc-btn) { width: 100%; }
+  :is(.page-body, .svc-body) form:has(> .tuc-btn:only-of-type) { width: 100%; }
+  /* A service's actions: two equal columns. */
+  .svc-actions { display: grid; grid-template-columns: 1fr 1fr; padding: 12px 16px 14px; }
+  /* The "changes to apply" notice puts its button under the text. */
+  .svc-body [role=status].flex { flex-wrap: wrap; }
   /* Fixed widths meant for a desktop give way. */
   .page-body .tuc-input, .page-body select, .tuc-modal .tuc-input { max-width: 100%; }
   .tuc-modal__panel { padding: 16px; }
