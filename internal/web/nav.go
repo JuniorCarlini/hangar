@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
@@ -58,12 +59,27 @@ func (h *handlers) navFor(r *http.Request, p *auth.Principal) views.Nav {
 	}
 	n.Limited = p.Limited()
 	if list, err := h.projects.ListProjects(r.Context()); err == nil {
+		pins, _ := h.projects.PinnedProjects(r.Context(), p.UserID)
 		for _, pr := range list {
 			if !p.CanSeeProject(pr.Slug) {
 				continue
 			}
-			n.Projects = append(n.Projects, views.NavProject{Slug: pr.Slug, Name: pr.Name, Services: pr.Services})
+			_, pinned := pins[pr.ID]
+			n.Projects = append(n.Projects, views.NavProject{Slug: pr.Slug, Name: pr.Name, Services: pr.Services, Pinned: pinned})
 		}
+		// Pinned projects first, in the order they were pinned; the rest
+		// keep their order (by name).
+		ids := map[string]string{}
+		for _, pr := range list {
+			ids[pr.Slug] = pr.ID
+		}
+		sort.SliceStable(n.Projects, func(i, j int) bool {
+			a, b := n.Projects[i], n.Projects[j]
+			if a.Pinned != b.Pinned {
+				return a.Pinned
+			}
+			return a.Pinned && pins[ids[a.Slug]] < pins[ids[b.Slug]]
+		})
 	}
 	if ports, err := h.projects.ListAllPorts(r.Context()); err == nil {
 		n.PortsOpen = len(ports)

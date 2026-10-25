@@ -534,6 +534,33 @@ func (q *Queries) ListEnv(ctx context.Context, serviceID string) ([]EnvVar, erro
 	return items, nil
 }
 
+const listPinnedProjects = `-- name: ListPinnedProjects :many
+SELECT project_id FROM pinned_projects WHERE user_id = ? ORDER BY pinned_at, project_id
+`
+
+func (q *Queries) ListPinnedProjects(ctx context.Context, userID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listPinnedProjects, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var project_id string
+		if err := rows.Scan(&project_id); err != nil {
+			return nil, err
+		}
+		items = append(items, project_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjects = `-- name: ListProjects :many
 SELECT p.id, p.slug, p.name, p.created_at,
        (SELECT count(*) FROM services s WHERE s.project_id = p.id) AS service_count
@@ -676,6 +703,21 @@ func (q *Queries) ListServices(ctx context.Context, projectID string) ([]Service
 		return nil, err
 	}
 	return items, nil
+}
+
+const pinProject = `-- name: PinProject :exec
+INSERT INTO pinned_projects (user_id, project_id, pinned_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING
+`
+
+type PinProjectParams struct {
+	UserID    string
+	ProjectID string
+	PinnedAt  int64
+}
+
+func (q *Queries) PinProject(ctx context.Context, arg PinProjectParams) error {
+	_, err := q.db.ExecContext(ctx, pinProject, arg.UserID, arg.ProjectID, arg.PinnedAt)
+	return err
 }
 
 const resetCanvasPositions = `-- name: ResetCanvasPositions :exec
@@ -825,6 +867,20 @@ type SupersedeLiveParams struct {
 
 func (q *Queries) SupersedeLive(ctx context.Context, arg SupersedeLiveParams) error {
 	_, err := q.db.ExecContext(ctx, supersedeLive, arg.ServiceID, arg.ID)
+	return err
+}
+
+const unpinProject = `-- name: UnpinProject :exec
+DELETE FROM pinned_projects WHERE user_id = ? AND project_id = ?
+`
+
+type UnpinProjectParams struct {
+	UserID    string
+	ProjectID string
+}
+
+func (q *Queries) UnpinProject(ctx context.Context, arg UnpinProjectParams) error {
+	_, err := q.db.ExecContext(ctx, unpinProject, arg.UserID, arg.ProjectID)
 	return err
 }
 

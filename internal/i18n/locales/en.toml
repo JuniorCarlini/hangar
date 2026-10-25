@@ -23,6 +23,11 @@ dark = "Dark"
 light = "Light"
 
 [nav]
+pinned = "Pinned to the top"
+pin = "Pin to the top"
+pin_named = "Pin {project} to the top"
+unpin = "Unpin"
+unpin_named = "Unpin {project}"
 team = "Team"
 new_version = "new version"
 updates = "Updates"

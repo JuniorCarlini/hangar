@@ -316,6 +316,12 @@ type Metric struct {
 	DiskTotal  int64
 }
 
+type PinnedProject struct {
+	UserID    string
+	ProjectID string
+	PinnedAt  int64
+}
+
 type Port struct {
 	ID            string
 	ServiceID     string

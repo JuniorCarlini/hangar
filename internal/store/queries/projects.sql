@@ -109,3 +109,12 @@ SELECT count(*) FROM projects WHERE id = ?;
 
 -- name: KnowsService :one
 SELECT count(*) FROM services WHERE id = ? AND project_id = ?;
+
+-- name: PinProject :exec
+INSERT INTO pinned_projects (user_id, project_id, pinned_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING;
+
+-- name: UnpinProject :exec
+DELETE FROM pinned_projects WHERE user_id = ? AND project_id = ?;
+
+-- name: ListPinnedProjects :many
+SELECT project_id FROM pinned_projects WHERE user_id = ? ORDER BY pinned_at, project_id;

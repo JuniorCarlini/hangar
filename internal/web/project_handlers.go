@@ -850,3 +850,19 @@ func markJSON(mk projects.LogMark) string {
 	b, _ := json.Marshal(map[string]any{"n": mk.At.UnixNano(), "t": mk.At.Local().Format("15:04:05"), "by": mk.By})
 	return string(b)
 }
+
+// pinProject pins the project to the top of the sidebar, or unpins it, and
+// returns to the page the person was on.
+func (h *handlers) pinProject(w http.ResponseWriter, r *http.Request) {
+	p := PrincipalFrom(r.Context())
+	if err := h.projects.PinProject(r.Context(), p.UserID, r.PathValue("project"), r.PostFormValue("on") == "1"); err != nil {
+		if errors.Is(err, projects.ErrNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		loggerFrom(r.Context()).Error("pin project", "error", err)
+		http.Error(w, i18n.T(r.Context(), "error.internal"), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, safeNext(r.PostFormValue("next")), http.StatusSeeOther)
+}

@@ -23,6 +23,11 @@ dark = "Escuro"
 light = "Claro"
 
 [nav]
+pinned = "Fixado no topo"
+pin = "Fixar no topo"
+pin_named = "Fixar {project} no topo"
+unpin = "Desafixar"
+unpin_named = "Desafixar {project}"
 team = "Equipe"
 new_version = "nova versão"
 updates = "Atualizações"

@@ -315,14 +315,39 @@ templ sidebar(n Nav) {
 			// Projects come right after the overview: they are where the daily
 			// work happens; the server settings sit below them.
 			<div class="tuc-menu__section">{ t(ctx, "nav.projects") }</div>
-			for _, p := range n.Projects {
-				<a class={ navItem(n, "p:"+p.Slug) } href={ templ.SafeURL("/p/" + p.Slug) }>
-					<span class="tuc-menu__icon">
-						<span class="size-2 rounded-xs bg-success" aria-hidden="true"></span>
-					</span>
-					<span class="truncate">{ p.Slug }</span>
-					<span class="tuc-menu__count">{ fmt.Sprint(p.Services) }</span>
-				</a>
+			for i, p := range n.Projects {
+				if i > 0 && !p.Pinned && n.Projects[i-1].Pinned {
+					<hr class="tuc-menu__separator"/>
+				}
+				<div class="group/pin relative">
+					<a class={ navItem(n, "p:"+p.Slug) } href={ templ.SafeURL("/p/" + p.Slug) }>
+						<span class="tuc-menu__icon">
+							<span class="size-2 rounded-xs bg-success" aria-hidden="true"></span>
+						</span>
+						<span class="truncate">{ p.Slug }</span>
+						if p.Pinned {
+							<span class="shrink-0 text-subtle" title={ t(ctx, "nav.pinned") }>
+								@Icon("pin", "size-3")
+							</span>
+						}
+						<span class="tuc-menu__count group-focus-within/pin:invisible group-hover/pin:invisible">{ fmt.Sprint(p.Services) }</span>
+					</a>
+					<form method="post" action={ templ.SafeURL("/p/" + p.Slug + "/pin") } class="absolute top-1/2 right-1 m-0 hidden -translate-y-1/2 group-focus-within/pin:block group-hover/pin:block">
+						<input type="hidden" name="csrf" value={ n.CSRF }/>
+						<input type="hidden" name="next" value={ n.Path }/>
+						if p.Pinned {
+							<input type="hidden" name="on" value="0"/>
+							<button class="tuc-btn is-ghost is-icon is-sm size-6" type="submit" aria-label={ t(ctx, "nav.unpin_named", "project", p.Slug) } title={ t(ctx, "nav.unpin") }>
+								@Icon("pin-off", "size-3.5")
+							</button>
+						} else {
+							<input type="hidden" name="on" value="1"/>
+							<button class="tuc-btn is-ghost is-icon is-sm size-6" type="submit" aria-label={ t(ctx, "nav.pin_named", "project", p.Slug) } title={ t(ctx, "nav.pin") }>
+								@Icon("pin", "size-3.5")
+							</button>
+						}
+					</form>
+				</div>
 			}
 			if n.CanCreate {
 				<a class="tuc-btn is-outline mt-1.5 w-full" href="/?new=1" data-tuc-modal="#new-project">

@@ -212,6 +212,8 @@ func routes(rt *Router, h *handlers) {
 	// Opening a way in (port, domain, link to another project) needs sudo
 	// (docs/17 § 1.3); closing one does not: in a hurry, reducing exposure
 	// must stay one click away.
+	// Pinning is personal: it only orders this person's sidebar.
+	rt.HandleFunc("POST /p/{project}/pin", h.pinProject, Policy{Role: auth.RoleViewer, Audit: "project.pin"})
 	rt.HandleFunc("POST /p/{project}/links", h.projectLink, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "project.link", AuditByHandler: true})
 	rt.HandleFunc("POST /p/{project}/links/delete", h.projectUnlink, Policy{Role: auth.RoleAdmin, Audit: "project.unlink", AuditByHandler: true})
 	rt.HandleFunc("GET /overview", h.overviewRedirect, viewer)

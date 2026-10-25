@@ -97,6 +97,8 @@ type NavProject struct {
 	Slug     string
 	Name     string
 	Services int64
+	// Pinned: at the top of this person's sidebar.
+	Pinned bool
 }
 
 // WithNav stores the sidebar data in ctx.
