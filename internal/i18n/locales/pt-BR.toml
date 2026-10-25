@@ -76,7 +76,6 @@ subtitle = "Acesso restrito"
 email = "E-mail"
 password = "Senha"
 continue = "Continuar"
-no_reset = "Sem \"esqueci a senha\": a recuperação é feita com os códigos de recuperação ou pelo servidor."
 
 [login.error]
 bad_credentials = "E-mail ou senha incorretos, ou conta bloqueada."

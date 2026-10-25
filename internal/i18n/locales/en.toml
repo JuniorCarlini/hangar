@@ -76,7 +76,6 @@ subtitle = "Restricted access"
 email = "E-mail"
 password = "Password"
 continue = "Continue"
-no_reset = "No \"forgot password\": recovery uses your recovery codes or the server."
 
 [login.error]
 bad_credentials = "Wrong e-mail or password, or the account is locked."
