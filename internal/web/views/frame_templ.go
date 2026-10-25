@@ -21,7 +21,7 @@ import (
 // Shared class strings for the prototype's cards.
 const (
 	cardClass     = "flex flex-col rounded-md border border-border bg-surface"
-	cardHeadClass = "flex flex-wrap items-center gap-2 border-b border-border px-4 py-3"
+	cardHeadClass = "card-head flex flex-wrap items-center gap-2 border-b border-border px-4 py-3"
 	cardBodyClass = "flex flex-col gap-3 p-4"
 )
 

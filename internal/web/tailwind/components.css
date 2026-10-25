@@ -449,7 +449,9 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .tuc-modal__body .flex.justify-end > .tuc-btn,
   .tuc-modal__panel > .flex.justify-end > .tuc-btn,
   .tuc-drawer__body form .flex.justify-end > .tuc-btn { width: 100%; }
-  /* The page title's actions take the whole row. */
+  /* The page title's actions go under it and take the whole row (the
+     spacer becomes the line break). */
+  .page-head > .grow { flex-basis: 100%; height: 0; }
   .page-head > .tuc-btn, .page-head > a.tuc-btn, .page-head > form, .page-head > .tuc-btn-group { flex: 1 1 auto; }
   .page-head > form:not(.flex) > .tuc-btn { width: 100%; }
   .page-head > form.flex { flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
@@ -460,7 +462,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   :is(.page-body, .page-head, .svc-body) .tuc-btn-group > .tuc-btn { flex: 1 1 0; min-width: 0; }
   /* Buttons standing on their own take the full width; icon buttons, the
      ones inside a table row and the quiet inline ones keep their size. */
-  :is(.page-body, .svc-body) .tuc-btn:not(.is-icon):not(.is-link):not(.is-ghost):not(.tuc-table .tuc-btn):not(.tuc-btn-group .tuc-btn) { width: 100%; }
+  :is(.page-body, .svc-body) .tuc-btn:not(.is-icon):not(.is-link):not(.is-ghost):not(.is-sm):not(.tuc-table .tuc-btn):not(.tuc-btn-group .tuc-btn),
+  .card-head .tuc-btn.is-sm:not(.is-icon):not(.is-ghost) { width: 100%; }
   :is(.page-body, .svc-body) form:has(> .tuc-btn:only-of-type) { width: 100%; }
   /* A service's actions: two equal columns. */
   .svc-actions { display: grid; grid-template-columns: 1fr 1fr; padding: 12px 16px 14px; }
@@ -479,6 +482,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .connect-table td:nth-child(4) { grid-column: 2; padding-top: 6px; }
   .connect-table tr + tr { border-top: 1px solid var(--p-border); }
   /* The canvas's "changes to apply" bar spans the screen and wraps. */
-  .pending-bar { left: 12px; right: 12px; transform: none; flex-wrap: wrap; white-space: normal; }
+  .pending-bar { top: 12px; bottom: auto; left: 12px; right: 12px; transform: none; animation: none; flex-wrap: wrap; white-space: normal; }
   .pending-bar > span:not(.pending-dot) { flex: 1 1 60%; min-width: 0; }
+  .pending-bar form { flex: 1 1 100%; }
+  .pending-bar form .tuc-btn { width: 100%; }
 }
