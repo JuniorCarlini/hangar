@@ -10,11 +10,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -283,6 +286,9 @@ func Clone(ctx context.Context, dir string, src Source) (Commit, error) {
 	if err != nil {
 		return Commit{}, mapErr(err)
 	}
+	if err := shareReadable(dir); err != nil {
+		return Commit{}, fmt.Errorf("source permissions: %w", err)
+	}
 	head, err := repo.Head()
 	if err != nil {
 		return Commit{}, fmt.Errorf("read HEAD: %w", err)
@@ -295,6 +301,36 @@ func Clone(ctx context.Context, dir string, src Source) (Commit, error) {
 		}
 	}
 	return c, nil
+}
+
+// shareReadable gives the checkout the permissions Git itself would (dirs
+// 0755, files 0644, executables 0755). The panel runs with umask 077, so
+// the clone came out 0700/0600 and owned by the panel; a Dockerfile's COPY
+// keeps those modes, and an app that switches to an unprivileged user
+// (USER 10001) could not read its own code. The checkout itself stays
+// private: it lives under the panel's data directory, which only the panel
+// reaches.
+func shareReadable(dir string) error {
+	return filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && d.Name() == ".git" {
+			return fs.SkipDir
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		mode := fs.FileMode(0o644)
+		if d.IsDir() || info.Mode()&0o100 != 0 {
+			mode = 0o755
+		}
+		return os.Chmod(p, mode)
+	})
 }
 
 // mapErr turns go-git's errors into messages the user can act on. Anything

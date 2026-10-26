@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -146,5 +148,40 @@ func TestSignatureAndPush(t *testing.T) {
 	}
 	if !ValidDelivery("72d3162e-cc78-11e3-81ab-4c9367dc0958") || ValidDelivery("x';--") {
 		t.Error("delivery id check")
+	}
+}
+
+// A checkout made under the panel's umask 077 gets Git's own modes back, so
+// an image that runs as an unprivileged user can read its code; .git is
+// left alone.
+func TestShareReadable(t *testing.T) {
+	dir := t.TempDir()
+	write := func(p string, mode os.FileMode) {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, p)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, p), []byte("x"), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("app/lab/wsgi.py", 0o600)
+	write("app/run.sh", 0o700)
+	write(".git/config", 0o600)
+	if err := os.Symlink("lab/wsgi.py", filepath.Join(dir, "app/link")); err != nil {
+		t.Fatal(err)
+	}
+	if err := shareReadable(dir); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]os.FileMode{
+		"app": 0o755, "app/lab": 0o755, "app/lab/wsgi.py": 0o644, "app/run.sh": 0o755, ".git/config": 0o600,
+	} {
+		info, err := os.Stat(filepath.Join(dir, p))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Errorf("%s: %o, want %o", p, got, want)
+		}
 	}
 }
