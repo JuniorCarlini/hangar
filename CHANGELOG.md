@@ -12,6 +12,31 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.18] - 2026-10-26
+
+### Novo
+
+- **Domínios dos clientes com Cloudflare**: domínio com a nuvem laranja
+  agora é aceito (antes caía em "DNS não aponta para cá"). A tela Domínios
+  mostra o caminho de cada pedido: direto ou via Cloudflare. O IP real do
+  visitante chega à app (o Hangar só confia no `CF-Connecting-IP` vindo do
+  Cloudflare).
+- **TXT de posse (opcional)**: com o switch ligado no serviço, um domínio
+  novo só recebe certificado se `_hangar.<domínio>` tiver o código que a app
+  mostra ao cliente. Domínios que já têm certificado continuam renovando.
+- **Limite por hora no painel**: o número de domínios novos por hora é
+  ajustado na tela Domínios (1 a 1000), com o uso da hora e aviso perto do
+  limite.
+- **Endereço dos clientes**: a tela Domínios mostra para onde os clientes
+  apontam (`entrada.…`) e avisa se ele estiver com a nuvem laranja.
+- **Kit do desenvolvedor**: chamada assinada, código do TXT em
+  Python/Node/PHP, texto pronto para o cliente e um teste que confere DNS,
+  TXT e a resposta da app sem gravar nem emitir nada.
+
+### Corrigido
+
+- O CI voltou a passar no lint (dois avisos do gosec).
+
 ## [0.5.17] - 2026-10-26
 
 ### Corrigido
