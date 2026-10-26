@@ -30,6 +30,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/statuspage"
 	"github.com/JuniorCarlini/hangar/internal/store"
 	"github.com/JuniorCarlini/hangar/internal/update"
+	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
 var discard = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -467,6 +468,23 @@ func TestAssetsServedWithoutListing(t *testing.T) {
 	}
 	if rec := e.do(req{method: "GET", target: "/assets/"}); rec.Code != http.StatusNotFound {
 		t.Errorf("/assets/ listing: status %d, want 404", rec.Code)
+	}
+}
+
+// The fonts are cached for good like the stylesheet: fetched again on each
+// page, the text painted in the fallback font and jumped when they arrived.
+func TestFontsAreVersionedAndCached(t *testing.T) {
+	e := newEnv(t)
+	css := e.do(req{method: "GET", target: "/assets/app.css?v=" + views.AssetVersion})
+	if css.Header().Get("Content-Type") != "text/css; charset=utf-8" {
+		t.Errorf("app.css type %q", css.Header().Get("Content-Type"))
+	}
+	font := "fonts/space-grotesk-latin.woff2?v=" + views.AssetVersion
+	if !strings.Contains(css.Body.String(), "url("+font+")") || strings.Contains(css.Body.String(), "woff2)") {
+		t.Fatal("app.css points at unversioned fonts")
+	}
+	if rec := e.do(req{method: "GET", target: "/assets/" + font}); rec.Code != http.StatusOK || !strings.Contains(rec.Header().Get("Cache-Control"), "immutable") {
+		t.Errorf("font: status %d, cache %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }
 

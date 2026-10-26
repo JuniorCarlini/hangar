@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/JuniorCarlini/hangar/internal/alerts"
@@ -363,6 +364,7 @@ func assets() http.Handler {
 		panic(err) // the directory is embedded at compile time; failing here is a build bug
 	}
 	files := http.StripPrefix("/assets/", http.FileServerFS(sub))
+	css := versionFonts(sub)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/") {
 			http.NotFound(w, r) // no directory listing
@@ -374,6 +376,25 @@ func assets() http.Handler {
 		} else {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
+		if r.URL.Path == "/assets/app.css" && css != nil {
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			_, _ = w.Write(css)
+			return
+		}
 		files.ServeHTTP(w, r)
 	})
+}
+
+var fontURL = regexp.MustCompile(`url\((fonts/[^)?]+\.woff2)\)`)
+
+// versionFonts gives the font URLs inside app.css the asset version, so the
+// fonts are cached for good like the stylesheet. Unversioned, they were
+// fetched again on every page (embedded files carry no ETag): the text
+// painted in the fallback font and jumped when Space Grotesk arrived.
+func versionFonts(sub fs.FS) []byte {
+	b, err := fs.ReadFile(sub, "app.css")
+	if err != nil {
+		return nil
+	}
+	return fontURL.ReplaceAll(b, []byte("url(${1}?v="+views.AssetVersion+")"))
 }
