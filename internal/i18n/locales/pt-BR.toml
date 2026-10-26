@@ -747,6 +747,8 @@ title = "Domínios"
 certificate = "Certificado"
 preview = "Será cadastrado:"
 wildcard_badge = "coringa"
+scale_cert = "coringa único, pelo DNS"
+scale_cert_hint = "Um só certificado cobre todos os subdomínios, obtido pelo DNS ({provider}). Subdomínio novo abre na hora."
 wildcard_cert = "por subdomínio, sob demanda"
 wildcard_cert_hint = "Cada subdomínio recebe o próprio certificado na primeira visita."
 

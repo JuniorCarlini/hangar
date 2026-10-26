@@ -747,6 +747,8 @@ title = "Domains"
 certificate = "Certificate"
 preview = "Will be added:"
 wildcard_badge = "wildcard"
+scale_cert = "one wildcard, through DNS"
+scale_cert_hint = "A single certificate covers every subdomain, obtained through the DNS ({provider}). A new subdomain opens at once."
 wildcard_cert = "per subdomain, on demand"
 wildcard_cert_hint = "Each subdomain gets its own certificate on its first visit."
 

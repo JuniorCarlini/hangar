@@ -26,3 +26,18 @@ func TestTypedConfirmationsOfferTheNameToCopy(t *testing.T) {
 		}
 	}
 }
+
+// The base domain's wildcard set up in scale has one certificate from the
+// DNS; any other wildcard gets one per subdomain on first visit.
+func TestScaledWildcardBadge(t *testing.T) {
+	b := EdgeBase{Domain: "checksafe.com.br", Provider: "cloudflare", Scaled: true}
+	if !scaledWildcard(b, "*.checksafe.com.br") || !scaledWildcard(b, "*.CheckSafe.com.br") {
+		t.Error("the base wildcard in scale is not recognised")
+	}
+	if scaledWildcard(b, "*.outro.com.br") || scaledWildcard(b, "lab.checksafe.com.br") {
+		t.Error("another domain counted as the scaled wildcard")
+	}
+	if scaledWildcard(EdgeBase{Domain: "checksafe.com.br"}, "*.checksafe.com.br") {
+		t.Error("a base without the DNS token counted as scaled")
+	}
+}

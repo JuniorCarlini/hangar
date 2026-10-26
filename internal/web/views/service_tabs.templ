@@ -800,7 +800,9 @@ templ fixedDomains(d ServiceData) {
 								</span>
 							</td>
 							<td>
-								if isWildcard(dm.Hostname) {
+								if scaledWildcard(d.Domains.Base, dm.Hostname) {
+									<span class="tuc-badge is-success" title={ t(ctx, "domain.scale_cert_hint", "provider", d.Domains.Base.Provider) }>{ t(ctx, "domain.scale_cert") }</span>
+								} else if isWildcard(dm.Hostname) {
 									<span class="tuc-badge is-info" title={ t(ctx, "domain.wildcard_cert_hint") }>{ t(ctx, "domain.wildcard_cert") }</span>
 								} else if dm.Offline {
 									<span class="tuc-badge is-danger" title={ t(ctx, "domain.offline_hint") }>{ t(ctx, "domain.offline") }</span>
@@ -910,6 +912,13 @@ templ dynamicDomains(d ServiceData) {
 }
 
 func isWildcard(host string) bool { return strings.HasPrefix(host, "*.") }
+
+// scaledWildcard: the wildcard of the base domain set up "in scale" is
+// covered by one certificate obtained through the DNS, not one per
+// subdomain on first visit.
+func scaledWildcard(b EdgeBase, host string) bool {
+	return b.Domain != "" && (b.Scaled || b.FromConfig) && strings.EqualFold(host, "*."+b.Domain)
+}
 
 // scaledBase shows, on the service holding *.<base domain>, that its
 // subdomains share one DNS-01 certificate, and lets an admin replace the
