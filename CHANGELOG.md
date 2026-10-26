@@ -12,6 +12,29 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.19] - 2026-10-26
+
+### Corrigido
+
+- **Textos que cresciam e voltavam ao trocar de tela**: a fonte era baixada
+  de novo a cada página, e o texto aparecia por um instante na fonte do
+  sistema. Agora ela fica guardada no navegador como o resto do estilo.
+- **Botão Atualizar que "não atualizava a página"**: logo depois do clique a
+  página às vezes voltava a mostrar o botão e parava de esperar, enquanto a
+  atualização seguia por trás. Agora ela espera até a versão nova responder.
+  A atualização para esta versão ainda é aplicada pela versão anterior,
+  então pode acontecer uma última vez.
+
+### Segurança
+
+- Go 1.27.3: corrige a vulnerabilidade GO-2026-6809 em `crypto/x509`, que o
+  painel alcançava. Recomendado atualizar.
+
+### Interno
+
+- O CI volta a passar por inteiro (testes de navegador acompanham as telas
+  atuais).
+
 ## [0.5.18] - 2026-10-26
 
 ### Novo
