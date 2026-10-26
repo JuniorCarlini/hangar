@@ -12,6 +12,38 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.16] - 2026-10-26
+
+### Novo
+
+- **Conectar serviços pelo que eles oferecem**: arrastar de um card a outro
+  no canvas, ou **Conectar a…** na aba Variáveis, abre uma janela com o que
+  o outro serviço oferece e, para cada valor, a variável do seu app que o
+  recebe. O nome sugerido é um que o app já usa ou que o `.env.example` dele
+  documenta (`PGHOST`, `POSTGRES_PASSWORD`, `DB_NAME`…), e dá para trocar.
+  A variável conectada aparece como "de db · DATABASE_URL", com
+  **Desconectar**.
+- **Serviço feito por imagem ou Git também oferece valores**: marque a
+  variável com o ícone de cabo e os outros serviços podem se conectar a ela.
+- **Projetos fixados**: passe o mouse num projeto do menu e fixe no topo. É
+  de cada pessoa.
+- **Painel no celular**: menu lateral num painel que abre pelo ☰, botões
+  em largura total e na proporção do texto, nada passando da tela, canvas
+  ajustado à tela ao abrir.
+
+### Corrigido
+
+- Conectar a um serviço que não oferece nada salvava uma variável vazia;
+  agora o painel avisa e não salva.
+- Trocar a senha do banco deixava os apps com a senha antiga sem aviso;
+  agora o que ele oferece se atualiza e os apps mostram "alterações para
+  aplicar".
+- Uma referência em cadeia (app → api → banco) chegava ao app como texto;
+  agora é resolvida, e um ciclo vira aviso.
+- Apagar um serviço usado por outros avisa quem vai quebrar.
+- A bolinha de status dos logs sumia quando o streaming começava.
+- A tela de login não mostra mais o aviso sobre recuperar a senha.
+
 ## [0.5.15] - 2026-10-20
 
 ### Novo
