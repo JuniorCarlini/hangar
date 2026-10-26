@@ -15,8 +15,8 @@ test('página de atualizações abre pelo menu', async ({ page }) => {
 });
 
 test.describe('links de status', () => {
-  // Confirming sudo replaces the session, which would log the saved session
-  // of the other tests out: this test logs in on its own.
+  // At a stricter level, confirming sudo replaces the session, which would
+  // log the saved session of the other tests out: this test logs in on its own.
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('criar, abrir sem login e revogar', async ({ page, browser }) => {
@@ -30,16 +30,12 @@ test.describe('links de status', () => {
     await expect(page).toHaveURL('/status-links');
     await expect(page.getByRole('heading', { level: 1, name: 'Links de status' })).toBeVisible();
 
-    // Creating is a 🔒 action: confirm it's you first.
+    // At the default security level (Médio) creating a link only asks for
+    // the password again at Avançado: the form opens straight away.
     await page.getByRole('button', { name: 'Novo link' }).click();
     const dialog = page.locator('dialog#new-status-link');
     await expect(dialog).toBeVisible();
-    await dialog.locator('#sudo-code').fill(OWNER_PASSWORD);
-    await dialog.getByRole('button', { name: 'Confirmar' }).click();
-    await expect(page).toHaveURL('/status-links');
-
-    await page.getByRole('button', { name: 'Novo link' }).click();
-    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('#sudo-code')).toHaveCount(0);
     await dialog.getByLabel('Nome', { exact: true }).fill('Monitor E2E');
     await dialog.getByRole('button', { name: 'Criar link' }).click();
 

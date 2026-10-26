@@ -149,41 +149,38 @@ test('criar projeto abre o canvas vazio', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Navegação' }).getByRole('link', { name: slug })).toBeVisible();
 });
 
-test('nome técnico inválido é barrado pelo navegador', async ({ page }) => {
+// The technical name is derived from the name on the server: a name with
+// no letters or digits gives none, and the dialog comes back with the error.
+test('nome sem letras nem números volta com erro na janela', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('link', { name: 'Novo projeto' }).click();
   const dialog = page.locator('dialog#new-project');
-  const slug = dialog.getByLabel('Nome técnico');
-  await slug.fill('Inválido!');
-  // The pattern must be a valid regex for the browser (v flag), or the
-  // check is silently skipped.
-  expect(await slug.evaluate((el: HTMLInputElement) => el.validity.patternMismatch)).toBe(true);
+  await dialog.getByLabel('Nome', { exact: true }).fill('!!!');
   await dialog.getByRole('button', { name: 'Criar projeto' }).click();
   await expect(dialog).toBeVisible();
-  await expect(page).toHaveURL('/');
+  await expect(dialog.getByRole('alert')).toContainText('pelo menos duas letras ou números');
+  await expect(dialog.getByLabel('Nome', { exact: true })).toHaveValue('!!!');
 });
 
 test('sem Docker, criar projeto explica o motivo', async ({ page }) => {
   test.skip(await hasDocker(page), 'só sem Docker');
   await page.getByRole('link', { name: 'Novo projeto' }).click();
   const dialog = page.locator('dialog#new-project');
-  await dialog.getByLabel('Nome técnico').fill(newSlug());
+  await dialog.getByLabel('Nome', { exact: true }).fill(newSlug());
   await dialog.getByRole('button', { name: 'Criar projeto' }).click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('alert')).toContainText('Docker');
 });
 
-test('projeto repetido volta com erro na janela', async ({ page }) => {
+// A name already taken does not fail: the technical name gets -2, -3…
+test('nome repetido ganha um sufixo no nome técnico', async ({ page }) => {
   test.skip(!(await hasDocker(page)), 'Docker indisponível para o painel');
   const slug = newSlug();
   await createProject(page, slug);
 
   await page.getByRole('link', { name: 'Novo projeto' }).click();
   const dialog = page.locator('dialog#new-project');
-  await dialog.getByLabel('Nome técnico').fill(slug);
+  await dialog.getByLabel('Nome', { exact: true }).fill(slug);
   await dialog.getByRole('button', { name: 'Criar projeto' }).click();
-  // The server answers with the dialog open again, the error and the value.
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('alert')).toBeVisible();
-  await expect(dialog.getByLabel('Nome técnico')).toHaveValue(slug);
+  await expect(page).toHaveURL(new RegExp(`/p/${slug}-2$`));
 });

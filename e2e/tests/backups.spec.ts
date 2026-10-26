@@ -14,8 +14,8 @@ test('página de backups mostra a configuração e o menu', async ({ page }) => 
   await nav.getByRole('link', { name: 'Backups' }).click();
   await expect(page).toHaveURL('/backups');
   await expect(page.getByRole('heading', { level: 1, name: 'Backups' })).toBeVisible();
-  await expect(page.getByText('Configurar backups')).toBeVisible();
-  await expect(page.getByText('Como preparar o bucket')).toBeVisible();
+  await expect(page.getByText('Como ligar os backups')).toBeVisible();
+  await expect(page.getByText('O que é salvo e quando')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Gerar kit de recuperação' }).first()).toBeVisible();
 });
 
@@ -62,11 +62,20 @@ test.describe('kit', () => {
     await page.getByLabel('Guardei o kit em lugar seguro, fora do servidor.').check();
     await expect(register).toBeEnabled();
     await register.click();
-    await expect(page).toHaveURL(/\/backups\?ok=key-added/);
+    // The redirect's ?ok= becomes a toast and leaves the address right away.
+    await expect(page.getByText('Chave pública registrada.')).toBeVisible();
+    await expect(page).toHaveURL(/\/backups#kit-app$/);
     await expect(page.getByText('aguardando confirmação')).toBeVisible();
 
     // Confirm with the file: read in the browser, only the code is sent.
-    await page.locator('input[data-kit-file]').setInputFiles(kitPath);
+    // The download is saved under a random name without extension, which
+    // the picker (.txt/.age only) would refuse: hand it over as the user's
+    // own hangar-kit.txt.
+    await page.locator('input[data-kit-file]').setInputFiles({
+      name: 'hangar-kit.txt',
+      mimeType: 'text/plain',
+      buffer: Buffer.from(kit),
+    });
     await expect(page.getByText('Kit conferido: código preenchido.')).toBeVisible();
     await page.getByRole('button', { name: 'Confirmar que guardei' }).click();
     await expect(page.getByText('Kit confirmado. Esta chave já cifra os backups.')).toBeVisible();

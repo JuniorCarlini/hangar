@@ -18,17 +18,20 @@ test.describe('com Docker', () => {
   });
 
   test('criar serviço a partir de template', async ({ page }) => {
-    await createProject(page, slug, 'Projeto E2E Docker');
+    await createProject(page, slug);
     // "Novo serviço" opens a modal over the canvas.
     await page.getByRole('link', { name: 'Novo serviço' }).first().click();
     const dialog = page.locator('dialog#new-service');
     await expect(dialog).toBeVisible();
 
+    // Picking a template opens its own modal with the details and the form.
     await dialog.getByText('Redis (cache)', { exact: true }).click();
+    const detail = page.getByRole('dialog', { name: /Novo Redis \(cache\)/ });
+    await expect(detail).toBeVisible();
     // The name follows the template and shows the internal address.
-    await expect(dialog.locator('#ns-tpl-name')).toHaveValue('cache');
-    await expect(dialog.locator('[data-template-form] [data-slug-out]')).toHaveText('cache');
-    await dialog.getByRole('button', { name: 'Criar serviço' }).click();
+    await expect(detail.getByLabel('Nome', { exact: true })).toHaveValue('cache');
+    await expect(detail.locator('[data-slug-out]')).toHaveText('cache');
+    await detail.getByRole('button', { name: 'Criar serviço' }).click();
 
     // The card shows up on the canvas and the container comes up.
     const card = page.locator('.node[data-slug="cache"]');
@@ -61,20 +64,26 @@ test.describe('com Docker', () => {
     await expect(page).toHaveURL(new RegExp(`/p/${slug}$`));
   });
 
-  test('aba Repositório Git recusa endereço sem HTTPS e não devolve o token', async ({ page }) => {
+  test('repositório por URL recusa endereço sem HTTPS e não devolve o token', async ({ page }) => {
     await page.goto(`/p/${slug}/new`);
-    await page.getByRole('tab', { name: 'Repositório Git' }).click();
-    await page.locator('#ns-git-repo').fill('http://github.com/dono/app');
+    // Without a GitHub credential, "Meus repositórios" offers the address
+    // form, a modal over the new-service one.
+    await page.getByRole('tab', { name: 'Meus repositórios' }).click();
+    await page.getByRole('button', { name: 'Usar o endereço de um repositório (URL)' }).click();
+    const dialog = page.locator('dialog#repo-url');
+    await expect(dialog).toBeVisible();
+    await dialog.locator('#ns-git-repo').fill('http://github.com/dono/app');
     // The name is suggested from the repository.
-    await expect(page.locator('#ns-git-name')).toHaveValue('app');
-    await page.locator('#git-credential').selectOption('new');
-    await page.locator('#git-token').fill('ghp_naoDeveVoltar123');
-    await page.getByRole('button', { name: 'Criar e fazer deploy' }).click();
+    await expect(dialog.locator('#ns-git-name')).toHaveValue('app');
+    await dialog.locator('#git-credential').selectOption('new');
+    await dialog.locator('#git-token').fill('ghp_naoDeveVoltar123');
+    await dialog.getByRole('button', { name: 'Criar e fazer deploy' }).click();
 
-    await expect(page.getByRole('alert')).toContainText('HTTPS');
-    await expect(page.getByRole('tab', { name: 'Repositório Git' })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('#ns-git-repo')).toHaveValue('http://github.com/dono/app');
-    await expect(page.locator('#git-token')).toHaveValue('');
+    // The server answers with the same modal open, the error and the address.
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('alert')).toContainText('HTTPS');
+    await expect(dialog.locator('#ns-git-repo')).toHaveValue('http://github.com/dono/app');
+    await expect(dialog.locator('#git-token')).toHaveValue('');
     expect(await page.content()).not.toContain('ghp_naoDeveVoltar123');
   });
 

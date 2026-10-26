@@ -23,14 +23,14 @@ export async function openAccountMenu(page: Page) {
 }
 
 // createProject creates a project through the sidebar dialog and waits for
-// its (empty) canvas.
-export async function createProject(page: Page, slug: string, name = 'Projeto E2E') {
+// its (empty) canvas. The dialog only asks for a name and the server derives
+// the technical name from it: a slug-shaped name keeps that name as is.
+export async function createProject(page: Page, slug: string) {
   await page.goto('/');
   await page.getByRole('link', { name: 'Novo projeto' }).click();
   const dialog = page.locator('dialog#new-project');
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel('Nome', { exact: true }).fill(name);
-  await dialog.getByLabel('Nome técnico').fill(slug);
+  await dialog.getByLabel('Nome', { exact: true }).fill(slug);
   await dialog.getByRole('button', { name: 'Criar projeto' }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${slug}$`));
 }

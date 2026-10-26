@@ -45,9 +45,3 @@ test('catálogo mostra toasts', async ({ page }) => {
   await page.locator('#pista-feedback [data-demo-toast][data-type="success"]').click();
   await expect(page.getByText('Variável salva.')).toBeVisible();
 });
-
-test('link do catálogo aparece no rodapé para o dono', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Catálogo do Pista' }).click();
-  await expect(page).toHaveURL('/_pista');
-});

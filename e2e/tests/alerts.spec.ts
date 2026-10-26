@@ -26,7 +26,9 @@ test('adicionar canal do Telegram sem mostrar o token', async ({ page }) => {
   await dialog.getByLabel('Chat ID').fill('-100123');
   await dialog.getByRole('button', { name: 'Adicionar canal' }).click();
 
-  await expect(page).toHaveURL(/\/alerts\?ok=channel-added/);
+  // The redirect's ?ok= becomes a toast and leaves the address right away.
+  await expect(page.getByText('Canal adicionado.')).toBeVisible();
+  await expect(page).toHaveURL(/\/alerts#channels$/);
   const row = page.getByRole('row', { name: /Plantão E2E/ });
   await expect(row).toContainText('chat -100123');
   await expect(row).toContainText('Ativo');
@@ -54,7 +56,7 @@ test('regras do servidor são salvas', async ({ page }) => {
   const disk = page.locator('input[name="v_host_disk"]');
   await disk.fill('80');
   await page.getByRole('button', { name: 'Salvar regras' }).click();
-  await expect(page).toHaveURL(/ok=rules/);
+  await expect(page.getByText('Regras salvas.')).toBeVisible();
   await expect(page.locator('input[name="v_host_disk"]')).toHaveValue('80');
   await disk.fill('85');
   await page.getByRole('button', { name: 'Salvar regras' }).click();
