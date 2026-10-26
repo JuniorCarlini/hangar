@@ -335,6 +335,12 @@ type DomainsSection struct {
 	DynamicElsewhere string
 	CheckPath        string
 	CheckSecret      string // only right after a sudo reveal
+	// RequireTXT: new customer domains need the _hangar.<domain> TXT.
+	RequireTXT bool
+	// EntryHost is the address customers point their domains at.
+	EntryHost string
+	// Probe is the result of the developer kit's test, right after it ran.
+	Probe *DomainProbe
 	// Base is the edge's base domain ("Em escala" sets it from the panel).
 	Base EdgeBase
 	// DNSProviders are the providers "Em escala" can use.

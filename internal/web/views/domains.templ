@@ -15,6 +15,13 @@ type DomainsData struct {
 	NewThisHour int64
 	HourCap     int
 	DeniedToday int64
+	// EntryHost is the address customers point their domains at, and
+	// EntryPath how it reaches this server (direct, cloudflare, elsewhere;
+	// "" when it was not checked).
+	EntryHost string
+	EntryPath string
+	MinCap    int
+	MaxCap    int
 	CanAdmin    bool
 	Error       string
 	Flash       string
@@ -28,6 +35,7 @@ type AskRow struct {
 	Count    int64
 	When     string
 	Blocked  bool
+	Via      string // direct, cloudflare, elsewhere or "" (fixed domains)
 }
 
 // BlockedRow is a blocked hostname.
@@ -55,6 +63,109 @@ func capText(n int64, cap int) string {
 
 func selectedIf(cur, v string) bool { return cur == v }
 
+// capPercent is the hour's use of the cap, for the bar (0-100).
+func capPercent(n int64, cap int) int {
+	if cap <= 0 {
+		return 0
+	}
+	return min(100, int(n*100/int64(cap)))
+}
+
+// nearCap: 80% of the hour's cap is used.
+func nearCap(n int64, cap int) bool { return cap > 0 && n*5 >= int64(cap)*4 }
+
+func pathBadge(via string) string {
+	switch via {
+	case "cloudflare":
+		return "tuc-badge is-info"
+	case "elsewhere":
+		return "tuc-badge is-danger"
+	}
+	return "tuc-badge"
+}
+
+// entryCard is where customers point their domains, with how it reaches
+// the server, and the reminder about Cloudflare's SSL mode.
+templ entryCard(d DomainsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "domains.entry.title"))
+		<div class={ cardBodyClass + " flex flex-col gap-3" }>
+			<div class="flex flex-wrap items-center gap-2">
+				<strong class="text-[13px] font-semibold">{ t(ctx, "domains.entry.label") }</strong>
+				switch d.EntryPath {
+					case "direct":
+						<span class="tuc-badge is-success">{ t(ctx, "domains.entry.reaches") }</span>
+					case "cloudflare":
+						<span class="tuc-badge is-warning">{ t(ctx, "domain.path.cloudflare") }</span>
+					case "elsewhere":
+						<span class="tuc-badge is-danger">{ t(ctx, "domains.entry.not_here") }</span>
+				}
+			</div>
+			<div class="flex items-center gap-1.5">
+				<code class="min-w-0 grow rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-[13px] break-all select-all">{ d.EntryHost }</code>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.EntryHost } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "domains.entry.copy") } title={ t(ctx, "domains.entry.copy") }>
+					@Icon("copy", "size-3.5")
+				</button>
+			</div>
+			<p class="text-[13px] text-muted">{ t(ctx, "domains.entry.explain") }</p>
+			if d.EntryPath == "cloudflare" {
+				<div class="tuc-alert is-warning" role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "domains.entry.orange", "host", d.EntryHost) }</p></div>
+				</div>
+			}
+			if d.EntryPath == "elsewhere" {
+				<div class="tuc-alert is-warning" role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "domains.entry.fix", "host", d.EntryHost) }</p></div>
+				</div>
+			}
+			<div class="tuc-alert is-info" role="note">
+				@Icon("info", "size-4")
+				<div class="tuc-alert__body"><p>{ t(ctx, "domains.entry.cloudflare") }</p></div>
+			</div>
+		</div>
+	</section>
+}
+
+// hourCapCard sets how many new domains may get a certificate per hour and
+// shows this hour's use.
+templ hourCapCard(d DomainsData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "domains.limit.title"))
+		<div class={ cardBodyClass + " flex flex-col gap-3" }>
+			<div class="flex flex-wrap items-end gap-3">
+				if d.CanAdmin {
+					<form method="post" action="/domains/limit" class="flex items-end gap-2">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="hour-cap">{ t(ctx, "domains.limit.label") }</label>
+							<input class="tuc-input w-28 tabular-nums" id="hour-cap" name="cap" type="number" required min={ sz(d.MinCap) } max={ sz(d.MaxCap) } value={ sz(d.HourCap) }/>
+						</div>
+						<button class="tuc-btn is-primary" type="submit">{ t(ctx, "domains.limit.save") }</button>
+					</form>
+				}
+				<div class="flex min-w-[200px] flex-1 flex-col gap-1.5">
+					<div class="flex justify-between text-xs text-muted">
+						<span>{ t(ctx, "domains.limit.hour") }</span>
+						<span class="tabular-nums">{ t(ctx, "domains.limit.used", "n", d.NewThisHour, "cap", d.HourCap) }</span>
+					</div>
+					<div class="h-1 w-full bg-surface-2" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ sz(capPercent(d.NewThisHour, d.HourCap)) } aria-label={ t(ctx, "domains.limit.hour") }>
+						<div class={ "bar-fill h-1 " + toneBg(level(capPercent(d.NewThisHour, d.HourCap))) + " " + pctWidth(capPercent(d.NewThisHour, d.HourCap)) }></div>
+					</div>
+				</div>
+			</div>
+			<p class="text-[13px] text-muted">{ t(ctx, "domains.limit.explain") }</p>
+			if nearCap(d.NewThisHour, d.HourCap) {
+				<div class="tuc-alert is-warning" role="status">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "domains.limit.near", "n", d.NewThisHour, "cap", d.HourCap) }</p></div>
+				</div>
+			}
+		</div>
+	</section>
+}
+
 // Domains lists recent certificate decisions and the blocklist.
 templ Domains(d DomainsData) {
 	@shell(t(ctx, "domains.page_title")) {
@@ -81,11 +192,17 @@ templ Domains(d DomainsData) {
 					<div class="tuc-alert__body"><p>{ t(ctx, "domains.no_dynamic") }</p></div>
 				</div>
 			}
+			if d.EntryHost != "" {
+				@entryCard(d)
+			}
 			<div class="flex flex-wrap gap-3">
 				@stat(t(ctx, "domains.stat.certified"), sz(int(d.Certified)), t(ctx, "domains.stat.certified_sub"), "")
 				@stat(t(ctx, "domains.stat.new"), capText(d.NewThisHour, d.HourCap), t(ctx, "domains.stat.new_sub"), "")
 				@stat(t(ctx, "domains.stat.denied"), sz(int(d.DeniedToday)), t(ctx, "domains.stat.denied_sub"), "text-warning")
 			</div>
+			if d.EdgeEnabled {
+				@hourCapCard(d)
+			}
 			<section class={ cardClass }>
 				@cardHead(t(ctx, "domains.recent")) {
 					<form method="get" action="/domains" class="w-44">
@@ -102,7 +219,7 @@ templ Domains(d DomainsData) {
 					} else {
 						<div class="tuc-table-wrap">
 							<table class="tuc-table is-compact w-full">
-								<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.decision") }</th><th>{ t(ctx, "domains.reason") }</th><th class="is-number">{ t(ctx, "domains.count") }</th><th>{ t(ctx, "domains.last") }</th><th class="tuc-table__actions"></th></tr></thead>
+								<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.decision") }</th><th>{ t(ctx, "domains.reason") }</th><th>{ t(ctx, "domains.path") }</th><th class="is-number">{ t(ctx, "domains.count") }</th><th>{ t(ctx, "domains.last") }</th><th class="tuc-table__actions"></th></tr></thead>
 								<tbody>
 									for _, a := range d.Recent {
 										<tr>
@@ -115,6 +232,11 @@ templ Domains(d DomainsData) {
 												}
 											</td>
 											<td class="text-muted">{ t(ctx, "domain.reason." + a.Reason) }</td>
+											<td>
+												if a.Via != "" {
+													<span class={ pathBadge(a.Via) }>{ t(ctx, "domain.path." + a.Via) }</span>
+												}
+											</td>
 											<td class="is-number">{ sz(int(a.Count)) }</td>
 											<td class="text-muted">{ a.When }</td>
 											<td class="tuc-table__actions">

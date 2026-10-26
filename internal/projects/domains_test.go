@@ -157,3 +157,50 @@ func TestMaintenanceReloadsEdgeAndAudits(t *testing.T) {
 		t.Errorf("unknown service: %v", err)
 	}
 }
+
+// The hourly cap set in the panel wins over hangar.toml's, stays within its
+// bounds, and the ownership TXT switch only applies to the service that
+// takes customer domains and reloads the edge (dropping cached decisions).
+func TestHourCapAndOwnershipTXT(t *testing.T) {
+	f := newFixture(t)
+	e := &countingEdge{}
+	f.m.SetEdge(e)
+	f.m.SetEdgeCap(30)
+	_, svcID := f.service(t)
+	ctx := context.Background()
+
+	if got := f.m.HourCap(ctx); got != 30 {
+		t.Fatalf("default cap %d, want hangar.toml's 30", got)
+	}
+	for _, bad := range []string{"0", "1001", "-3", "dez", ""} {
+		if err := f.m.SetHourCap(ctx, f.who, bad); err == nil {
+			t.Errorf("cap %q accepted", bad)
+		}
+	}
+	if err := f.m.SetHourCap(ctx, f.who, " 120 "); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.m.HourCap(ctx); got != 120 {
+		t.Errorf("cap %d after saving 120", got)
+	}
+
+	if err := f.m.SetDomainRequireTXT(ctx, f.who, svcID, true); !errors.Is(err, ErrNotFound) {
+		t.Errorf("TXT on a service without customer domains: %v", err)
+	}
+	if err := f.m.EnableDynamicDomains(ctx, f.who, "lab", "web"); err != nil {
+		t.Fatal(err)
+	}
+	before := e.applied
+	if err := f.m.SetDomainRequireTXT(ctx, f.who, svcID, true); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := f.m.q.GetServiceByID(ctx, svcID); s.DomainRequireTxt != 1 {
+		t.Error("the TXT requirement was not saved")
+	}
+	if e.applied != before+1 {
+		t.Error("turning the TXT on must reload the edge")
+	}
+	if _, err := f.m.ProbeDomain(ctx, "loja.com.br"); err == nil {
+		t.Error("the test needs an edge that can probe")
+	}
+}

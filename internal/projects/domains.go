@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"strconv"
 	"strings"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
@@ -385,6 +386,87 @@ type DomainActivity struct {
 // SetEdgeCap tells the page the hourly cap on new customer domains.
 func (m *Manager) SetEdgeCap(n int) { m.edgeCap = n }
 
+// Bounds of the hourly cap on new domains set in the panel.
+const (
+	MinHourCap = 1
+	MaxHourCap = 1000
+)
+
+// HourCap is the hourly cap on new domains in effect: the panel's setting,
+// else hangar.toml's.
+func (m *Manager) HourCap(ctx context.Context) int {
+	if v, err := m.q.GetSetting(ctx, edge.MaxNewSetting); err == nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return m.edgeCap
+}
+
+// SetHourCap changes the hourly cap on new domains (customer domains and
+// subdomains of wildcards that have no certificate yet). The authorizer
+// reads it on every new name, so nothing has to be reloaded.
+func (m *Manager) SetHourCap(ctx context.Context, a Actor, raw string) error {
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < MinHourCap || n > MaxHourCap {
+		return i18n.E("domain.error.hour_cap", "min", MinHourCap, "max", MaxHourCap)
+	}
+	before := m.HourCap(ctx)
+	if err := m.q.SetSetting(ctx, dbq.SetSettingParams{Key: edge.MaxNewSetting, ValueJson: strconv.Itoa(n)}); err != nil {
+		return err
+	}
+	m.record(ctx, a, "domain.hour_cap", "setting", edge.MaxNewSetting, audit.OK, map[string]any{"from": before, "to": n})
+	return nil
+}
+
+// SetDomainRequireTXT turns on or off the ownership TXT (_hangar.<domain>)
+// that new customer domains must have before the app is asked.
+func (m *Manager) SetDomainRequireTXT(ctx context.Context, a Actor, serviceID string, on bool) error {
+	s, err := m.q.GetServiceByID(ctx, serviceID)
+	if err != nil {
+		return err
+	}
+	if s.DynamicDomains != 1 {
+		return ErrNotFound
+	}
+	v := int64(0)
+	if on {
+		v = 1
+	}
+	if err := m.q.SetDomainRequireTXT(ctx, dbq.SetDomainRequireTXTParams{DomainRequireTxt: v, UpdatedAt: m.now().Unix(), ID: s.ID}); err != nil {
+		return err
+	}
+	action := "domain.txt.off"
+	if on {
+		action = "domain.txt.on"
+	}
+	m.record(ctx, a, action, "service", s.ID, audit.OK, nil)
+	// Drops the cached decisions, so the change counts on the next handshake.
+	return m.applyEdge(ctx)
+}
+
+type domainProber interface {
+	ProbeDomain(ctx context.Context, host string) (edge.Probe, error)
+}
+
+// ProbeDomain runs, for the panel's test, the checks a customer domain goes
+// through (DNS path, ownership TXT, the app's answer) without logging,
+// counting or issuing anything.
+func (m *Manager) ProbeDomain(ctx context.Context, host string) (edge.Probe, error) {
+	p, ok := m.edgeProxy().(domainProber)
+	if !ok {
+		return edge.Probe{}, i18n.E("domain.edge_disabled")
+	}
+	r, err := p.ProbeDomain(ctx, host)
+	switch {
+	case edge.IsInvalidHost(err):
+		return r, i18n.E("domain.error.hostname")
+	case errors.Is(err, edge.ErrNoDynamic):
+		return r, ErrNotFound
+	}
+	return r, err
+}
+
 // DomainActivity lists recent certificate decisions (all, or only "allow"
 // or "deny") and the blocklist, with the numbers on top of the page.
 func (m *Manager) DomainActivity(ctx context.Context, decision string) (DomainActivity, error) {
@@ -403,7 +485,7 @@ func (m *Manager) DomainActivity(ctx context.Context, decision string) (DomainAc
 		return DomainActivity{}, err
 	}
 	hour := m.now().Unix() / 3600
-	act := DomainActivity{Recent: recent, Blocked: blocked, HourCap: m.edgeCap}
+	act := DomainActivity{Recent: recent, Blocked: blocked, HourCap: m.HourCap(ctx)}
 	act.Certified, _ = m.q.CountAllowedHosts(ctx)
 	act.NewThisHour, _ = m.q.CountNewAllowsSince(ctx, hour)
 	if v, err := m.q.CountDeniedSince(ctx, hour-23); err == nil {

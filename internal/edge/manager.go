@@ -668,3 +668,9 @@ func writeFile(path string, data []byte) error {
 	}
 	return os.Rename(tmp.Name(), path)
 }
+
+// ProbeDomain runs the customer-domain checks for host without side effects
+// (the panel's "test" button).
+func (m *Manager) ProbeDomain(ctx context.Context, host string) (Probe, error) {
+	return m.auth.Probe(ctx, host)
+}

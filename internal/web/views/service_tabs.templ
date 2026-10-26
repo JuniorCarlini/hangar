@@ -901,12 +901,37 @@ templ dynamicDomains(d ServiceData) {
 					}
 				</div>
 			</div>
-			<div>
+			<form class="flex items-center gap-4" method="post" action={ templ.SafeURL(d.base() + "/domains/txt") }
+				if d.Domains.RequireTXT {
+					data-confirm={ t(ctx, "confirm.txt_off.title") }
+					data-confirm-text={ t(ctx, "confirm.txt_off.text") }
+					data-confirm-ok={ t(ctx, "confirm.txt_off.ok") }
+					data-tone="warning"
+				}
+			>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				if d.Domains.RequireTXT {
+					<input type="hidden" name="on" value="0"/>
+				} else {
+					<input type="hidden" name="on" value="1"/>
+				}
+				<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.txt.switch") } checked?={ d.Domains.RequireTXT } disabled?={ !d.CanAdmin } data-autosubmit/>
+				<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+					<strong class="text-[13px] font-semibold">{ t(ctx, "domain.txt.switch") }</strong>
+					<span class="text-xs text-muted">{ t(ctx, "domain.txt.explain") }</span>
+				</div>
+			</form>
+			<div class="flex flex-wrap gap-2">
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-kit">
+					@Icon("file-code", "size-3.5")
+					{ t(ctx, "domain.kit.open") }
+				</button>
 				<a class="tuc-btn is-outline is-sm" href="/domains">
 					@Icon("list", "size-3.5")
 					{ t(ctx, "domain.dynamic.requests") }
 				</a>
 			</div>
+			@domainKit(d)
 		}
 	</div>
 }

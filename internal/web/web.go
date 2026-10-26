@@ -189,6 +189,10 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/endpoints/sslip-on", h.endpointSslipOn, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.endpoint.sslip_on", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/endpoints/sslip-off", h.endpointSslipOff, Policy{Role: auth.RoleOperator, Audit: "service.endpoint.sslip_off", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/domains/secret", h.revealCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
+	// The ownership TXT and the kit's test (read only: it logs, counts and
+	// issues nothing, but it calls the app, so it is an admin's tool).
+	rt.HandleFunc("POST "+svc+"/domains/txt", h.domainTXT, Policy{Role: auth.RoleAdmin, Audit: "domain.txt", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/probe", h.probeDomain, Policy{Role: auth.RoleAdmin, Audit: "domain.probe"})
 	rt.HandleFunc("POST "+svc+"/domains/secret/rotate", h.rotateCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "domain.dynamic.rotate_secret", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/exports/reveal", h.revealExport, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backup", h.downloadBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.backup.download", AuditByHandler: true})
@@ -244,6 +248,7 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET /domains", h.domainsPage, viewer)
 	rt.HandleFunc("POST /domains/block", h.blockHostname, Policy{Role: auth.RoleAdmin, Audit: "domain.block", AuditByHandler: true})
 	rt.HandleFunc("POST /domains/unblock", h.unblockHostname, Policy{Role: auth.RoleAdmin, Audit: "domain.unblock", AuditByHandler: true})
+	rt.HandleFunc("POST /domains/limit", h.setHourCap, Policy{Role: auth.RoleAdmin, Audit: "domain.hour_cap", AuditByHandler: true})
 
 	rt.HandleFunc("GET /updates", h.updatesPage, viewer)
 	rt.HandleFunc("POST /updates/scan", h.updatesScan, Policy{Role: auth.RoleOperator, Audit: "deps.scan"})

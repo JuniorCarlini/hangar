@@ -41,6 +41,7 @@ const (
 	ReasonAppError     = "app_error"
 	ReasonAppSignature = "app_bad_signature"
 	ReasonDNSMismatch  = "dns_mismatch"
+	ReasonTXTMissing   = "txt_missing"
 	ReasonInternalFail = "internal_error"
 )
 
@@ -76,6 +77,8 @@ type Authorizer struct {
 	PublicIPs []netip.Addr
 	// LookupIP resolves a hostname (replaceable in tests).
 	LookupIP func(ctx context.Context, host string) ([]netip.Addr, error)
+	// LookupTXT reads TXT records (replaceable in tests).
+	LookupTXT func(ctx context.Context, name string) ([]string, error)
 
 	mu    sync.Mutex
 	cache map[string]cached
@@ -84,6 +87,7 @@ type Authorizer struct {
 type cached struct {
 	allow   bool
 	reason  string
+	via     Path
 	expires time.Time
 }
 
@@ -97,7 +101,8 @@ func NewAuthorizer(db *sql.DB, box *secrets.Box, resolver AppResolver) *Authoriz
 		LookupIP: func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		},
-		cache: map[string]cached{},
+		LookupTXT: net.DefaultResolver.LookupTXT,
+		cache:     map[string]cached{},
 	}
 }
 
@@ -180,92 +185,119 @@ func (a *Authorizer) Decide(ctx context.Context, hostname string) (bool, string)
 		a.log(ctx, truncate(strings.ToLower(hostname), 253), false, ReasonInvalid)
 		return false, ReasonInvalid
 	}
-	allow, reason, cache := a.decide(ctx, host)
+	allow, reason, cache, via := a.decide(ctx, host)
 	if cache {
 		ttl := cacheDenyTTL
 		if allow {
 			ttl = cacheAllowTTL
 		}
 		a.mu.Lock()
-		a.cache[host] = cached{allow: allow, reason: reason, expires: a.now().Add(ttl)}
+		a.cache[host] = cached{allow: allow, reason: reason, via: via, expires: a.now().Add(ttl)}
 		a.mu.Unlock()
 	}
-	a.log(ctx, host, allow, reason)
+	a.logVia(ctx, host, allow, reason, via)
 	return allow, reason
 }
 
-// decide returns the decision and whether it may be cached. Transient
-// failures (app or DNS errors) are not cached, so a recovered app answers on
-// the next handshake.
-func (a *Authorizer) decide(ctx context.Context, host string) (bool, string, bool) {
+// decide returns the decision, whether it may be cached, and how the host
+// reaches this server. Transient failures (app or DNS errors, a missing TXT,
+// the hourly cap) are not cached, so a fixed DNS or a recovered app answers
+// on the next handshake. The cheap checks run first: the DNS before the
+// ownership TXT, both before the hourly cap and the call to the app.
+func (a *Authorizer) decide(ctx context.Context, host string) (bool, string, bool, Path) {
 	if n, err := a.q.IsBlocked(ctx, host); err != nil {
-		return false, ReasonInternalFail, false
+		return false, ReasonInternalFail, false, ""
 	} else if n > 0 {
-		return false, ReasonBlocked, true
+		return false, ReasonBlocked, true, ""
 	}
 
 	a.mu.Lock()
 	c, hit := a.cache[host]
 	a.mu.Unlock()
 	if hit && a.now().Before(c.expires) {
-		return c.allow, c.reason, false
+		return c.allow, c.reason, false, c.via
 	}
 
 	if _, err := a.q.GetDomainByHostname(ctx, host); err == nil {
-		return true, ReasonFixed, true
+		return true, ReasonFixed, true, ""
 	} else if !errors.Is(err, sql.ErrNoRows) {
-		return false, ReasonInternalFail, false
+		return false, ReasonInternalFail, false, ""
 	}
 
 	// A subdomain of a wildcard the admin added: no app to ask, but the
-	// name is still made up by whoever connects, so the hourly cap and the
-	// DNS check apply (random names must not burn the ACME limits).
+	// name is still made up by whoever connects, so the DNS check and the
+	// hourly cap apply (random names must not burn the ACME limits).
 	if w := wildcardFor(host); w != "" {
 		if _, err := a.q.GetDomainByHostname(ctx, w); err == nil {
+			via := a.pathOf(ctx, host)
+			if via == PathElsewhere {
+				return false, ReasonDNSMismatch, false, via
+			}
 			if why := a.limitNew(ctx, host); why != "" {
-				return false, why, false
+				return false, why, false, via
 			}
-			if !a.pointsHere(ctx, host) {
-				return false, ReasonDNSMismatch, false
-			}
-			return true, ReasonWildcard, true
+			return true, ReasonWildcard, true, via
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			return false, ReasonInternalFail, false
+			return false, ReasonInternalFail, false, ""
 		}
 	}
 
 	svc, err := a.q.DynamicService(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, ReasonNoDynamic, true
+		return false, ReasonNoDynamic, true, ""
 	}
 	if err != nil {
-		return false, ReasonInternalFail, false
+		return false, ReasonInternalFail, false, ""
 	}
 
+	via := a.pathOf(ctx, host)
+	if via == PathElsewhere {
+		return false, ReasonDNSMismatch, false, via
+	}
+	// The ownership TXT is asked of new names only: turning it on must not
+	// break the renewals of customers already served.
+	if svc.DomainRequireTxt == 1 {
+		ok, err := a.ownsNew(ctx, svc, host)
+		if err != nil {
+			return false, ReasonInternalFail, false, via
+		}
+		if !ok {
+			return false, ReasonTXTMissing, false, via
+		}
+	}
 	if why := a.limitNew(ctx, host); why != "" {
-		return false, why, false
+		return false, why, false, via
 	}
 
 	allowed, err := a.askApp(ctx, svc, host)
 	if errors.Is(err, errBadSignature) {
-		return false, ReasonAppSignature, false
+		return false, ReasonAppSignature, false, via
 	}
 	if err != nil {
-		return false, ReasonAppError, false
+		return false, ReasonAppError, false, via
 	}
 	if !allowed {
-		return false, ReasonAppDenied, true
+		return false, ReasonAppDenied, true, via
 	}
-
-	if !a.pointsHere(ctx, host) {
-		return false, ReasonDNSMismatch, false
-	}
-	return true, ReasonAppAllowed, true
+	return true, ReasonAppAllowed, true, via
 }
 
-// limitNew applies the hourly cap on new hostnames: it returns the denial
-// reason, or "" to go on. Only hostnames never approved before count, so a
-// flood of fake names cannot lock out real stores renewing.
+// MaxNewSetting is the panel setting that overrides MaxNewPerHour.
+const MaxNewSetting = "edge.max_new_per_hour"
+
+// maxNew is the hourly cap: the panel's setting when there is one, else the
+// configured default.
+func (a *Authorizer) maxNew(ctx context.Context) int {
+	if v, err := a.q.GetSetting(ctx, MaxNewSetting); err == nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return a.MaxNewPerHour
+}
+
+// limitNew caps hostnames approved for the first time in the current hour.
+// A host approved before never counts: renewals and returning visitors pass.
 func (a *Authorizer) limitNew(ctx context.Context, host string) string {
 	seen, err := a.q.WasAllowed(ctx, host)
 	if err != nil {
@@ -278,23 +310,100 @@ func (a *Authorizer) limitNew(ctx context.Context, host string) string {
 	if err != nil {
 		return ReasonInternalFail
 	}
-	if int(n) >= a.MaxNewPerHour {
+	if int(n) >= a.maxNew(ctx) {
 		return ReasonRateLimited
 	}
 	return ""
 }
 
-// pointsHere reports whether host resolves to this server (always true when
-// the server's public IPs are not known).
-func (a *Authorizer) pointsHere(ctx context.Context, host string) bool {
+// pathOf reports how host reaches this server: directly (it resolves to
+// one of the server's public IPs), through Cloudflare (every address is a
+// Cloudflare edge: the orange cloud), or not at all. When the server's
+// public IPs are not known, every host counts as direct.
+func (a *Authorizer) pathOf(ctx context.Context, host string) Path {
 	if len(a.PublicIPs) == 0 {
-		return true
+		return PathDirect
 	}
 	ips, err := a.LookupIP(ctx, host)
 	if err != nil {
-		return false
+		return PathElsewhere
 	}
-	return slices.ContainsFunc(ips, func(ip netip.Addr) bool { return slices.Contains(a.PublicIPs, ip.Unmap()) })
+	return ClassifyPath(a.PublicIPs, ips)
+}
+
+// ClassifyPath says how a name whose addresses are resolved reaches a
+// server at public: one of them is the server (direct), all of them are
+// Cloudflare's edge (the orange cloud), or neither.
+func ClassifyPath(public, resolved []netip.Addr) Path {
+	if len(resolved) == 0 {
+		return PathElsewhere
+	}
+	if slices.ContainsFunc(resolved, func(ip netip.Addr) bool { return slices.Contains(public, ip.Unmap()) }) {
+		return PathDirect
+	}
+	if !slices.ContainsFunc(resolved, func(ip netip.Addr) bool { return !isCloudflare(ip) }) {
+		return PathCloudflare
+	}
+	return PathElsewhere
+}
+
+// Path reports how host reaches this server, for the panel's checks.
+func (a *Authorizer) Path(ctx context.Context, host string) Path { return a.pathOf(ctx, host) }
+
+// OwnershipCode is the value of the _hangar.<host> TXT record that proves a
+// customer controls host: derived from the service's check secret, so the
+// app computes the same code without storing anything ("hg-" + 12 hex).
+func OwnershipCode(secret []byte, host string) string {
+	m := hmac.New(sha256.New, secret)
+	fmt.Fprintf(m, "txt|%s", host)
+	return "hg-" + hex.EncodeToString(m.Sum(nil))[:12]
+}
+
+// OwnershipRecord is the TXT record name the customer creates.
+func OwnershipRecord(host string) string { return "_hangar." + host }
+
+// ownsTXT reports whether _hangar.<host> holds the service's code for host.
+// A lookup failure other than "no such record" is an error, not a "no".
+func (a *Authorizer) ownsTXT(ctx context.Context, svc dbq.DynamicServiceRow, host string) (bool, error) {
+	if len(svc.DomainCheckSecretEnc) == 0 {
+		return false, errors.New("dynamic service has no check secret")
+	}
+	secret, err := a.box.Open(svc.DomainCheckSecretEnc, CheckSecretAD(svc.ID))
+	if err != nil {
+		return false, err
+	}
+	return a.HasTXT(ctx, host, OwnershipCode(secret, host))
+}
+
+// ownsNew is ownsTXT for a host never approved before; one approved before
+// passes.
+func (a *Authorizer) ownsNew(ctx context.Context, svc dbq.DynamicServiceRow, host string) (bool, error) {
+	seen, err := a.q.WasAllowed(ctx, host)
+	if err != nil {
+		return false, err
+	}
+	if seen > 0 {
+		return true, nil
+	}
+	return a.ownsTXT(ctx, svc, host)
+}
+
+// HasTXT reports whether _hangar.<host> holds want.
+func (a *Authorizer) HasTXT(ctx context.Context, host, want string) (bool, error) {
+	recs, err := a.LookupTXT(ctx, OwnershipRecord(host))
+	if err != nil {
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	for _, r := range recs {
+		if strings.TrimSpace(r) == want {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 var errBadSignature = errors.New("the app rejected the domain-check signature")
@@ -355,6 +464,10 @@ func (a *Authorizer) askApp(ctx context.Context, svc dbq.DynamicServiceRow, host
 }
 
 func (a *Authorizer) log(ctx context.Context, host string, allow bool, reason string) {
+	a.logVia(ctx, host, allow, reason, "")
+}
+
+func (a *Authorizer) logVia(ctx context.Context, host string, allow bool, reason string, via Path) {
 	if n, err := a.q.CountAskRows(ctx); err == nil && n >= maxAskRows {
 		return
 	}
@@ -364,7 +477,7 @@ func (a *Authorizer) log(ctx context.Context, host string, allow bool, reason st
 	}
 	now := a.now().Unix()
 	_ = a.q.LogAsk(context.WithoutCancel(ctx), dbq.LogAskParams{
-		Hostname: host, Decision: decision, Reason: reason, Hour: now / 3600, LastAt: now,
+		Hostname: host, Decision: decision, Reason: reason, Hour: now / 3600, LastAt: now, Via: string(via),
 	})
 }
 
@@ -374,3 +487,64 @@ func truncate(s string, n int) string {
 	}
 	return s[:n]
 }
+
+// Probe is what the panel's "test" of a customer domain shows: each check a
+// handshake would run, in the same order. It logs nothing, caches nothing,
+// does not count toward the hourly cap and issues no certificate.
+type Probe struct {
+	Host        string
+	Path        Path
+	TXTRequired bool
+	TXTRecord   string
+	TXTCode     string
+	TXTFound    bool
+	// App is how the app answered: ReasonAppAllowed, ReasonAppDenied,
+	// ReasonAppSignature or ReasonAppError.
+	App string
+}
+
+// ErrNoDynamic means no service takes customer domains.
+var ErrNoDynamic = errors.New("no service takes customer domains")
+
+// Probe runs the customer-domain checks for hostname without side effects.
+func (a *Authorizer) Probe(ctx context.Context, hostname string) (Probe, error) {
+	host, ok := NormalizeHostname(hostname)
+	if !ok {
+		return Probe{}, errInvalidHost
+	}
+	svc, err := a.q.DynamicService(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Probe{}, ErrNoDynamic
+	}
+	if err != nil {
+		return Probe{}, err
+	}
+	secret, err := a.box.Open(svc.DomainCheckSecretEnc, CheckSecretAD(svc.ID))
+	if err != nil {
+		return Probe{}, err
+	}
+	p := Probe{
+		Host: host, Path: a.pathOf(ctx, host), TXTRequired: svc.DomainRequireTxt == 1,
+		TXTRecord: OwnershipRecord(host), TXTCode: OwnershipCode(secret, host),
+	}
+	if p.TXTFound, err = a.HasTXT(ctx, host, p.TXTCode); err != nil {
+		p.TXTFound = false
+	}
+	switch allowed, err := a.askApp(ctx, svc, host); {
+	case errors.Is(err, errBadSignature):
+		p.App = ReasonAppSignature
+	case err != nil:
+		p.App = ReasonAppError
+	case allowed:
+		p.App = ReasonAppAllowed
+	default:
+		p.App = ReasonAppDenied
+	}
+	return p, nil
+}
+
+var errInvalidHost = errors.New("invalid hostname")
+
+// IsInvalidHost reports whether a Probe failed because the name is not a
+// plain hostname.
+func IsInvalidHost(err error) bool { return errors.Is(err, errInvalidHost) }

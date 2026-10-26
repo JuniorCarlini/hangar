@@ -385,6 +385,7 @@ type Service struct {
 	ValidateTimeoutS     int64
 	Maintenance          int64
 	StopGraceS           int64
+	DomainRequireTxt     int64
 }
 
 type ServiceAlias struct {
@@ -486,6 +487,7 @@ type TlsAskLog struct {
 	Hour     int64
 	Count    int64
 	LastAt   int64
+	Via      string
 }
 
 type User struct {

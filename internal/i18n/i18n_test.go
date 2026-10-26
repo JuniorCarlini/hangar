@@ -140,7 +140,7 @@ var dynamicPrefixes = map[string][]string{
 	"flash.": {
 		"deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings",
 		"git", "git-token", "webhook-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-limit", "volume-unlimit",
-		"connected", "offered", "unoffered",
+		"connected", "offered", "unoffered", "txt-on", "txt-off",
 	},
 	"flash.backups.":         {"key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued"},
 	"backups.kind.":          {"pg_dump", "pg_base", "panel"},
@@ -152,7 +152,8 @@ var dynamicPrefixes = map[string][]string{
 	"backups.rules.folders.": {"diario", "semanal", "mensal", "wal", "painel"},
 	"svcbackup.step.":        {"queued", "pre_backup", "create", "deploy", "plan", "stop", "stage", "recover", "restore", "done"},
 	"target.providers.":      {"b2", "wasabi", "aws", "r2", "custom"},
-	"domain.reason.":         {"fixed_domain", "wildcard_domain", "app_authorized", "invalid_hostname", "blocked", "no_dynamic_service", "rate_limited", "app_denied", "app_error", "app_bad_signature", "dns_mismatch", "internal_error"},
+	"domain.reason.":         {"fixed_domain", "wildcard_domain", "app_authorized", "invalid_hostname", "blocked", "no_dynamic_service", "rate_limited", "app_denied", "app_error", "app_bad_signature", "dns_mismatch", "internal_error", "txt_missing"},
+	"domain.path.":           {"direct", "cloudflare", "elsewhere"},
 	"audit.tamper.":          {"removed_or_reordered", "content_changed"},
 	"pista.tone.":            {"default", "info", "success", "warning", "danger"},
 	"pista.alert.":           {"info", "success", "warning", "danger"},

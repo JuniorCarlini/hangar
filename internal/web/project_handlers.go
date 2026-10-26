@@ -267,6 +267,7 @@ type serviceView struct {
 	exportValue   string
 	gitToken      string            // the clone token, right after a sudo reveal
 	hook          *projects.Webhook // webhook URL token and secret, right after rotate or reveal
+	probe         *views.DomainProbe
 	status        int
 }
 
@@ -278,7 +279,7 @@ func (h *handlers) servicePage(w http.ResponseWriter, r *http.Request) {
 // reaches the page directly).
 func flashFrom(r *http.Request) string {
 	switch ok := r.URL.Query().Get("ok"); ok {
-	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
+	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
 		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed",
 		"volume-limit", "volume-unlimit", "connected", "offered", "unoffered":
 		return i18n.T(r.Context(), "flash."+ok)
@@ -375,6 +376,10 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.Domains = views.DomainsSection{
 		EdgeEnabled: h.projects.EdgeEnabled(), Dynamic: s.DynamicDomains == 1,
 		CheckPath: s.DomainCheckPath, CheckSecret: v.checkSecret,
+		RequireTXT: s.DomainRequireTxt == 1, Probe: v.probe,
+	}
+	if d.Domains.Dynamic && d.Domains.EdgeEnabled {
+		d.Domains.EntryHost = h.entryHost()
 	}
 	if info, err := h.projects.EdgeDNSInfo(r.Context()); err == nil {
 		d.Domains.Base = views.EdgeBase{Domain: info.BaseDomain, Provider: info.Provider, Scaled: info.HasToken, FromConfig: info.FromConfig}
@@ -501,7 +506,7 @@ func inferTab(r *http.Request) string {
 	switch r.URL.Query().Get("ok") {
 	case "env", "env-deleted", "connected", "offered", "unoffered":
 		return "variables"
-	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed":
+	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed":
 		return "network"
 	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off":
 		return "settings"

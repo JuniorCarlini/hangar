@@ -98,6 +98,14 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 		}
 	}
 	issuers := []any{issuer}
+	// Certificates issued on demand (customer domains, wildcard subdomains)
+	// were approved by the ask endpoint, which saw the name reach this
+	// server. Behind Cloudflare's proxy the ACME challenge can fail (the
+	// proxy may answer it with an HTTPS redirect); then the internal issuer
+	// gives a certificate Cloudflare accepts in "Full" mode, so the site
+	// still opens. Directly reached hosts get the public certificate, as
+	// the challenge reaches Caddy; renewals try ACME first again.
+	onDemandIssuers := []any{issuer, obj{"module": "internal"}}
 
 	routes := []any{
 		obj{
@@ -183,7 +191,7 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 	// demand the first time it is visited, after the ask endpoint approves.
 	if len(wildHosts) > 0 {
 		slices.Sort(wildHosts)
-		policies = append(policies, obj{"subjects": wildHosts, "on_demand": true, "issuers": issuers})
+		policies = append(policies, obj{"subjects": wildHosts, "on_demand": true, "issuers": onDemandIssuers})
 	}
 	// One managed wildcard certificate for the base domain, via DNS-01. It
 	// covers every automatic link under the base, so those hosts never need
@@ -197,7 +205,7 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 			return nil, fmt.Errorf("on-demand certificates need the ask endpoint")
 		}
 		if in.Dynamic != nil {
-			policies = append(policies, obj{"on_demand": true, "issuers": issuers})
+			policies = append(policies, obj{"on_demand": true, "issuers": onDemandIssuers})
 		}
 		tlsApp["automation"] = obj{
 			"policies":  policies,
@@ -233,8 +241,16 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 				"servers": obj{
 					"edge": obj{
 						"listen": []string{":443"},
-						"routes": routes,
-						"errors": obj{"routes": errorRoutes(fixed, in.Dynamic)},
+						// Behind Cloudflare's proxy every request comes from
+						// its edge; the visitor's address is in
+						// CF-Connecting-IP. It is believed only from
+						// Cloudflare's published ranges (strict), so a direct
+						// visitor cannot forge it.
+						"trusted_proxies":        obj{"source": "static", "ranges": CloudflareRanges()},
+						"trusted_proxies_strict": 1,
+						"client_ip_headers":      []string{"CF-Connecting-IP"},
+						"routes":                 routes,
+						"errors":                 obj{"routes": errorRoutes(fixed, in.Dynamic)},
 						// The :80 server below redirects every host,
 						// including customer domains Caddy cannot list.
 						"automatic_https": autoHTTPS,
@@ -457,6 +473,13 @@ func proxy(upstream string) obj {
 		// A site that takes longer than this to start answering gets the
 		// "too slow" page (504) instead of an endless spinner.
 		"transport": obj{"protocol": "http", "response_header_timeout": "100s"},
+		// The app (and the panel) read the visitor from X-Forwarded-For:
+		// one address, the one Caddy determined (the Cloudflare visitor or
+		// the direct peer), never a chain a client could prefix.
+		"headers": obj{"request": obj{"set": obj{
+			"X-Forwarded-For": []string{"{http.vars.client_ip}"},
+			"X-Real-Ip":       []string{"{http.vars.client_ip}"},
+		}}},
 		// During a zero-downtime deploy the old container stops accepting
 		// connections; Caddy dials again (the name now resolves to the new
 		// one) instead of answering 502. Only requests that never reached

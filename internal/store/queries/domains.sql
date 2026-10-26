@@ -51,8 +51,11 @@ SELECT count(*) FROM domain_blocklist WHERE hostname = ?;
 SELECT * FROM domain_blocklist ORDER BY created_at DESC;
 
 -- name: LogAsk :exec
-INSERT INTO tls_ask_log (hostname, decision, reason, hour, count, last_at) VALUES (?, ?, ?, ?, 1, ?)
-ON CONFLICT (hostname, decision, hour) DO UPDATE SET count = count + 1, reason = excluded.reason, last_at = excluded.last_at;
+INSERT INTO tls_ask_log (hostname, decision, reason, hour, count, last_at, via) VALUES (?, ?, ?, ?, 1, ?, ?)
+ON CONFLICT (hostname, decision, hour) DO UPDATE SET count = count + 1, reason = excluded.reason, last_at = excluded.last_at, via = excluded.via;
+
+-- name: SetDomainRequireTXT :exec
+UPDATE services SET domain_require_txt = ?, updated_at = ? WHERE id = ?;
 
 -- name: CountNewAllowsSince :one
 SELECT count(*) FROM tls_ask_log a

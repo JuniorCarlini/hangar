@@ -364,6 +364,9 @@ git-token = "Token saved."
 webhook-off = "Automatic deploys turned off."
 maintenance-on = "Maintenance mode on. Visitors now see the maintenance page."
 maintenance-off = "Maintenance mode off. The site is answering again."
+domains-limit = "Hourly limit saved."
+txt-on = "New domains now need the ownership TXT."
+txt-off = "The ownership TXT is no longer required."
 
 [service]
 restart_long = "Restart service"
@@ -814,6 +817,7 @@ reserved = "{domain} is an automatic link's address; pick another domain."
 no_port = "The service needs an internal port to receive domains."
 dynamic_taken = "Service {service} already takes dynamic domains; only one per server."
 edge_apply = "Saved, but Caddy rejected the configuration: {error}"
+hour_cap = "The hourly limit goes from {min} to {max}."
 
 [domain.dynamic]
 explain = "Any hostname that is not a fixed domain reaches this service. A certificate is issued only after the app confirms, through a signed call, that the hostname belongs to an active customer."
@@ -842,6 +846,7 @@ app_error = "the app did not answer"
 dns_mismatch = "DNS does not point here"
 internal_error = "internal error"
 app_bad_signature = "the app rejected the signature (deploy so it gets the current secret)"
+txt_missing = "ownership TXT missing"
 
 [domains]
 subtitle = "service {service} takes the customer domains"
@@ -869,6 +874,7 @@ decision = "Decision"
 count = "Times"
 last = "Last"
 since = "Since"
+path = "Path"
 
 [template]
 generated_hint = "Passwords are generated and stored encrypted; you never type one."
@@ -3072,3 +3078,62 @@ none = "Tick at least one value to connect."
 not_offered = "{service} does not offer {key}."
 duplicate = "{var} appears twice: each variable receives a single value."
 exists = "{var} already exists with another value."
+
+[domain.path]
+direct = "direct"
+cloudflare = "via Cloudflare"
+elsewhere = "does not point here"
+
+[domain.txt]
+switch = "Require the ownership TXT"
+explain = "Before asking the app, Hangar checks the _hangar.<domain> record against the code the app shows the customer. It proves whoever connected the domain controls its DNS. Applies to new domains; those that already have a certificate keep working."
+
+[domain.kit]
+open = "Developer kit"
+title = "Developer kit · customer domains"
+intro = "What your app needs so each customer can connect their own domain. The HANGAR_DOMAIN_CHECK_SECRET secret already reaches the app on every deploy."
+step_check = "1 · Answer whether the domain belongs to an active customer"
+step_check_hint = "Hangar calls the app before issuing the certificate, signed as below. Answer 200 only for an active customer's domain and 404 otherwise; check the signature and refuse with 403 when it does not match."
+step_txt = "2 · Show the ownership TXT code"
+step_txt_hint = "The app computes the same code Hangar checks; nothing has to be stored. Only required with the ownership TXT on."
+step_text = "3 · Text for the customer"
+step_text_hint = "Show it on your app's domain screen, with each customer's domain and code. Test a domain below to see the text with its code."
+text_intro = "In the DNS of {domain}, create:"
+text_cloudflare = "Using Cloudflare? You can turn the orange cloud on, with SSL set to Full (Flexible causes an endless redirect)."
+text_https = "HTTPS turns on by itself within a few minutes."
+copy_text = "Copy text"
+test = "Test your app"
+test_host = "A customer's domain"
+test_run = "Test"
+check_dns = "DNS"
+check_txt = "Ownership TXT"
+check_app = "App's answer"
+dns_fix = "Create a CNAME to {entry}."
+txt_found = "found"
+txt_missing = "not found yet"
+txt_optional = "not required"
+
+[confirm.txt_off]
+title = "Stop requiring the ownership TXT?"
+text = "New domains will depend only on the DNS and the app's answer."
+ok = "Stop requiring"
+
+[domains.entry]
+title = "Where your customers point"
+label = "Customer address"
+reaches = "reaches this server"
+not_here = "does not point here"
+copy = "Copy the address"
+explain = "Each customer creates, in their DNS, a CNAME from their domain to this address. Without Cloudflare, Hangar issues the certificate for free; with their own Cloudflare, the customer may turn the orange cloud on."
+fix = "{host} does not point to this server. Create an A record for {host} to the server's IP in your DNS, with the grey cloud."
+orange = "{host} has the orange cloud on. Customers using Cloudflare in another account get error 1014; leave this record grey (DNS only)."
+cloudflare = "Your own domains stay as they are: a CNAME with the orange cloud works. Whoever uses Cloudflare sets SSL to Full; Flexible causes an endless redirect."
+
+[domains.limit]
+title = "New domains limit"
+label = "New domains per hour"
+save = "Save"
+hour = "This hour"
+used = "{n} of {cap}"
+explain = "Applies to customer domains and wildcard subdomains that have no certificate yet; those already approved do not count. It protects the Let's Encrypt limits from made-up names."
+near = "Near the limit: {n} of {cap} this hour. The next ones wait for the hour to turn and get in by themselves. If you are bringing many customers at once, raise the number."

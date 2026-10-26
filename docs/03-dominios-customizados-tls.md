@@ -145,20 +145,53 @@ subdomínio novo leva alguns segundos a mais (emissão do certificado).
    caracteres, não termina em domínio nosso que não esteja cadastrado.
 2. **Lista de bloqueio**: domínios negados manualmente.
 3. **Cache**: decisão positiva cacheada por 1 h, negativa por 5 min (evita
-   martelar a aplicação).
+   martelar a aplicação). Erros passageiros (DNS, TXT ausente, limite, app
+   fora do ar) não entram no cache.
 4. **Domínios fixos cadastrados** → permite. **Subdomínio de um coringa
-   cadastrado** → permite, depois do limite por hora e do DNS (itens 6 e 7).
-5. **Pergunta à aplicação** (o ponto-chave):
-   `GET http://<ip-do-container-app>:8000/.well-known/hangar/domain-check?domain=X`
-   (o `hangard` roda no host e obtém o IP pela API do Docker)
-   com cabeçalho `X-Hangar-Signature` (HMAC-SHA256 de `domain|timestamp`
-   com segredo compartilhado, timestamp com janela de 60 s).
-   A aplicação responde `200` só se o domínio está cadastrado numa **loja
-   ativa**. Timeout de 2 s; erro = negar.
-6. **(Opcional, recomendado) Verificação de DNS**: o domínio resolve
-   (A/AAAA) para o IP do servidor, ou CNAME para `lojas.seudominio.com`.
-7. **Limites**: no máximo N emissões novas por hora (padrão 30) e por domínio
-   registrável. Excedeu → nega e alerta.
+   cadastrado** → permite, depois do DNS e do limite por hora (itens 5 e 7).
+5. **Caminho do DNS**: o nome resolve para um IP do servidor (**direto**) ou
+   só para endereços do Cloudflare (**via Cloudflare**, nuvem laranja; lista
+   oficial em `internal/edge/cloudflare.go`). Qualquer outra resposta, ou
+   uma mistura, → nega (`dns_mismatch`) sem perguntar à aplicação. O caminho
+   fica gravado na decisão e aparece na tela.
+6. **TXT de posse** (opcional, por serviço): com "Exigir o TXT de posse"
+   ligado, um domínio **novo** só passa se `_hangar.<domínio>` tiver o código
+   `"hg-" + hex(HMAC-SHA256(segredo, "txt|" + domínio))[:12]`. O segredo é o
+   mesmo `HANGAR_DOMAIN_CHECK_SECRET`, então a aplicação calcula o código sem
+   guardar nada. Domínios já aprovados antes não precisam do TXT (ligar o
+   switch não quebra renovações).
+7. **Limite por hora**: no máximo N nomes novos aprovados por hora (padrão
+   30, ajustável de 1 a 1000 na tela Domínios, auditado). Nomes já aprovados
+   antes não contam.
+8. **Pergunta à aplicação** (o ponto-chave):
+   `GET http://<ip-do-container-app>:<porta>/.well-known/hangar/domain-check?domain=X`
+   com `X-Hangar-Timestamp` e `X-Hangar-Signature` (HMAC-SHA256 de
+   `domain|timestamp` com o segredo compartilhado). A aplicação responde
+   `200` só se o domínio está cadastrado num cliente **ativo**, `404` se não,
+   `403` se a assinatura não bate. Timeout curto; erro = negar.
+
+### Cloudflare na frente
+
+- Clientes podem usar a nuvem laranja (SSL em **Full**; Flexible gera
+  redirecionamento infinito). Como o desafio HTTP pode não chegar até o
+  servidor, as políticas sob demanda têm o emissor interno do Caddy como
+  reserva: o Cloudflare em modo Full aceita esse certificado.
+- O Caddy só confia em `CF-Connecting-IP` quando a conexão vem de um
+  endereço do Cloudflare (`trusted_proxies` estrito); o IP do visitante vai
+  para a aplicação em `X-Forwarded-For`/`X-Real-Ip`.
+- O endereço dos clientes (`entrada.<domínio base>`, ou
+  `entrada.<ip>.sslip.io` sem domínio base) deve ficar com a **nuvem
+  cinza**: um CNAME de outra conta Cloudflare para um nome laranja dá o
+  erro 1014. A tela Domínios avisa.
+
+### Kit do desenvolvedor
+
+Na seção Domínios do serviço que aceita domínios dos clientes, o botão
+"Kit do desenvolvedor" mostra a chamada assinada, o código do TXT em
+Python/Node/PHP (testado contra o Go em `domain_kit_test.go`), o texto
+pronto para o cliente e um **teste** que roda DNS, TXT e a resposta da app
+para um domínio sem gravar, cachear, contar no limite nem emitir nada
+(só admin).
 
 Cada decisão é registrada (tabela `tls_ask_log`) para auditoria e para a tela
 de "Domínios dinâmicos" no painel.
@@ -184,11 +217,12 @@ Três coisas a implementar no sistema de lojas:
 
 | Caso | Registro |
 |---|---|
-| Subdomínio (`www.minhaloja.com.br`, `loja.minhaloja.com.br`) | `CNAME` → `lojas.seudominio.com` |
-| Domínio raiz (`minhaloja.com.br`) | `A` → IP da VPS (e `AAAA` se houver IPv6) |
+| Subdomínio (`www.minhaloja.com.br`, `loja.minhaloja.com.br`) | `CNAME` → endereço dos clientes (`entrada.…`) |
+| Domínio raiz (`minhaloja.com.br`) | `A` → IP da VPS, ou CNAME flattening do provedor |
+| Com o TXT de posse ligado | `TXT` `_hangar.<domínio>` → código mostrado pela app |
 
 Usar o CNAME sempre que possível: se o IP do servidor mudar, só o registro
-`lojas.seudominio.com` precisa ser atualizado.
+do endereço dos clientes precisa ser atualizado.
 
 Domínio raiz + `www`: cadastrar ambos na loja; o app redireciona um para o outro.
 

@@ -1,12 +1,17 @@
 package web
 
 import (
+	"context"
+	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
+	"github.com/JuniorCarlini/hangar/internal/edge"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
@@ -186,6 +191,8 @@ func (h *handlers) domainsPage(w http.ResponseWriter, r *http.Request) {
 		flash = i18n.T(r.Context(), "flash.domains-blocked")
 	case "unblocked":
 		flash = i18n.T(r.Context(), "flash.domains-unblocked")
+	case "limit":
+		flash = i18n.T(r.Context(), "flash.domains-limit")
 	}
 	h.renderDomains(w, r, http.StatusOK, "", flash)
 }
@@ -203,6 +210,11 @@ func (h *handlers) renderDomains(w http.ResponseWriter, r *http.Request, status 
 	if d.Filter == "all" {
 		d.Filter = ""
 	}
+	if d.EdgeEnabled && d.Dynamic != "" {
+		d.EntryHost = h.entryHost()
+		d.EntryPath = h.entryPath(r.Context(), d.EntryHost)
+	}
+	d.MinCap, d.MaxCap = projects.MinHourCap, projects.MaxHourCap
 	act, err := h.projects.DomainActivity(r.Context(), d.Filter)
 	d.Certified, d.NewThisHour, d.HourCap, d.DeniedToday = act.Certified, act.NewThisHour, act.HourCap, act.DeniedToday
 	if err != nil {
@@ -219,7 +231,7 @@ func (h *handlers) renderDomains(w http.ResponseWriter, r *http.Request, status 
 	for _, a := range act.Recent {
 		d.Recent = append(d.Recent, views.AskRow{
 			Hostname: a.Hostname, Allowed: a.Decision == "allow", Reason: a.Reason, Count: a.Count,
-			When: time.Unix(a.LastAt, 0).Format("02/01 15:04"), Blocked: blocked[a.Hostname],
+			When: time.Unix(a.LastAt, 0).Format("02/01 15:04"), Blocked: blocked[a.Hostname], Via: a.Via,
 		})
 	}
 	render(w, r, status, views.Domains(d))
@@ -241,4 +253,75 @@ func (h *handlers) unblockHostname(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectLocal(w, r, "/domains?ok=unblocked")
+}
+
+// entryLabel names the address customers point their domains at.
+const entryLabel = "entrada"
+
+// entryHost is that address: entrada.<base domain>, or, without one,
+// entrada.<ip>.sslip.io, which resolves to the server by itself.
+func (h *handlers) entryHost() string {
+	ip, _ := netip.ParseAddr(h.autoLinkIP)
+	return edge.AutoHost(h.projects.BaseDomain(), ip, entryLabel)
+}
+
+// entryPath checks how the entry address reaches the server ("" when it
+// cannot be told). An sslip.io name always resolves to its IP.
+func (h *handlers) entryPath(ctx context.Context, host string) string {
+	ip, err := netip.ParseAddr(h.autoLinkIP)
+	if host == "" || err != nil {
+		return ""
+	}
+	if strings.HasSuffix(host, ".sslip.io") {
+		return string(edge.PathDirect)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return string(edge.PathElsewhere)
+	}
+	return string(edge.ClassifyPath([]netip.Addr{ip}, ips))
+}
+
+// setHourCap changes how many new domains may get a certificate per hour.
+func (h *handlers) setHourCap(w http.ResponseWriter, r *http.Request) {
+	if err := h.projects.SetHourCap(r.Context(), actor(r), r.PostFormValue("cap")); err != nil {
+		code, msg := userError(r, err)
+		h.renderDomains(w, r, code, msg, "")
+		return
+	}
+	redirectLocal(w, r, "/domains?ok=limit")
+}
+
+// domainTXT turns the ownership TXT of new customer domains on or off.
+func (h *handlers) domainTXT(w http.ResponseWriter, r *http.Request) {
+	s, ok := h.withService(w, r)
+	if !ok {
+		return
+	}
+	on := r.PostFormValue("on") == "1"
+	flash := "txt-off"
+	if on {
+		flash = "txt-on"
+	}
+	h.domainsDone(w, r, flash, h.projects.SetDomainRequireTXT(r.Context(), actor(r), s.ID, on))
+}
+
+// probeDomain runs the developer kit's test of a customer domain: read
+// only, nothing is logged, counted or issued.
+func (h *handlers) probeDomain(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.withService(w, r); !ok {
+		return
+	}
+	p, err := h.projects.ProbeDomain(r.Context(), r.PostFormValue("hostname"))
+	if err != nil {
+		code, msg := userError(r, err)
+		h.renderService(w, r, serviceView{status: code, errMsg: msg})
+		return
+	}
+	h.renderService(w, r, serviceView{status: http.StatusOK, probe: &views.DomainProbe{
+		Host: p.Host, Path: string(p.Path), TXTRequired: p.TXTRequired, TXTFound: p.TXTFound,
+		TXTRecord: p.TXTRecord, TXTCode: p.TXTCode, App: p.App,
+	}})
 }

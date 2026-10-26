@@ -364,6 +364,9 @@ git-token = "Token salvo."
 webhook-off = "Deploy automático desligado."
 maintenance-on = "Modo manutenção ligado. Os visitantes já veem a página de manutenção."
 maintenance-off = "Modo manutenção desligado. O site voltou a responder."
+domains-limit = "Limite por hora salvo."
+txt-on = "Agora os domínios novos precisam do TXT de posse."
+txt-off = "O TXT de posse deixou de ser exigido."
 
 [service]
 restart_long = "Reiniciar serviço"
@@ -814,6 +817,7 @@ no_port = "O serviço precisa de uma porta interna para receber domínios."
 reserved = "{domain} é o endereço de um link automático; escolha outro domínio."
 dynamic_taken = "O serviço {service} já recebe os domínios dinâmicos; só um por servidor."
 edge_apply = "Salvo, mas o Caddy recusou a configuração: {error}"
+hour_cap = "O limite por hora vai de {min} a {max}."
 
 [domain.dynamic]
 explain = "Qualquer domínio que não seja fixo cai neste serviço. O certificado só é emitido depois que a app confirma, por uma chamada assinada, que o domínio pertence a um cliente ativo."
@@ -842,6 +846,7 @@ app_error = "a app não respondeu"
 dns_mismatch = "DNS não aponta para cá"
 internal_error = "erro interno"
 app_bad_signature = "a app recusou a assinatura (faça deploy para ela receber o segredo atual)"
+txt_missing = "falta o TXT de posse"
 
 [domains]
 subtitle = "serviço {service} recebe os domínios dos clientes"
@@ -869,6 +874,7 @@ decision = "Decisão"
 count = "Vezes"
 last = "Último"
 since = "Desde"
+path = "Caminho"
 
 [template]
 generated_hint = "As senhas são geradas e guardadas cifradas; você não precisa digitar nenhuma."
@@ -3073,3 +3079,62 @@ none = "Marque pelo menos um valor para conectar."
 not_offered = "{service} não oferece {key}."
 duplicate = "{var} aparece duas vezes: cada variável recebe um valor só."
 exists = "{var} já existe com outro valor."
+
+[domain.path]
+direct = "direto"
+cloudflare = "via Cloudflare"
+elsewhere = "não aponta para cá"
+
+[domain.txt]
+switch = "Exigir o TXT de posse"
+explain = "Antes de perguntar à app, o Hangar confere o registro _hangar.<domínio> com o código que a app mostra ao cliente. Prova que quem conectou o domínio manda no DNS dele. Vale para domínios novos; os que já têm certificado continuam."
+
+[domain.kit]
+open = "Kit do desenvolvedor"
+title = "Kit do desenvolvedor · domínios dos clientes"
+intro = "O que a sua app precisa para cada cliente conectar o próprio domínio. O segredo HANGAR_DOMAIN_CHECK_SECRET já chega na app em cada deploy."
+step_check = "1 · Responder se o domínio é de um cliente ativo"
+step_check_hint = "O Hangar chama a app antes de emitir o certificado, com a assinatura abaixo. Responda 200 só para domínio de cliente ativo e 404 para o resto; confira a assinatura e recuse com 403 se não bater."
+step_txt = "2 · Mostrar o código do TXT de posse"
+step_txt_hint = "A app calcula o mesmo código que o Hangar confere; não precisa guardar nada. Só é exigido com o TXT de posse ligado."
+step_text = "3 · Texto para o cliente"
+step_text_hint = "Mostre na tela de domínio da sua app, com o domínio e o código de cada cliente. Teste um domínio abaixo para ver o texto com o código dele."
+text_intro = "No DNS de {domain}, crie:"
+text_cloudflare = "Usa Cloudflare? Pode ligar a nuvem laranja, com o SSL em Full (no Flexible o site entra em redirecionamento infinito)."
+text_https = "O HTTPS ativa sozinho em poucos minutos."
+copy_text = "Copiar texto"
+test = "Testar a sua app"
+test_host = "Domínio de um cliente"
+test_run = "Testar"
+check_dns = "DNS"
+check_txt = "TXT de posse"
+check_app = "Resposta da app"
+dns_fix = "Crie um CNAME para {entry}."
+txt_found = "encontrado"
+txt_missing = "ainda não encontrado"
+txt_optional = "não exigido"
+
+[confirm.txt_off]
+title = "Deixar de exigir o TXT de posse?"
+text = "Domínios novos passam a depender só do DNS e da resposta da app."
+ok = "Deixar de exigir"
+
+[domains.entry]
+title = "Para onde seus clientes apontam"
+label = "Endereço dos clientes"
+reaches = "chega neste servidor"
+not_here = "não aponta para cá"
+copy = "Copiar o endereço"
+explain = "Cada cliente cria no DNS dele um CNAME do próprio domínio para este endereço. Sem Cloudflare, o Hangar emite o certificado de graça; com o Cloudflare do cliente, ele pode ligar a nuvem laranja."
+fix = "{host} não aponta para este servidor. Crie no DNS um registro A de {host} para o IP do servidor, com a nuvem cinza."
+orange = "{host} está com a nuvem laranja. Clientes com Cloudflare em outra conta recebem o erro 1014; deixe este registro com a nuvem cinza (só DNS)."
+cloudflare = "Seus próprios domínios continuam como estão: CNAME com a nuvem laranja funciona. Quem usa Cloudflare deixa o SSL em Full; no Flexible o site entra em redirecionamento infinito."
+
+[domains.limit]
+title = "Limite de domínios novos"
+label = "Domínios novos por hora"
+save = "Salvar"
+hour = "Nesta hora"
+used = "{n} de {cap}"
+explain = "Vale para domínios de clientes e subdomínios de coringa que ainda não têm certificado; os já aprovados não contam. Protege o limite da Let's Encrypt contra nomes inventados."
+near = "Perto do limite: {n} de {cap} nesta hora. Os próximos esperam a hora virar e entram sozinhos. Se você está trazendo muitos clientes de uma vez, aumente o número."

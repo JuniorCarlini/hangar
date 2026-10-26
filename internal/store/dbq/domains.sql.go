@@ -145,7 +145,7 @@ func (q *Queries) DeleteDomain(ctx context.Context, arg DeleteDomainParams) (Del
 }
 
 const dynamicService = `-- name: DynamicService :one
-SELECT s.id, s.project_id, s.slug, s.image, s.internal_port, s.memory_bytes, s.nano_cpus, s.pids_limit, s.read_only, s.command_json, s.desired_state, s.created_at, s.updated_at, s.dynamic_domains, s.domain_check_path, s.domain_check_secret_enc, s.template, s.stateful, s.health_json, s.cap_add_json, s.predeploy_json, s.health_path, s.canvas_x, s.canvas_y, s.validate_json, s.validate_timeout_s, s.maintenance, s.stop_grace_s, p.slug AS project_slug FROM services s JOIN projects p ON p.id = s.project_id
+SELECT s.id, s.project_id, s.slug, s.image, s.internal_port, s.memory_bytes, s.nano_cpus, s.pids_limit, s.read_only, s.command_json, s.desired_state, s.created_at, s.updated_at, s.dynamic_domains, s.domain_check_path, s.domain_check_secret_enc, s.template, s.stateful, s.health_json, s.cap_add_json, s.predeploy_json, s.health_path, s.canvas_x, s.canvas_y, s.validate_json, s.validate_timeout_s, s.maintenance, s.stop_grace_s, s.domain_require_txt, p.slug AS project_slug FROM services s JOIN projects p ON p.id = s.project_id
 WHERE s.dynamic_domains = 1
 `
 
@@ -178,6 +178,7 @@ type DynamicServiceRow struct {
 	ValidateTimeoutS     int64
 	Maintenance          int64
 	StopGraceS           int64
+	DomainRequireTxt     int64
 	ProjectSlug          string
 }
 
@@ -213,6 +214,7 @@ func (q *Queries) DynamicService(ctx context.Context) (DynamicServiceRow, error)
 		&i.ValidateTimeoutS,
 		&i.Maintenance,
 		&i.StopGraceS,
+		&i.DomainRequireTxt,
 		&i.ProjectSlug,
 	)
 	return i, err
@@ -254,7 +256,7 @@ func (q *Queries) GetEdgeSettings(ctx context.Context) (EdgeSetting, error) {
 }
 
 const getServiceByID = `-- name: GetServiceByID :one
-SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance, stop_grace_s FROM services WHERE id = ?
+SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance, stop_grace_s, domain_require_txt FROM services WHERE id = ?
 `
 
 func (q *Queries) GetServiceByID(ctx context.Context, id string) (Service, error) {
@@ -289,6 +291,7 @@ func (q *Queries) GetServiceByID(ctx context.Context, id string) (Service, error
 		&i.ValidateTimeoutS,
 		&i.Maintenance,
 		&i.StopGraceS,
+		&i.DomainRequireTxt,
 	)
 	return i, err
 }
@@ -423,8 +426,8 @@ func (q *Queries) ListDomains(ctx context.Context, serviceID string) ([]Domain, 
 }
 
 const logAsk = `-- name: LogAsk :exec
-INSERT INTO tls_ask_log (hostname, decision, reason, hour, count, last_at) VALUES (?, ?, ?, ?, 1, ?)
-ON CONFLICT (hostname, decision, hour) DO UPDATE SET count = count + 1, reason = excluded.reason, last_at = excluded.last_at
+INSERT INTO tls_ask_log (hostname, decision, reason, hour, count, last_at, via) VALUES (?, ?, ?, ?, 1, ?, ?)
+ON CONFLICT (hostname, decision, hour) DO UPDATE SET count = count + 1, reason = excluded.reason, last_at = excluded.last_at, via = excluded.via
 `
 
 type LogAskParams struct {
@@ -433,6 +436,7 @@ type LogAskParams struct {
 	Reason   string
 	Hour     int64
 	LastAt   int64
+	Via      string
 }
 
 func (q *Queries) LogAsk(ctx context.Context, arg LogAskParams) error {
@@ -442,12 +446,13 @@ func (q *Queries) LogAsk(ctx context.Context, arg LogAskParams) error {
 		arg.Reason,
 		arg.Hour,
 		arg.LastAt,
+		arg.Via,
 	)
 	return err
 }
 
 const recentAsks = `-- name: RecentAsks :many
-SELECT hostname, decision, reason, hour, count, last_at FROM tls_ask_log ORDER BY last_at DESC LIMIT ?
+SELECT hostname, decision, reason, hour, count, last_at, via FROM tls_ask_log ORDER BY last_at DESC LIMIT ?
 `
 
 func (q *Queries) RecentAsks(ctx context.Context, limit int64) ([]TlsAskLog, error) {
@@ -466,6 +471,7 @@ func (q *Queries) RecentAsks(ctx context.Context, limit int64) ([]TlsAskLog, err
 			&i.Hour,
 			&i.Count,
 			&i.LastAt,
+			&i.Via,
 		); err != nil {
 			return nil, err
 		}
@@ -481,7 +487,7 @@ func (q *Queries) RecentAsks(ctx context.Context, limit int64) ([]TlsAskLog, err
 }
 
 const recentAsksByDecision = `-- name: RecentAsksByDecision :many
-SELECT hostname, decision, reason, hour, count, last_at FROM tls_ask_log WHERE decision = ? ORDER BY last_at DESC LIMIT ?
+SELECT hostname, decision, reason, hour, count, last_at, via FROM tls_ask_log WHERE decision = ? ORDER BY last_at DESC LIMIT ?
 `
 
 type RecentAsksByDecisionParams struct {
@@ -505,6 +511,7 @@ func (q *Queries) RecentAsksByDecision(ctx context.Context, arg RecentAsksByDeci
 			&i.Hour,
 			&i.Count,
 			&i.LastAt,
+			&i.Via,
 		); err != nil {
 			return nil, err
 		}
@@ -517,6 +524,21 @@ func (q *Queries) RecentAsksByDecision(ctx context.Context, arg RecentAsksByDeci
 		return nil, err
 	}
 	return items, nil
+}
+
+const setDomainRequireTXT = `-- name: SetDomainRequireTXT :exec
+UPDATE services SET domain_require_txt = ?, updated_at = ? WHERE id = ?
+`
+
+type SetDomainRequireTXTParams struct {
+	DomainRequireTxt int64
+	UpdatedAt        int64
+	ID               string
+}
+
+func (q *Queries) SetDomainRequireTXT(ctx context.Context, arg SetDomainRequireTXTParams) error {
+	_, err := q.db.ExecContext(ctx, setDomainRequireTXT, arg.DomainRequireTxt, arg.UpdatedAt, arg.ID)
+	return err
 }
 
 const setDynamicDomains = `-- name: SetDynamicDomains :exec

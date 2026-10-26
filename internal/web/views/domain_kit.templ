@@ -1,0 +1,176 @@
+package views
+
+import "context"
+
+// DomainProbe is the developer kit's test of one customer domain.
+type DomainProbe struct {
+	Host        string
+	Path        string // direct, cloudflare or elsewhere
+	TXTRequired bool
+	TXTFound    bool
+	TXTRecord   string
+	TXTCode     string
+	App         string // a domain.reason code
+}
+
+// The code the app runs to show each customer its ownership TXT; it must
+// match edge.OwnershipCode (domain_kit_test.go checks the Python one).
+const (
+	txtSnippetPython = `import hashlib, hmac, os
+
+def hangar_txt(domain):
+    secret = os.environ["HANGAR_DOMAIN_CHECK_SECRET"].encode()
+    mac = hmac.new(secret, ("txt|" + domain).encode(), hashlib.sha256)
+    return "hg-" + mac.hexdigest()[:12]`
+	txtSnippetNode = `const crypto = require("crypto");
+
+function hangarTxt(domain) {
+  const mac = crypto.createHmac("sha256", process.env.HANGAR_DOMAIN_CHECK_SECRET);
+  mac.update("txt|" + domain);
+  return "hg-" + mac.digest("hex").slice(0, 12);
+}`
+	txtSnippetPHP = `function hangar_txt(string $domain): string {
+    $mac = hash_hmac("sha256", "txt|" . $domain, getenv("HANGAR_DOMAIN_CHECK_SECRET"));
+    return "hg-" . substr($mac, 0, 12);
+}`
+)
+
+func checkRequest(path string) string {
+	return "GET " + path + "?domain=loja.cliente.com.br\n" +
+		"X-Hangar-Timestamp: 1793044163\n" +
+		"X-Hangar-Signature: hex(HMAC-SHA256(HANGAR_DOMAIN_CHECK_SECRET, \"loja.cliente.com.br|1793044163\"))"
+}
+
+// customerText is the DNS a customer creates, ready to show in the app.
+func customerText(ctx context.Context, d DomainsSection) string {
+	host, code := "loja.cliente.com.br", "hg-…"
+	if d.Probe != nil {
+		host, code = d.Probe.Host, d.Probe.TXTCode
+	}
+	entry := d.EntryHost
+	if entry == "" {
+		entry = "—"
+	}
+	s := t(ctx, "domain.kit.text_intro", "domain", host) + "\n" +
+		"  CNAME  " + host + "  →  " + entry + "\n"
+	if d.RequireTXT {
+		s += "  TXT    _hangar." + host + "  →  " + code + "\n"
+	}
+	return s + t(ctx, "domain.kit.text_cloudflare") + "\n" + t(ctx, "domain.kit.text_https")
+}
+
+func probeTone(ok bool) string {
+	if ok {
+		return "tuc-badge is-success"
+	}
+	return "tuc-badge is-warning"
+}
+
+// domainKit is the modal with what the app needs to take customer domains:
+// the signed check it answers, the ownership TXT code it shows, the text
+// for the customer, and a test that runs every check without side effects.
+templ domainKit(d ServiceData) {
+	<dialog class="tuc-modal is-lg" id="domain-kit" aria-labelledby="domain-kit-title" data-open={ boolAttr(d.Domains.Probe != nil) }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="domain-kit-title">{ t(ctx, "domain.kit.title") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<div class="tuc-modal__body flex flex-col gap-5">
+				<p class="tuc-modal__text">{ t(ctx, "domain.kit.intro") }</p>
+				<section class="flex flex-col gap-2">
+					<h3 class="text-sm font-semibold">{ t(ctx, "domain.kit.step_check") }</h3>
+					<p class="text-[13px] text-muted">{ t(ctx, "domain.kit.step_check_hint") }</p>
+					<pre class="overflow-x-auto rounded-sm border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs leading-[18px]">{ checkRequest(d.Domains.CheckPath) }</pre>
+				</section>
+				<section class="flex flex-col gap-2">
+					<h3 class="text-sm font-semibold">{ t(ctx, "domain.kit.step_txt") }</h3>
+					<p class="text-[13px] text-muted">{ t(ctx, "domain.kit.step_txt_hint") }</p>
+					<div class="tuc-tabs" data-tuc-tabs>
+						<div class="tuc-tabs__list">
+							for i, lang := range []string{"Python", "Node", "PHP"} {
+								<button type="button" class="tuc-tabs__tab" aria-selected={ boolAttr(i == 0) }>{ lang }</button>
+							}
+						</div>
+						for i, code := range []string{txtSnippetPython, txtSnippetNode, txtSnippetPHP} {
+							<div class="tuc-tabs__panel pt-3" hidden?={ i != 0 }>
+								<pre class="overflow-x-auto rounded-sm border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs leading-[18px]">{ code }</pre>
+							</div>
+						}
+					</div>
+				</section>
+				<section class="flex flex-col gap-2">
+					<h3 class="text-sm font-semibold">{ t(ctx, "domain.kit.step_text") }</h3>
+					<p class="text-[13px] text-muted">{ t(ctx, "domain.kit.step_text_hint") }</p>
+					<pre class="overflow-x-auto rounded-sm border border-border bg-surface-2 px-3 py-2.5 font-mono text-xs leading-[18px] whitespace-pre-wrap">{ customerText(ctx, d.Domains) }</pre>
+					<div class="flex justify-end">
+						<button type="button" class="tuc-btn is-outline is-sm" data-copy={ customerText(ctx, d.Domains) } data-copied={ t(ctx, "common.copied") }>
+							@Icon("copy", "size-3.5")
+							{ t(ctx, "domain.kit.copy_text") }
+						</button>
+					</div>
+				</section>
+				if d.CanAdmin {
+					<section class="flex flex-col gap-3 border-t border-border pt-4">
+						<h3 class="text-sm font-semibold">{ t(ctx, "domain.kit.test") }</h3>
+						<form method="post" action={ templ.SafeURL(d.base() + "/domains/probe") } class="flex flex-wrap items-end gap-2">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<div class="flex min-w-0 flex-[1_1_260px] flex-col gap-1.5">
+								<label class="tuc-label" for="kit-host">{ t(ctx, "domain.kit.test_host") }</label>
+								<input class="tuc-input font-mono" id="kit-host" name="hostname" required maxlength="253" autocomplete="off" placeholder="loja.cliente.com.br" value={ probeHost(d.Domains.Probe) }/>
+							</div>
+							<button class="tuc-btn is-primary" type="submit">
+								@Icon("play", "size-3.5")
+								{ t(ctx, "domain.kit.test_run") }
+							</button>
+						</form>
+						if p := d.Domains.Probe; p != nil {
+							<div class="tuc-table-wrap">
+								<table class="tuc-table is-compact w-full">
+									<tbody>
+										<tr>
+											<td>{ t(ctx, "domain.kit.check_dns") }</td>
+											<td><span class={ probeTone(p.Path != "elsewhere") }>{ t(ctx, "domain.path." + p.Path) }</span></td>
+											<td class="text-muted">
+												if p.Path == "elsewhere" {
+													{ t(ctx, "domain.kit.dns_fix", "entry", d.Domains.EntryHost) }
+												}
+											</td>
+										</tr>
+										<tr>
+											<td>{ t(ctx, "domain.kit.check_txt") }</td>
+											<td>
+												if p.TXTFound {
+													<span class="tuc-badge is-success">{ t(ctx, "domain.kit.txt_found") }</span>
+												} else if p.TXTRequired {
+													<span class="tuc-badge is-warning">{ t(ctx, "domain.kit.txt_missing") }</span>
+												} else {
+													<span class="tuc-badge">{ t(ctx, "domain.kit.txt_optional") }</span>
+												}
+											</td>
+											<td class="font-mono text-xs break-all">{ p.TXTRecord } → { p.TXTCode }</td>
+										</tr>
+										<tr>
+											<td>{ t(ctx, "domain.kit.check_app") }</td>
+											<td><span class={ probeTone(p.App == "app_authorized") }>{ t(ctx, "domain.reason." + p.App) }</span></td>
+											<td class="text-muted"></td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						}
+					</section>
+				}
+			</div>
+		</div>
+	</dialog>
+}
+
+func probeHost(p *DomainProbe) string {
+	if p == nil {
+		return ""
+	}
+	return p.Host
+}
