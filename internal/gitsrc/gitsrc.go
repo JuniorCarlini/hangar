@@ -17,7 +17,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -310,8 +309,15 @@ func Clone(ctx context.Context, dir string, src Source) (Commit, error) {
 // (USER 10001) could not read its own code. The checkout itself stays
 // private: it lives under the panel's data directory, which only the panel
 // reaches.
+// The changes go through an os.Root, so a symlink in the repository can
+// never make them land outside the checkout.
 func shareReadable(dir string) error {
-	return filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	return fs.WalkDir(root.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -329,7 +335,7 @@ func shareReadable(dir string) error {
 		if d.IsDir() || info.Mode()&0o100 != 0 {
 			mode = 0o755
 		}
-		return os.Chmod(p, mode)
+		return root.Chmod(p, mode)
 	})
 }
 

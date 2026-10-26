@@ -864,5 +864,6 @@ func (h *handlers) pinProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, i18n.T(r.Context(), "error.internal"), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, safeNext(r.PostFormValue("next")), http.StatusSeeOther)
+	// safeNext keeps the redirect on this panel (a local path, never //host).
+	redirectLocal(w, r, safeNext(r.PostFormValue("next")))
 }
