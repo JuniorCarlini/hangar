@@ -54,7 +54,11 @@ func (h *handlers) renderUpdate(w http.ResponseWriter, r *http.Request, status i
 	// The status file only holds the last apply; every finished one is in
 	// the audit log (recorded when the new version starts).
 	d.Busy = d.Pending
-	if st, err := update.ReadStatus(h.updateDir); err == nil && st != nil && st.State == "applying" {
+	st, stErr := update.ReadStatus(h.updateDir)
+	if ask := h.updateAsked.Load(); ask != nil && ask.waiting(d.Current, st, time.Now()) {
+		d.Busy = true
+	}
+	if err := stErr; err == nil && st != nil && st.State == "applying" {
 		d.Busy = true
 		d.History = append(d.History, views.UpdateStatus{
 			State: st.State, Version: st.Version, From: st.From, Message: st.Message,
@@ -95,7 +99,25 @@ func (h *handlers) updateApply(w http.ResponseWriter, r *http.Request) {
 		h.renderUpdate(w, r, http.StatusUnprocessableEntity, i18n.T(r.Context(), "update.error.refused", "error", i18n.Message(i18n.Locale(r.Context()), err)), true)
 		return
 	}
+	h.updateAsked.Store(&updateAsk{version: version, at: time.Now()})
 	http.Redirect(w, r, "/update", http.StatusSeeOther)
+}
+
+// updateAsk is an update this process requested.
+type updateAsk struct {
+	version string
+	at      time.Time
+}
+
+// waiting reports whether the page should still wait for the update: it is
+// not running yet, the applier has not finished it (no result written
+// after the request) and it was asked recently (a lost request must not
+// keep the page waiting forever).
+func (a *updateAsk) waiting(current string, st *update.Status, now time.Time) bool {
+	if current == a.version || now.Sub(a.at) > 15*time.Minute {
+		return false
+	}
+	return st == nil || st.At.Before(a.at) || st.State == "applying"
 }
 
 // auditTime formats an audit record's timestamp for a table.

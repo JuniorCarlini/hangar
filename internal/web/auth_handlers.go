@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/a-h/templ"
@@ -68,13 +69,17 @@ type handlers struct {
 	auth       *auth.Service
 	updates    updates
 	updateDir  string
-	panelURL   string
-	projects   *projects.Manager
-	metrics    *metrics.Collector
-	audit      *audit.Logger
-	deps       *deps.Monitor
-	status     *statuspage.Service
-	pub        *publicStatus
+	// updateAsked is the update requested from this process, so the page
+	// keeps waiting while the applier works between dropping the request
+	// and marking the update as applying.
+	updateAsked atomic.Pointer[updateAsk]
+	panelURL    string
+	projects    *projects.Manager
+	metrics     *metrics.Collector
+	audit       *audit.Logger
+	deps        *deps.Monitor
+	status      *statuspage.Service
+	pub         *publicStatus
 	// statusBase is the public base URL of status links ("" = the panel's).
 	statusBase string
 	alerts     *alerts.Service

@@ -142,6 +142,13 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 	if err != nil {
 		return a.finish("failed", req.Version, "", "read installed version: "+err.Error())
 	}
+	// Say so at once: the request is gone and the checks below take a
+	// while, and the panel shows the update as on its way only while it
+	// sees the request or this status (otherwise it offers the button again
+	// and stops waiting for the new version).
+	if _, err := a.finish("applying", req.Version, current, ""); err != nil {
+		return nil, err
+	}
 
 	// Verify everything again without trusting the unprivileged process that
 	// staged it. The binary is copied somewhere only root can write before its
@@ -158,10 +165,6 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 	}
 	if err := a.Preflight(ctx, newBin); err != nil {
 		return a.finish("failed", req.Version, current, "preflight (the panel was not stopped): "+err.Error())
-	}
-
-	if _, err := a.finish("applying", req.Version, current, ""); err != nil {
-		return nil, err
 	}
 
 	backupDir := filepath.Join(a.DataDir, "backups", "pre-update-"+current+"-"+a.Now().UTC().Format("20060102T150405Z"))

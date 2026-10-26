@@ -509,3 +509,22 @@ func TestApplierWatches(t *testing.T) {
 		t.Error("the unit watches another directory: no applier for this one")
 	}
 }
+
+// The request is removed before the slow checks, so the status says
+// "applying" before them: the panel must never see neither (it would offer
+// the button again and stop waiting for the new version).
+func TestApplyingIsSetBeforeTheChecks(t *testing.T) {
+	a, svc := stagedApplier(t, []byte("binario-novo"))
+	svc.healthy["binario-novo"] = "v1.1.0"
+	var during *Status
+	a.Preflight = func(context.Context, string) error {
+		during, _ = ReadStatus(a.updateDir())
+		return nil
+	}
+	if _, err := a.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if during == nil || during.State != "applying" {
+		t.Fatalf("status during the checks: %+v", during)
+	}
+}
