@@ -12,6 +12,17 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.17] - 2026-10-26
+
+### Corrigido
+
+- **Apps de Git com usuário sem privilégio não subiam**: o código baixado do
+  Git chegava à imagem legível só pelo root, e um app que roda como usuário
+  comum (`USER 10001`, o recomendado) não conseguia ler os próprios arquivos.
+  Agora o código mantém as permissões normais do Git.
+- O coringa do domínio base em escala aparecia como "por subdomínio, sob
+  demanda"; agora mostra o certificado único obtido pelo DNS.
+
 ## [0.5.16] - 2026-10-26
 
 ### Novo
