@@ -182,7 +182,7 @@ templ createdURL(label, url string) {
 
 // newStatusLinkDialog creates a link (sudo first, like every 🔒 action).
 templ newStatusLinkDialog(d StatusLinksData) {
-	<dialog class="tuc-modal is-md" id="new-status-link" aria-labelledby="new-status-link-title" data-open={ fmt.Sprint(d.Open) }>
+	<dialog class="tuc-modal is-lg" id="new-status-link" aria-labelledby="new-status-link-title" data-open={ fmt.Sprint(d.Open) }>
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
 				<h2 class="tuc-modal__title" id="new-status-link-title">{ t(ctx, "statuslink.new") }</h2>
@@ -231,7 +231,7 @@ templ newStatusLinkDialog(d StatusLinksData) {
 						if len(d.Services) == 0 {
 							<span class="tuc-hint">{ t(ctx, "statuslink.no_services") }</span>
 						}
-						<div class="flex max-h-[260px] flex-col gap-1.5 overflow-y-auto">
+						<div class="flex max-h-[320px] flex-col gap-1.5 overflow-y-auto">
 							for _, s := range d.Services {
 								// Each service with its public name (Name mode), shared by
 								// every link.
