@@ -2053,7 +2053,7 @@ when = "Quando"
 what = "O quê"
 result = "Resultado"
 counts = "{tables} tabelas, {rows} linhas"
-download = "Baixar (link assinado de 5 min)"
+download = "Baixar"
 
 [backups.kind]
 pg_dump = "pg_dump"
