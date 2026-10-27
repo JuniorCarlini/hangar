@@ -47,6 +47,22 @@ func (q *Queries) AddVolume(ctx context.Context, arg AddVolumeParams) error {
 	return err
 }
 
+const addVolumeTrash = `-- name: AddVolumeTrash :exec
+INSERT INTO volume_trash (service_id, name, created_at) VALUES (?, ?, ?)
+ON CONFLICT (service_id, name) DO NOTHING
+`
+
+type AddVolumeTrashParams struct {
+	ServiceID string
+	Name      string
+	CreatedAt int64
+}
+
+func (q *Queries) AddVolumeTrash(ctx context.Context, arg AddVolumeTrashParams) error {
+	_, err := q.db.ExecContext(ctx, addVolumeTrash, arg.ServiceID, arg.Name, arg.CreatedAt)
+	return err
+}
+
 const createPort = `-- name: CreatePort :exec
 INSERT INTO ports (id, service_id, host_port, container_port, protocol, access, allowed_ips, expires_at, created_by, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -126,6 +142,20 @@ func (q *Queries) DeleteVolume(ctx context.Context, arg DeleteVolumeParams) (int
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const deleteVolumeTrash = `-- name: DeleteVolumeTrash :exec
+DELETE FROM volume_trash WHERE service_id = ? AND name = ?
+`
+
+type DeleteVolumeTrashParams struct {
+	ServiceID string
+	Name      string
+}
+
+func (q *Queries) DeleteVolumeTrash(ctx context.Context, arg DeleteVolumeTrashParams) error {
+	_, err := q.db.ExecContext(ctx, deleteVolumeTrash, arg.ServiceID, arg.Name)
+	return err
 }
 
 const expiredPorts = `-- name: ExpiredPorts :many
@@ -506,6 +536,33 @@ func (q *Queries) ListVolumeSharers(ctx context.Context, ownerServiceID sql.Null
 	return items, nil
 }
 
+const listVolumeTrash = `-- name: ListVolumeTrash :many
+SELECT name FROM volume_trash WHERE service_id = ? ORDER BY name
+`
+
+func (q *Queries) ListVolumeTrash(ctx context.Context, serviceID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listVolumeTrash, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVolumes = `-- name: ListVolumes :many
 SELECT v.service_id, v.name, v.path, v.read_only, v.owner_service_id, coalesce(o.slug, '') AS owner_slug
 FROM service_volumes v LEFT JOIN services o ON o.id = v.owner_service_id
@@ -613,6 +670,24 @@ func (q *Queries) UpdatePort(ctx context.Context, arg UpdatePortParams) (int64, 
 		arg.ID,
 		arg.ServiceID,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updateVolumePath = `-- name: UpdateVolumePath :execrows
+UPDATE service_volumes SET path = ? WHERE service_id = ? AND name = ?
+`
+
+type UpdateVolumePathParams struct {
+	Path      string
+	ServiceID string
+	Name      string
+}
+
+func (q *Queries) UpdateVolumePath(ctx context.Context, arg UpdateVolumePathParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updateVolumePath, arg.Path, arg.ServiceID, arg.Name)
 	if err != nil {
 		return 0, err
 	}

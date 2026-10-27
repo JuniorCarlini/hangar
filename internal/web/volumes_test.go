@@ -71,25 +71,25 @@ func TestVolumeLimitRoutes(t *testing.T) {
 		return vols[0].Limit
 	}
 
-	// Usage of a disk without a limit, and the button behind sudo.
+	// Usage of a disk without a limit; its size behind sudo.
 	c, pr := e.session(t, auth.RoleAdmin)
 	page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{c}}).Body.String()
-	for _, want := range []string{"300 MB", "sem limite", `data-tuc-modal="#sudo-dialog" title="Limitar tamanho"`} {
+	for _, want := range []string{"300 MB", "sem limite", `data-tuc-modal="#volume-edit-media"`, `id="volume-edit-media"`, "Definir tamanho"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page without sudo lacks %q", want)
 		}
 	}
-	if strings.Contains(page, `id="volume-limit-media"`) {
-		t.Error("limit dialog without sudo")
+	if strings.Contains(page, `id="volume-edit-media-size"`) {
+		t.Error("size field without sudo")
 	}
-	form := url.Values{"csrf": {pr.CSRFToken}, "name": {"media"}, "size_gb": {"2"}}
-	if rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/limit", form: form, cookies: []*http.Cookie{c}}); rec.Code == http.StatusSeeOther || limit() != nil {
-		t.Fatalf("limit without sudo: %d", rec.Code)
+	form := url.Values{"csrf": {pr.CSRFToken}, "name": {"media"}, "path": {"/app/media"}, "size_gb": {"2"}, "size_was": {""}}
+	if rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/edit", form: form, cookies: []*http.Cookie{c}}); rec.Code == http.StatusSeeOther || limit() != nil {
+		t.Fatalf("size without sudo: %d", rec.Code)
 	}
 
 	c, pr = e.sudo(t, c, pr)
 	page = e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{c}}).Body.String()
-	for _, want := range []string{`id="volume-limit-media"`, `name="size_gb"`, `data-tuc-modal="#volume-limit-media"`, "Livre no servidor"} {
+	for _, want := range []string{`id="volume-edit-media-size"`, `name="size_gb"`, "Livre no servidor"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page with sudo lacks %q", want)
 		}
@@ -97,34 +97,35 @@ func TestVolumeLimitRoutes(t *testing.T) {
 	form.Set("csrf", pr.CSRFToken)
 	for _, bad := range []string{"0", "abc", "1.5", "99999"} {
 		form.Set("size_gb", bad)
-		rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/limit", form: form, cookies: []*http.Cookie{c}})
+		rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/edit", form: form, cookies: []*http.Cookie{c}})
 		if rec.Code == http.StatusSeeOther || !strings.Contains(rec.Body.String(), "Escolha um tamanho entre 1 GB") {
 			t.Errorf("size %q: %d", bad, rec.Code)
 		}
 	}
 	form.Set("size_gb", "2")
-	rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/limit", form: form, cookies: []*http.Cookie{c}})
-	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "ok=volume-limit") {
+	rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/edit", form: form, cookies: []*http.Cookie{c}})
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "ok=volume-edit") {
 		t.Fatalf("limit: %d %s", rec.Code, rec.Header().Get("Location"))
 	}
 	if l := limit(); l == nil || l.Size != 2*volumes.GiB {
 		t.Fatalf("limit = %+v", l)
 	}
-	page = e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings&ok=volume-limit", cookies: []*http.Cookie{c}}).Body.String()
-	if !strings.Contains(page, "Preparando o disco") || !strings.Contains(page, "Limite pedido") {
+	page = e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{c}}).Body.String()
+	if !strings.Contains(page, "Preparando o disco") {
 		t.Error("the new limit is not shown as being prepared")
 	}
 	answer(t, e, p, limit)
 
 	page = e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{c}}).Body.String()
-	for _, want := range []string{"512 MB de 2 GB", `role="meter"`, `aria-valuenow="25"`, `id="volume-grow-media"`, `form="volume-unlimit-media"`, `data-confirm="Remover o limite de media?"`} {
+	for _, want := range []string{"512 MB de 2 GB", `role="meter"`, `aria-valuenow="25"`, `name="size_was" value="2"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("limited disk page lacks %q", want)
 		}
 	}
-	// Increasing; and the audit trail.
+	// Increasing (the same form, unchanged path); and the audit trail.
 	form.Set("size_gb", "3")
-	if rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/limit", form: form, cookies: []*http.Cookie{c}}); rec.Code != http.StatusSeeOther {
+	form.Set("size_was", "2")
+	if rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/edit", form: form, cookies: []*http.Cookie{c}}); rec.Code != http.StatusSeeOther {
 		t.Fatalf("grow: %d", rec.Code)
 	}
 	answer(t, e, p, limit)
@@ -132,7 +133,8 @@ func TestVolumeLimitRoutes(t *testing.T) {
 		t.Errorf("after growing: %+v", l)
 	}
 	form.Set("size_gb", "2")
-	if rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/limit", form: form, cookies: []*http.Cookie{c}}); !strings.Contains(rec.Body.String(), "Um limite só aumenta") {
+	form.Set("size_was", "3")
+	if rec := e.do(req{method: "POST", target: "/p/lab/s/web/volumes/edit", form: form, cookies: []*http.Cookie{c}}); !strings.Contains(rec.Body.String(), "Um limite só aumenta") {
 		t.Errorf("shrink: %d", rec.Code)
 	}
 	var n int
@@ -145,7 +147,7 @@ func TestVolumeLimitRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 	page = e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{c}}).Body.String()
-	if !strings.Contains(page, "de 3 GB") || strings.Contains(page, "volume-grow-media") || strings.Contains(page, "Limitar tamanho") {
+	if !strings.Contains(page, "de 3 GB") || strings.Contains(page, "volume-edit-media") {
 		t.Error("operator view of a limited disk")
 	}
 }

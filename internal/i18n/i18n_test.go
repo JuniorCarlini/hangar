@@ -140,7 +140,7 @@ var dynamicPrefixes = map[string][]string{
 	"brand.error.": {"name", "contact", "color", "theme", "logo", "logo_size", "logo_dimensions", "page", "too_long"},
 	"flash.": {
 		"deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings",
-		"git", "git-token", "webhook-off", "auto-on", "auto-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-limit", "volume-unlimit",
+		"git", "git-token", "webhook-off", "auto-on", "auto-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-edit", "volume-limit", "volume-unlimit",
 		"connected", "offered", "unoffered", "txt-on", "txt-off",
 	},
 	"flash.backups.":         {"key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued"},

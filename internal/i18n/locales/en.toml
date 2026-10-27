@@ -340,8 +340,8 @@ volume-limit = "Limit requested. The disk shows its new size in a moment; if it 
 volume-unlimit = "Limit removal requested. The services that use the disk stop during the copy and come back by themselves."
 image = "Version changed and deploy started. If the new one does not come up, the service stays on the previous one."
 compose = "Services created from the compose file. Their deploys have started: databases first."
-volume = "Disk added. It applies from the next deploy."
-volume-removed = "Disk detached. It applies from the next deploy."
+volume = "Disk added. It comes in with the next deploy."
+volume-removed = "Disk removed. It leaves with the next deploy and its data is deleted right after."
 backup-policy = "Backup schedule saved."
 backup-queued = "Backup queued. It shows in the history when done."
 backup-preparing = "Preparing the encrypted backup to download."
@@ -371,6 +371,7 @@ maintenance-off = "Maintenance mode off. The site is answering again."
 domains-limit = "Hourly limit saved."
 txt-on = "New domains now need the ownership TXT."
 txt-off = "The ownership TXT is no longer required."
+volume-edit = "Disk saved. It applies from the next deploy."
 
 [service]
 restart_long = "Restart service"
@@ -2587,7 +2588,7 @@ write = "The brand was saved, but the pages could not be written for the proxy. 
 empty = "No disk. Everything the app writes is lost on the next deploy."
 usage = "Usage"
 usage_of = "{used} of {size}"
-usage_unknown = "measuring…"
+usage_unknown = "Waiting"
 no_limit = "no limit"
 title = "Disks"
 name = "Name"
@@ -2596,13 +2597,16 @@ read_only = "read-only"
 shared_from = "the disk of {service}"
 shared_with = "also used by {services}"
 add = "Add disk"
-detach = "Detach"
-wipe = "Delete disk and data"
-next_deploy = "New or detached disks apply from the next deploy."
-modal_text = "The app writes to that path on a volume that survives deploys."
+modal_text = "The app writes to this path on a disk that survives deploys. It applies from the next deploy."
+size = "Size (GB)"
+size_hint = "Empty: no limit. It can only grow later. Free on the server: {free}."
+size_unlock = "Set a size"
+edit_title = "Disk {name}"
+remove = "Remove disk"
+save = "Save"
+path_fixed = "The template's path does not change."
 
 [volume.error]
-limited_detach = "This disk has a size limit: its data lives in a file of its own on the server. Remove the limit before detaching it, or delete the disk and its data."
 name = "Use a short lowercase name, like media (letters, numbers and hyphen)."
 path = "Use an absolute path inside the container, like /app/media."
 reserved = "{path} is a system folder of the container and cannot become a disk."
@@ -2613,6 +2617,7 @@ template = "The disks of a service created from a template belong to it and cann
 in_use = "The disk is still in use. Detach it, deploy, then delete the data."
 shared_wipe = "This disk belongs to {service}, which this service shares it with: detach it here; its data can only be deleted from {service}."
 shared_owner = "{services} also use this disk. Detach it from them (or delete them) first."
+size_sudo = "Confirm your identity to set the size."
 
 [confirm.maintenance_on]
 title = "Put {name} under maintenance?"
@@ -2620,14 +2625,9 @@ text = "Right away, every domain of the service shows the maintenance page inste
 ok = "Turn maintenance on"
 
 [confirm.volume_remove]
-title = "Detach disk {name}?"
-text = "From the next deploy the app no longer sees these files. The data stays on the server and comes back if you add the disk again with the same name."
-ok = "Detach"
-
-[confirm.volume_wipe]
-title = "Delete disk {name} and its data?"
-text = "The files are deleted for good and cannot be recovered. If the app still uses the disk, detach it and deploy first."
-ok = "Delete for good"
+title = "Remove disk {name}?"
+text = "It leaves with the next deploy and, once the new version is live, its data is deleted. Adding a disk with the same name before then brings the data back."
+ok = "Remove"
 
 [terminal]
 title = "Terminal"
@@ -2920,23 +2920,7 @@ image_eco = "image"
 severe_other = "{severe} severe · {other} other"
 
 [volume.limit]
-action = "Limit size"
-action_named = "Limit the size of {name}"
-grow = "Increase"
-grow_named = "Increase disk {name}"
-remove = "Remove limit"
-dismiss = "Dismiss the notice"
-title = "Limit the size of {name}"
-grow_title = "Increase disk {name}"
-text = "The disk becomes a fixed-size file on the server, which only takes what the app writes. When it is full, the app gets \"no space left\" on this disk only: the rest of the server and the other services are not affected."
 size = "Size (GB)"
-hint = "Used now: {used} · Free on the server: {free}"
-moves = "If the disk already holds data, it is copied to the limited disk: the services that use this disk stop during the copy (a few minutes for many GB) and come back by themselves."
-delete_note = "When the disk or the service is deleted, the disk's file is deleted with it."
-submit = "Limit"
-grow_text = "The disk grows right away, without stopping the service. A limit never shrinks later."
-grow_hint = "Now: {size} · Used: {used} · Free on the server: {free}"
-grow_submit = "Increase"
 of = "{size} limit"
 preparing = "Preparing the disk…"
 moving = "Moving the data…"
@@ -2955,11 +2939,6 @@ busy = "This disk's limit is changing right now. Wait for it to finish and try a
 owner = "The limit belongs to the disk of {service}: change it there."
 sudo = "Limiting a disk asks for your password again: confirm it and create again."
 not_ready = "The limited disk did not get ready: {error}"
-
-[confirm.volume_unlimit]
-title = "Remove the limit of {name}?"
-text = "The data goes back to a plain disk, with no limit, that grows on the server's disk. The services that use this disk stop during the copy and come back by themselves."
-ok = "Remove limit"
 
 [security]
 subtitle = "When the panel asks for your password again, after login"

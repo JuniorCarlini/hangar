@@ -81,3 +81,16 @@ SELECT key FROM service_offers WHERE service_id = ? ORDER BY key;
 -- The offered variables of a service, with their stored value.
 SELECT e.* FROM env_vars e JOIN service_offers o ON o.service_id = e.service_id AND o.key = e.key
 WHERE e.service_id = ? ORDER BY e.key;
+
+-- name: UpdateVolumePath :execrows
+UPDATE service_volumes SET path = ? WHERE service_id = ? AND name = ?;
+
+-- name: AddVolumeTrash :exec
+INSERT INTO volume_trash (service_id, name, created_at) VALUES (?, ?, ?)
+ON CONFLICT (service_id, name) DO NOTHING;
+
+-- name: ListVolumeTrash :many
+SELECT name FROM volume_trash WHERE service_id = ? ORDER BY name;
+
+-- name: DeleteVolumeTrash :exec
+DELETE FROM volume_trash WHERE service_id = ? AND name = ?;

@@ -538,6 +538,12 @@ type VolumeLimit struct {
 	UpdatedAt   int64
 }
 
+type VolumeTrash struct {
+	ServiceID string
+	Name      string
+	CreatedAt int64
+}
+
 type WalStatus struct {
 	ServiceID       string
 	LastArchivedWal string

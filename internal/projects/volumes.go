@@ -233,13 +233,20 @@ func (m *Manager) AddServiceVolume(ctx context.Context, a Actor, projectSlug, se
 	if err := m.q.AddVolume(ctx, dbq.AddVolumeParams{ServiceID: s.ID, Name: name, Path: mountPath}); err != nil {
 		return err
 	}
+	// Removed and not deleted yet: the same name brings its data back.
+	if err := m.q.DeleteVolumeTrash(ctx, dbq.DeleteVolumeTrashParams{ServiceID: s.ID, Name: name}); err != nil {
+		return err
+	}
 	m.record(ctx, a, "service.volume.add", "service", s.ID, audit.OK, map[string]any{"name": name, "path": mountPath})
 	return nil
 }
 
-// RemoveServiceVolume detaches a disk from the next deploy. With wipe, its
-// data is deleted too (the container must not be using it: deploy first).
-// A template's disk (the database files) cannot be removed here.
+// RemoveServiceVolume takes a disk off the service from the next deploy,
+// and its data is deleted once a deploy goes live without it (the running
+// container keeps it mounted until then). With wipe, the data is deleted
+// now (the container must not be using it). A template's disk (the
+// database files) cannot be removed here; another service's disk only
+// loses this mount.
 func (m *Manager) RemoveServiceVolume(ctx context.Context, a Actor, projectSlug, serviceSlug, name string, wipe bool) error {
 	p, s, err := m.GetService(ctx, projectSlug, serviceSlug)
 	if err != nil {
@@ -252,12 +259,14 @@ func (m *Manager) RemoveServiceVolume(ctx context.Context, a Actor, projectSlug,
 	if err != nil {
 		return err
 	}
+	shared := false
 	for _, v := range rows {
 		if v.Name != name {
 			continue
 		}
 		// Another service's volume: this one only drops its mount.
-		if v.OwnerSlug != "" && wipe {
+		shared = v.OwnerSlug != ""
+		if shared && wipe {
 			return i18n.E("volume.error.shared_wipe", "service", v.OwnerSlug)
 		}
 	}
@@ -266,16 +275,11 @@ func (m *Manager) RemoveServiceVolume(ctx context.Context, a Actor, projectSlug,
 	} else if list := sharers[name]; len(list) > 0 {
 		return i18n.E("volume.error.shared_owner", "services", strings.Join(list, ", "))
 	}
-	// A limited disk is a file of its own: detaching it would leave it
-	// mounted with nothing to show for it. Deleting it deletes the file.
+	// A limited disk is a file of its own, deleted with its limit; not
+	// while its data moves.
 	limited, isLimited := m.limitOf(ctx, node.VolumeName(p.Slug, s.Slug, name))
-	if isLimited && limited.State != limitFailed && limited.State != limitRemove {
-		switch {
-		case limited.State == limitMigrate || limited.State == limitUnlimit:
-			return i18n.E("volume.limit.error.busy")
-		case !wipe:
-			return i18n.E("volume.error.limited_detach")
-		}
+	if isLimited && (limited.State == limitMigrate || limited.State == limitUnlimit) {
+		return i18n.E("volume.limit.error.busy")
 	}
 	if wipe {
 		vr, ok := m.node.(volumeRemover)
@@ -298,10 +302,84 @@ func (m *Manager) RemoveServiceVolume(ctx context.Context, a Actor, projectSlug,
 	if n == 0 && !wipe {
 		return ErrNotFound
 	}
+	if !wipe && !shared {
+		if err := m.q.AddVolumeTrash(ctx, dbq.AddVolumeTrashParams{ServiceID: s.ID, Name: name, CreatedAt: m.now().Unix()}); err != nil {
+			return err
+		}
+	}
 	action := "service.volume.remove"
 	if wipe {
 		action = "service.volume.wipe"
 	}
 	m.record(ctx, a, action, "service", s.ID, audit.OK, map[string]any{"name": name})
 	return nil
+}
+
+// EditServiceVolume changes where a disk is mounted in the container, from
+// the next deploy. A template's disks keep the path its image expects.
+func (m *Manager) EditServiceVolume(ctx context.Context, a Actor, projectSlug, serviceSlug, name, mountPath string) error {
+	_, s, err := m.GetService(ctx, projectSlug, serviceSlug)
+	if err != nil {
+		return err
+	}
+	if s.Template != "" {
+		return i18n.E("volume.error.template")
+	}
+	if mountPath, err = cleanMount(mountPath); err != nil {
+		return err
+	}
+	rows, err := m.q.ListVolumes(ctx, s.ID)
+	if err != nil {
+		return err
+	}
+	from := ""
+	for _, v := range rows {
+		if v.Name == name {
+			from = v.Path
+			continue
+		}
+		if v.Path == mountPath || strings.HasPrefix(mountPath, v.Path+"/") || strings.HasPrefix(v.Path, mountPath+"/") {
+			return i18n.E("volume.error.overlap", "path", v.Path)
+		}
+	}
+	if from == "" {
+		return ErrNotFound
+	}
+	if from == mountPath {
+		return nil
+	}
+	if _, err := m.q.UpdateVolumePath(ctx, dbq.UpdateVolumePathParams{Path: mountPath, ServiceID: s.ID, Name: name}); err != nil {
+		return err
+	}
+	m.record(ctx, a, "service.volume.edit", "service", s.ID, audit.OK, map[string]any{"name": name, "from": from, "to": mountPath})
+	return nil
+}
+
+// emptyVolumeTrash deletes the data of the disks removed from a service,
+// now that a deploy went live without them. One still in use (the deploy
+// kept the old container) waits for the next deploy.
+func (m *Manager) emptyVolumeTrash(ctx context.Context, p dbq.Project, s dbq.Service) {
+	names, err := m.q.ListVolumeTrash(ctx, s.ID)
+	if err != nil || len(names) == 0 {
+		return
+	}
+	vr, ok := m.node.(volumeRemover)
+	if !ok {
+		return
+	}
+	for _, name := range names {
+		if _, limited := m.limitOf(ctx, node.VolumeName(p.Slug, s.Slug, name)); limited {
+			// A size-limited disk is a file of its own, removed with its limit.
+			if err := m.forgetVolumeLimits(ctx, p, s, []string{name}); err != nil {
+				m.log.Warn("delete a removed disk", "service", p.Slug+"/"+s.Slug, "disk", name, "error", err)
+				continue
+			}
+		} else if err := vr.RemoveVolume(ctx, p.Slug, s.Slug, name); err != nil {
+			m.log.Warn("delete a removed disk", "service", p.Slug+"/"+s.Slug, "disk", name, "error", err)
+			continue
+		}
+		if err := m.q.DeleteVolumeTrash(ctx, dbq.DeleteVolumeTrashParams{ServiceID: s.ID, Name: name}); err != nil {
+			m.log.Warn("forget a deleted disk", "service", p.Slug+"/"+s.Slug, "disk", name, "error", err)
+		}
+	}
 }

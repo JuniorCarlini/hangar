@@ -186,18 +186,21 @@ func TestVolumeLimitNewDiskGrowAndWipe(t *testing.T) {
 		t.Errorf("limit after: %+v (used %d)", l, vols[0].Used)
 	}
 
-	// A limited disk is not detached and left behind: delete it or remove the limit.
-	if err := f.m.RemoveServiceVolume(ctx, f.who, "lab", "web", "media", false); !isKey(err, "volume.error.limited_detach") {
-		t.Errorf("detach: %v", err)
-	}
-	f.n.mu.Lock()
-	delete(f.n.deployed, "lab_web") // the deploy that detached it
-	f.n.mu.Unlock()
-	if err := f.m.RemoveServiceVolume(ctx, f.who, "lab", "web", "media", true); err != nil {
+	// Removing a limited disk keeps it until a deploy goes live without
+	// it, then deletes its image.
+	if err := f.m.RemoveServiceVolume(ctx, f.who, "lab", "web", "media", false); err != nil {
 		t.Fatal(err)
 	}
+	if st, _ := f.limitState(t, name); st != limitActive {
+		t.Fatalf("state right after removing = %s", st)
+	}
+	f.n.mu.Lock()
+	delete(f.n.deployed, "lab_web") // the deploy that dropped it
+	f.n.mu.Unlock()
+	proj, svc, _ := f.m.GetService(ctx, "lab", "web")
+	f.m.emptyVolumeTrash(ctx, proj, svc)
 	if st, _ := f.limitState(t, name); st != limitRemove {
-		t.Fatalf("state after wipe = %s", st)
+		t.Fatalf("state after the deploy = %s", st)
 	}
 	f.sync(t)
 	if desiredOps(p)[name] != volumes.OpRemove {

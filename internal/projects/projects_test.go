@@ -424,3 +424,64 @@ func TestDeleteServiceRemovesItsDisks(t *testing.T) {
 		t.Error("the disk was left on the server")
 	}
 }
+
+// A removed disk keeps its data until a deploy goes live without it; the
+// same name added back before that brings the data back.
+func TestRemovedDiskIsDeletedAfterTheDeploy(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.service(t)
+	if err := f.m.AddServiceVolume(ctx, f.who, "lab", "web", "media", "/app/media"); err != nil {
+		t.Fatal(err)
+	}
+	name := node.VolumeName("lab", "web", "media")
+	f.n.volumes()[name] = ""
+	if err := f.m.RemoveServiceVolume(ctx, f.who, "lab", "web", "media", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.m.AddServiceVolume(ctx, f.who, "lab", "web", "media", "/app/files"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.m.Deploy(ctx, f.who, "lab", "web", "manual"); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	if _, ok := f.n.volumes()[name]; !ok {
+		t.Fatal("a disk added back lost its data")
+	}
+
+	if err := f.m.RemoveServiceVolume(ctx, f.who, "lab", "web", "media", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.n.volumes()[name]; !ok {
+		t.Fatal("the data went before the deploy")
+	}
+	if _, err := f.m.Deploy(ctx, f.who, "lab", "web", "manual"); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	if _, ok := f.n.volumes()[name]; ok {
+		t.Error("the removed disk's data was left on the server")
+	}
+}
+
+func TestEditDiskPath(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, id := f.service(t)
+	for _, v := range [][2]string{{"media", "/app/media"}, {"logs", "/app/logs"}} {
+		if err := f.m.AddServiceVolume(ctx, f.who, "lab", "web", v[0], v[1]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := f.m.EditServiceVolume(ctx, f.who, "lab", "web", "media", "/app/logs/x"); !isKey(err, "volume.error.overlap") {
+		t.Errorf("overlap: %v", err)
+	}
+	if err := f.m.EditServiceVolume(ctx, f.who, "lab", "web", "media", "/srv/media"); err != nil {
+		t.Fatal(err)
+	}
+	vols, _ := f.m.q.ListVolumes(ctx, id)
+	if vols[1].Name != "media" || vols[1].Path != "/srv/media" {
+		t.Errorf("volumes = %+v", vols)
+	}
+}

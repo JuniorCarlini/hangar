@@ -340,8 +340,8 @@ volume-limit = "Limite pedido. O disco aparece com o novo tamanho em instantes; 
 volume-unlimit = "Remoção do limite pedida. Os serviços que usam o disco param durante a cópia e voltam sozinhos."
 image = "Versão trocada e deploy iniciado. Se a nova não subir, o serviço continua na anterior."
 compose = "Serviços criados a partir do compose. Os deploys já começaram: os bancos primeiro."
-volume = "Disco adicionado. Vale a partir do próximo deploy."
-volume-removed = "Disco desligado. Vale a partir do próximo deploy."
+volume = "Disco adicionado. Ele entra no próximo deploy."
+volume-removed = "Disco removido. Ele sai no próximo deploy e os dados são apagados logo depois."
 backup-policy = "Agenda de backup salva."
 backup-queued = "Backup na fila. Ele aparece no histórico ao terminar."
 backup-preparing = "Preparando o backup cifrado para baixar."
@@ -371,6 +371,7 @@ maintenance-off = "Modo manutenção desligado. O site voltou a responder."
 domains-limit = "Limite por hora salvo."
 txt-on = "Agora os domínios novos precisam do TXT de posse."
 txt-off = "O TXT de posse deixou de ser exigido."
+volume-edit = "Disco salvo. Vale no próximo deploy."
 
 [service]
 restart_long = "Reiniciar serviço"
@@ -2588,7 +2589,7 @@ write = "A marca foi salva, mas as páginas não puderam ser gravadas para o pro
 empty = "Nenhum disco. Tudo o que o app grava se perde no próximo deploy."
 usage = "Uso"
 usage_of = "{used} de {size}"
-usage_unknown = "medindo…"
+usage_unknown = "Aguardando"
 no_limit = "sem limite"
 title = "Discos"
 name = "Nome"
@@ -2597,13 +2598,16 @@ read_only = "só leitura"
 shared_from = "o disco de {service}"
 shared_with = "também usado por {services}"
 add = "Adicionar disco"
-detach = "Desligar"
-wipe = "Apagar disco e dados"
-next_deploy = "Discos novos ou desligados valem a partir do próximo deploy."
-modal_text = "O app passa a gravar nesse caminho num volume que sobrevive aos deploys."
+modal_text = "O app passa a gravar nesse caminho num disco que sobrevive aos deploys. Vale no próximo deploy."
+size = "Tamanho (GB)"
+size_hint = "Vazio: sem limite. Depois só dá para aumentar. Livre no servidor: {free}."
+size_unlock = "Definir tamanho"
+edit_title = "Disco {name}"
+remove = "Remover disco"
+save = "Salvar"
+path_fixed = "O caminho do modelo não muda."
 
 [volume.error]
-limited_detach = "Este disco tem limite de tamanho: os dados ficam num arquivo próprio no servidor. Remova o limite antes de desligá-lo, ou apague o disco e os dados."
 name = "Use um nome curto em minúsculas, como media (letras, números e hífen)."
 path = "Use um caminho absoluto dentro do container, como /app/media."
 reserved = "{path} é uma pasta do sistema do container e não pode virar disco."
@@ -2614,6 +2618,7 @@ template = "Os discos de um serviço criado por modelo são do modelo e não pod
 in_use = "O disco ainda está em uso. Desligue o disco, faça um deploy e depois apague os dados."
 shared_wipe = "Este disco é de {service}, que o divide com este serviço: desligue-o aqui; os dados só podem ser apagados em {service}."
 shared_owner = "{services} também usam este disco. Desligue o disco deles (ou apague-os) primeiro."
+size_sudo = "Confirme sua identidade para definir o tamanho."
 
 [confirm.maintenance_on]
 title = "Colocar {name} em manutenção?"
@@ -2621,14 +2626,9 @@ text = "Na hora, todos os domínios do serviço passam a mostrar a página de ma
 ok = "Ligar manutenção"
 
 [confirm.volume_remove]
-title = "Desligar o disco {name}?"
-text = "A partir do próximo deploy o app não vê mais esses arquivos. Os dados continuam guardados no servidor e voltam se você adicionar o disco de novo com o mesmo nome."
-ok = "Desligar"
-
-[confirm.volume_wipe]
-title = "Apagar o disco {name} e os dados?"
-text = "Os arquivos são apagados de vez e não há como recuperar. Se o app ainda estiver usando o disco, desligue e faça um deploy antes."
-ok = "Apagar de vez"
+title = "Remover o disco {name}?"
+text = "Ele sai no próximo deploy e, com a versão nova no ar, os dados são apagados. Adicionar um disco com o mesmo nome antes disso traz os dados de volta."
+ok = "Remover"
 
 [terminal]
 title = "Terminal"
@@ -2921,23 +2921,7 @@ image_eco = "imagem"
 severe_other = "{severe} graves · {other} outras"
 
 [volume.limit]
-action = "Limitar tamanho"
-action_named = "Limitar o tamanho de {name}"
-grow = "Aumentar"
-grow_named = "Aumentar o disco {name}"
-remove = "Remover limite"
-dismiss = "Dispensar o aviso"
-title = "Limitar o tamanho de {name}"
-grow_title = "Aumentar o disco {name}"
-text = "O disco passa a ser um arquivo de tamanho fixo no servidor, que só ocupa o que o app grava. Quando ele enche, o app recebe \"sem espaço\" só neste disco: o resto do servidor e os outros serviços não são afetados."
 size = "Tamanho (GB)"
-hint = "Usado agora: {used} · Livre no servidor: {free}"
-moves = "Se o disco já tem dados, eles são copiados para o disco limitado: os serviços que usam este disco param durante a cópia (alguns minutos para muitos GB) e voltam sozinhos."
-delete_note = "Ao apagar o disco ou o serviço, o arquivo do disco é apagado junto."
-submit = "Limitar"
-grow_text = "O disco cresce na hora, sem parar o serviço. Um limite não diminui depois."
-grow_hint = "Hoje: {size} · Usado: {used} · Livre no servidor: {free}"
-grow_submit = "Aumentar"
 of = "limite de {size}"
 preparing = "Preparando o disco…"
 moving = "Movendo os dados…"
@@ -2956,11 +2940,6 @@ busy = "O limite deste disco está mudando agora. Espere terminar e tente de nov
 owner = "O limite é do disco de {service}: mude-o lá."
 sudo = "Limitar um disco pede sua senha de novo: confirme e crie de novo."
 not_ready = "O disco limitado não ficou pronto: {error}"
-
-[confirm.volume_unlimit]
-title = "Remover o limite de {name}?"
-text = "Os dados voltam para um disco comum, sem limite, que cresce no disco do servidor. Os serviços que usam este disco param durante a cópia e voltam sozinhos."
-ok = "Remover limite"
 
 [security]
 subtitle = "Quando o painel pede a sua senha de novo, depois do login"

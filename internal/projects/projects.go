@@ -611,6 +611,7 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 		}
 		if status == "live" {
 			_ = m.q.SupersedeLive(bg, dbq.SupersedeLiveParams{ServiceID: s.ID, ID: depID})
+			m.emptyVolumeTrash(bg, p, s)
 			// A domain added while this deploy ran found no container to
 			// join to the edge network; join it now.
 			if !spec.Edge && m.needsEdge(bg, s.ID) {
@@ -712,6 +713,13 @@ func (m *Manager) DeleteService(ctx context.Context, a Actor, projectSlug, servi
 	vols, err := m.q.ListVolumes(ctx, s.ID)
 	if err != nil {
 		return err
+	}
+	trash, err := m.q.ListVolumeTrash(ctx, s.ID)
+	if err != nil {
+		return err
+	}
+	for _, name := range trash {
+		vols = append(vols, dbq.ListVolumesRow{Name: name})
 	}
 	if err := m.node.Remove(ctx, p.Slug, s.Slug); err != nil {
 		return err

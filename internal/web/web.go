@@ -233,6 +233,8 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/terminal/commands", h.saveCommand, Policy{Role: auth.RoleAdmin, Audit: "service.command.save", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/terminal/commands/delete", h.deleteCommand, Policy{Role: auth.RoleAdmin, Audit: "service.command.delete", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/volumes", h.addVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.add", AuditByHandler: true})
+	// Changing a disk's size asks for sudo inside (volumeSize).
+	rt.HandleFunc("POST "+svc+"/volumes/edit", h.editVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.edit", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/volumes/remove", h.removeVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.remove", AuditByHandler: true})
 	// Deleting a disk's data cannot be undone.
 	rt.HandleFunc("POST "+svc+"/volumes/wipe", h.wipeVolume, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.volume.wipe", AuditByHandler: true})
