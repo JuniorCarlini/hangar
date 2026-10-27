@@ -63,7 +63,7 @@ func (s *Service) senderFor(ch dbq.AlertChannel) (sender, error) {
 		if s.opt.SMTPTLS != nil {
 			roots = s.opt.SMTPTLS.RootCAs
 		}
-		return &email{cfg: c, roots: roots}, nil
+		return &email{cfg: c, roots: roots, allowInsecure: s.opt.AllowInsecure}, nil
 	case KindWebhook:
 		return &webhook{url: c.URL, secret: c.Secret, client: s.opt.HTTPClient}, nil
 	}
@@ -211,19 +211,7 @@ func stripURL(err error) error {
 // too (anti-SSRF and DNS rebinding, docs/17 #11). It never follows
 // redirects and ignores proxy variables.
 func safeHTTPClient(allowInsecure bool) *http.Client {
-	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	if !allowInsecure {
-		dialer.Control = func(_, address string, _ syscall.RawConn) error {
-			host, _, err := net.SplitHostPort(address)
-			if err != nil {
-				return err
-			}
-			if ip := net.ParseIP(host); ip == nil || !publicIP(ip) {
-				return fmt.Errorf("address %s is not public", host)
-			}
-			return nil
-		}
-	}
+	dialer := safeDialer(allowInsecure)
 	return &http.Client{
 		Timeout: sendTimeout,
 		Transport: &http.Transport{
@@ -238,6 +226,27 @@ func safeHTTPClient(allowInsecure bool) *http.Client {
 	}
 }
 
+// safeDialer only connects to public addresses, checked after DNS. The
+// e-mail channel uses it too: its host and port are free text, and without
+// the check an admin could probe the server's internal network (or the
+// cloud metadata service) and read the first line each service answers.
+func safeDialer(allowInsecure bool) *net.Dialer {
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	if !allowInsecure {
+		dialer.Control = func(_, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			if ip := net.ParseIP(host); ip == nil || !publicIP(ip) {
+				return fmt.Errorf("address %s is not public", host)
+			}
+			return nil
+		}
+	}
+	return dialer
+}
+
 var specialNets = []netip.Prefix{
 	netip.MustParsePrefix("0.0.0.0/8"),
 	netip.MustParsePrefix("100.64.0.0/10"), // carrier-grade NAT
@@ -249,6 +258,8 @@ var specialNets = []netip.Prefix{
 	netip.MustParsePrefix("240.0.0.0/4"),
 	netip.MustParsePrefix("64:ff9b::/96"), // NAT64 can reach IPv4 private space
 	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("2002::/16"), // 6to4 embeds an IPv4 address
+	netip.MustParsePrefix("2001::/32"), // Teredo embeds one too
 }
 
 // publicIP reports whether ip is a normal internet address.
@@ -272,15 +283,16 @@ func publicIP(ip net.IP) bool {
 // --- e-mail -------------------------------------------------------------------
 
 type email struct {
-	cfg   Config
-	roots *x509.CertPool
+	cfg           Config
+	roots         *x509.CertPool
+	allowInsecure bool // tests: a fake server on loopback
 }
 
 func (e *email) send(ctx context.Context, m Message) error {
 	c := e.cfg
 	addr := net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
 	tlsCfg := &tls.Config{ServerName: c.Host, MinVersion: tls.VersionTLS12, RootCAs: e.roots}
-	nd := &net.Dialer{Timeout: 10 * time.Second}
+	nd := safeDialer(e.allowInsecure)
 	var (
 		conn net.Conn
 		err  error

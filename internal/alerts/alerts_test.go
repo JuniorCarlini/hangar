@@ -557,3 +557,15 @@ func must[T any](v T, err error) T {
 	}
 	return v
 }
+
+// The e-mail host is free text: like webhooks, it may not point the panel
+// at its own machine, the private network or the cloud metadata service.
+func TestEmailRefusesInternalAddresses(t *testing.T) {
+	for _, host := range []string{"127.0.0.1", "10.0.0.5", "169.254.169.254"} {
+		e := &email{cfg: Config{Host: host, Port: 25, Security: SMTPStartTLS}}
+		err := e.send(context.Background(), Message{Title: "x"})
+		if err == nil || !strings.Contains(err.Error(), "not public") {
+			t.Errorf("%s: %v", host, err)
+		}
+	}
+}

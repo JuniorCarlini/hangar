@@ -33,6 +33,8 @@ var extra = []netip.Prefix{
 	netip.MustParsePrefix("240.0.0.0/4"),
 	netip.MustParsePrefix("64:ff9b::/96"), // NAT64 can reach IPv4 internals
 	netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("2002::/16"), // 6to4 embeds an IPv4 address
+	netip.MustParsePrefix("2001::/32"), // Teredo embeds one too
 }
 
 // Allowed reports whether ip is a public unicast address.
