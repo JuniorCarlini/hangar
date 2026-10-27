@@ -3081,7 +3081,6 @@ elsewhere = "não aponta para cá"
 [domain.txt]
 switch = "Exigir o TXT de posse"
 explain = "O cliente prova que manda no DNS do domínio."
-optional = "opcional"
 
 [domain.kit]
 open = "Kit do desenvolvedor"

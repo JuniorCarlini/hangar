@@ -211,40 +211,40 @@ templ tabVariables(d ServiceData) {
 								</td>
 								<td class="tuc-table__actions">
 									<span class="inline-flex items-center justify-end gap-1 [&_form]:inline-flex">
-									if d.CanAdmin && !d.HasExports && !isRef(v.Value) {
-										<form method="post" action={ templ.SafeURL(d.base() + "/env/offer") }>
-											<input type="hidden" name="csrf" value={ d.CSRF }/>
-											<input type="hidden" name="key" value={ v.Key }/>
-											if v.Offered {
-												<input type="hidden" name="on" value="0"/>
-												<button class="tuc-btn is-ghost is-icon is-sm text-accent-text" type="submit" aria-label={ t(ctx, "connect.unoffer_named", "key", v.Key) } title={ t(ctx, "connect.unoffer") }>
-													@Icon("cable", "size-3.5")
+										if d.CanAdmin && !d.HasExports && !isRef(v.Value) {
+											<form method="post" action={ templ.SafeURL(d.base() + "/env/offer") }>
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="key" value={ v.Key }/>
+												if v.Offered {
+													<input type="hidden" name="on" value="0"/>
+													<button class="tuc-btn is-ghost is-icon is-sm text-accent-text" type="submit" aria-label={ t(ctx, "connect.unoffer_named", "key", v.Key) } title={ t(ctx, "connect.unoffer") }>
+														@Icon("cable", "size-3.5")
+													</button>
+												} else {
+													<input type="hidden" name="on" value="1"/>
+													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.offer_named", "key", v.Key) } title={ t(ctx, "connect.offer") }>
+														@Icon("cable", "size-3.5")
+													</button>
+												}
+											</form>
+										}
+										if svc, _ := connection(v.Value); svc != "" && d.CanOperate {
+											<form data-confirm={ t(ctx, "confirm.disconnect.title", "key", v.Key) } data-confirm-text={ t(ctx, "confirm.disconnect.text", "service", svc) } data-confirm-ok={ t(ctx, "confirm.disconnect.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="key" value={ v.Key }/>
+												<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.disconnect_named", "key", v.Key) } title={ t(ctx, "connect.disconnect") }>
+													@Icon("unlink", "size-3.5")
 												</button>
-											} else {
-												<input type="hidden" name="on" value="1"/>
-												<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.offer_named", "key", v.Key) } title={ t(ctx, "connect.offer") }>
-													@Icon("cable", "size-3.5")
+											</form>
+										} else if d.CanOperate {
+											<form data-confirm={ t(ctx, "confirm.env_delete.title") } data-confirm-text={ t(ctx, "confirm.env_delete.text") } data-confirm-ok={ t(ctx, "confirm.env_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
+												<input type="hidden" name="csrf" value={ d.CSRF }/>
+												<input type="hidden" name="key" value={ v.Key }/>
+												<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.delete_named", "key", v.Key) } title={ t(ctx, "service.env.delete") }>
+													@Icon("trash", "size-3.5")
 												</button>
-											}
-										</form>
-									}
-									if svc, _ := connection(v.Value); svc != "" && d.CanOperate {
-										<form data-confirm={ t(ctx, "confirm.disconnect.title", "key", v.Key) } data-confirm-text={ t(ctx, "confirm.disconnect.text", "service", svc) } data-confirm-ok={ t(ctx, "confirm.disconnect.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
-											<input type="hidden" name="csrf" value={ d.CSRF }/>
-											<input type="hidden" name="key" value={ v.Key }/>
-											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.disconnect_named", "key", v.Key) } title={ t(ctx, "connect.disconnect") }>
-												@Icon("unlink", "size-3.5")
-											</button>
-										</form>
-									} else if d.CanOperate {
-										<form data-confirm={ t(ctx, "confirm.env_delete.title") } data-confirm-text={ t(ctx, "confirm.env_delete.text") } data-confirm-ok={ t(ctx, "confirm.env_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
-											<input type="hidden" name="csrf" value={ d.CSRF }/>
-											<input type="hidden" name="key" value={ v.Key }/>
-											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.delete_named", "key", v.Key) } title={ t(ctx, "service.env.delete") }>
-												@Icon("trash", "size-3.5")
-											</button>
-										</form>
-									}
+											</form>
+										}
 									</span>
 								</td>
 							</tr>
@@ -855,7 +855,7 @@ templ clientsRow(d ServiceData) {
 	<tr>
 		<td>
 			<span class="flex flex-col">
-				<strong class="text-[13px] font-semibold">{ t(ctx, "domain.clients.title") }</strong>
+				<strong class="text-[13px] font-semibold whitespace-nowrap">{ t(ctx, "domain.clients.title") }</strong>
 				if d.Domains.DynamicElsewhere != "" && !d.Domains.Dynamic {
 					<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.elsewhere", "service", d.Domains.DynamicElsewhere) }</span>
 				} else if d.Domains.Dynamic && d.Domains.RequireTXT {
@@ -890,7 +890,7 @@ templ clientsRow(d ServiceData) {
 // clientsDialog holds the customers' domains settings: the two switches and
 // how the app takes part. It reopens after each change (ClientsOpen).
 templ clientsDialog(d ServiceData) {
-	<dialog class="tuc-modal is-md" id="domain-clients" aria-labelledby="domain-clients-title" data-open={ boolAttr(d.Domains.ClientsOpen) }>
+	<dialog class="tuc-modal is-lg" id="domain-clients" aria-labelledby="domain-clients-title" data-open={ boolAttr(d.Domains.ClientsOpen) }>
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
 				<h2 class="tuc-modal__title" id="domain-clients-title">{ t(ctx, "domain.clients.title") }</h2>
@@ -927,7 +927,10 @@ templ clientsDialog(d ServiceData) {
 						</form>
 					}
 					if d.Domains.Dynamic {
-						<form class="flex items-center gap-4" method="post" action={ templ.SafeURL(d.base() + "/domains/txt") }
+						<form
+							class="flex items-center gap-4 border-t border-border pt-4"
+							method="post"
+							action={ templ.SafeURL(d.base() + "/domains/txt") }
 							if d.Domains.RequireTXT {
 								data-confirm={ t(ctx, "confirm.txt_off.title") }
 								data-confirm-text={ t(ctx, "confirm.txt_off.text") }
@@ -942,10 +945,7 @@ templ clientsDialog(d ServiceData) {
 								<input type="hidden" name="on" value="1"/>
 							}
 							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
-								<span class="flex items-center gap-2">
-									<strong class="text-[13px] font-semibold">{ t(ctx, "domain.txt.switch") }</strong>
-									<span class="tuc-badge">{ t(ctx, "domain.txt.optional") }</span>
-								</span>
+								<strong class="text-[13px] font-semibold">{ t(ctx, "domain.txt.switch") }</strong>
 								<span class="text-xs text-muted">{ t(ctx, "domain.txt.explain") }</span>
 							</div>
 							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.txt.switch") } checked?={ d.Domains.RequireTXT } disabled?={ !d.CanAdmin } data-autosubmit/>
@@ -953,7 +953,7 @@ templ clientsDialog(d ServiceData) {
 					}
 				</div>
 				if d.Domains.Dynamic {
-					<div class="flex flex-col gap-2">
+					<div class="flex flex-col gap-2 border-t border-border pt-5">
 						<span class="tuc-label">{ t(ctx, "domain.clients.app") }</span>
 						<div class="rounded-sm border border-border">
 							<div class="flex items-center gap-3 border-b border-border px-3 py-2.5">
@@ -964,9 +964,16 @@ templ clientsDialog(d ServiceData) {
 								</button>
 							</div>
 							<div class="flex flex-col gap-2 px-3 py-2.5">
+								// The secret stays hidden until an admin reveals it (critical
+								// sudo, as the variables' values).
 								<div class="flex items-center gap-3 [&_form]:inline-flex">
 									<span class="w-20 shrink-0 text-[13px] text-muted">{ t(ctx, "domain.clients.secret") }</span>
-									<code class="min-w-0 grow font-mono text-xs break-all">HANGAR_DOMAIN_CHECK_SECRET</code>
+									<span class="flex min-w-0 grow flex-col">
+										if d.Domains.CheckSecret == "" {
+											<span class="font-mono text-xs text-muted">••••••••••••</span>
+										}
+										<code class="font-mono text-[11px] text-subtle break-all">HANGAR_DOMAIN_CHECK_SECRET</code>
+									</span>
 									if d.Domains.CheckSecret == "" && d.CanAdmin && d.SudoCritical {
 										<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret") }>
 											<input type="hidden" name="csrf" value={ d.CSRF }/>
@@ -974,6 +981,10 @@ templ clientsDialog(d ServiceData) {
 												@Icon("eye", "size-3.5")
 											</button>
 										</form>
+									} else if d.Domains.CheckSecret == "" && d.CanAdmin {
+										<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" title={ t(ctx, "domain.dynamic.reveal") } aria-label={ t(ctx, "domain.dynamic.reveal") }>
+											@Icon("eye", "size-3.5")
+										</button>
 									}
 									if d.CanAdmin && d.SudoActive {
 										<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret/rotate") } data-confirm={ t(ctx, "confirm.secret_rotate.title") } data-confirm-text={ t(ctx, "confirm.secret_rotate.text") } data-confirm-ok={ t(ctx, "confirm.secret_rotate.ok") } data-tone="warning">
@@ -994,7 +1005,7 @@ templ clientsDialog(d ServiceData) {
 						</div>
 					</div>
 				}
-				<div class="flex flex-wrap items-center gap-2">
+				<div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
 					if d.Domains.Dynamic {
 						<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-kit">
 							@Icon("file-code", "size-3.5")
@@ -1002,6 +1013,7 @@ templ clientsDialog(d ServiceData) {
 						</button>
 						<a class="tuc-btn is-ghost is-sm" href="/domains">{ t(ctx, "domain.dynamic.requests") }</a>
 					}
+					<span class="grow"></span>
 					<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(domainsDocURL) } target="_blank" rel="noopener">
 						@Icon("circle-question-mark", "size-3.5")
 						{ t(ctx, "domain.clients.how") }
@@ -1088,7 +1100,7 @@ func dnsProviderName(id string) string {
 
 // domainModeCard explains one way a domain can work, in plain words.
 templ domainModeCard(icon, title, text string) {
-	<div class="flex items-start gap-3 rounded-sm border border-border bg-surface-2 p-3">
+	<div class="flex items-center gap-3 rounded-sm border border-border bg-surface-2 p-3">
 		<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
 			@Icon(icon, "size-4")
 		</span>

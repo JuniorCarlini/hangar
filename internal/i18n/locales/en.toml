@@ -3080,7 +3080,6 @@ elsewhere = "does not point here"
 [domain.txt]
 switch = "Require the ownership TXT"
 explain = "The customer proves they control the domain's DNS."
-optional = "optional"
 
 [domain.kit]
 open = "Developer kit"
