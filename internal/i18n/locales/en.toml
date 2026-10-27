@@ -373,7 +373,6 @@ txt-off = "The ownership TXT is no longer required."
 restart_long = "Restart service"
 stop_long = "Stop service"
 start_long = "Start service"
-resources = "Resources"
 deploy = "Deploy"
 restart = "Restart"
 pending = "There are variable changes that are not live yet."
@@ -384,9 +383,6 @@ tabs = "Service sections"
 summary = "{image} · port {port} · {memory} MB · {cpus} CPU"
 
 [service.stat]
-state = "State"
-image = "Image"
-limits = "Limits"
 limits_value = "{memory} MB · {cpus} CPU"
 restarts = "Restarts"
 oom = "out of memory"
@@ -1041,7 +1037,9 @@ health_path = "The healthcheck path starts with / and has no spaces (e.g. /healt
 rollback = "You can only roll back to one of the last 5 deploys that went live (not the current one)."
 
 [deploy.strategy]
-rolling_hint = "No downtime: the new version goes live only once healthy."
+rolling = "No downtime"
+recreate = "Seconds offline"
+rolling_hint = "The new version goes live only once healthy."
 recreate_hint = "Has a disk or published port: the deploy stops the old one before starting the new (a few seconds offline)."
 
 [deploy.settings]
@@ -2605,7 +2603,6 @@ usage_unknown = "measuring…"
 no_limit = "no limit"
 title = "Disks"
 count = { one = "1 disk", other = "{n} disks" }
-hint = "What the app writes to a disk (uploads, generated files) stays there after every deploy. With a disk, a deploy stops the old container before starting the new one: a few seconds of the \"Updating\" page."
 empty = "No disks. Everything the app writes is lost at the next deploy."
 name = "Name"
 path = "Path in the container"
@@ -2871,7 +2868,6 @@ branch_hint = "The repository's branches; the default one comes selected."
 
 [image_tag]
 title = "Image"
-hint = "The deploy starts right away; if the new version does not come up, the previous one stays."
 stateful = "Database: only change within the same major version (e.g. 18.1 → 18.3) and take a backup first."
 tag = "Version (tag)"
 change = "Change version"

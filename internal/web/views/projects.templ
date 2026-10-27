@@ -476,23 +476,6 @@ templ serviceActions(d ServiceData) {
 	}
 }
 
-templ serviceStats(d ServiceData) {
-	<div class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))]">
-		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0"><span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.state") }</span><span class="flex items-center gap-1.5 truncate">{ t(ctx, "state." + d.State) }</span></div>
-		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0"><span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.image") }</span><span class="flex items-center gap-1.5 truncate font-mono text-[13px]">{ d.Image }</span></div>
-		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0"><span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.limits") }</span><span class="flex items-center gap-1.5 truncate">{ t(ctx, "service.stat.limits_value", "memory", d.MemoryMB, "cpus", d.CPUs) }</span></div>
-		<div class="flex min-w-0 flex-col gap-0.5 border-l border-border px-3.5 py-2.5 first:border-l-0">
-			<span class="text-[11px] font-medium uppercase tracking-[0.04em] text-subtle">{ t(ctx, "service.stat.restarts") }</span>
-			<span class="flex items-center gap-1.5 truncate">
-				{ fmt.Sprint(d.Restarts) }
-				if d.OOMKilled {
-					<span class="tuc-badge is-danger">{ t(ctx, "service.stat.oom") }</span>
-				}
-			</span>
-		</div>
-	</div>
-}
-
 templ logsCard(d ServiceData) {
 	<section class={ cardClass + " overflow-hidden" } data-expandable>
 		<div class={ cardHeadClass }>
@@ -745,6 +728,11 @@ templ deployField(icon, id, label, hint string) {
 templ deploySettings(d ServiceData) {
 	<section class={ cardClass } id="deploy-settings">
 		@cardHead(t(ctx, "deploy.settings.title")) {
+			if d.Strategy == "rolling" {
+				<span class="tuc-badge is-success" title={ t(ctx, "deploy.strategy.rolling_hint") }>{ t(ctx, "deploy.strategy.rolling") }</span>
+			} else {
+				<span class="tuc-badge is-warning" title={ t(ctx, "deploy.strategy.recreate_hint") }>{ t(ctx, "deploy.strategy.recreate") }</span>
+			}
 			if d.CanOperate {
 				<form class="inline-flex" data-confirm={ t(ctx, "confirm.rebuild.title") } data-confirm-text={ t(ctx, "confirm.rebuild.text") } data-confirm-ok={ t(ctx, "confirm.rebuild.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/rebuild") }>
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
@@ -756,11 +744,6 @@ templ deploySettings(d ServiceData) {
 			}
 		}
 		<div class={ cardBodyClass }>
-			if d.Strategy == "rolling" {
-				@notice("success", "shield-check", t(ctx, "deploy.strategy.rolling_hint"))
-			} else {
-				@notice("warning", "triangle-alert", t(ctx, "deploy.strategy.recreate_hint"))
-			}
 			if d.CanAdmin {
 				<form method="post" action={ templ.SafeURL(d.base() + "/deploy-settings") } class="@container flex flex-col gap-4">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>

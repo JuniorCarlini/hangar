@@ -1,29 +1,37 @@
 package views
 
+import "fmt"
+
 // ServiceMetrics is the "Metrics" tab of a service: current usage against its
 // limits and the history over the chosen period.
 type ServiceMetrics struct {
-	Period  string
-	Periods []string
-	Running bool
-	CPU     string // "0,35 CPU"
-	CPUNote string // "35% de 1 CPU"
-	CPUHist []int  // percent of the CPU limit; -1 = no data
-	Mem     string // "80 MB"
-	MemNote string // "31% de 256 MB"
-	MemHist []int  // percent of the memory limit
+	Period   string
+	Periods  []string
+	Running  bool
+	CPU      string // "0,35 CPU"
+	CPUNote  string // "35% de 1 CPU"
+	CPUHist  []int  // percent of the CPU limit; -1 = no data
+	Mem      string // "80 MB"
+	MemNote  string // "31% de 256 MB"
+	MemHist  []int  // percent of the memory limit
 	Disk     string // volume usage, "210 MB" or "–"
 	DiskNote string // "em volumes" / "sem volume"
-	NetDown string
-	NetUp   string
-	NetUnit string
-	NetHist []int
-	NetNote string
+	NetDown  string
+	NetUp    string
+	NetUnit  string
+	NetHist  []int
+	NetNote  string
 }
 
 templ tabMetrics(d ServiceData) {
 	<section class={ cardClass }>
 		@cardHead(t(ctx, "service.tab.metrics")) {
+			<span class="inline-flex items-center gap-1.5 text-xs text-muted">
+				{ t(ctx, "service.stat.restarts") }: { fmt.Sprint(d.Restarts) }
+				if d.OOMKilled {
+					<span class="tuc-badge is-danger">{ t(ctx, "service.stat.oom") }</span>
+				}
+			</span>
 			@periodPicker(d.base(), d.Metrics.Period, "overview", d.Metrics.Periods)
 		}
 		<div id="metrics-live" class={ cardBodyClass } data-refresh="10" data-live>

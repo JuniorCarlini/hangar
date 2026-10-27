@@ -1229,10 +1229,6 @@ templ domainDialog(d ServiceData) {
 }
 
 templ tabSettings(d ServiceData) {
-	<section class={ cardClass }>
-		@cardHead(t(ctx, "service.resources"))
-		@serviceStats(d)
-	</section>
 	if d.Git == nil && d.ImageTag != "" {
 		@imageCard(d)
 	}
@@ -1281,30 +1277,30 @@ templ imageCard(d ServiceData) {
 	<section class={ cardClass } id="image">
 		@cardHead(t(ctx, "image_tag.title"))
 		<div class={ cardBodyClass }>
-			<p class="m-0 text-[13px] text-muted">{ t(ctx, "image_tag.hint") }</p>
 			if d.Stateful {
 				@notice("warning", "triangle-alert", t(ctx, "image_tag.stateful"))
 			}
 			if d.CanAdmin && d.SudoActive {
-				<form data-confirm={ t(ctx, "confirm.image.title", "name", d.Slug) } data-confirm-text={ t(ctx, "confirm.image.text") } data-confirm-ok={ t(ctx, "confirm.image.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/image") } class="flex flex-wrap items-end gap-3">
+				<form data-confirm={ t(ctx, "confirm.image.title", "name", d.Slug) } data-confirm-text={ t(ctx, "confirm.image.text") } data-confirm-ok={ t(ctx, "confirm.image.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/image") } class="flex flex-wrap items-center gap-3">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<div class="flex min-w-0 flex-[1_1_320px] flex-col gap-1.5">
-						<label class="tuc-label" for="image-tag">{ t(ctx, "image_tag.tag") }</label>
-						<div class="flex min-w-0 items-center gap-1.5">
-							<span class="truncate font-mono text-[13px] text-muted">{ d.ImageRepo + ":" }</span>
-							<input class="tuc-input min-w-0 grow font-mono text-[13px]" id="image-tag" name="tag" value={ d.ImageTag } required maxlength="128" pattern="[a-z0-9_][a-z0-9._\-]*" autocomplete="off" spellcheck="false"/>
-						</div>
+					<div class="flex min-w-0 grow items-center gap-2">
+						@Icon("package", "size-4 shrink-0 text-muted")
+						<span class="min-w-0 truncate font-mono text-[13px]" title={ d.ImageRepo }>{ d.ImageRepo }</span>
+						<span class="text-muted">:</span>
+						<label class="sr-only" for="image-tag">{ t(ctx, "image_tag.tag") }</label>
+						<input class="tuc-input w-32 shrink-0 font-mono text-[13px]" id="image-tag" name="tag" value={ d.ImageTag } required maxlength="128" pattern="[a-z0-9_][a-z0-9._\-]*" autocomplete="off" spellcheck="false" title={ t(ctx, "image_tag.tag") }/>
 					</div>
-					<div class="flex grow justify-end">
-						<button class="tuc-btn is-outline" type="submit">
-							@Icon("circle-arrow-up", "size-4")
-							{ t(ctx, "image_tag.change") }
-						</button>
-					</div>
+					<button class="tuc-btn is-outline shrink-0" type="submit">
+						@Icon("circle-arrow-up", "size-4")
+						{ t(ctx, "image_tag.change") }
+					</button>
 				</form>
 			} else {
-				<div class="flex flex-wrap items-center justify-between gap-3">
-					<span class="font-mono text-[13px]">{ d.ImageRepo + ":" + d.ImageTag }</span>
+				<div class="flex flex-wrap items-center gap-3">
+					<div class="flex min-w-0 grow items-center gap-2">
+						@Icon("package", "size-4 shrink-0 text-muted")
+						<span class="min-w-0 truncate font-mono text-[13px]">{ d.ImageRepo + ":" + d.ImageTag }</span>
+					</div>
 					if d.CanAdmin {
 						@sudoButton(t(ctx, "image_tag.change"))
 					}
@@ -1328,7 +1324,7 @@ templ maintenanceCard(d ServiceData) {
 			if d.Maintenance {
 				@notice("warning", "wrench", t(ctx, "service.maintenance.active"))
 			} else {
-				@notice("info", "info", t(ctx, "service.maintenance.hint"))
+				<p class="m-0 text-[13px] text-muted">{ t(ctx, "service.maintenance.hint") }</p>
 			}
 			if !d.Domains.EdgeEnabled {
 				@notice("warning", "triangle-alert", t(ctx, "service.maintenance.no_edge"))
@@ -1481,7 +1477,6 @@ templ volumesCard(d ServiceData) {
 			}
 		}
 		<div class={ cardBodyClass }>
-			@notice("info", "hard-drive", t(ctx, "volume.hint"))
 			if len(d.Volumes) == 0 {
 				@emptyState("hard-drive", t(ctx, "volume.empty"))
 			} else {
