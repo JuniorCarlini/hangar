@@ -1550,16 +1550,13 @@ never_opened = "nunca aberto"
 revoke = "Revogar"
 revoke_named = "Revogar o link {name}"
 privacy = "A página pública nunca mostra nomes de container, imagens, versões, domínios nem IPs. Revogar responde 404 na hora."
-aliases = "Apelidos públicos"
-aliases_hint = "Como cada serviço aparece nos links no modo Apelido. Sem apelido, ele aparece como \"Serviço A\", \"Serviço B\"…"
 alias_placeholder = "Ex.: Loja principal"
 alias_for = "Apelido de {service}"
-save = "Salvar"
 no_services = "Nenhum serviço ainda."
 services = "Serviços que aparecem"
 name_placeholder = "Ex.: Monitor de casa"
 name_hint = "Só você vê este nome, no painel."
-naming_hint = "Apelido: o nome público de cada serviço. Genérico: \"Serviço A\", \"Serviço B\". Oculto: só os totais do servidor."
+naming_hint = "Apelido: o nome que você escreve ao lado de cada serviço abaixo (vale para todos os links). Genérico: \"Serviço A\", \"Serviço B\". Oculto: só os totais do servidor."
 ips = "Restringir por IP (opcional)"
 ips_hint = "Endereços ou faixas separados por vírgula. Vazio = qualquer IP. Outros IPs recebem 404."
 
@@ -1570,7 +1567,6 @@ restriction = "Acesso"
 expires = "Expiração"
 access = "Acessos"
 last = "Último acesso"
-alias = "Apelido público"
 
 [statuslink.naming]
 alias = "Apelido"
@@ -1585,7 +1581,6 @@ never = "Nunca"
 
 [statuslink.flash]
 revoked = "Link revogado: o endereço agora responde 404."
-alias = "Apelido salvo."
 
 [statuslink.error]
 name = "Dê um nome ao link (até 60 caracteres)."

@@ -147,39 +147,6 @@ templ StatusLinks(d StatusLinksData) {
 					}
 				</div>
 			</section>
-			<section class={ cardClass } id="aliases">
-				@cardHead(t(ctx, "statuslink.aliases"))
-				<div class={ cardBodyClass }>
-					@notice("info", "info", t(ctx, "statuslink.aliases_hint"))
-					if len(d.Services) == 0 {
-						@emptyState("box", t(ctx, "statuslink.no_services"))
-					} else {
-						<div class="tuc-table-wrap">
-							<table class="tuc-table is-compact w-full">
-								<thead><tr><th>{ t(ctx, "overview.service") }</th><th>{ t(ctx, "statuslink.col.alias") }</th></tr></thead>
-								<tbody>
-									for _, s := range d.Services {
-										<tr>
-											<td class="font-mono text-xs">{ s.Name }</td>
-											<td>
-												<form method="post" action="/status-links/alias" class="flex items-center gap-2">
-													<input type="hidden" name="csrf" value={ d.CSRF }/>
-													<input type="hidden" name="service" value={ s.ID }/>
-													<input class="tuc-input max-w-[280px]" name="alias" maxlength="40" value={ s.Alias } placeholder={ t(ctx, "statuslink.alias_placeholder") } aria-label={ t(ctx, "statuslink.alias_for", "service", s.Name) }/>
-													<button class="tuc-btn is-outline is-sm" type="submit">
-														@Icon("save", "size-3.5")
-														{ t(ctx, "statuslink.save") }
-													</button>
-												</form>
-											</td>
-										</tr>
-									}
-								</tbody>
-							</table>
-						</div>
-					}
-				</div>
-			</section>
 			@newStatusLinkDialog(d)
 			if !d.SudoActive {
 				<dialog class="tuc-modal is-warning" id="status-sudo" aria-labelledby="status-sudo-title">
@@ -264,15 +231,17 @@ templ newStatusLinkDialog(d StatusLinksData) {
 						if len(d.Services) == 0 {
 							<span class="tuc-hint">{ t(ctx, "statuslink.no_services") }</span>
 						}
-						<div class="flex max-h-[200px] flex-col gap-1.5 overflow-y-auto">
+						<div class="flex max-h-[260px] flex-col gap-1.5 overflow-y-auto">
 							for _, s := range d.Services {
-								<label class="tuc-choice">
-									<input type="checkbox" class="tuc-check" name="service" value={ s.ID } checked/>
-									<span class="font-mono text-xs">{ s.Name }</span>
-									if s.Alias != "" {
-										<span class="text-xs text-muted">{ "→ " + s.Alias }</span>
-									}
-								</label>
+								// Each service with its public name (Name mode), shared by
+								// every link.
+								<div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-2">
+									<label class="tuc-choice min-w-0">
+										<input type="checkbox" class="tuc-check" name="service" value={ s.ID } checked/>
+										<span class="truncate font-mono text-xs" title={ s.Name }>{ s.Name }</span>
+									</label>
+									<input class="tuc-input is-sm" name={ "alias_" + s.ID } maxlength="40" value={ s.Alias } placeholder={ t(ctx, "statuslink.alias_placeholder") } aria-label={ t(ctx, "statuslink.alias_for", "service", s.Name) }/>
+								</div>
 							}
 						</div>
 					</fieldset>

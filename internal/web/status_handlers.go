@@ -24,8 +24,6 @@ func (h *handlers) statusLinksPage(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Query().Get("ok") {
 	case "revoked":
 		flash = i18n.T(r.Context(), "statuslink.flash.revoked")
-	case "alias":
-		flash = i18n.T(r.Context(), "statuslink.flash.alias")
 	}
 	h.renderStatusLinks(w, r, statusView{status: http.StatusOK, flash: flash})
 }
@@ -128,6 +126,19 @@ func (h *handlers) createStatusLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, i18n.T(r.Context(), "error.bad_request"), http.StatusBadRequest)
 		return
 	}
+	// The public names are typed next to each service in the same dialog
+	// and serve every link: save the ones that changed.
+	if aliases, err := h.status.Aliases(r.Context()); err == nil {
+		for id := range known {
+			if v, sent := r.PostForm["alias_"+id]; sent && strings.TrimSpace(v[0]) != aliases[id] {
+				if err := h.status.SetAlias(r.Context(), statusActor(r), id, v[0], known); err != nil {
+					code, msg := userError(r, err)
+					h.renderStatusLinks(w, r, statusView{status: code, errMsg: msg, open: true})
+					return
+				}
+			}
+		}
+	}
 	token, _, err := h.status.Create(r.Context(), statusActor(r), statuspage.Input{
 		Name: r.PostFormValue("name"), Naming: r.PostFormValue("naming"), ServiceIDs: r.PostForm["service"],
 		Expiry: r.PostFormValue("expiry"), CIDRs: r.PostFormValue("ips"),
@@ -153,18 +164,4 @@ func (h *handlers) revokeStatusLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectLocal(w, r, "/status-links?ok=revoked")
-}
-
-func (h *handlers) setStatusAlias(w http.ResponseWriter, r *http.Request) {
-	if h.status == nil {
-		http.NotFound(w, r)
-		return
-	}
-	_, known := h.serviceRefs(r.Context())
-	if err := h.status.SetAlias(r.Context(), statusActor(r), r.PostFormValue("service"), r.PostFormValue("alias"), known); err != nil {
-		code, msg := userError(r, err)
-		h.renderStatusLinks(w, r, statusView{status: code, errMsg: msg})
-		return
-	}
-	redirectLocal(w, r, "/status-links?ok=alias#aliases")
 }

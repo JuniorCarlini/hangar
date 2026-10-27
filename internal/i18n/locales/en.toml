@@ -1550,16 +1550,13 @@ never_opened = "never opened"
 revoke = "Revoke"
 revoke_named = "Revoke the link {name}"
 privacy = "The public page never shows container names, images, versions, domains or IPs. Revoking answers 404 right away."
-aliases = "Public aliases"
-aliases_hint = "How each service shows on links in Alias mode. Without one it shows as \"Service A\", \"Service B\"…"
 alias_placeholder = "E.g. Main store"
 alias_for = "Alias of {service}"
-save = "Save"
 no_services = "No services yet."
 services = "Services shown"
 name_placeholder = "E.g. Home monitor"
 name_hint = "Only you see this name, in the panel."
-naming_hint = "Alias: each service's public name. Generic: \"Service A\", \"Service B\". Hidden: server totals only."
+naming_hint = "Alias: the name you type next to each service below (shared by every link). Generic: \"Service A\", \"Service B\". Hidden: server totals only."
 ips = "Restrict by IP (optional)"
 ips_hint = "Addresses or ranges separated by commas. Empty = any IP. Other IPs get 404."
 
@@ -1570,7 +1567,6 @@ restriction = "Access"
 expires = "Expiry"
 access = "Visits"
 last = "Last visit"
-alias = "Public alias"
 
 [statuslink.naming]
 alias = "Alias"
@@ -1585,7 +1581,6 @@ never = "Never"
 
 [statuslink.flash]
 revoked = "Link revoked: the address now answers 404."
-alias = "Alias saved."
 
 [statuslink.error]
 name = "Name the link (up to 60 characters)."

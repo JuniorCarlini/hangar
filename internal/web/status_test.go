@@ -157,11 +157,8 @@ func TestStatusLinkAliasRevokeAndRestrictions(t *testing.T) {
 	id := e.leakyService(t)
 	c, csrf := e.sudoSession(t, auth.RoleAdmin)
 
-	rec := e.do(req{method: "POST", target: "/status-links/alias", form: url.Values{"csrf": {csrf}, "service": {id}, "alias": {"Loja principal"}}, cookies: []*http.Cookie{c}})
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("set alias: %d %s", rec.Code, rec.Body)
-	}
-	token := e.createLink(t, c, csrf, url.Values{"name": {"Casa"}, "naming": {"alias"}, "service": {id}, "expiry": {"7d"}})
+	// The public name is typed next to the service in the new link dialog.
+	token := e.createLink(t, c, csrf, url.Values{"name": {"Casa"}, "naming": {"alias"}, "service": {id}, "expiry": {"7d"}, "alias_" + id: {"Loja principal"}})
 	page := e.public("/s/" + token)
 	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), "Loja principal") {
 		t.Fatalf("alias not shown: %d", page.Code)
@@ -186,7 +183,7 @@ func TestStatusLinkAliasRevokeAndRestrictions(t *testing.T) {
 	if linkID == nil {
 		t.Fatal("revoke form not found")
 	}
-	rec = e.do(req{method: "POST", target: "/status-links/revoke", form: url.Values{"csrf": {csrf}, "id": {linkID[1]}}, cookies: []*http.Cookie{c}})
+	rec := e.do(req{method: "POST", target: "/status-links/revoke", form: url.Values{"csrf": {csrf}, "id": {linkID[1]}}, cookies: []*http.Cookie{c}})
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("revoke: %d %s", rec.Code, rec.Body)
 	}

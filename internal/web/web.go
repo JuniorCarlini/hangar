@@ -274,7 +274,6 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET /status-links", h.statusLinksPage, Policy{Role: auth.RoleAdmin})
 	rt.HandleFunc("POST /status-links", h.createStatusLink, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "status_link.create", AuditByHandler: true})
 	rt.HandleFunc("POST /status-links/revoke", h.revokeStatusLink, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "status_link.revoke", AuditByHandler: true})
-	rt.HandleFunc("POST /status-links/alias", h.setStatusAlias, Policy{Role: auth.RoleAdmin, Audit: "status_link.alias", AuditByHandler: true})
 
 	// Public status links (docs/15): no session, unguessable token, rate
 	// limited, a snapshot without any real name. "/s/{token}" also serves
