@@ -183,7 +183,7 @@ templ gitCredNewDialog(csrf, back, project string, open bool, errMsg string) {
 				</p>
 				<div class="flex min-w-0 flex-col gap-1.5">
 					<label class="tuc-label" for="gc-host">{ t(ctx, "gitcred.col.host") }</label>
-					<select class="tuc-input font-mono" id="gc-host" name="host" data-tuc-select>
+					<select class="tuc-input font-mono" id="gc-host" name="host" data-tuc-select data-clearable="false">
 						<option value="github.com" selected>github.com</option>
 					</select>
 				</div>
@@ -279,7 +279,7 @@ templ projectGitCreds(d ProjectData) {
 templ gitCredPicker(prefix string, opts []GitCredOption, selected string) {
 	<div class="flex min-w-0 flex-col gap-1.5 col-span-full">
 		<label class="tuc-label" for={ prefix + "-credential" }>{ t(ctx, "gitcred.pick") }</label>
-		<select class="tuc-input" id={ prefix + "-credential" } name="credential" data-tuc-select>
+		<select class="tuc-input" id={ prefix + "-credential" } name="credential" data-tuc-select data-clearable="false">
 			for _, o := range opts {
 				<option value={ o.ID } selected?={ o.ID == selected }>
 					{ o.Name } · { o.Host } ·
