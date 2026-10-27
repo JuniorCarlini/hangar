@@ -366,3 +366,32 @@ func TestResolvedEnvText(t *testing.T) {
 		t.Errorf("old %q and new %q connections differ", oldV, newV)
 	}
 }
+
+// A cache's values never take the database's names: with DB_HOST already
+// in the app, a Redis still suggests REDIS_HOST, not DB_HOST.
+func TestCacheNamesStayApartFromTheDatabase(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, webID := f.service(t)
+	if _, err := f.m.CreateFromTemplate(ctx, f.who, "lab", "redis-cache", "redis", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	for _, k := range []string{"DB_HOST", "DB_PASSWORD"} {
+		if err := f.m.SetEnv(ctx, f.who, webID, k, "x", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	plan, err := f.m.PlanConnect(ctx, "lab", "web", "redis")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range plan.Rows {
+		if strings.HasPrefix(r.Var, "DB_") {
+			t.Errorf("%s suggested as %s", r.Key, r.Var)
+		}
+		if r.Key == "HOST" && r.Var != "REDIS_HOST" {
+			t.Errorf("HOST suggested as %s, want REDIS_HOST", r.Var)
+		}
+	}
+}

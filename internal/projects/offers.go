@@ -355,8 +355,25 @@ var varAliases = map[string][]string{
 
 // varCandidates are the consumer names that would receive key, best first.
 func varCandidates(key string, to dbq.Service) []string {
-	out := append([]string(nil), varAliases[key]...)
+	// A cache's HOST is not the database's: DB_HOST is no candidate for a
+	// Redis, nor REDIS_HOST for a Postgres.
+	cache := varPrefix(to) == "REDIS_"
+	var out []string
+	for _, a := range varAliases[key] {
+		if isCacheName(a) == cache || key == "REDIS_URL" {
+			out = append(out, a)
+		}
+	}
 	return append(out, key, varPrefix(to)+key)
+}
+
+func isCacheName(name string) bool {
+	for _, w := range []string{"REDIS", "CACHE", "BROKER", "CELERY", "VALKEY"} {
+		if strings.Contains(name, w) {
+			return true
+		}
+	}
+	return false
 }
 
 // defaultVarName is the name made up when the consumer has none for it:
@@ -368,7 +385,7 @@ func defaultVarName(key string, to dbq.Service) string {
 	}
 	// A database's parts take the most common names (DB_NAME, not
 	// DB_DATABASE).
-	if a := varAliases[key]; len(a) > 0 && varPrefix(to) == "DB_" {
+	if a := varCandidates(key, to); len(a) > 2 && varPrefix(to) == "DB_" {
 		return a[0]
 	}
 	if strings.HasPrefix(key, varPrefix(to)) {
@@ -380,7 +397,9 @@ func defaultVarName(key string, to dbq.Service) string {
 // varPrefix names a provider in its consumers' variables: DB_ for a
 // database, REDIS_ for a cache, else its name (API_ for "api").
 func varPrefix(to dbq.Service) string {
-	switch to.Template {
+	// Templates come in flavours (redis-cache, redis-queue, valkey-cache).
+	family, _, _ := strings.Cut(to.Template, "-")
+	switch family {
 	case "postgres", "mysql", "mariadb", "mongodb":
 		return "DB_"
 	case "redis", "valkey", "keydb":

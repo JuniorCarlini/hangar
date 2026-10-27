@@ -271,114 +271,114 @@ templ valueTail(ctx context.Context, svc string, showSvc bool, key, copy string)
 	</span>
 }
 
-// connectorDialog: pick a service, then cross its values with the app's
-// variables. A field comes filled only when the name is certain (the app
-// already has it, or its .env.example lists it); otherwise it is empty with
-// the usual name as a hint, and "Use suggestions" fills the empty ones.
-// "Add to .env" writes the filled rows as references into the editor, to
-// check and save there; empty rows are left out.
+// connectorDialog: a small modal to pick the service to connect to, then a
+// second one on top to cross its values with this service's variables, in
+// plain Tucano inputs (a name may be new, so no closed list). A field comes
+// filled only when the name is certain (the app already has it, or its
+// .env.example lists it); otherwise it is empty with the usual name as a
+// hint, and "Use suggestions" fills the empty ones. "Add to .env" writes
+// the filled rows as references into the editor, to check and save there.
 templ connectorDialog(d ServiceData) {
-	<dialog class="tuc-modal is-lg" id="connector" aria-labelledby="connector-title" data-connector>
+	<dialog class="tuc-modal is-sm" id="connector" aria-labelledby="connector-title">
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
-				<h2 class="tuc-modal__title" id="connector-title">{ t(ctx, "connect.open") }</h2>
+				<h2 class="tuc-modal__title" id="connector-title">{ t(ctx, "connect.title", "from", d.Slug) }</h2>
 				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
 					@Icon("x", "size-4")
 				</button>
 			</div>
-			<div class="tuc-modal__body flex flex-col gap-3" data-connector-list>
+			<div class="tuc-modal__body flex flex-col gap-3">
 				<p class="tuc-modal__text">{ t(ctx, "connect.pick_hint", "from", d.Slug) }</p>
-				<div class="flex flex-col gap-2">
+				<ul class="m-0 list-none divide-y divide-border rounded-sm border border-border p-0">
 					for i, g := range offerGroups(d.ConnectOffers) {
-						<button type="button" class="tuc-btn h-auto justify-start gap-3 py-2.5 text-left" data-connector-pick={ strconv.Itoa(i) }>
-							<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
-								@Icon("cable", "size-4")
-							</span>
-							<span class="flex min-w-0 grow flex-col">
-								<strong class="text-[13px] font-semibold">{ g[0].Service }</strong>
-								<span class="truncate font-mono text-xs text-muted">{ offerKeys(g) }</span>
-							</span>
-							@Icon("chevron-right", "size-4 text-subtle")
-						</button>
+						<li>
+							<button type="button" class="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-2" data-tuc-modal={ "#connector-" + strconv.Itoa(i) }>
+								<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
+									@Icon("cable", "size-4")
+								</span>
+								<span class="flex min-w-0 grow flex-col">
+									<strong class="text-[13px] font-semibold">{ g[0].Service }</strong>
+									<span class="truncate font-mono text-xs text-muted">{ offerKeys(g) }</span>
+								</span>
+								@Icon("chevron-right", "size-4 text-subtle")
+							</button>
+						</li>
 					}
+				</ul>
+			</div>
+		</div>
+	</dialog>
+	for i, g := range offerGroups(d.ConnectOffers) {
+		@connectorPanel(d, i, g)
+	}
+}
+
+// connectorPanel crosses one service's values with this service's
+// variables (the second modal of the connector).
+templ connectorPanel(d ServiceData, i int, g []ConnectOffer) {
+	<dialog class="tuc-modal is-lg" id={ "connector-" + strconv.Itoa(i) } aria-labelledby={ "connector-title-" + strconv.Itoa(i) } data-connector-panel data-service={ g[0].Service }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<span class="grid size-7 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
+					@Icon("cable", "size-3.5")
+				</span>
+				<h2 class="tuc-modal__title" id={ "connector-title-" + strconv.Itoa(i) }>{ t(ctx, "connect.to", "service", g[0].Service) }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<div class="tuc-modal__body flex flex-col gap-3">
+				<div class="flex flex-wrap items-start gap-3">
+					<p class="m-0 min-w-0 flex-1 text-[13px] text-muted">{ t(ctx, "connect.cross_hint", "from", d.Slug) }</p>
+					<button type="button" class="tuc-btn is-outline is-sm" data-connector-suggest>{ t(ctx, "connect.use_suggestions") }</button>
+				</div>
+				<table class="tuc-table is-compact w-full table-fixed rounded-sm border border-border">
+					<thead>
+						<tr>
+							<th>{ t(ctx, "connect.offered_col") }</th>
+							<th class="w-8 px-0"></th>
+							<th>{ t(ctx, "connect.receives", "service", d.Slug) }</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, o := range g {
+							<tr>
+								<td class="truncate font-mono text-[13px]" title={ o.Key }>
+									{ o.Key }
+									if o.Secret {
+										<span class="ml-1 inline-flex align-middle" title={ t(ctx, "connect.secret") }>
+											@Icon("lock", "size-3 text-subtle")
+										</span>
+									}
+								</td>
+								<td class="px-0 text-center text-accent-text">
+									@Icon("cable", "size-3.5")
+								</td>
+								<td>
+									<input
+										class="tuc-input font-mono text-[13px]"
+										data-key={ o.Key }
+										if o.Known {
+											value={ o.Var }
+										}
+										placeholder={ o.Var }
+										pattern="[A-Za-z_][A-Za-z0-9_]{0,127}"
+										autocomplete="off"
+										aria-label={ t(ctx, "connect.var_for", "key", g[0].Service+" · "+o.Key) }
+									/>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button type="button" class="tuc-btn is-primary" data-connector-add>
+						@Icon("file-text", "size-3.5")
+						{ t(ctx, "connect.add_to_env") }
+					</button>
 				</div>
 			</div>
-			for i, g := range offerGroups(d.ConnectOffers) {
-				<div class="tuc-modal__body flex flex-col gap-3" data-connector-panel={ strconv.Itoa(i) } data-service={ g[0].Service } hidden>
-					<div class="flex flex-wrap items-center gap-2">
-						<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-connector-back aria-label={ t(ctx, "connect.back") }>
-							@Icon("arrow-left", "size-4")
-						</button>
-						<span class="grid size-7 place-items-center rounded-sm bg-accent-soft text-accent-text">
-							@Icon("cable", "size-3.5")
-						</span>
-						<strong class="grow text-[13px] font-semibold">{ g[0].Service }</strong>
-						<button type="button" class="tuc-btn is-outline is-sm" data-connector-suggest>{ t(ctx, "connect.use_suggestions") }</button>
-					</div>
-					<p class="m-0 text-[13px] text-muted">{ t(ctx, "connect.cross_hint", "from", d.Slug) }</p>
-					<div class="tuc-table-wrap max-h-[50vh] overflow-y-auto rounded-sm border border-border">
-						<table class="tuc-table is-compact w-full">
-							<thead class="sticky top-0 z-[1] bg-surface">
-								<tr>
-									<th>{ t(ctx, "connect.offered_col") }</th>
-									<th class="w-8"></th>
-									<th>{ t(ctx, "connect.receives", "service", d.Slug) }</th>
-								</tr>
-							</thead>
-							<tbody>
-								for _, o := range g {
-									<tr>
-										<td class="font-mono text-[13px] whitespace-nowrap">
-											<span class="inline-flex items-center gap-1.5">
-												{ o.Key }
-												if o.Secret {
-													<span title={ t(ctx, "connect.secret") }>
-														@Icon("lock", "size-3 text-subtle")
-													</span>
-												}
-											</span>
-										</td>
-										<td class="px-0 text-center text-accent-text">
-											@Icon("cable", "size-3.5")
-										</td>
-										<td>
-											<input
-												class="tuc-input font-mono text-[13px]"
-												data-key={ o.Key }
-												if o.Known {
-													value={ o.Var }
-												}
-												placeholder={ o.Var }
-												list="connector-vars"
-												pattern="[A-Za-z_][A-Za-z0-9_]{0,127}"
-												autocomplete="off"
-												aria-label={ t(ctx, "connect.var_for", "key", g[0].Service+" · "+o.Key) }
-											/>
-										</td>
-									</tr>
-								}
-							</tbody>
-						</table>
-					</div>
-					<div class="flex justify-end gap-2">
-						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
-						<button type="button" class="tuc-btn is-primary" data-connector-add>
-							@Icon("file-text", "size-3.5")
-							{ t(ctx, "connect.add_to_env") }
-						</button>
-					</div>
-				</div>
-			}
-			<datalist id="connector-vars">
-				for _, v := range d.Env {
-					<option value={ v.Key }></option>
-				}
-				if d.EnvSuggest != nil {
-					for _, v := range d.EnvSuggest.Vars {
-						<option value={ v.Key }></option>
-					}
-				}
-			</datalist>
 		</div>
 	</dialog>
 }
