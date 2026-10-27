@@ -166,3 +166,31 @@ func TestCanvasAutoLayoutSkipsSavedCards(t *testing.T) {
 		t.Error("the automatic card did not take the free first row")
 	}
 }
+
+// Many variables between the same two services draw one line, whose
+// tooltip lists them all.
+func TestCanvasOneLinePerPair(t *testing.T) {
+	e := newEnv(t)
+	webID := e.labService(t)
+	ctx := context.Background()
+	a := projects.Actor{UserID: "usr_x"}
+	if _, err := e.pm.CreateFromTemplate(ctx, a, "lab", "postgres", "db", nil); err != nil {
+		t.Fatal(err)
+	}
+	e.pm.Wait()
+	for k, ref := range map[string]string{"DB_HOST": "db.HOST", "DB_PORT": "db.PORT", "DB_PASS": "db.PASSWORD"} {
+		if err := e.pm.SetEnv(ctx, a, webID, k, "${{"+ref+"}}", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, _ := e.session(t, auth.RoleAdmin)
+	canvas := html.UnescapeString(e.do(req{method: "GET", target: "/p/lab", cookies: []*http.Cookie{c}}).Body.String())
+	if n := strings.Count(canvas, `data-from="web" data-to="db"`); n != 1 {
+		t.Errorf("%d lines from web to db, want 1", n)
+	}
+	for _, k := range []string{"DB_HOST = ${{db.HOST}}", "DB_PORT = ${{db.PORT}}", "DB_PASS = ${{db.PASSWORD}}"} {
+		if !strings.Contains(canvas, k) {
+			t.Errorf("the line's tooltip lacks %q", k)
+		}
+	}
+}

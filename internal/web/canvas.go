@@ -114,12 +114,33 @@ func (h *handlers) buildCanvas(r *http.Request, p dbq.Project, selected string) 
 		maxY = max(maxY, top+gh)
 	}
 
+	// One line per pair of services, however many variables link them (an
+	// app wired to Postgres by six would draw six); its tooltip lists them.
+	type link struct {
+		From, To string
+		Titles   []string
+		Dashed   bool
+	}
+	var links []*link
+	byPair := map[[2]string]*link{}
+	for _, e := range g.Edges {
+		k := [2]string{e.From, e.To}
+		l := byPair[k]
+		if l == nil {
+			l = &link{From: e.From, To: e.To}
+			byPair[k] = l
+			links = append(links, l)
+		}
+		l.Titles = append(l.Titles, e.Key+" = ${{"+e.Ref+"}}")
+		l.Dashed = l.Dashed || strings.Count(e.Ref, ".") > 1
+	}
+
 	// Edges: one slot per incoming line, so they do not overlap at the card.
 	inCount, inIdx := map[string]int{}, map[string]int{}
-	for _, e := range g.Edges {
+	for _, e := range links {
 		inCount[e.To]++
 	}
-	for _, e := range g.Edges {
+	for _, e := range links {
 		a, b := pos[e.From], pos[e.To]
 		inIdx[e.To]++
 		slot := 0.0
@@ -137,7 +158,7 @@ func (h *handlers) buildCanvas(r *http.Request, p dbq.Project, selected string) 
 		}
 		d.Edges = append(d.Edges, views.CanvasEdge{
 			D: curve(x1, y1, x2, y2, b.x <= a.x), Len: int(math.Hypot(x2-x1, y2-y1) * 1.4),
-			Title: e.Key + " = ${{" + e.Ref + "}}", Dashed: strings.Count(e.Ref, ".") > 1,
+			Title: strings.Join(e.Titles, "\n"), Dashed: e.Dashed,
 			From: slugOf(g, e.From), To: slugOf(g, e.To), Slot: int(slot),
 		})
 	}
