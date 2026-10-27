@@ -8,6 +8,7 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
+	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
@@ -66,12 +67,22 @@ func (h *handlers) connect(w http.ResponseWriter, r *http.Request) {
 	var order []string
 	maps := map[string][]projects.Mapping{}
 	seen := map[string]bool{}
+	type pair struct{ field, v string }
+	var pairs []pair
 	for _, field := range r.PostForm["key"] {
+		pairs = append(pairs, pair{field, r.PostFormValue("var_" + field)})
+	}
+	// The "connect variables" modal sends one pair: variable A ("var")
+	// receives variable B ("field", as "db|HOST").
+	if f := r.PostFormValue("field"); f != "" {
+		pairs = append(pairs, pair{f, strings.TrimSpace(r.PostFormValue("var"))})
+	}
+	for _, p := range pairs {
+		field, v := p.field, p.v
 		target, key, ok := strings.Cut(field, "|")
 		if !ok {
 			target, key = r.PostFormValue("to"), field
 		}
-		v := r.PostFormValue("var_" + field)
 		// One variable cannot take two values, even from two services.
 		if seen[v] {
 			h.renderService(w, r, serviceView{status: http.StatusBadRequest, errMsg: i18n.T(r.Context(), "connect.error.duplicate", "var", v)})
@@ -129,6 +140,30 @@ func (h *handlers) connectTargets(r *http.Request, projectID, self string) []str
 		}
 		if offers, err := h.projects.Offers(r.Context(), s.ID); err == nil && len(offers) > 0 {
 			out = append(out, s.Slug)
+		}
+	}
+	return out
+}
+
+// connectOffers are the values the project's other services offer, by
+// service name, for the connector's "variable B".
+func (h *handlers) connectOffers(r *http.Request, projectID, self string) []views.ConnectOffer {
+	svcs, err := h.projects.ListServices(r.Context(), projectID)
+	if err != nil {
+		return nil
+	}
+	slices.SortFunc(svcs, func(a, b dbq.Service) int { return strings.Compare(a.Slug, b.Slug) })
+	var out []views.ConnectOffer
+	for _, s := range svcs {
+		if s.Slug == self {
+			continue
+		}
+		offers, err := h.projects.Offers(r.Context(), s.ID)
+		if err != nil {
+			continue
+		}
+		for _, o := range offers {
+			out = append(out, views.ConnectOffer{Service: s.Slug, Key: o.Key, Secret: o.Secret})
 		}
 	}
 	return out

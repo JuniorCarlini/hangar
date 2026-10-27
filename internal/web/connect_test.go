@@ -93,4 +93,19 @@ func TestConnectDialogAndSave(t *testing.T) {
 	if !strings.Contains(tab, `title="${{api.API_TOKEN}}"`) || !strings.Contains(tab, `title="${{db.PASSWORD}}"`) {
 		t.Error("connecting two services at once did not set both")
 	}
+
+	// The Connector card: "connect variables" sends one pair, variable A
+	// (a new name here) receiving variable B of another service, and the
+	// card lists it on its own line.
+	pair := url.Values{"var": {"CACHE_HOST"}, "field": {"db|HOST"}}
+	if code := post("/p/lab/s/web/connect", pair); code != http.StatusSeeOther {
+		t.Fatalf("connect one pair: %d", code)
+	}
+	tab = get("/p/lab/s/web?tab=variables")
+	card, _, _ := strings.Cut(tab, `id="env-new"`)
+	for _, want := range []string{`id="connector"`, `id="connect-var-b"`, `<option value="db|HOST">db · HOST</option>`, "CACHE_HOST"} {
+		if !strings.Contains(card, want) {
+			t.Errorf("the connector lacks %q", want)
+		}
+	}
 }

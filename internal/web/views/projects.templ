@@ -208,6 +208,13 @@ type EnvRow struct {
 	Offered bool
 }
 
+// ConnectOffer is one value another service offers to connect to.
+type ConnectOffer struct {
+	Service string
+	Key     string
+	Secret  bool
+}
+
 // RefWarning is a reference in the variables that the next deploy cannot
 // resolve.
 type RefWarning struct {
@@ -269,9 +276,9 @@ type ServiceData struct {
 	// UsedBy are the variables of other services that reference this one
 	// ("app (DATABASE_URL ← DATABASE_URL)").
 	UsedBy []string
-	// ConnectTargets are the other services of the project that offer
-	// something, for the "Connector" picker.
-	ConnectTargets []string
+	// ConnectOffers are the values the project's other services offer, by
+	// service name, for the connector's "variable B".
+	ConnectOffers []ConnectOffer
 	EnvSuggest  *EnvSuggest  // nil when the repository suggests nothing new
 	Domains     DomainsSection
 	Exports     []ExportRow

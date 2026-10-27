@@ -364,7 +364,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	if deps, err := h.projects.Dependents(r.Context(), p.Slug, s.Slug); err == nil {
 		d.UsedBy = dependentsLabel(r, deps)
 	}
-	d.ConnectTargets = h.connectTargets(r, p.ID, s.Slug)
+	d.ConnectOffers = h.connectOffers(r, p.ID, s.Slug)
 	if env, err := h.projects.ListEnv(r.Context(), s.ID); err == nil {
 		for _, e := range env {
 			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret, Offered: offered[e.Key]}

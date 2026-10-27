@@ -120,20 +120,10 @@ templ pendingBanner(d ServiceData) {
 
 templ tabVariables(d ServiceData) {
 	@pendingBanner(d)
+	@connectorCard(d)
 	<section class={ cardClass }>
 		@cardHead(t(ctx, "service.tab.variables")) {
 			if d.CanOperate {
-				if len(d.ConnectTargets) > 0 {
-					<button type="button" class="tuc-btn is-outline is-sm" data-connect-from={ d.Slug }>
-						@Icon("cable", "size-3.5")
-						{ t(ctx, "connect.open") }
-					</button>
-				} else {
-					<button type="button" class="tuc-btn is-outline is-sm" disabled title={ t(ctx, "connect.no_targets") }>
-						@Icon("cable", "size-3.5")
-						{ t(ctx, "connect.open") }
-					</button>
-				}
 				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#env-bulk" aria-label={ t(ctx, "service.env.bulk") }>
 					@Icon("file-text", "size-3.5")
 					.env
@@ -348,6 +338,138 @@ templ tabVariables(d ServiceData) {
 			</div>
 		</dialog>
 	}
+}
+
+// connectorCard lists the service's connections, one per line: its
+// variable A receives variable B of another service. "Connect variables"
+// opens a small modal to pick the two.
+templ connectorCard(d ServiceData) {
+	<section class={ cardClass } id="connector">
+		@cardHeadHelp(t(ctx, "connect.open"), t(ctx, "connect.help")) {
+			if d.CanOperate {
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#connect-vars" disabled?={ len(d.ConnectOffers) == 0 } title={ connectTitle(ctx, d) }>
+					@Icon("cable", "size-3.5")
+					{ t(ctx, "connect.vars") }
+				</button>
+			}
+		}
+		if links := connections(d.Env); len(links) == 0 {
+			<p class="m-0 px-4 py-4 text-[13px] text-muted">{ t(ctx, "connect.none") }</p>
+		} else {
+			<ul class="m-0 flex list-none flex-col p-0">
+				for _, l := range links {
+					<li class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_2rem] items-center gap-3 border-t border-border px-4 py-2.5 first:border-t-0">
+						<span class="truncate text-right font-mono text-[13px]">{ l.Var }</span>
+						<span class="grid size-7 place-items-center rounded-sm bg-accent-soft text-accent-text" aria-label={ t(ctx, "connect.receives_from") }>
+							@Icon("cable", "size-3.5")
+						</span>
+						<span class="truncate font-mono text-[13px]"><span class="text-muted">{ l.Service }</span><span class="text-subtle"> · </span>{ l.Key }</span>
+						if d.CanOperate {
+							<form class="inline-flex justify-end" data-confirm={ t(ctx, "confirm.disconnect.title", "key", l.Var) } data-confirm-text={ t(ctx, "confirm.disconnect.text", "service", l.Service) } data-confirm-ok={ t(ctx, "confirm.disconnect.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
+								<input type="hidden" name="csrf" value={ d.CSRF }/>
+								<input type="hidden" name="key" value={ l.Var }/>
+								<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.disconnect_named", "key", l.Var) } title={ t(ctx, "connect.disconnect") }>
+									@Icon("x", "size-3.5")
+								</button>
+							</form>
+						}
+					</li>
+				}
+			</ul>
+		}
+	</section>
+	if d.CanOperate && len(d.ConnectOffers) > 0 {
+		@connectVarsDialog(d)
+	}
+}
+
+// connectVarsDialog connects one pair: variable A of this service (one
+// that exists or a new name) receives variable B of another service.
+templ connectVarsDialog(d ServiceData) {
+	<dialog class="tuc-modal is-md" id="connect-vars" aria-labelledby="connect-vars-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="connect-vars-title">{ t(ctx, "connect.vars") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form method="post" action={ templ.SafeURL(d.base() + "/connect") } class="tuc-modal__body flex flex-col gap-4" autocomplete="off">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="connect-var-a">{ t(ctx, "connect.var_a", "service", d.Slug) }</label>
+					<input class="tuc-input font-mono" id="connect-var-a" name="var" list="connect-var-a-list" required maxlength="128" pattern="[A-Za-z_][A-Za-z0-9_]{0,127}" placeholder="DB_HOST" autofocus/>
+					<datalist id="connect-var-a-list">
+						for _, v := range d.Env {
+							<option value={ v.Key }></option>
+						}
+					</datalist>
+					<span class="tuc-hint">{ t(ctx, "connect.var_a_hint") }</span>
+				</div>
+				<div class="grid place-items-center text-accent-text">
+					<span class="grid size-8 place-items-center rounded-sm bg-accent-soft">
+						@Icon("cable", "size-4")
+					</span>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="connect-var-b">{ t(ctx, "connect.var_b") }</label>
+					<select class="tuc-input" id="connect-var-b" name="field" required data-tuc-select data-clearable="false" data-placeholder={ t(ctx, "connect.var_b_pick") }>
+						<option value=""></option>
+						for _, g := range offerGroups(d.ConnectOffers) {
+							<optgroup label={ g[0].Service }>
+								for _, o := range g {
+									<option value={ o.Service + "|" + o.Key }>{ o.Service } · { o.Key }</option>
+								}
+							</optgroup>
+						}
+					</select>
+				</div>
+				<p class="tuc-hint m-0">{ t(ctx, "connect.hint", "from", d.Slug) }</p>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("cable", "size-3.5")
+						{ t(ctx, "connect.save") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
+}
+
+// connectLink is one connection of the service: Var receives Service's Key.
+type connectLink struct{ Var, Service, Key string }
+
+// connections are the service's variables that reference, whole, a value
+// another service offers.
+func connections(env []EnvRow) []connectLink {
+	var out []connectLink
+	for _, v := range env {
+		if svc, key := connection(v.Value); svc != "" {
+			out = append(out, connectLink{Var: v.Key, Service: svc, Key: key})
+		}
+	}
+	return out
+}
+
+// offerGroups splits the offers by service, keeping their order.
+func offerGroups(offers []ConnectOffer) [][]ConnectOffer {
+	var out [][]ConnectOffer
+	for _, o := range offers {
+		if n := len(out); n > 0 && out[n-1][0].Service == o.Service {
+			out[n-1] = append(out[n-1], o)
+		} else {
+			out = append(out, []ConnectOffer{o})
+		}
+	}
+	return out
+}
+
+func connectTitle(ctx context.Context, d ServiceData) string {
+	if len(d.ConnectOffers) == 0 {
+		return t(ctx, "connect.no_targets")
+	}
+	return ""
 }
 
 // envSuggestions is the "Suggested variables" card: keys the repository's

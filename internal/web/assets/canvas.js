@@ -3,7 +3,8 @@
 // does opens the connect dialog, where each offered value gets the variable
 // of the dragged service that receives it (a reference such as
 // DB_HOST = ${{db.HOST}}), applied by the next deploy. The Variables tab
-// opens the same dialog from "Connector". Texts come from data-*.
+// connects one pair at a time from its Connector card. Texts come from
+// data-*.
 (function () {
   var modal = document.getElementById('connect-modal');
   if (!modal) return;
@@ -33,12 +34,6 @@
     load(to || '');
     open();
   };
-  document.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-connect-from]');
-    if (!b) return;
-    e.preventDefault();
-    window.hangarConnect(b.dataset.connectFrom, '');
-  });
 })();
 
 (function () {
