@@ -32,9 +32,10 @@ func (h *handlers) templatePage(w http.ResponseWriter, r *http.Request) {
 var templateIDRE = regexp.MustCompile(`^[a-z][a-z0-9-]{1,30}$`)
 
 // logoCSP lets a logo opened on its own draw, and nothing else: no
-// scripts, no outside loads. The SVG was already checked when the catalog
-// loaded (templates.CheckSVG); this is the second wall.
-const logoCSP = "default-src 'none'; style-src 'unsafe-inline'"
+// scripts, no outside loads, no navigating the tab (sandbox). The SVG was
+// already checked when the catalog loaded (templates.CheckSVG); this is the
+// second wall.
+const logoCSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 
 // templateLogo serves a template's logo.svg. The ETag carries the
 // template's version and the logo's hash; the URL the pages use

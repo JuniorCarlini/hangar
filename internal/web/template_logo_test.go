@@ -26,7 +26,7 @@ func TestTemplateLogo(t *testing.T) {
 	for k, want := range map[string]string{
 		"Content-Type":            "image/svg+xml",
 		"X-Content-Type-Options":  "nosniff",
-		"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+		"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
 		"ETag":                    tp.LogoETag(),
 		"Cache-Control":           "private, max-age=31536000, immutable",
 	} {
