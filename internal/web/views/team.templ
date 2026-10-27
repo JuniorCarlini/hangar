@@ -46,7 +46,7 @@ type TeamData struct {
 	Members    []TeamMember
 	Invites    []TeamInvite
 	Projects   []TeamProject // every project, for the pickers
-	InviteLink string   // just created: shown once
+	InviteLink string        // just created: shown once
 	Error      string
 	Flash      string
 	// InviteOpen reopens the invite dialog with Error.
@@ -78,25 +78,16 @@ func hasProject(list []string, p string) bool {
 templ Team(d TeamData) {
 	@shell(t(ctx, "team.page_title")) {
 		@pageHead(t(ctx, "team.title"), t(ctx, "team.subtitle")) {
-			if d.SudoActive {
-				<button type="button" class="tuc-btn is-primary" data-tuc-modal="#team-invite">
-					@Icon("user-plus", "size-3.5")
-					{ t(ctx, "team.invite") }
-				</button>
-			}
+			<button type="button" class="tuc-btn is-primary" data-tuc-modal={ teamModal(d, "#team-invite") }>
+				@Icon("user-plus", "size-3.5")
+				{ t(ctx, "team.invite") }
+			</button>
 		}
 		@pageBody() {
 			if !d.InviteOpen {
 				@errorAlert(d.Error)
 			}
 			@toast("success", d.Flash)
-			if !d.SudoActive {
-				<section class={ cardClass }>
-					<div class={ cardBodyClass }>
-						@sudoForm(d.CSRF, "/team", t(ctx, "team.sudo_label"))
-					</div>
-				</section>
-			}
 			if d.InviteLink != "" {
 				<div class="tuc-alert is-success" role="status">
 					@Icon("link", "size-4")
@@ -166,7 +157,11 @@ templ Team(d TeamData) {
 										}
 									</td>
 									<td class="tuc-table__actions">
-										if !m.Self && d.SudoActive {
+										if !m.Self && !d.SudoActive {
+											<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "team.edit_named", "who", m.Email) } title={ t(ctx, "team.edit") }>
+												@Icon("pencil", "size-3.5")
+											</button>
+										} else if !m.Self {
 											<div class="flex justify-end gap-1">
 												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal={ "#team-edit-" + m.ID } aria-label={ t(ctx, "team.edit_named", "who", m.Email) } title={ t(ctx, "team.edit") }>
 													@Icon("pencil", "size-3.5")
@@ -210,7 +205,9 @@ templ Team(d TeamData) {
 										</td>
 										<td class="text-muted">{ inv.Expires }</td>
 										<td class="tuc-table__actions">
-											if d.SudoActive {
+											if !d.SudoActive {
+												<button type="button" class="tuc-btn is-ghost is-sm" data-tuc-modal="#sudo-dialog">{ t(ctx, "team.cancel_invite") }</button>
+											} else {
 												<form data-confirm={ t(ctx, "confirm.team_cancel.title") } data-confirm-text={ t(ctx, "confirm.team_cancel.text", "who", inv.Email) } data-confirm-ok={ t(ctx, "confirm.team_cancel.ok") } data-tone="warning" method="post" action={ templ.SafeURL("/team/invites/" + inv.ID + "/cancel") }>
 													<input type="hidden" name="csrf" value={ d.CSRF }/>
 													<button class="tuc-btn is-ghost is-sm" type="submit">{ t(ctx, "team.cancel_invite") }</button>
@@ -225,6 +222,7 @@ templ Team(d TeamData) {
 				</section>
 			}
 		}
+		@sudoModal(d.CSRF, "/team", d.SudoActive)
 		if d.SudoActive {
 			@teamInviteDialog(d)
 			for _, m := range d.Members {
@@ -234,6 +232,15 @@ templ Team(d TeamData) {
 			}
 		}
 	}
+}
+
+// teamModal opens a dialog, or the identity check first: changing the
+// team needs a fresh confirmation.
+func teamModal(d TeamData, modal string) string {
+	if d.SudoActive {
+		return modal
+	}
+	return "#sudo-dialog"
 }
 
 // projectList shows "all" or the project chips.
