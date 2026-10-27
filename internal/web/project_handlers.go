@@ -365,12 +365,12 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		d.UsedBy = dependentsLabel(r, deps)
 	}
 	d.ConnectOffers = h.connectOffers(r, p, s.Slug)
-	// Admins see every value, in the table and in the .env editor.
-	listEnv := h.projects.ListEnv
-	if d.CanAdmin {
-		listEnv = h.projects.ListEnvValues
+	// Admins see every value, in the table and in the .env editor; the
+	// table follows the order of the .env file.
+	if text, _, err := h.projects.EnvText(r.Context(), s.ID, d.CanAdmin); err == nil {
+		d.EnvText = text
 	}
-	if env, err := listEnv(r.Context(), s.ID); err == nil {
+	if env, err := h.projects.EnvInFileOrder(r.Context(), s.ID, d.CanAdmin); err == nil {
 		for _, e := range env {
 			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret, Offered: offered[e.Key]}
 			if e.Key == v.revealKey {

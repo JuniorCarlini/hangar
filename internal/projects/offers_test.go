@@ -3,6 +3,7 @@ package projects
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -244,4 +245,78 @@ func (f *fixture) envValue(t *testing.T, serviceID, key string) string {
 		t.Fatal(err)
 	}
 	return string(plain)
+}
+
+// The .env keeps what the operator wrote: comments, sections, blank lines,
+// commented-out variables and order. Changes made elsewhere are reconciled
+// into it, and a secret hidden from the editor survives a save.
+func TestEnvTextKeepsTheFile(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, webID := f.service(t)
+	file := `# ======
+# app — variables
+# ======
+
+# Django
+SECRET_KEY="long-random"
+DEBUG=True
+
+# Database
+DATABASE_URL=${{db.DATABASE_URL}}
+# OPTIONAL_FLAG=1
+EMPTY=
+`
+	if _, err := f.m.SetEnvFile(ctx, f.who, webID, file); err != nil {
+		t.Fatal(err)
+	}
+	got, keys, err := f.m.EnvText(ctx, webID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != file {
+		t.Errorf("the file came back changed:\n%s", got)
+	}
+	if !slices.Equal(keys, []string{"SECRET_KEY", "DEBUG", "DATABASE_URL", "EMPTY"}) {
+		t.Errorf("order = %v", keys)
+	}
+
+	// Changed elsewhere: a new variable goes to the end, a deleted one loses
+	// its line, a changed value shows the new one.
+	if err := f.m.SetEnv(ctx, f.who, webID, "DB_HOST", "${{db.HOST}}", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.m.DeleteEnv(ctx, f.who, webID, "EMPTY"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.m.SetEnv(ctx, f.who, webID, "DEBUG", "False", false); err != nil {
+		t.Fatal(err)
+	}
+	got, _, _ = f.m.EnvText(ctx, webID, true)
+	for _, want := range []string{"# Database\n", "# OPTIONAL_FLAG=1\n", "DEBUG=False\n", "DB_HOST=${{db.HOST}}\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reconciled file lacks %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "EMPTY=") || !strings.HasSuffix(got, "DB_HOST=${{db.HOST}}\n") {
+		t.Errorf("reconciled file:\n%s", got)
+	}
+
+	// Below admin a secret is "KEY=••••"; saving that text keeps the value.
+	hidden, _, _ := f.m.EnvText(ctx, webID, false)
+	if !strings.Contains(hidden, "SECRET_KEY="+HiddenValue) || strings.Contains(hidden, "long-random") {
+		t.Fatalf("the secret reached a hidden editor:\n%s", hidden)
+	}
+	if _, err := f.m.SetEnvFile(ctx, f.who, webID, hidden+"NEW=1\n"); err != nil {
+		t.Fatal(err)
+	}
+	vals, _ := f.m.ListEnvValues(ctx, webID)
+	for _, v := range vals {
+		if v.Key == "SECRET_KEY" && v.Value != "long-random" {
+			t.Errorf("the hidden secret became %q", v.Value)
+		}
+	}
+	if full, _, _ := f.m.EnvText(ctx, webID, true); !strings.Contains(full, `SECRET_KEY="long-random"`) {
+		t.Errorf("the stored file lost the secret's line:\n%s", full)
+	}
 }

@@ -172,12 +172,14 @@ templ tabVariables(d ServiceData) {
 										<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
 										<span class="ref-text">{ v.Value }</span>
 									} else if svc != "" {
-										<span title={ v.Value }>{ key }</span>
+										<span class="rounded-sm bg-accent-soft px-1.5 py-0.5 text-accent-text" title={ v.Value }>{ key }</span>
 									} else if isRef(v.Value) {
 										<span class="tuc-badge is-info ref-badge">ref</span>
 										<span class="ref-text">{ v.Value }</span>
 									} else if v.Secret && v.Value == "" {
 										<span class="text-muted">••••••••••••</span>
+									} else if v.Value == "" {
+										<span class="font-sans text-xs text-subtle">{ t(ctx, "service.env.empty_value") }</span>
 									} else {
 										{ v.Value }
 									}
@@ -245,15 +247,6 @@ templ tabVariables(d ServiceData) {
 					// admin's view) is a "# KEY=••••" line, and stays.
 					<input type="hidden" name="mode" value="replace"/>
 					<p class="tuc-modal__text">{ t(ctx, "service.env.file_hint") }</p>
-					<div hidden data-envfile>
-						for _, v := range d.Env {
-							if v.Secret && v.Value == "" {
-								<span data-k={ v.Key } data-secret="1"></span>
-							} else {
-								<span data-k={ v.Key }>{ v.Value }</span>
-							}
-						}
-					</div>
 					// What "Add" in the suggested variables card appends to the
 					// editor, under a comment naming the file.
 					if d.EnvSuggest != nil {
@@ -271,7 +264,7 @@ templ tabVariables(d ServiceData) {
 								<span data-env-copy-label>{ t(ctx, "service.env.copy") }</span>
 							</button>
 						</div>
-						<textarea class="tuc-input font-mono text-[13px]" id="bulk-env" name="env" rows="16" spellcheck="false" autocomplete="off" placeholder={ t(ctx, "service.env.bulk_placeholder") } data-envimport-src></textarea>
+						<textarea class="tuc-input font-mono text-[13px]" id="bulk-env" name="env" rows="16" spellcheck="false" autocomplete="off" placeholder={ t(ctx, "service.env.bulk_placeholder") } data-envimport-src>{ d.EnvText }</textarea>
 					</div>
 					<div class="flex justify-end gap-2">
 						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>

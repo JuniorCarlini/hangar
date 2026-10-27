@@ -1,37 +1,14 @@
-// The ".env" modal of a service: the variables shown as a .env file the
-// operator can edit, paste over or copy out, and where the connector writes
-// its references. An admin's editor holds every value and saving replaces
-// the variables (a line taken out is deleted). For other roles a secret's
-// value never reaches the page: it is a commented line (# KEY=••••),
-// skipped on save, and saving only adds and updates.
+// The ".env" modal of a service: the file as its operator wrote it
+// (comments, sections, order), to edit, paste over or copy out, and where
+// the connector writes its references. Saving replaces the variables: a
+// line taken out is deleted. Below admin a secret shows as KEY=••••, which
+// saving keeps as it is.
 (function () {
   "use strict";
 
-  function initialText(form) {
-    var src = form.querySelector("[data-envfile]");
-    if (!src) return "";
-    var lines = [];
-    var spans = src.querySelectorAll("span[data-k]");
-    for (var i = 0; i < spans.length; i++) {
-      var s = spans[i];
-      var k = s.getAttribute("data-k");
-      if (s.getAttribute("data-secret") === "1") {
-        lines.push("# " + k + "=••••");
-      } else {
-        lines.push(k + "=" + (s.textContent || ""));
-      }
-    }
-    return lines.length ? lines.join("\n") + "\n" : "";
-  }
-
   // The Variables tab can be swapped in without a page load (switching tabs
   // in the drawer), and this script runs only once, so everything is wired
-  // by delegation and the editor is filled when its modal opens.
-  function fill(form) {
-    var ta = form.querySelector("[data-envimport-src]");
-    // Fill once, without clobbering anything the operator already typed.
-    if (ta && !ta.value.trim()) ta.value = initialText(form);
-  }
+  // by delegation.
 
   // appendSuggested adds the repository's suggested variables (the
   // "Suggested variables" card) to the end of the editor, under a comment
@@ -103,7 +80,6 @@
     var editor = document.getElementById("env-bulk");
     var form = editor && editor.querySelector("form[data-envimport]");
     if (!form) return;
-    fill(form);
     appendBlock(form, b.getAttribute("data-env-block"));
     var picker = b.closest("dialog");
     if (picker) closeModal(picker);
@@ -131,7 +107,7 @@
     }
   }
 
-  // Capture phase: the editor is filled before the modal script shows it.
+  // Capture phase: the suggested lines are in before the modal shows.
   document.addEventListener("click", function (e) {
     var t = e.target.closest && e.target.closest("[data-env-copy], [data-tuc-modal]");
     if (!t) return;
@@ -140,18 +116,6 @@
     try { dlg = document.querySelector(t.getAttribute("data-tuc-modal")); } catch (err) { return; }
     var form = dlg && dlg.querySelector("form[data-envimport]");
     if (!form) return;
-    fill(form);
     if (t.hasAttribute("data-env-suggest")) appendSuggested(form);
   }, true);
-
-  function boot() {
-    var forms = document.querySelectorAll("form[data-envimport]");
-    for (var i = 0; i < forms.length; i++) fill(forms[i]);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
-  } else {
-    boot();
-  }
 })();

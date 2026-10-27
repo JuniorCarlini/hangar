@@ -282,6 +282,9 @@ type ServiceData struct {
 	// ConnectOffers are the values the project's other services offer, by
 	// service name, for the connector's "variable B".
 	ConnectOffers []ConnectOffer
+	// EnvText is the .env file as written, for the editor (secrets as
+	// "KEY=••••" below admin).
+	EnvText string
 	EnvSuggest  *EnvSuggest  // nil when the repository suggests nothing new
 	Domains     DomainsSection
 	Exports     []ExportRow

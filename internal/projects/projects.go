@@ -810,11 +810,16 @@ func (m *Manager) ListEnvValues(ctx context.Context, serviceID string) ([]EnvVar
 	return out, nil
 }
 
-// SetEnvFile makes the service's variables exactly the .env text: lines set
-// as SetEnvBulk does, and a variable missing from the text is deleted. A
-// secret the editor could not show is a commented "# KEY=••••" line: it is
-// kept as it is. An empty text deletes every variable.
+// SetEnvFile makes the service's variables exactly the .env text and keeps
+// the text itself (comments, blank lines, order) for the editor: lines set
+// as SetEnvBulk does, a variable missing from the text is deleted, and a
+// "KEY=••••" line (a secret the editor did not show) keeps its value. An
+// empty text deletes every variable.
 func (m *Manager) SetEnvFile(ctx context.Context, a Actor, serviceID, text string) (int, error) {
+	text, err := m.unhide(ctx, serviceID, text)
+	if err != nil {
+		return 0, err
+	}
 	vars, err := ParseEnvFile(text)
 	if err != nil {
 		return 0, err
@@ -829,11 +834,6 @@ func (m *Manager) SetEnvFile(ctx context.Context, a Actor, serviceID, text strin
 	for _, x := range vars {
 		keep[x.Key] = true
 	}
-	for _, line := range strings.Split(text, "\n") {
-		if g := hiddenSecretRE.FindStringSubmatch(strings.TrimSpace(line)); g != nil {
-			keep[g[1]] = true
-		}
-	}
 	cur, err := m.q.ListEnv(ctx, serviceID)
 	if err != nil {
 		return changed, err
@@ -847,7 +847,7 @@ func (m *Manager) SetEnvFile(ctx context.Context, a Actor, serviceID, text strin
 		}
 		changed++
 	}
-	return changed, nil
+	return changed, m.storeEnvFile(ctx, serviceID, text)
 }
 
 // SetEnv creates or replaces a variable.
@@ -902,10 +902,6 @@ func (m *Manager) SetEnv(ctx context.Context, a Actor, serviceID, key, value str
 	m.record(ctx, a, "service.env.set", "service", serviceID, audit.OK, map[string]any{"key": key, "secret": secret})
 	return nil
 }
-
-// hiddenSecretRE is how the .env editor shows a secret it was not given:
-// "# KEY=••••".
-var hiddenSecretRE = regexp.MustCompile(`^#\s*([A-Za-z_][A-Za-z0-9_]*)=••••$`)
 
 // envSecretRE matches variable names that usually hold a secret.
 var envSecretRE = regexp.MustCompile(`(?i)(SECRET|PASSWORD|PASSWD|PASS$|_PASS_|TOKEN|PRIVATE|_KEY$|^KEY$|API_KEY|CREDENTIAL|DSN$)`)

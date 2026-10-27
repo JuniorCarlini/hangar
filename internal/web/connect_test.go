@@ -100,7 +100,7 @@ func TestConnectDialogAndSave(t *testing.T) {
 	if !strings.Contains(tab, `id="connector"`) || !strings.Contains(tab, "PGHOST=${{db.HOST}}") {
 		t.Error("the connector does not offer the database's lines for the .env")
 	}
-	file := url.Values{"mode": {"replace"}, "env": {"PGHOST=${{db.HOST}}\n# SECRET_KEY=••••\n"}}
+	file := url.Values{"mode": {"replace"}, "env": {"PGHOST=${{db.HOST}}\nSECRET_KEY=••••\n"}}
 	if code := post("/p/lab/s/web/env/bulk", file); code != http.StatusSeeOther {
 		t.Fatalf("save the .env: %d", code)
 	}

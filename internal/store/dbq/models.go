@@ -401,6 +401,12 @@ type ServiceCommand struct {
 	CreatedAt int64
 }
 
+type ServiceEnvFile struct {
+	ServiceID string
+	TextEnc   []byte
+	UpdatedAt int64
+}
+
 type ServiceEnvSuggestion struct {
 	ServiceID       string
 	File            string

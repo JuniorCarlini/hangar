@@ -407,6 +407,7 @@ title = "Deploys"
 last = { one = "o último", other = "últimos {n}" }
 
 [service.env]
+empty_value = "vazia"
 file_hint = "Este é o arquivo inteiro: o que você apagar aqui é apagado no serviço. Linhas como DB_HOST=${{postgres.HOST}} são conexões."
 empty = "Nenhuma variável ainda. Escreva no .env ou use o Conector."
 name = "Nome"

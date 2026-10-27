@@ -407,6 +407,7 @@ title = "Deploys"
 last = { one = "the latest", other = "last {n}" }
 
 [service.env]
+empty_value = "empty"
 file_hint = "This is the whole file: what you remove here is removed from the service. Lines such as DB_HOST=${{postgres.HOST}} are connections."
 empty = "No variables yet. Write them in the .env or use the Connector."
 name = "Name"
