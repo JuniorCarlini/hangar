@@ -166,8 +166,8 @@ func (m *Manager) ListEndpoints(ctx context.Context, serviceID string) ([]Endpoi
 }
 
 // SetEndpointPublic exposes an endpoint (public = true gives it an external
-// link) or keeps it on the project network only. Making it public joins the
-// service to the edge network so Caddy can reach it; both reload the edge.
+// link) or keeps it on the project network only. Making it public joins
+// Caddy to the project network so it can reach it; both reload the edge.
 func (m *Manager) SetEndpointPublic(ctx context.Context, a Actor, projectSlug, serviceSlug, endpointID string, public bool) error {
 	p, s, err := m.GetService(ctx, projectSlug, serviceSlug)
 	if err != nil {
@@ -197,8 +197,8 @@ func (m *Manager) SetEndpointPublic(ctx context.Context, a Actor, projectSlug, s
 	}
 	m.record(ctx, a, action, "service", s.ID, audit.OK, map[string]any{"port": ep.Port})
 	if public && m.node != nil {
-		if err := m.node.ConnectEdge(ctx, p.Slug, s.Slug); err != nil {
-			m.log.Warn("join edge network", "service", p.Slug+"/"+s.Slug, "error", err)
+		if err := m.node.ConnectEdge(ctx, p.Slug); err != nil {
+			m.log.Warn("join caddy to the project network", "service", p.Slug+"/"+s.Slug, "error", err)
 		}
 	}
 	return m.applyEdge(ctx)

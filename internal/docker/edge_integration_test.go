@@ -4,10 +4,15 @@ package docker
 
 import (
 	"context"
+	"io"
 	"net/netip"
+	"runtime"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
@@ -98,4 +103,129 @@ func addrOn(t *testing.T, l *Local, ctx context.Context, id, networkName string)
 		return netip.Addr{}
 	}
 	return info.Container.NetworkSettings.Networks[networkName].IPAddress
+}
+
+// Services with a domain must not share a network across projects: Caddy
+// joins each project network instead, reaches both services, and neither
+// project reaches the other. A service an older version left on the edge
+// network leaves it once Caddy is on its project network.
+func TestEdgeKeepsProjectsApart(t *testing.T) {
+	l, ctx := setup(t)
+	if _, err := l.c.ContainerInspect(ctx, node.EdgeContainer, client.ContainerInspectOptions{}); err == nil {
+		t.Skipf("%s already exists on this Docker; not touching it", node.EdgeContainer)
+	}
+	if _, err := l.c.NetworkInspect(ctx, node.EdgeNetwork, client.NetworkInspectOptions{}); err == nil {
+		t.Skipf("%s already exists on this Docker; not touching it", node.EdgeNetwork)
+	}
+	if err := l.pull(ctx, "busybox:1.37"); err != nil {
+		t.Fatal(err)
+	}
+	a, b := uniq("hga"), uniq("hgb")
+	cleanup(t, l, a, "web")
+	cleanup(t, l, b, "web")
+	for _, p := range []string{a, b} {
+		if err := l.EnsureProjectNetwork(ctx, "prj_"+p, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Stand-ins for Caddy and the edge network: the real Caddy would publish
+	// 80/443 on this machine.
+	if _, err := l.c.NetworkCreate(ctx, node.EdgeNetwork, client.NetworkCreateOptions{
+		Driver: "bridge",
+		IPAM:   &network.IPAM{Config: []network.IPAMConfig{{Subnet: netip.MustParsePrefix("10.213.8.0/24"), Gateway: netip.MustParseAddr("10.213.8.1")}}},
+		Labels: map[string]string{node.LabelManaged: "true", "hangar.role": "edge"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	caddy, err := l.c.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Name: node.EdgeContainer,
+		Config: &container.Config{
+			Image: "busybox:1.37", Cmd: []string{"sleep", "3600"},
+			Labels: map[string]string{node.LabelManaged: "true", "hangar.role": "edge"},
+		},
+		HostConfig: &container.HostConfig{NetworkMode: container.NetworkMode(node.EdgeNetwork)},
+	})
+	if err != nil {
+		_, _ = l.c.NetworkRemove(context.Background(), node.EdgeNetwork, client.NetworkRemoveOptions{})
+		t.Fatal(err)
+	}
+	// Registered after the project cleanups, so it runs before them: the
+	// project networks go once Caddy left them (RemoveProjectNetwork).
+	t.Cleanup(func() {
+		bg := context.Background()
+		_, _ = l.c.ContainerRemove(bg, caddy.ID, client.ContainerRemoveOptions{Force: true})
+		_, _ = l.c.NetworkRemove(bg, node.EdgeNetwork, client.NetworkRemoveOptions{})
+	})
+	if _, err := l.c.ContainerStart(ctx, caddy.ID, client.ContainerStartOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, p := range []string{a, b} {
+		s := spec(p, "web", "nginx:1.31-alpine")
+		s.Edge = true
+		if _, err := l.Deploy(ctx, s, node.DeployOptions{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// An older version put b's service on the edge network too.
+	webA, webB := node.ContainerName(a, "web"), node.ContainerName(b, "web")
+	if _, err := l.c.NetworkConnect(ctx, node.EdgeNetwork, client.NetworkConnectOptions{
+		Container: webB, EndpointConfig: &network.EndpointSettings{Aliases: []string{webB}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.moveServicesOffEdge(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{webA, webB} {
+		info, err := l.c.ContainerInspect(ctx, name, client.ContainerInspectOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Container.NetworkSettings.Networks[node.EdgeNetwork] != nil {
+			t.Errorf("%s is on %s", name, node.EdgeNetwork)
+		}
+	}
+	time.Sleep(2 * time.Second)
+
+	reaches := func(from, target string) bool {
+		t.Helper()
+		var out strings.Builder
+		ex, err := l.c.ExecCreate(ctx, from, client.ExecCreateOptions{
+			Cmd:          []string{"sh", "-c", "wget -q -T 3 -O - http://" + target + "/ >/dev/null && echo REACHED || echo NOT_REACHED"},
+			AttachStdout: true, AttachStderr: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		att, err := l.c.ExecAttach(ctx, ex.ID, client.ExecAttachOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer att.Close()
+		_, _ = stdcopy.StdCopy(&out, io.Discard, att.Reader)
+		return strings.Contains(out.String(), "REACHED") && !strings.Contains(out.String(), "NOT_REACHED")
+	}
+	for _, name := range []string{webA, webB} {
+		if !reaches(caddy.ID, name) {
+			t.Errorf("caddy should reach %s", name)
+		}
+	}
+	// The services with a domain themselves, which used to share the edge
+	// network.
+	if reaches(webB, webA) || reaches(webA, webB) {
+		t.Error("a service with a domain reaches another project's service by name")
+	}
+	// By address, what keeps two bridges apart is Docker's own isolation
+	// (iptables on Linux); Docker Desktop and OrbStack route between bridges,
+	// with or without Hangar, so it is only checked on Linux.
+	if runtime.GOOS == "linux" {
+		addrA, err := l.ServiceAddress(ctx, a, "web", 80)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if reaches(webB, addrA) {
+			t.Errorf("%s reaches %s at %s", webB, webA, addrA)
+		}
+	}
 }

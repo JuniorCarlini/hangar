@@ -204,6 +204,7 @@ func (m *Manager) Start(ctx, life context.Context) error {
 	if err := m.node.EnsureEdge(ctx, m.opts.Spec); err != nil {
 		return fmt.Errorf("start caddy: %w", err)
 	}
+	m.joinProjects(ctx)
 	ln, err := (&net.ListenConfig{}).Listen(life, "tcp",
 		net.JoinHostPort(m.opts.Spec.Gateway.String(), strconv.Itoa(AskPort)))
 	if err != nil {
@@ -317,7 +318,38 @@ func (m *Manager) Heal(ctx context.Context) error {
 	if err := m.node.EnsureEdge(ctx, m.opts.Spec); err != nil {
 		return fmt.Errorf("start caddy: %w", err)
 	}
+	m.joinProjects(ctx)
 	return m.bringUp(ctx)
+}
+
+// joinProjects joins Caddy to the network of every project it routes to.
+// Caddy reaches services only through their project networks, and a Caddy
+// created from scratch (removed by hand, an older install) is on none of
+// them. A failure is logged: the other sites still come up.
+func (m *Manager) joinProjects(ctx context.Context) {
+	projects := map[string]bool{}
+	if rows, err := m.q.ListAllDomains(ctx); err == nil {
+		for _, r := range rows {
+			projects[r.ProjectSlug] = true
+		}
+	} else {
+		m.log.Error("list domains to join caddy to their projects", "error", err)
+	}
+	if eps, err := m.q.ListPublicEndpoints(ctx); err == nil {
+		for _, e := range eps {
+			projects[e.ProjectSlug] = true
+		}
+	} else {
+		m.log.Error("list public endpoints to join caddy to their projects", "error", err)
+	}
+	if svc, err := m.q.DynamicService(ctx); err == nil {
+		projects[svc.ProjectSlug] = true
+	}
+	for p := range projects {
+		if err := m.node.ConnectEdge(ctx, p); err != nil {
+			m.log.Error("join caddy to the project network", "project", p, "error", err)
+		}
+	}
 }
 
 // Degraded says why Caddy is not serving the full config, "" when it is.
@@ -519,8 +551,8 @@ func (m *Manager) build(ctx context.Context) ([]byte, error) {
 	return BuildConfig(in)
 }
 
-// Upstream is how Caddy reaches a service: its container name on the edge
-// network.
+// Upstream is how Caddy reaches a service: its container name on the
+// project network, which Caddy joins (node.Node.ConnectEdge).
 func Upstream(project, service string, port int64) string {
 	return net.JoinHostPort(node.ContainerName(project, service), strconv.FormatInt(port, 10))
 }

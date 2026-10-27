@@ -121,7 +121,7 @@ func (m *Manager) applyEdge(ctx context.Context) error {
 
 // needsEdge reports whether the service has a domain, takes dynamic ones, or
 // has a public endpoint (its sslip/base link) — any of which needs Caddy to
-// reach it on the edge network.
+// reach it on the project network.
 func (m *Manager) needsEdge(ctx context.Context, serviceID string) bool {
 	s, err := m.q.GetServiceByID(ctx, serviceID)
 	if err != nil {
@@ -218,8 +218,8 @@ func (m *Manager) AddDomain(ctx context.Context, a Actor, projectSlug, serviceSl
 	}
 	m.record(ctx, a, "domain.add", "service", s.ID, audit.OK, map[string]any{"hostname": host})
 	if m.node != nil {
-		if err := m.node.ConnectEdge(ctx, p.Slug, s.Slug); err != nil {
-			m.log.Warn("join edge network", "service", p.Slug+"/"+s.Slug, "error", err)
+		if err := m.node.ConnectEdge(ctx, p.Slug); err != nil {
+			m.log.Warn("join caddy to the project network", "service", p.Slug+"/"+s.Slug, "error", err)
 		}
 	}
 	return m.applyEdge(ctx)
@@ -302,8 +302,8 @@ func (m *Manager) EnableDynamicDomains(ctx context.Context, a Actor, projectSlug
 	}
 	m.record(ctx, a, "domain.dynamic.enable", "service", s.ID, audit.OK, map[string]any{"service": p.Slug + "/" + s.Slug})
 	if m.node != nil {
-		if err := m.node.ConnectEdge(ctx, p.Slug, s.Slug); err != nil {
-			m.log.Warn("join edge network", "service", p.Slug+"/"+s.Slug, "error", err)
+		if err := m.node.ConnectEdge(ctx, p.Slug); err != nil {
+			m.log.Warn("join caddy to the project network", "service", p.Slug+"/"+s.Slug, "error", err)
 		}
 	}
 	return m.applyEdge(ctx)

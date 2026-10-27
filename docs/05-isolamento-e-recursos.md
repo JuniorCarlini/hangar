@@ -17,6 +17,13 @@ Servidor
   internet, porque apps chamam APIs de pagamento, frete etc.) + prefixo de
   nomes + labels.
   Projetos podem ser conectados entre si (ver "Rede e portas").
+- Serviço com domínio **não** entra numa rede compartilhada: é o Caddy que
+  entra na rede de cada projeto que tem domínio ou link público, e alcança o
+  serviço por `<projeto>_<serviço>`. A rede `hangar_edge` tem só o Caddy
+  (é nela que o painel aceita o IP fixo dele). Antes, todo serviço com
+  domínio entrava na `hangar_edge` e podia alcançar qualquer porta de outro
+  projeto com domínio; ao atualizar, o painel põe o Caddy na rede de cada
+  projeto e só depois tira os serviços da `hangar_edge`, sem derrubar site.
 - Serviço = um container (ou dois, durante o deploy).
 - Labels em tudo que o Hangar cria: `hangar.managed=true`,
   `hangar.project=<id>`, `hangar.service=<id>`, `hangar.deployment=<id>`.

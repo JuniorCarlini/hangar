@@ -69,6 +69,12 @@ func (l *Local) Deploy(ctx context.Context, spec node.ServiceSpec, opt node.Depl
 	if old != "" && l.running(ctx, old) {
 		untouched = node.PreviousLive
 	}
+	// Caddy reaches the new container through the project network.
+	if spec.Edge {
+		if err := l.ConnectEdge(ctx, spec.Project); err != nil {
+			return node.DeployResult{Previous: untouched}, fmt.Errorf("caddy: join the project network: %w", err)
+		}
+	}
 
 	if !opt.LocalImage {
 		progress(node.PhasePull, spec.Image)
@@ -573,10 +579,8 @@ func containerAddr(c container.InspectResponse, spec node.ServiceSpec, port int)
 	if c.NetworkSettings == nil {
 		return ""
 	}
-	for _, n := range []string{node.NetworkName(spec.Project), node.EdgeNetwork} {
-		if ep := c.NetworkSettings.Networks[n]; ep != nil && ep.IPAddress.IsValid() {
-			return net.JoinHostPort(ep.IPAddress.String(), strconv.Itoa(port))
-		}
+	if ep := c.NetworkSettings.Networks[node.NetworkName(spec.Project)]; ep != nil && ep.IPAddress.IsValid() {
+		return net.JoinHostPort(ep.IPAddress.String(), strconv.Itoa(port))
 	}
 	return ""
 }

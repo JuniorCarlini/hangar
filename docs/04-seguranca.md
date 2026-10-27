@@ -7,7 +7,7 @@
 | Invasão do painel | Força bruta, senha vazada, sessão roubada | 2FA (obrigatório em produção com `require_2fa`), passkeys, rate limit, lockout, sessão curta, painel só por HTTPS (ou modo bunker) |
 | Abuso de domínio dinâmico | Esgotar rate limit da Let's Encrypt, phishing | `ask` com autorização da app, limites, fail-closed ([03](03-dominios-customizados-tls.md)) |
 | Container comprometido escapando | RCE na aplicação → host | Hardening de container, sem docker.sock, redes isoladas ([05](05-isolamento-e-recursos.md)) |
-| Movimento lateral entre projetos | App A acessa Postgres do projeto B | Rede por projeto; conexão entre projetos só quando você liga; senhas fortes geradas |
+| Movimento lateral entre projetos | App A acessa Postgres do projeto B | Rede por projeto (serviço com domínio também: o Caddy é que entra na rede do projeto); conexão entre projetos só quando você liga; senhas fortes geradas |
 | Vazamento de segredos | Dump do SQLite, backup exposto | Segredos cifrados com chave fora do banco; backups cifrados |
 | Exposição acidental de porta | Docker ignorando UFW, porta esquecida aberta | Regras na chain `DOCKER-USER`; opção por IP/localhost; tela de portas abertas; aviso ao expor banco |
 | Supply chain | Imagem trocada, dependência maliciosa | Imagens fixadas por digest, `govulncheck`, binário assinado |
@@ -22,7 +22,7 @@ Dois modos:
    certificado Let's Encrypt de verdade) ou em `public_host`
    (`painel.seudominio.com`). O instalador liga quando as portas 80/443
    estão livres e descobre o IP público. O painel continua escutando só em
-   127.0.0.1 e no gateway da rede `hangar-edge`, onde **só o IP do Caddy**
+   127.0.0.1 e no gateway da rede `hangar_edge`, onde **só o IP do Caddy**
    é aceito; o IP do visitante vem do `X-Forwarded-For` que o Caddy põe, e
    vale para limites de tentativa, sessões e auditoria. Com o painel
    trancado, quem chega pelo Caddy recebe 403.

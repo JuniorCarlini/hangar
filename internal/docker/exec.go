@@ -62,7 +62,8 @@ func (l *limitedBuffer) Write(p []byte) (int, error) {
 
 // SetLinked makes the running container's networks match the linked
 // projects: joins the missing ones and leaves the ones no longer linked. The
-// container's own network and the edge network are never touched.
+// container's own network and the edge network (which services left; see
+// EnsureEdge) are never touched.
 func (l *Local) SetLinked(ctx context.Context, project, service string, linked []string) error {
 	res, err := l.c.ContainerInspect(ctx, node.ContainerName(project, service), client.ContainerInspectOptions{})
 	if isNotFound(err) {

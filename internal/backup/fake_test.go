@@ -39,7 +39,7 @@ type fakeNode struct {
 }
 
 func (f *fakeNode) EnsureEdge(context.Context, node.EdgeSpec) error            { return nil }
-func (f *fakeNode) ConnectEdge(context.Context, string, string) error          { return nil }
+func (f *fakeNode) ConnectEdge(context.Context, string) error                  { return nil }
 func (f *fakeNode) EnsureProjectNetwork(context.Context, string, string) error { return nil }
 func (f *fakeNode) RemoveProjectNetwork(context.Context, string) error         { return nil }
 func (f *fakeNode) Start(context.Context, string, string) error                { return nil }

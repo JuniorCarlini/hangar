@@ -77,7 +77,8 @@ func (l *Local) managedLabels(projectID, project string) map[string]string {
 }
 
 // EnsureProjectNetwork creates the project's network if it does not exist.
-// Different projects live on different networks and cannot reach each other.
+// Different projects live on different networks and cannot reach each other;
+// only Caddy joins the networks of projects with a domain (ConnectEdge).
 func (l *Local) EnsureProjectNetwork(ctx context.Context, projectID, project string) error {
 	name := node.NetworkName(project)
 	res, err := l.c.NetworkInspect(ctx, name, client.NetworkInspectOptions{})
@@ -115,6 +116,9 @@ func (l *Local) RemoveProjectNetwork(ctx context.Context, project string) error 
 	}
 	if err := l.checkOwner(ctx, name, res.Network.Labels); err != nil {
 		return err
+	}
+	if err := l.disconnectCaddy(ctx, name); err != nil {
+		return fmt.Errorf("caddy: leave %s: %w", name, err)
 	}
 	_, err = l.c.NetworkRemove(ctx, name, client.NetworkRemoveOptions{})
 	return err
@@ -168,9 +172,9 @@ func (l *Local) createContainer(ctx context.Context, spec node.ServiceSpec, name
 	endpoints := map[string]*network.EndpointSettings{
 		node.NetworkName(spec.Project): {Aliases: []string{spec.Service, full}},
 	}
-	if spec.Edge {
-		endpoints[node.EdgeNetwork] = &network.EndpointSettings{Aliases: []string{full}}
-	}
+	// No endpoint on the edge network even with a domain: Caddy joins the
+	// project network instead (ConnectEdge), so a shared network never lets
+	// one project reach another.
 	// Linked projects see this container by its full name (<project>_<service>),
 	// never by the short alias, so names do not clash across projects.
 	for _, linked := range spec.Linked {

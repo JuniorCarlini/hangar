@@ -612,11 +612,11 @@ func (m *Manager) deploy(ctx context.Context, a Actor, projectSlug, serviceSlug 
 		if status == "live" {
 			_ = m.q.SupersedeLive(bg, dbq.SupersedeLiveParams{ServiceID: s.ID, ID: depID})
 			m.emptyVolumeTrash(bg, p, s)
-			// A domain added while this deploy ran found no container to
-			// join to the edge network; join it now.
+			// A domain added while this deploy ran: make sure Caddy is on
+			// the project network (a no-op when it already is).
 			if !spec.Edge && m.needsEdge(bg, s.ID) {
-				if err := m.node.ConnectEdge(bg, p.Slug, s.Slug); err != nil {
-					m.log.Warn("join edge network", "service", p.Slug+"/"+s.Slug, "error", err)
+				if err := m.node.ConnectEdge(bg, p.Slug); err != nil {
+					m.log.Warn("join caddy to the project network", "service", p.Slug+"/"+s.Slug, "error", err)
 				}
 			}
 		}

@@ -26,7 +26,18 @@ const labelEdgeSpec = "hangar.edge.spec"
 // it is the one container allowed bind mounts (its admin socket and its
 // certificates) and published ports (80/443); it still runs without
 // capabilities, read-only and as the panel user.
+//
+// The edge network holds Caddy alone: Caddy reaches services by joining their
+// project networks (ConnectEdge). Services that older versions put on the
+// edge network leave it here, once Caddy reaches them through their own.
 func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
+	if err := l.ensureCaddy(ctx, spec); err != nil {
+		return err
+	}
+	return l.moveServicesOffEdge(ctx)
+}
+
+func (l *Local) ensureCaddy(ctx context.Context, spec node.EdgeSpec) error {
 	if err := l.ensureEdgeNetwork(ctx, spec); err != nil {
 		return err
 	}
@@ -42,6 +53,9 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 		return err
 	}
 	hash := edgeHash(spec, image)
+	// The project networks a replaced Caddy had joined: the new one joins
+	// them again, or every site would lose its upstream.
+	var projectNets []string
 	res, err := l.c.ContainerInspect(ctx, node.EdgeContainer, client.ContainerInspectOptions{})
 	switch {
 	case err == nil:
@@ -58,6 +72,7 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 			}
 			return l.startOnAddress(ctx, c.ID, node.EdgeNetwork, spec.CaddyIP)
 		}
+		projectNets = caddyProjectNetworks(c)
 		if _, err := l.c.ContainerRemove(ctx, c.ID, client.ContainerRemoveOptions{Force: true}); err != nil {
 			return fmt.Errorf("replace caddy: %w", err)
 		}
@@ -101,6 +116,11 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 			LogConfig:     container.LogConfig{Type: "local", Config: map[string]string{"max-size": "50m", "max-file": "3"}},
 			Resources:     container.Resources{Memory: 256 << 20, MemorySwap: 256 << 20, NanoCPUs: 1e9, PidsLimit: &pids},
 			NetworkMode:   container.NetworkMode(node.EdgeNetwork),
+			// Caddy sits on every project network with a domain; a network
+			// namespace inherits the host's forwarding, and with it a
+			// service able to craft packets could route through Caddy into
+			// another project.
+			Sysctls: map[string]string{"net.ipv4.ip_forward": "0"},
 		},
 		NetworkingConfig: &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{
 			node.EdgeNetwork: {IPAMConfig: &network.EndpointIPAMConfig{IPv4Address: spec.CaddyIP}},
@@ -111,6 +131,54 @@ func (l *Local) EnsureEdge(ctx context.Context, spec node.EdgeSpec) error {
 	}
 	if err := l.startOnAddress(ctx, created.ID, node.EdgeNetwork, spec.CaddyIP); err != nil {
 		return fmt.Errorf("start caddy: %w", err)
+	}
+	for _, n := range projectNets {
+		if err := l.connectCaddy(ctx, n); err != nil && !isNotFound(err) {
+			return fmt.Errorf("caddy: join %s: %w", n, err)
+		}
+	}
+	return nil
+}
+
+// caddyProjectNetworks lists the project networks Caddy has joined.
+func caddyProjectNetworks(c container.InspectResponse) []string {
+	if c.NetworkSettings == nil {
+		return nil
+	}
+	var out []string
+	for name := range c.NetworkSettings.Networks {
+		if name != node.EdgeNetwork && strings.HasPrefix(name, node.NetworkPrefix) {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// moveServicesOffEdge takes the service containers older versions joined to
+// the edge network off it: on a network shared by every project with a
+// domain, any of them could reach the others' ports. Caddy joins each
+// service's project network first, so no site stops answering in between.
+// Only this panel's containers are touched.
+func (l *Local) moveServicesOffEdge(ctx context.Context) error {
+	res, err := l.c.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: make(client.Filters).Add("network", node.EdgeNetwork).Add("label", node.LabelManaged+"=true"),
+	})
+	if err != nil {
+		return fmt.Errorf("list containers on %s: %w", node.EdgeNetwork, err)
+	}
+	for _, c := range res.Items {
+		project := c.Labels[node.LabelProject]
+		if project == "" || !l.owns(ctx, c.Labels) {
+			continue // Caddy itself, or another panel's container
+		}
+		if err := l.connectCaddy(ctx, node.NetworkName(project)); err != nil {
+			return fmt.Errorf("caddy: join the network of %s: %w", project, err)
+		}
+		_, err := l.c.NetworkDisconnect(ctx, node.EdgeNetwork, client.NetworkDisconnectOptions{Container: c.ID, Force: true})
+		if err != nil && !isNotFound(err) {
+			return fmt.Errorf("take %s off %s: %w", c.ID, node.EdgeNetwork, err)
+		}
 	}
 	return nil
 }
@@ -269,13 +337,13 @@ func (l *Local) ensureEdgeNetwork(ctx context.Context, spec node.EdgeSpec) error
 }
 
 func edgeHash(spec node.EdgeSpec, image string) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d|%d|v1",
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%s|%s|%s|%s|%d|%d|v2",
 		image, spec.Subnet, spec.Gateway, spec.CaddyIP, spec.AdminDir, spec.DataDir, spec.UID, spec.GID)))
 	return hex.EncodeToString(h[:8])
 }
 
-// ServiceAddress returns ip:port of the service container, preferring the
-// edge network (reachable from the host and from Caddy).
+// ServiceAddress returns ip:port of the service container on its project
+// network (reachable from the host and from Caddy).
 func (l *Local) ServiceAddress(ctx context.Context, project, service string, port int) (string, error) {
 	res, err := l.c.ContainerInspect(ctx, node.ContainerName(project, service), client.ContainerInspectOptions{})
 	if err != nil {
@@ -291,34 +359,101 @@ func (l *Local) ServiceAddress(ctx context.Context, project, service string, por
 	if c.NetworkSettings == nil {
 		return "", errors.New("container has no network")
 	}
-	for _, name := range []string{node.EdgeNetwork, node.NetworkName(project)} {
-		if ep := c.NetworkSettings.Networks[name]; ep != nil && ep.IPAddress.IsValid() {
-			return net.JoinHostPort(ep.IPAddress.String(), strconv.Itoa(port)), nil
-		}
+	if ep := c.NetworkSettings.Networks[node.NetworkName(project)]; ep != nil && ep.IPAddress.IsValid() {
+		return net.JoinHostPort(ep.IPAddress.String(), strconv.Itoa(port)), nil
 	}
-	return "", errors.New("container has no address on the project or edge network")
+	return "", errors.New("container has no address on the project network")
 }
 
-// ConnectEdge joins the service container to the edge network, if it is not
-// there yet.
-func (l *Local) ConnectEdge(ctx context.Context, project, service string) error {
-	res, err := l.c.ContainerInspect(ctx, node.ContainerName(project, service), client.ContainerInspectOptions{})
-	if isNotFound(err) {
-		return nil // not deployed yet: the deploy joins it
+// ConnectEdge joins Caddy to the project's network, so it reaches the
+// project's services by their full name. Services never join the edge
+// network themselves: there every project with a domain could reach the
+// others (docs/05). Without Caddy (no edge on this server, or not created
+// yet) there is nothing to join; the edge joins it when it starts.
+func (l *Local) ConnectEdge(ctx context.Context, project string) error {
+	err := l.connectCaddy(ctx, node.NetworkName(project))
+	if errors.Is(err, errNoCaddy) {
+		return nil
+	}
+	return err
+}
+
+var errNoCaddy = errors.New("caddy container not found")
+
+// connectCaddy joins Caddy to a project network of this panel, if it is not
+// there yet. That endpoint never provides the default gateway: Caddy keeps
+// leaving through the edge network, where the panel and the firewall expect
+// its fixed address.
+func (l *Local) connectCaddy(ctx context.Context, networkName string) error {
+	c, err := l.caddy(ctx)
+	if err != nil {
+		return err
+	}
+	if onNetwork(c, networkName) {
+		return nil
+	}
+	res, err := l.c.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
+	if err != nil {
+		return err
+	}
+	if res.Network.Labels[node.LabelManaged] != "true" || res.Network.Labels[node.LabelProject] == "" {
+		return fmt.Errorf("network %s is not a Hangar project network", networkName)
+	}
+	if err := l.checkOwner(ctx, networkName, res.Network.Labels); err != nil {
+		return err
+	}
+	_, err = l.c.NetworkConnect(ctx, networkName, client.NetworkConnectOptions{
+		Container: c.ID, EndpointConfig: &network.EndpointSettings{GwPriority: -1},
+	})
+	if err != nil {
+		// A concurrent deploy of the same project may have joined it first.
+		if now, ierr := l.caddy(ctx); ierr == nil && onNetwork(now, networkName) {
+			return nil
+		}
+	}
+	return err
+}
+
+// disconnectCaddy takes Caddy off a project network that is going away.
+// Docker removes a network a stopped Caddy still lists, and that Caddy would
+// then fail to start, taking every site down.
+func (l *Local) disconnectCaddy(ctx context.Context, networkName string) error {
+	c, err := l.caddy(ctx)
+	if errors.Is(err, errNoCaddy) {
+		return nil
 	}
 	if err != nil {
 		return err
 	}
-	c := res.Container
-	if c.Config == nil {
-		return ErrNotManaged
-	}
-	if err := l.checkOwner(ctx, node.ContainerName(project, service), c.Config.Labels); err != nil {
-		return err
-	}
-	if c.NetworkSettings != nil && c.NetworkSettings.Networks[node.EdgeNetwork] != nil {
+	if !onNetwork(c, networkName) {
 		return nil
 	}
-	_, err = l.c.NetworkConnect(ctx, node.EdgeNetwork, client.NetworkConnectOptions{Container: c.ID})
+	_, err = l.c.NetworkDisconnect(ctx, networkName, client.NetworkDisconnectOptions{Container: c.ID, Force: true})
+	if isNotFound(err) {
+		return nil
+	}
 	return err
+}
+
+// caddy inspects Caddy's container, refusing one Hangar did not create.
+func (l *Local) caddy(ctx context.Context) (container.InspectResponse, error) {
+	res, err := l.c.ContainerInspect(ctx, node.EdgeContainer, client.ContainerInspectOptions{})
+	if isNotFound(err) {
+		return container.InspectResponse{}, errNoCaddy
+	}
+	if err != nil {
+		return container.InspectResponse{}, err
+	}
+	c := res.Container
+	if c.Config == nil {
+		return c, ErrNotManaged
+	}
+	if err := l.checkOwner(ctx, node.EdgeContainer, c.Config.Labels); err != nil {
+		return c, err
+	}
+	return c, nil
+}
+
+func onNetwork(c container.InspectResponse, networkName string) bool {
+	return c.NetworkSettings != nil && c.NetworkSettings.Networks[networkName] != nil
 }

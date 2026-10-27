@@ -53,8 +53,9 @@ type ServiceSpec struct {
 	PidsLimit   int64
 	ReadOnly    bool
 	CapAdd      []string
-	// Edge joins the container to the edge network too, so Caddy can proxy
-	// to it (services with domains).
+	// Edge joins Caddy to the project network, so it can proxy to the
+	// container (services with domains). The container itself never joins
+	// the edge network, which would let it reach other projects.
 	Edge bool
 	// Volumes are named Docker volumes (never host paths).
 	Volumes []Volume
@@ -576,7 +577,9 @@ type StatsReader interface {
 	ReclaimDisk(ctx context.Context) (Reclaimed, error)
 }
 
-// EdgeNetwork is the network shared by Caddy and every service with a domain.
+// EdgeNetwork is Caddy's own network, where the panel's listeners on its
+// gateway expect Caddy's fixed address. No service joins it: Caddy joins the
+// project networks instead.
 const EdgeNetwork = "hangar_edge"
 
 // EdgeContainer is Caddy's container name.
@@ -596,9 +599,9 @@ type EdgeSpec struct {
 // Node is what the panel can do with containers on a server.
 type Node interface {
 	EnsureEdge(ctx context.Context, spec EdgeSpec) error
-	// ConnectEdge joins a running service to the edge network (a domain was
-	// added; no redeploy needed).
-	ConnectEdge(ctx context.Context, project, service string) error
+	// ConnectEdge joins Caddy to the project's network so it reaches the
+	// project's services (a domain was added; no redeploy needed).
+	ConnectEdge(ctx context.Context, project string) error
 	ServiceAddress(ctx context.Context, project, service string, port int) (string, error)
 	EnsureProjectNetwork(ctx context.Context, projectID, project string) error
 	RemoveProjectNetwork(ctx context.Context, project string) error

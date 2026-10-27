@@ -18,6 +18,7 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store"
+	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
 // fakeCaddy is the admin API: it rejects any config containing reject, and
@@ -59,9 +60,15 @@ func (c *fakeCaddy) last() string {
 type edgeNode struct {
 	node.Node
 	ensured int
+	joined  []string
 }
 
 func (n *edgeNode) EnsureEdge(context.Context, node.EdgeSpec) error { n.ensured++; return nil }
+
+func (n *edgeNode) ConnectEdge(_ context.Context, project string) error {
+	n.joined = append(n.joined, project)
+	return nil
+}
 
 // newBootManager is a Manager whose admin API is caddy (nil = Caddy does not
 // answer at all), with the DNS-01 wildcard configured in hangar.toml.
@@ -242,6 +249,35 @@ func TestCheckAndHeal(t *testing.T) {
 	}
 	if m.node.(*edgeNode).ensured != 1 || caddy.last() == "" {
 		t.Error("Heal should ensure the container and load the config")
+	}
+	if j := m.node.(*edgeNode).joined; len(j) != 0 {
+		t.Errorf("no domain yet, caddy joined %v", j)
+	}
+}
+
+// A recreated Caddy is on no project network: Heal joins it to the network
+// of every project it routes to, or those sites would lose their upstream.
+func TestHealJoinsCaddyToRoutedProjects(t *testing.T) {
+	m := newBootManager(t, &fakeCaddy{})
+	ctx := context.Background()
+	now := time.Now().Unix()
+	if err := m.q.CreateProject(ctx, dbq.CreateProjectParams{ID: "prj_1", Slug: "lab", Name: "Lab", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.q.CreateService(ctx, dbq.CreateServiceParams{
+		ID: "svc_1", ProjectID: "prj_1", Slug: "web", Image: "lab:dev",
+		InternalPort: 8000, MemoryBytes: 256 << 20, NanoCpus: 1e9, PidsLimit: 128, CommandJson: "[]", CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.q.CreateDomain(ctx, dbq.CreateDomainParams{ID: "dom_1", ServiceID: "svc_1", Hostname: "lab.exemplo.com", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.Heal(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if j := m.node.(*edgeNode).joined; len(j) != 1 || j[0] != "lab" {
+		t.Errorf("caddy joined %v, want [lab]", j)
 	}
 	if err := newBootManager(t, nil).Check(context.Background()); err == nil {
 		t.Error("a Caddy that does not answer should fail the check")

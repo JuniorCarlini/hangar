@@ -49,7 +49,7 @@ func (f *fakeNode) Logs(_ context.Context, _, _ string, _ node.LogOptions, fn fu
 }
 func (f *fakeNode) ListManaged(context.Context) ([]node.Managed, error) { return nil, nil }
 func (f *fakeNode) EnsureEdge(context.Context, node.EdgeSpec) error     { return nil }
-func (f *fakeNode) ConnectEdge(context.Context, string, string) error   { return nil }
+func (f *fakeNode) ConnectEdge(context.Context, string) error           { return nil }
 func (f *fakeNode) Exec(_ context.Context, _, _ string, cmd []string, w io.Writer) error {
 	_, err := io.WriteString(w, "exec:"+strings.Join(cmd, " "))
 	return err
