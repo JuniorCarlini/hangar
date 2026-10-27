@@ -12,6 +12,14 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Corrigido
+
+- **TXT de posse aceito na hora**: quando o cliente abria o domínio antes de
+  criar o `_hangar.<domínio>`, o servidor guardava o "não existe" e seguia
+  recusando por até 30 minutos depois de o registro ser criado. Agora o
+  Hangar pergunta direto aos nameservers do domínio e aceita assim que o
+  registro existe.
+
 ## [0.5.19] - 2026-10-26
 
 ### Corrigido

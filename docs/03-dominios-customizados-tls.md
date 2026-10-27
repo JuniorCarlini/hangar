@@ -159,7 +159,11 @@ subdomínio novo leva alguns segundos a mais (emissão do certificado).
    `"hg-" + hex(HMAC-SHA256(segredo, "txt|" + domínio))[:12]`. O segredo é o
    mesmo `HANGAR_DOMAIN_CHECK_SECRET`, então a aplicação calcula o código sem
    guardar nada. Domínios já aprovados antes não precisam do TXT (ligar o
-   switch não quebra renovações).
+   switch não quebra renovações). O TXT é perguntado direto aos nameservers
+   da zona, não ao resolvedor da máquina: o cliente costuma abrir o site antes
+   de criar o registro, e o resolvedor guardaria esse "não existe" pelo TTL
+   negativo da zona (30 min na Cloudflare). Se os nameservers não respondem,
+   vale o resolvedor do sistema.
 7. **Limite por hora**: no máximo N nomes novos aprovados por hora (padrão
    30, ajustável de 1 a 1000 na tela Domínios, auditado). Nomes já aprovados
    antes não contam.

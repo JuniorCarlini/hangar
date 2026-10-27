@@ -77,7 +77,8 @@ type Authorizer struct {
 	PublicIPs []netip.Addr
 	// LookupIP resolves a hostname (replaceable in tests).
 	LookupIP func(ctx context.Context, host string) ([]netip.Addr, error)
-	// LookupTXT reads TXT records (replaceable in tests).
+	// LookupTXT reads TXT records from the zone's nameservers, past any
+	// cached "no such name" (replaceable in tests).
 	LookupTXT func(ctx context.Context, name string) ([]string, error)
 
 	mu    sync.Mutex
@@ -101,7 +102,7 @@ func NewAuthorizer(db *sql.DB, box *secrets.Box, resolver AppResolver) *Authoriz
 		LookupIP: func(ctx context.Context, host string) ([]netip.Addr, error) {
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		},
-		LookupTXT: net.DefaultResolver.LookupTXT,
+		LookupTXT: newFreshTXT().Lookup,
 		cache:     map[string]cached{},
 	}
 }
