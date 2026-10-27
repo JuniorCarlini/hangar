@@ -250,7 +250,7 @@ func (p *panel) project(name string) string {
 	p.t.Helper()
 	slug := "e2e-cx-" + name + "-" + randHex(3)
 	p.t.Cleanup(func() { removeProject(slug) })
-	if code, body := p.post("/projects", url.Values{"slug": {slug}, "name": {"Caos"}}); code != http.StatusSeeOther {
+	if code, body := p.post("/projects", url.Values{"name": {slug}}); code != http.StatusSeeOther {
 		p.t.Fatalf("create project: %d %s", code, tail(errorText(body), 300))
 	}
 	if code, body := p.post("/p/"+slug+"/services", url.Values{"slug": {"web"}, "image": {"nginx:1.29-alpine"}, "port": {"80"}, "memory_mb": {"64"}}); code != http.StatusSeeOther {
