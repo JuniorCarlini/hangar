@@ -22,6 +22,7 @@ var sealedColumns = []sealedColumn{
 	{"env_vars", "value_enc", []string{"service_id", "key"}, func(k []string) string { return "env_vars|" + k[0] + "|" + k[1] }},
 	{"service_exports", "value_enc", []string{"service_id", "key"}, func(k []string) string { return "service_exports|" + k[0] + "|" + k[1] }},
 	{"services", "domain_check_secret_enc", []string{"id"}, func(k []string) string { return "services|" + k[0] + "|domain_check_secret" }},
+	{"service_env_files", "text_enc", []string{"service_id"}, func(k []string) string { return "services|" + k[0] + "|env_file" }},
 	{"alert_channels", "config_enc", []string{"id"}, func(k []string) string { return "alert_channels|" + k[0] + "|config_enc" }},
 	{"backup_targets", "config_enc", []string{"id"}, func(k []string) string { return "backup_targets|" + k[0] + "|config" }},
 	{"service_git", "token_enc", []string{"service_id"}, func(k []string) string { return "service_git|" + k[0] + "|token" }},

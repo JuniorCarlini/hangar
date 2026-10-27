@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
@@ -20,6 +21,10 @@ func TestMasterKeyRotationKeepsEverySecretReadable(t *testing.T) {
 	ctx := context.Background()
 	id := g.create(t, GitServiceInput{ServiceInput: ServiceInput{Slug: "web", Port: 8000}, Token: "github_pat_leitura_123"})
 	if err := g.m.SetEnv(ctx, g.who, id, "SECRET_KEY", "super-segredo-123", true); err != nil {
+		t.Fatal(err)
+	}
+	// The .env editor keeps the whole text (with the real values) sealed too.
+	if _, err := g.m.SetEnvFile(ctx, g.who, id, "# app\nSECRET_KEY=super-segredo-123\n"); err != nil {
 		t.Fatal(err)
 	}
 	hook, err := g.m.RotateWebhook(ctx, g.who, id)
@@ -48,6 +53,12 @@ func TestMasterKeyRotationKeepsEverySecretReadable(t *testing.T) {
 	m2 := New(g.st.DB, newBox, g.b, audit.New(g.st.DB), slog.New(slog.NewTextHandler(io.Discard, nil)))
 	if v, err := m2.RevealEnv(ctx, g.who, id, "SECRET_KEY"); err != nil || v != "super-segredo-123" {
 		t.Errorf("env after rotation: %q, %v", v, err)
+	}
+	if text, _, err := m2.EnvText(ctx, id, true); err != nil || !strings.Contains(text, "SECRET_KEY=super-segredo-123") {
+		t.Errorf(".env text after rotation: %q, %v", text, err)
+	}
+	if _, _, err := g.m.EnvText(ctx, id, true); err == nil {
+		t.Error("the old key still opens the .env text")
 	}
 	if v, err := m2.RevealGitToken(ctx, g.who, id); err != nil || v != "github_pat_leitura_123" {
 		t.Errorf("git token after rotation: %q, %v", v, err)
