@@ -488,11 +488,19 @@ func TestOptionalTOTP(t *testing.T) {
 
 	// Turning 2FA on from My account.
 	secret, _ := NewTOTPSecret()
-	if _, err := f.svc.EnableTOTP(ctx, p, secret, "000000", cli); !errors.Is(err, ErrInvalidCode) {
+	if _, err := f.svc.EnableTOTP(ctx, p, goodPassword, secret, "000000", cli); !errors.Is(err, ErrInvalidCode) {
 		t.Errorf("wrong code enabling 2FA: %v", err)
 	}
 	code, _ := totpCode(secret, f.clock.now().Unix()/totpStep)
-	codes, err := f.svc.EnableTOTP(ctx, p, secret, code, cli)
+	// A session alone is not enough: the factor that sudo will trust from now
+	// on can only replace the password with the password.
+	if _, err := f.svc.EnableTOTP(ctx, p, "not-the-password", secret, code, cli); !errors.Is(err, ErrWrongPassword) {
+		t.Errorf("enabling 2FA with a wrong password: %v", err)
+	}
+	if p2, _ := f.svc.Authenticate(ctx, token); p2 == nil || p2.HasTOTP {
+		t.Fatal("a refused enable must leave the session and the account as they were")
+	}
+	codes, err := f.svc.EnableTOTP(ctx, p, goodPassword, secret, code, cli)
 	if err != nil || len(codes) != recoveryCount {
 		t.Fatalf("enable: %v %d codes", err, len(codes))
 	}

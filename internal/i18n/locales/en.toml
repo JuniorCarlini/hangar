@@ -979,6 +979,7 @@ why = "With 2FA, a leaked password is not enough to sign in: the code from the p
 step_scan = "Scan the QR code with an authenticator app (Google Authenticator, 1Password, Authy…)."
 qr_alt = "QR code to add Hangar to the authenticator app"
 manual = "No camera? Type this key in the app:"
+step_password = "Your current password (confirms it is you)"
 step_code = "6-digit code shown by the app"
 enable = "Turn on 2FA"
 enabled = "2FA is on. Keep the recovery codes below."
@@ -990,6 +991,7 @@ disabled = "2FA is off."
 required = "This server requires 2FA on every account (require_2fa in hangar.toml)."
 
 [account.totp.error]
+password = "Wrong password."
 code = "Invalid code. Check the phone's clock and try the next code."
 already_on = "2FA is already on."
 required = "This server requires 2FA; it cannot be turned off."

@@ -61,10 +61,14 @@ func (h *handlers) renderAccount(w http.ResponseWriter, r *http.Request, status 
 
 func (h *handlers) enableTOTP(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	codes, err := h.auth.EnableTOTP(r.Context(), p, r.PostFormValue("secret"), r.PostFormValue("code"), client(r))
+	codes, err := h.auth.EnableTOTP(r.Context(), p, r.PostFormValue("password"), r.PostFormValue("secret"), r.PostFormValue("code"), client(r))
 	if err != nil {
+		var rl *auth.RateLimitedError
 		msg := i18n.T(r.Context(), "account.totp.error.code")
-		if !errors.Is(err, auth.ErrInvalidCode) {
+		switch {
+		case errors.As(err, &rl):
+			msg = i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes())
+		case !errors.Is(err, auth.ErrInvalidCode):
 			msg = i18n.Message(i18n.Locale(r.Context()), err)
 		}
 		h.renderAccount(w, r, http.StatusUnprocessableEntity, "", msg, nil)

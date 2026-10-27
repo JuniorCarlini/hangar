@@ -41,7 +41,7 @@ func TestOptionalTOTPThroughTheWeb(t *testing.T) {
 	e.secret = secret
 	rec = e.do(req{
 		method: "POST", target: "/account/totp/enable", cookies: []*http.Cookie{session},
-		form: url.Values{"csrf": {csrf}, "secret": {secret}, "code": {e.code(t)}},
+		form: url.Values{"csrf": {csrf}, "secret": {secret}, "code": {e.code(t)}, "password": {testPassword}},
 	})
 	if rec.Code != http.StatusOK || strings.Count(rec.Body.String(), `select-all`) < 10 {
 		t.Fatalf("enable: %d", rec.Code)

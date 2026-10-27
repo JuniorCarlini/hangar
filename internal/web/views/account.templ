@@ -195,6 +195,10 @@ templ totpCard(d AccountData) {
 							<label class="tuc-label" for="totp-code">2. { t(ctx, "account.totp.step_code") }</label>
 							<input class="tuc-input w-40 text-center font-mono text-lg tracking-[.3em]" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required/>
 						</div>
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="totp-password">3. { t(ctx, "account.totp.step_password") }</label>
+							<input class="tuc-input max-w-xs" id="totp-password" name="password" type="password" autocomplete="current-password" required/>
+						</div>
 						<div>
 							<button class="tuc-btn is-primary" type="submit">
 								@Icon("shield-check", "size-3.5")

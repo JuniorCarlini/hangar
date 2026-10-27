@@ -979,6 +979,7 @@ why = "Com 2FA, uma senha vazada não basta para entrar: também é preciso o c�
 step_scan = "Escaneie o QR code com o app autenticador (Google Authenticator, 1Password, Authy…)."
 qr_alt = "QR code para cadastrar o Hangar no app autenticador"
 manual = "Sem câmera? Digite a chave no app:"
+step_password = "Sua senha atual (confirma que é você)"
 step_code = "Código de 6 dígitos que o app mostra"
 enable = "Ativar 2FA"
 enabled = "2FA ativada. Guarde os códigos de recuperação abaixo."
@@ -990,6 +991,7 @@ disabled = "2FA desativada."
 required = "Este servidor exige 2FA para todas as contas (require_2fa no hangar.toml)."
 
 [account.totp.error]
+password = "Senha incorreta."
 code = "Código inválido. Confira o horário do celular e tente o código seguinte."
 already_on = "A 2FA já está ativada."
 required = "Este servidor exige 2FA; ela não pode ser desativada."

@@ -58,6 +58,7 @@ var (
 	ErrEmailTaken         = &i18n.Error{Key: "user.error.email_taken"}
 	ErrTOTPAlreadyOn      = &i18n.Error{Key: "account.totp.error.already_on"}
 	ErrTOTPRequired       = &i18n.Error{Key: "account.totp.error.required"}
+	ErrWrongPassword      = &i18n.Error{Key: "account.totp.error.password"}
 )
 
 // LockedError is returned when the right password (or the pending 2FA step)
@@ -627,9 +628,26 @@ func (s *Service) confirm(ctx context.Context, userID, secret string) error {
 
 // EnableTOTP turns 2FA on from "My account": the code proves the app has the
 // secret. It returns fresh recovery codes, shown once.
-func (s *Service) EnableTOTP(ctx context.Context, p *Principal, secret, code string, c Client) ([]string, error) {
+//
+// The password is checked first: once a secret is stored, sudo asks for the
+// code instead of the password, so enrolling a factor from a stolen or
+// unattended session would otherwise grant sudo without ever knowing the
+// password (and lock the real user out).
+func (s *Service) EnableTOTP(ctx context.Context, p *Principal, password, secret, code string, c Client) ([]string, error) {
 	if p.HasTOTP {
 		return nil, ErrTOTPAlreadyOn
+	}
+	key := "sudo:" + p.UserID
+	if err := s.checkLimits(key); err != nil {
+		return nil, err
+	}
+	defer s.limits.end(key)
+	if err := s.confirm(ctx, p.UserID, password); err != nil {
+		if errors.Is(err, ErrInvalidCode) {
+			s.fail(ctx, c, p.UserID, "wrong_password_totp_enable", key)
+			return nil, ErrWrongPassword
+		}
+		return nil, err
 	}
 	if err := s.enrollTOTP(ctx, p.UserID, secret, code, p.SessionToken); err != nil {
 		return nil, err
