@@ -32,6 +32,37 @@ servidor pelo botão **Atualização** do painel.
   Hangar pergunta direto aos nameservers do domínio e aceita assim que o
   registro existe.
 
+### Segurança
+
+Correções de uma auditoria de segurança do código. Recomendado atualizar.
+
+- **Projetos separados de verdade**: todo serviço com domínio ficava numa
+  rede compartilhada, e de lá alcançava qualquer porta de serviços com
+  domínio de outros projetos, sem passar pelo Caddy nem pelo vínculo entre
+  projetos. Agora cada serviço fica só na rede do seu projeto, e o Caddy
+  entra na rede de cada projeto que ele atende. A mudança é automática ao
+  atualizar: o Caddy é recriado uma vez, e nenhum site perde a rota.
+- **Ativar a 2FA pede a senha**: antes bastava estar logado. Quem achasse
+  um navegador aberto podia cadastrar um celular próprio, passar pela
+  confirmação de senha com esse código e trancar o dono fora.
+- **Backup do painel só para o dono**: no modo simples, um administrador
+  conseguia baixar o backup do painel já aberto, com a chave mestra e o
+  banco inteiro, e com eles ler os segredos que são só do dono.
+- **Trocar a chave mestra cobre os arquivos .env**: o texto do editor de
+  .env (com os valores secretos) ficava na chave antiga depois da troca.
+  Quem tinha a chave vazada continuava abrindo, e o painel deixava de ler.
+- **hangar-cofre não roda imagem desconhecida**: a restauração usava a
+  imagem Docker escrita nos metadados do backup, que não são protegidos
+  pela criptografia. Agora só a imagem oficial do postgres é usada
+  automaticamente; outra precisa de `-image`.
+- **Nomes de outros projetos escondidos**: quem só vê alguns projetos não
+  vê mais, na página do serviço, o nome do projeto que recebe domínios dos
+  clientes.
+- **Defesas extras**: alertas por e-mail não conectam mais em endereços
+  internos do servidor; os textos da marca não conseguem rodar comandos
+  nas páginas de erro; o redirecionamento depois do login recusa
+  caracteres de controle; o logo dos templates abre isolado.
+
 ## [0.5.19] - 2026-10-26
 
 ### Corrigido
