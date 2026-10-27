@@ -2586,17 +2586,13 @@ write = "A marca foi salva, mas as páginas não puderam ser gravadas para o pro
 
 [volume]
 empty = "Nenhum disco. Tudo o que o app grava se perde no próximo deploy."
-disk = "Disco"
 usage = "Uso"
-usage_used = "{size} usados"
 usage_of = "{used} de {size}"
 usage_unknown = "medindo…"
 no_limit = "sem limite"
 title = "Discos"
 name = "Nome"
 path = "Caminho no container"
-docker = "Volume no servidor"
-fixed = "do modelo"
 read_only = "só leitura"
 shared_from = "o disco de {service}"
 shared_with = "também usado por {services}"
@@ -2858,13 +2854,14 @@ branch_hint = "Os branches do repositório; o padrão já vem escolhido."
 [image_tag]
 title = "Imagem"
 stateful = "Banco de dados: troque só dentro da mesma versão principal (ex.: 18.1 → 18.3) e faça backup antes."
-tag = "Versão (tag)"
-change = "Trocar versão"
+ref = "Imagem (nome:versão)"
+change = "Trocar imagem"
 
 [image_tag.error]
 git = "Este serviço é construído do Git: a versão vem do repositório."
 tag = "Versão inválida. Use só a tag (letras minúsculas, números, ponto, hífen e sublinhado), sem o nome da imagem."
-same = "O serviço já roda essa versão."
+same = "O serviço já roda essa imagem."
+image = "Imagem inválida. Use nome:versão, por exemplo postgres:18 ou ghcr.io/dono/app:1.2."
 changed = "A imagem do serviço mudou enquanto isso. Recarregue a página e tente de novo."
 
 [confirm.image]

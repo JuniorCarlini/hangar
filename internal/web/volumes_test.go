@@ -74,7 +74,7 @@ func TestVolumeLimitRoutes(t *testing.T) {
 	// Usage of a disk without a limit, and the button behind sudo.
 	c, pr := e.session(t, auth.RoleAdmin)
 	page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{c}}).Body.String()
-	for _, want := range []string{"300 MB usados", "sem limite", `data-tuc-modal="#sudo-dialog" title="Limitar tamanho"`} {
+	for _, want := range []string{"300 MB", "sem limite", `data-tuc-modal="#sudo-dialog" title="Limitar tamanho"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page without sudo lacks %q", want)
 		}

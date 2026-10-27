@@ -2585,17 +2585,13 @@ write = "The brand was saved, but the pages could not be written for the proxy. 
 
 [volume]
 empty = "No disk. Everything the app writes is lost on the next deploy."
-disk = "Disk"
 usage = "Usage"
-usage_used = "{size} used"
 usage_of = "{used} of {size}"
 usage_unknown = "measuring…"
 no_limit = "no limit"
 title = "Disks"
 name = "Name"
 path = "Path in the container"
-docker = "Volume on the server"
-fixed = "from the template"
 read_only = "read-only"
 shared_from = "the disk of {service}"
 shared_with = "also used by {services}"
@@ -2857,13 +2853,14 @@ branch_hint = "The repository's branches; the default one comes selected."
 [image_tag]
 title = "Image"
 stateful = "Database: only change within the same major version (e.g. 18.1 → 18.3) and take a backup first."
-tag = "Version (tag)"
-change = "Change version"
+ref = "Image (name:version)"
+change = "Change image"
 
 [image_tag.error]
 git = "This service is built from Git: its version comes from the repository."
 tag = "Invalid version. Use only the tag (lowercase letters, digits, dot, hyphen and underscore), without the image name."
-same = "The service already runs this version."
+same = "The service already runs this image."
+image = "Invalid image. Use name:version, for example postgres:18 or ghcr.io/owner/app:1.2."
 changed = "The service's image changed meanwhile. Reload the page and try again."
 
 [confirm.image]
