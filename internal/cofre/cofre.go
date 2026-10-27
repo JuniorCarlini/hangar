@@ -145,8 +145,11 @@ type Vault struct {
 	Src      Source
 	Docker   Docker
 	Progress Progress
-	ids      []age.Identity
-	now      func() time.Time
+	// Image, when set by the operator (-image), is the image restores run;
+	// otherwise only an official postgres image named by the backup is used.
+	Image string
+	ids   []age.Identity
+	now   func() time.Time
 }
 
 // New builds a Vault reading from src.

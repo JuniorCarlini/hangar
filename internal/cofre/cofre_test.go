@@ -169,3 +169,49 @@ func TestDrillRestoresDumpsAndChecksPanel(t *testing.T) {
 		}
 	}
 }
+
+// The image a backup names lives in bucket metadata, outside the
+// encryption: whoever can write the bucket (the server's own credential)
+// could name an image of theirs and receive the decrypted backup here. Only
+// the official postgres image is run on the backup's word; any other needs
+// the operator's -image.
+func TestRestoreRefusesImageFromMetadata(t *testing.T) {
+	id, _ := age.GenerateX25519Identity()
+	key := archive.DumpKey(archive.ClassDaily, "loja", "db", time.Now().Add(-time.Hour).UTC())
+	dir := writeDir(t, map[string][]byte{key: sealed(t, id, []byte("PGDMP secret-rows"), false)}, nil)
+	meta := filepath.Join(dir, filepath.FromSlash(key)) + metaSuffix
+	if err := os.WriteFile(meta, []byte(`{"hangar-image":"evil.example/attacker:latest"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opt := RestoreOptions{Project: "loja", Service: "db", Dump: true, Port: 54329}
+
+	fd := &fakeDocker{}
+	v := New(Dir{Root: dir}, []age.Identity{id})
+	v.Docker = fd.run
+	if _, err := v.RestoreLocal(context.Background(), opt); err == nil {
+		t.Fatal("an image named only by the bucket must be refused")
+	}
+	if len(fd.calls) != 0 || len(fd.in) != 0 {
+		t.Fatalf("docker ran or got the backup: %v %q", fd.calls, fd.in)
+	}
+
+	// The operator trusts it explicitly.
+	fd = &fakeDocker{}
+	v.Docker = fd.run
+	v.Image = "evil.example/attacker:latest"
+	if _, err := v.RestoreLocal(context.Background(), opt); err != nil {
+		t.Fatal(err)
+	}
+
+	// An official postgres image is run as the backup says.
+	for _, img := range []string{"postgres:17-alpine", "docker.io/library/postgres:16.4-bookworm"} {
+		if got, err := (&Vault{}).image(map[string]string{"hangar-image": img}); err != nil || got != img {
+			t.Errorf("%s: %q %v", img, got, err)
+		}
+	}
+	for _, img := range []string{"postgres:17-alpine@sha256:x", "evil/postgres:17", "postgres.evil.example/postgres:17", "postgres:latest; rm"} {
+		if _, err := (&Vault{}).image(map[string]string{"hangar-image": img}); err == nil {
+			t.Errorf("%s accepted", img)
+		}
+	}
+}

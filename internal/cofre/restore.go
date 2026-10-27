@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/i18n"
 )
 
 // DefaultImage is used when a backup does not say which image made it.
@@ -122,6 +124,31 @@ func (v *Vault) latestDump(ctx context.Context, project, service string, before 
 	return best.Key, nil
 }
 
+// officialPostgres matches the Docker Official PostgreSQL images, the only
+// ones hangar-cofre runs on a backup's word alone.
+var officialPostgres = regexp.MustCompile(`^(docker\.io/)?(library/)?postgres:[0-9]+(\.[0-9]+)*(-(alpine[0-9.]*|bookworm|bullseye|trixie))?$`)
+
+// image picks the image that will receive the decrypted backup. The
+// backup's metadata names the image that made it, but metadata is not
+// covered by the encryption: whoever can write the bucket (the server's own
+// credential, if the server is broken into) could name an image of theirs
+// and read the backup the moment it is restored here. So the metadata is
+// only advice: the operator's -image wins, an official postgres image is
+// accepted, anything else is refused with the flag that trusts it.
+func (v *Vault) image(meta map[string]string) (string, error) {
+	if v.Image != "" {
+		return v.Image, nil
+	}
+	m := meta["hangar-image"]
+	switch {
+	case m == "":
+		return DefaultImage, nil
+	case officialPostgres.MatchString(m):
+		return m, nil
+	}
+	return "", i18n.E("cofre.error.untrusted_image", "image", m)
+}
+
 func metaOr(meta map[string]string, key, def string) string {
 	if v := meta[key]; v != "" {
 		return v
@@ -143,9 +170,13 @@ func (v *Vault) restorePITR(ctx context.Context, o RestoreOptions, plan archive.
 		return Restored{}, err
 	}
 	_ = rc.Close()
+	img, err := v.image(meta)
+	if err != nil {
+		return Restored{}, err
+	}
 	r := Restored{
 		Mode: "pitr", Key: plan.Base.Key, Target: plan.Target, ToEnd: plan.ToEnd, Port: o.Port,
-		Image: metaOr(meta, "hangar-image", DefaultImage), User: metaOr(meta, "hangar-db-user", "postgres"), DB: metaOr(meta, "hangar-db-name", "postgres"),
+		Image: img, User: metaOr(meta, "hangar-db-user", "postgres"), DB: metaOr(meta, "hangar-db-name", "postgres"),
 	}
 	suffix := randSuffix()
 	r.Volume = "hangar-cofre-" + o.Project + "-" + o.Service + "-" + suffix
@@ -180,9 +211,13 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 		return Restored{}, err
 	}
 	defer func() { _ = rc.Close() }()
+	img, err := v.image(meta)
+	if err != nil {
+		return Restored{}, err
+	}
 	r := Restored{
 		Mode: "dump", Key: key, Container: name, Port: port, Password: randSuffix() + randSuffix(),
-		Image: metaOr(meta, "hangar-image", DefaultImage), User: metaOr(meta, "hangar-db-user", "postgres"), DB: metaOr(meta, "hangar-db-name", "postgres"),
+		Image: img, User: metaOr(meta, "hangar-db-user", "postgres"), DB: metaOr(meta, "hangar-db-name", "postgres"),
 	}
 	args := []string{
 		"run", "-d", "--name", name, "--label", "hangar.cofre=true",

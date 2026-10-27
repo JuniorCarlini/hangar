@@ -280,6 +280,7 @@ func vaultCmd(ctx context.Context, cmd string, args []string, stdin io.Reader, s
 	at := fs.String("at", "", tr("cofre.flag_at"))
 	dump := fs.Bool("dump", false, tr("cofre.flag_dump"))
 	port := fs.Int("port", 54329, tr("cofre.flag_port"))
+	image := fs.String("image", "", tr("cofre.flag_image"))
 	positional, flagArgs := splitFirst(args)
 	if err := fs.Parse(flagArgs); err != nil {
 		return err
@@ -340,6 +341,7 @@ func vaultCmd(ctx context.Context, cmd string, args []string, stdin io.Reader, s
 		return err
 	}
 	v.SetIdentities(archive.Identities(keys))
+	v.Image = *image
 	switch cmd {
 	case "restore-local":
 		if positional == "" {
