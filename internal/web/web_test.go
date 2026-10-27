@@ -569,3 +569,25 @@ func TestUpdatePageRequiresOwnerAndSudo(t *testing.T) {
 		t.Fatalf("update without sudo: status %d, want 403", rec.Code)
 	}
 }
+
+// The customers' domains modal reopens after its own changes only.
+func TestClientsModalReopens(t *testing.T) {
+	base := "/p/lab/s/web"
+	for _, c := range []struct {
+		method, target, secret string
+		want                   bool
+	}{
+		{http.MethodGet, base + "?tab=network", "", false},
+		{http.MethodGet, base + "?tab=network&ok=txt-on", "", true},
+		{http.MethodGet, base + "?tab=network&ok=dynamic-on", "", true},
+		{http.MethodGet, base + "?tab=network&ok=domain", "", false},
+		{http.MethodPost, base + "/domains/txt", "", true},
+		{http.MethodPost, base + "/domains/secret", "s3cret", true},
+		{http.MethodPost, base + "/domains/probe", "", false},
+	} {
+		r := httptest.NewRequest(c.method, c.target, nil)
+		if got := clientsOpen(r, serviceView{checkSecret: c.secret}); got != c.want {
+			t.Errorf("%s %s: %v, want %v", c.method, c.target, got, c.want)
+		}
+	}
+}

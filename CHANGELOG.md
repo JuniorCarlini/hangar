@@ -12,6 +12,16 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Mudado
+
+- **Aba Rede mais limpa**: os domínios do serviço viram uma tabela só (link
+  automático, domínios fixos e a linha "Domínios dos clientes"), sem os
+  textos longos. As explicações ficam no **?** ao lado do título.
+- **Domínios dos clientes num modal**: aceitar domínios, o TXT de posse, a
+  rota da app, o segredo e o kit do desenvolvedor saíram da aba e ficam no
+  botão **Configurar** da linha. Depois de mudar algo, o modal reabre com o
+  resultado.
+
 ### Corrigido
 
 - **TXT de posse aceito na hora**: quando o cliente abria o domínio antes de

@@ -287,6 +287,26 @@ func flashFrom(r *http.Request) string {
 	return ""
 }
 
+// clientsOpen reports whether the page answers a change made in the
+// customers' domains modal (a switch, the secret, or an error from them).
+func clientsOpen(r *http.Request, v serviceView) bool {
+	if v.checkSecret != "" {
+		return true
+	}
+	switch r.URL.Query().Get("ok") {
+	case "dynamic-on", "txt-on", "txt-off":
+		return true
+	}
+	if r.Method == http.MethodPost {
+		for _, p := range []string{"/domains/dynamic", "/domains/txt", "/domains/secret", "/domains/secret/rotate"} {
+			if strings.HasSuffix(r.URL.Path, p) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v serviceView) {
 	pr := PrincipalFrom(r.Context())
 	p, s, err := h.projects.GetService(r.Context(), r.PathValue("project"), r.PathValue("service"))
@@ -377,6 +397,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		EdgeEnabled: h.projects.EdgeEnabled(), Dynamic: s.DynamicDomains == 1,
 		CheckPath: s.DomainCheckPath, CheckSecret: v.checkSecret,
 		RequireTXT: s.DomainRequireTxt == 1, Probe: v.probe,
+		ClientsOpen: clientsOpen(r, v),
 	}
 	if d.Domains.Dynamic && d.Domains.EdgeEnabled {
 		d.Domains.EntryHost = h.entryHost()

@@ -76,3 +76,49 @@ func TestKitShowsTheProbe(t *testing.T) {
 		}
 	}
 }
+
+// The Domains card is one table (links, fixed domains and the customers'
+// row); the customers' settings live in their own modal, which opens by
+// itself only after one of its changes.
+func TestDomainsTabIsOneTable(t *testing.T) {
+	d := ServiceData{Project: "lab", Slug: "web", CSRF: "tok", Port: 8000, CanAdmin: true, CanOperate: true, SudoActive: true, Domains: DomainsSection{
+		EdgeEnabled: true, Dynamic: true, CheckPath: "/.well-known/hangar/domain-check",
+		Endpoints: []EndpointRow{{ID: "e1", Label: "web", Port: 8000}},
+		Fixed:     []DomainRow{{ID: "d1", Hostname: "loja.exemplo.com"}},
+	}}
+	render := func(d ServiceData) string {
+		var b strings.Builder
+		if err := tabDomains(d).Render(context.Background(), &b); err != nil {
+			t.Fatal(err)
+		}
+		return b.String()
+	}
+	html := render(d)
+	card, modal, ok := strings.Cut(html, `id="domain-clients"`)
+	if !ok {
+		t.Fatal("no customer domains modal")
+	}
+	if n := strings.Count(card, "<table"); n != 1 {
+		t.Errorf("%d tables in the card, want 1", n)
+	}
+	for _, want := range []string{"web", "loja.exemplo.com", `data-tuc-modal="#domain-clients"`} {
+		if !strings.Contains(card, want) {
+			t.Errorf("card without %q", want)
+		}
+	}
+	for _, moved := range []string{"/domains/txt", "/domains/secret/rotate", "HANGAR_DOMAIN_CHECK_SECRET"} {
+		if strings.Contains(card, moved) {
+			t.Errorf("%q is still in the card", moved)
+		}
+		if !strings.Contains(modal, moved) {
+			t.Errorf("%q is not in the modal", moved)
+		}
+	}
+	if strings.Contains(modal[:200], `data-open="true"`) {
+		t.Error("the modal opens on a plain visit")
+	}
+	d.Domains.ClientsOpen = true
+	if _, modal, _ := strings.Cut(render(d), `id="domain-clients"`); !strings.Contains(modal[:200], `data-open="true"`) {
+		t.Error("the modal does not reopen after a change")
+	}
+}

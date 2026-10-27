@@ -162,6 +162,24 @@ templ cardHead(title string) {
 	</div>
 }
 
+// cardHeadHelp is cardHead with a "?" beside the title whose tooltip holds
+// the explanation, so the card itself stays free of loose text.
+templ cardHeadHelp(title, help string) {
+	<div class={ cardHeadClass }>
+		<h2 class="m-0 text-sm leading-5 font-semibold">{ title }</h2>
+		@helpTip(help)
+		<span class="grow"></span>
+		{ children... }
+	</div>
+}
+
+// helpTip is a "?" whose tooltip explains what is next to it.
+templ helpTip(text string) {
+	<button type="button" class="tuc-btn is-ghost is-icon is-sm -ml-1 text-subtle" data-tuc-tip={ text } aria-label={ text }>
+		@Icon("circle-question-mark", "size-3.5")
+	</button>
+}
+
 // notice is an explanation that matters (where alerts go, what a public
 // page hides…) shown as an alert box instead of loose small text. tone:
 // info, warning, success or danger.

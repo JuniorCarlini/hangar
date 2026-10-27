@@ -341,6 +341,9 @@ type DomainsSection struct {
 	EntryHost string
 	// Probe is the result of the developer kit's test, right after it ran.
 	Probe *DomainProbe
+	// ClientsOpen reopens the customers' domains modal after one of its
+	// changes, so the operator sees the result where they made it.
+	ClientsOpen bool
 	// Base is the edge's base domain ("Em escala" sets it from the panel).
 	Base EdgeBase
 	// DNSProviders are the providers "Em escala" can use.

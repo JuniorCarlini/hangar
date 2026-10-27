@@ -460,7 +460,7 @@ templ tabConnection(d ServiceData) {
 
 templ tabPorts(d ServiceData) {
 	<section class={ cardClass } id="ports">
-		@cardHead(t(ctx, "port.title_plural")) {
+		@cardHeadHelp(t(ctx, "port.title_plural"), t(ctx, "port.hint")+" "+t(ctx, "port.internal_hint")) {
 			if d.CanAdmin && d.SudoActive {
 				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#port-new">
 					@Icon("plug", "size-3.5")
@@ -470,9 +470,6 @@ templ tabPorts(d ServiceData) {
 				@sudoButton(t(ctx, "port.open"))
 			}
 		}
-		<div class="px-4 pt-4">
-			@notice("info", "info", t(ctx, "port.hint"))
-		</div>
 		if len(d.Ports) > 0 {
 			<div class="tuc-table-wrap pt-3">
 				<table class="tuc-table is-compact w-full">
@@ -646,14 +643,14 @@ templ certBadge(state string) {
 	}
 }
 
-// tabDomains is the Domains card of the Network tab: the fixed domains
-// (wildcards included) and, below them, whether this service takes the
-// customers' own domains.
+// tabDomains is the Domains card of the Network tab: one table with every
+// address of the service (automatic links, fixed domains and the customers'
+// domains), and the customers' domains settings in their own modal.
 templ tabDomains(d ServiceData) {
 	// While a certificate is being issued the card refreshes itself (ui.js,
 	// data-refresh/data-live) until it shows "HTTPS ativo".
 	<section class={ cardClass } id="domains" data-live { certRefresh(d)... }>
-		@cardHead(t(ctx, "domain.title")) {
+		@cardHeadHelp(t(ctx, "domain.title"), t(ctx, "domain.help")) {
 			if d.Port != 0 || len(d.Domains.Endpoints) > 0 {
 				if d.CanAdmin && d.SudoActive {
 					<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#domain-new">
@@ -671,7 +668,7 @@ templ tabDomains(d ServiceData) {
 			// served, but it must stay visible to be removed.
 			if len(d.Domains.Fixed) > 0 {
 				<div class={ cardBodyClass }>
-					@fixedDomains(d)
+					@domainTable(d, false)
 				</div>
 			}
 		} else {
@@ -682,259 +679,342 @@ templ tabDomains(d ServiceData) {
 				if d.Domains.EdgeEnabled && d.Domains.NoAutoLink {
 					@notice("info", "info", t(ctx, "endpoint.no_link"))
 				}
-				if len(d.Domains.Endpoints) > 0 {
-					<div class="flex flex-col gap-2">
-						<span class="tuc-label">{ t(ctx, "endpoint.section") }</span>
-						for _, e := range d.Domains.Endpoints {
-							<div class="flex flex-wrap items-center gap-3 rounded-sm border border-border px-3.5 py-3">
-								<div class="flex min-w-0 grow flex-col gap-0.5">
-									<span class="flex items-center gap-2">
-										<strong class="text-[13px] font-semibold">{ e.Label }</strong>
-										<span class="font-mono text-xs text-muted">:{ strconv.Itoa(e.Port) }</span>
-									</span>
-									if e.Public && e.SslipEnabled && e.AutoHost != "" {
-										<span class="flex flex-wrap items-center gap-2">
-											<a class="font-mono text-xs text-accent-text break-all hover:underline" href={ templ.SafeURL(siteURL(e.AutoHost, e.Cert)) } target="_blank" rel="noopener">{ e.AutoHost }</a>
-											@certBadge(e.Cert)
-										</span>
-									} else if e.Public && e.SslipEnabled {
-										<span class="text-xs text-muted">{ t(ctx, "endpoint.no_link_short") }</span>
-									} else if e.Public {
-										<span class="text-xs text-muted">{ t(ctx, "endpoint.link_off") }</span>
-									} else {
-										<span class="text-xs text-muted">{ t(ctx, "endpoint.internal_hint") }</span>
-									}
-								</div>
-								if e.Public && e.SslipEnabled && e.AutoHost != "" {
-									<div class="flex shrink-0 items-center gap-1">
-										<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ "https://" + e.AutoHost } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "export.copy") }>
-											@Icon("copy", "size-3.5")
-										</button>
-										<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL(siteURL(e.AutoHost, e.Cert)) } target="_blank" rel="noopener" aria-label={ t(ctx, "endpoint.open") } title={ t(ctx, "endpoint.open") }>
-											@Icon("external-link", "size-3.5")
-										</a>
-									</div>
-								}
-								if d.CanOperate {
-									<div class="flex shrink-0 items-center gap-4 border-l border-border pl-3">
-										// Putting a service on the internet takes an admin with
-										// sudo and a confirmation (as a domain does); taking it
-										// off only lowers exposure: any operator, confirmed.
-										if e.Public {
-											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/internal") } data-confirm={ t(ctx, "endpoint.internal_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.internal_confirm_text") } data-confirm-ok={ t(ctx, "endpoint.internal_confirm_ok") } data-tone="warning">
-												<input type="hidden" name="csrf" value={ d.CSRF }/>
-												<input type="hidden" name="id" value={ e.ID }/>
-												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } checked data-autosubmit/>
-												<span class="text-xs text-muted">{ t(ctx, "endpoint.public") }</span>
-											</form>
-										} else if d.CanAdmin && d.SudoActive {
-											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/public") } data-confirm={ t(ctx, "endpoint.public_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.public_confirm_text", "label", e.Label) } data-confirm-ok={ t(ctx, "endpoint.public_confirm_ok") } data-tone="warning">
-												<input type="hidden" name="csrf" value={ d.CSRF }/>
-												<input type="hidden" name="id" value={ e.ID }/>
-												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } data-autosubmit/>
-												<span class="text-xs text-muted">{ t(ctx, "endpoint.public") }</span>
-											</form>
-										} else if d.CanAdmin {
-											@sudoButton(t(ctx, "endpoint.make_public"))
-										} else {
-											<span class="flex items-center gap-2" title={ t(ctx, "endpoint.admin_only") }>
-												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } disabled/>
-												<span class="text-xs text-subtle">{ t(ctx, "endpoint.public") }</span>
-											</span>
-										}
-										if e.Public && e.SslipEnabled {
-											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-off") }>
-												<input type="hidden" name="csrf" value={ d.CSRF }/>
-												<input type="hidden" name="id" value={ e.ID }/>
-												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } checked data-autosubmit/>
-												<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip") }</span>
-											</form>
-										} else if e.Public && d.CanAdmin && d.SudoActive {
-											<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-on") } data-confirm={ t(ctx, "endpoint.sslip_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.sslip_confirm_text") } data-confirm-ok={ t(ctx, "endpoint.sslip_confirm_ok") } data-tone="warning">
-												<input type="hidden" name="csrf" value={ d.CSRF }/>
-												<input type="hidden" name="id" value={ e.ID }/>
-												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } data-autosubmit/>
-												<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip") }</span>
-											</form>
-										} else if e.Public && d.CanAdmin {
-											@sudoButton(t(ctx, "endpoint.sslip"))
-										} else if e.Public {
-											<span class="flex items-center gap-2" title={ t(ctx, "endpoint.admin_only") }>
-												<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } disabled/>
-												<span class="text-xs text-subtle">{ t(ctx, "endpoint.sslip") }</span>
-											</span>
-										}
-									</div>
-								}
-							</div>
-						}
-					</div>
-				}
-				@fixedDomains(d)
+				@domainTable(d, true)
 				@scaledBase(d)
-				@dynamicDomains(d)
 			</div>
 		}
 	</section>
 	if (d.Port != 0 || len(d.Domains.Endpoints) > 0) && d.CanAdmin && d.SudoActive {
 		@domainDialog(d)
 	}
-}
-
-// fixedDomains lists the service's own domains, with their certificate
-// state and the button to remove them.
-templ fixedDomains(d ServiceData) {
-	if len(d.Domains.Fixed) > 0 {
-		<div class="tuc-table-wrap rounded-sm border border-border">
-			<table class="tuc-table is-compact w-full">
-				<thead><tr><th>{ t(ctx, "domain.fixed") }</th><th>{ t(ctx, "domain.certificate") }</th><th class="tuc-table__actions"></th></tr></thead>
-				<tbody>
-					for _, dm := range d.Domains.Fixed {
-						<tr>
-							<td>
-								<span class="flex flex-wrap items-center gap-1.5">
-									<span class="font-mono text-[13px] break-all">{ dm.Hostname }</span>
-									if isWildcard(dm.Hostname) {
-										<span class="tuc-badge">{ t(ctx, "domain.wildcard_badge") }</span>
-									}
-								</span>
-							</td>
-							<td>
-								if scaledWildcard(d.Domains.Base, dm.Hostname) {
-									<span class="tuc-badge is-success" title={ t(ctx, "domain.scale_cert_hint", "provider", d.Domains.Base.Provider) }>{ t(ctx, "domain.scale_cert") }</span>
-								} else if isWildcard(dm.Hostname) {
-									<span class="tuc-badge is-info" title={ t(ctx, "domain.wildcard_cert_hint") }>{ t(ctx, "domain.wildcard_cert") }</span>
-								} else if dm.Offline {
-									<span class="tuc-badge is-danger" title={ t(ctx, "domain.offline_hint") }>{ t(ctx, "domain.offline") }</span>
-								} else {
-									@certBadge(dm.Cert)
-								}
-							</td>
-							<td class="tuc-table__actions">
-								if d.CanAdmin && !d.SudoActive {
-									<button type="button" class="tuc-btn is-ghost is-icon is-sm text-danger" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "domain.remove_named", "host", dm.Hostname) } title={ t(ctx, "domain.remove_sudo") }>
-										@Icon("trash", "size-3.5")
-									</button>
-								} else if d.CanAdmin {
-									<form data-confirm={ t(ctx, "confirm.domain_delete.title") } data-confirm-text={ t(ctx, "confirm.domain_delete.text") } data-confirm-ok={ t(ctx, "confirm.domain_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/domains/delete") }>
-										<input type="hidden" name="csrf" value={ d.CSRF }/>
-										<input type="hidden" name="id" value={ dm.ID }/>
-										<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" aria-label={ t(ctx, "domain.remove_named", "host", dm.Hostname) } title={ t(ctx, "domain.remove") }>
-											@Icon("trash", "size-3.5")
-										</button>
-									</form>
-								}
-							</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-		</div>
-	} else {
-		@emptyState("globe", t(ctx, "domain.empty"))
+	if d.Port != 0 || len(d.Domains.Endpoints) > 0 {
+		@clientsDialog(d)
+		if d.Domains.Dynamic {
+			@domainKit(d)
+		}
 	}
 }
 
-// dynamicDomains is the "accept the customers' domains" switch and, when on,
-// how the app takes part.
-templ dynamicDomains(d ServiceData) {
-	<div class="flex flex-col gap-3 border-t border-border pt-3">
-		if d.Domains.DynamicElsewhere != "" && !d.Domains.Dynamic {
-			<div class="flex min-w-0 flex-col gap-0.5">
-				<strong class="text-[13px] font-semibold">{ t(ctx, "domain.dynamic.switch") }</strong>
-				<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.elsewhere", "service", d.Domains.DynamicElsewhere) }</span>
-			</div>
-		} else {
-			<form class="flex items-center gap-4" data-confirm={ t(ctx, "confirm.dynamic.title") } data-confirm-text={ t(ctx, "confirm.dynamic.text") } data-confirm-ok={ t(ctx, "confirm.dynamic.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/domains/dynamic") }>
-				<input type="hidden" name="csrf" value={ d.CSRF }/>
-				if d.Domains.Dynamic {
-					<input type="hidden" name="action" value="disable"/>
-				} else {
-					<input type="hidden" name="action" value="enable"/>
-				}
-				if d.CanAdmin && d.SudoActive {
-					<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.dynamic.switch") } checked?={ d.Domains.Dynamic } data-autosubmit/>
-				} else if d.CanAdmin {
-					@sudoButton(t(ctx, "domain.dynamic.unlock"))
-				} else {
-					<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.dynamic.switch") } checked?={ d.Domains.Dynamic } disabled/>
-				}
-				<div class="flex min-w-0 flex-1 flex-col gap-0.5">
-					<strong class="text-[13px] font-semibold">{ t(ctx, "domain.dynamic.switch") }</strong>
-					<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.explain") }</span>
-				</div>
-			</form>
-		}
-		if d.Domains.Dynamic {
-			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3">
-				<div class="flex min-w-0 flex-col gap-1"><span class="tuc-label">{ t(ctx, "domain.dynamic.check_path") }</span><code class="font-mono text-xs break-all">{ d.Domains.CheckPath }</code></div>
-				<div class="flex min-w-0 flex-col gap-1">
-					<span class="tuc-label">{ t(ctx, "domain.dynamic.secret_env") }</span>
-					<span class="flex flex-wrap items-center gap-1.5 [&_form]:inline-flex">
-						<code class="font-mono text-xs">HANGAR_DOMAIN_CHECK_SECRET</code>
-						if d.Domains.CheckSecret == "" && d.CanAdmin && d.SudoCritical {
-							<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret") }>
-								<input type="hidden" name="csrf" value={ d.CSRF }/>
-								<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "domain.dynamic.reveal") } aria-label={ t(ctx, "domain.dynamic.reveal") }>
-									@Icon("eye", "size-3.5")
-								</button>
-							</form>
-						}
-					</span>
-					if d.Domains.CheckSecret != "" {
-						<div class="flex items-center gap-1.5">
-							<code class="grow rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs break-all select-all">{ d.Domains.CheckSecret }</code>
-							<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Domains.CheckSecret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "domain.dynamic.secret_copy") } title={ t(ctx, "domain.dynamic.secret_copy") }>
-								@Icon("copy", "size-3.5")
-							</button>
-						</div>
+// domainTable lists every address of the service in one table. Without a
+// port only the fixed domains left behind show, to be removed.
+templ domainTable(d ServiceData, served bool) {
+	<div class="tuc-table-wrap rounded-sm border border-border">
+		<table class="tuc-table is-compact w-full">
+			<thead>
+				<tr>
+					<th>{ t(ctx, "domain.col.address") }</th>
+					<th>{ t(ctx, "domain.col.status") }</th>
+					<th class="tuc-table__actions"><span class="sr-only">{ t(ctx, "domain.col.actions") }</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				if served {
+					for _, e := range d.Domains.Endpoints {
+						@endpointRow(d, e)
 					}
-					if d.CanAdmin && d.SudoActive {
-						<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret/rotate") } data-confirm={ t(ctx, "confirm.secret_rotate.title") } data-confirm-text={ t(ctx, "confirm.secret_rotate.text") } data-confirm-ok={ t(ctx, "confirm.secret_rotate.ok") } data-tone="warning">
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<button type="submit" class="tuc-btn is-outline is-sm">
-								@Icon("refresh-cw", "size-3.5")
-								{ t(ctx, "domain.dynamic.rotate") }
-							</button>
-						</form>
-						<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.rotate_hint") }</span>
-					}
-				</div>
-			</div>
-			<form class="flex items-center gap-4" method="post" action={ templ.SafeURL(d.base() + "/domains/txt") }
-				if d.Domains.RequireTXT {
-					data-confirm={ t(ctx, "confirm.txt_off.title") }
-					data-confirm-text={ t(ctx, "confirm.txt_off.text") }
-					data-confirm-ok={ t(ctx, "confirm.txt_off.ok") }
-					data-tone="warning"
 				}
-			>
-				<input type="hidden" name="csrf" value={ d.CSRF }/>
-				if d.Domains.RequireTXT {
-					<input type="hidden" name="on" value="0"/>
-				} else {
-					<input type="hidden" name="on" value="1"/>
+				for _, dm := range d.Domains.Fixed {
+					@fixedRow(d, dm)
 				}
-				<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.txt.switch") } checked?={ d.Domains.RequireTXT } disabled?={ !d.CanAdmin } data-autosubmit/>
-				<div class="flex min-w-0 flex-1 flex-col gap-0.5">
-					<strong class="text-[13px] font-semibold">{ t(ctx, "domain.txt.switch") }</strong>
-					<span class="text-xs text-muted">{ t(ctx, "domain.txt.explain") }</span>
-				</div>
-			</form>
-			<div class="flex flex-wrap gap-2">
-				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-kit">
-					@Icon("file-code", "size-3.5")
-					{ t(ctx, "domain.kit.open") }
-				</button>
-				<a class="tuc-btn is-outline is-sm" href="/domains">
-					@Icon("list", "size-3.5")
-					{ t(ctx, "domain.dynamic.requests") }
-				</a>
-			</div>
-			@domainKit(d)
-		}
+				if served {
+					@clientsRow(d)
+				}
+			</tbody>
+		</table>
 	</div>
 }
+
+// endpointRow is a web port of the service and its automatic link.
+templ endpointRow(d ServiceData, e EndpointRow) {
+	<tr>
+		<td>
+			<span class="flex min-w-0 flex-col">
+				if e.Public && e.SslipEnabled && e.AutoHost != "" {
+					<a class="font-mono text-[13px] text-accent-text break-all hover:underline" href={ templ.SafeURL(siteURL(e.AutoHost, e.Cert)) } target="_blank" rel="noopener">{ e.AutoHost }</a>
+				} else {
+					<span class="font-mono text-[13px]">{ e.Label }<span class="text-subtle">:{ strconv.Itoa(e.Port) }</span></span>
+				}
+				<span class="text-xs text-muted">{ t(ctx, "domain.kind.auto") }</span>
+			</span>
+		</td>
+		<td class="whitespace-nowrap">
+			if e.Public && e.SslipEnabled && e.AutoHost != "" {
+				@certBadge(e.Cert)
+			} else if e.Public && e.SslipEnabled {
+				<span class="tuc-badge">{ t(ctx, "endpoint.no_link_short") }</span>
+			} else if e.Public {
+				<span class="tuc-badge">{ t(ctx, "endpoint.link_off") }</span>
+			} else {
+				<span class="tuc-badge">{ t(ctx, "domain.status.internal") }</span>
+			}
+		</td>
+		<td class="tuc-table__actions">
+			<div class="flex items-center justify-end gap-3">
+				if e.Public && e.SslipEnabled && e.AutoHost != "" {
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ "https://" + e.AutoHost } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "export.copy") }>
+						@Icon("copy", "size-3.5")
+					</button>
+				}
+				if d.CanOperate {
+					// Putting a service on the internet takes an admin with
+					// sudo and a confirmation (as a domain does); taking it
+					// off only lowers exposure: any operator, confirmed.
+					if e.Public {
+						<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/internal") } data-confirm={ t(ctx, "endpoint.internal_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.internal_confirm_text") } data-confirm-ok={ t(ctx, "endpoint.internal_confirm_ok") } data-tone="warning">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="id" value={ e.ID }/>
+							<span class="text-xs text-muted">{ t(ctx, "endpoint.public") }</span>
+							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } checked data-autosubmit/>
+						</form>
+					} else if d.CanAdmin && d.SudoActive {
+						<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/public") } data-confirm={ t(ctx, "endpoint.public_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.public_confirm_text", "label", e.Label) } data-confirm-ok={ t(ctx, "endpoint.public_confirm_ok") } data-tone="warning">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="id" value={ e.ID }/>
+							<span class="text-xs text-muted">{ t(ctx, "endpoint.public") }</span>
+							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } data-autosubmit/>
+						</form>
+					} else if d.CanAdmin {
+						@sudoButton(t(ctx, "endpoint.make_public"))
+					} else {
+						<span class="flex items-center gap-2" title={ t(ctx, "endpoint.admin_only") }>
+							<span class="text-xs text-subtle">{ t(ctx, "endpoint.public") }</span>
+							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } disabled/>
+						</span>
+					}
+					if e.Public && e.SslipEnabled {
+						<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-off") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="id" value={ e.ID }/>
+							<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip_short") }</span>
+							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } checked data-autosubmit/>
+						</form>
+					} else if e.Public && d.CanAdmin && d.SudoActive {
+						<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-on") } data-confirm={ t(ctx, "endpoint.sslip_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.sslip_confirm_text") } data-confirm-ok={ t(ctx, "endpoint.sslip_confirm_ok") } data-tone="warning">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="id" value={ e.ID }/>
+							<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip_short") }</span>
+							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } data-autosubmit/>
+						</form>
+					} else if e.Public && d.CanAdmin {
+						@sudoButton(t(ctx, "endpoint.sslip"))
+					}
+				}
+			</div>
+		</td>
+	</tr>
+}
+
+// fixedRow is one of the service's own domains, with its certificate state
+// and the button to remove it.
+templ fixedRow(d ServiceData, dm DomainRow) {
+	<tr>
+		<td>
+			<span class="flex min-w-0 flex-col">
+				<span class="font-mono text-[13px] break-all">{ dm.Hostname }</span>
+				<span class="text-xs text-muted">
+					if isWildcard(dm.Hostname) {
+						{ t(ctx, "domain.kind.wildcard") }
+					} else {
+						{ t(ctx, "domain.kind.fixed") }
+					}
+				</span>
+			</span>
+		</td>
+		<td class="whitespace-nowrap">
+			if scaledWildcard(d.Domains.Base, dm.Hostname) {
+				<span class="tuc-badge is-success" title={ t(ctx, "domain.scale_cert_hint", "provider", d.Domains.Base.Provider) }>{ t(ctx, "domain.scale_cert") }</span>
+			} else if isWildcard(dm.Hostname) {
+				<span class="tuc-badge is-info" title={ t(ctx, "domain.wildcard_cert_hint") }>{ t(ctx, "domain.wildcard_cert") }</span>
+			} else if dm.Offline {
+				<span class="tuc-badge is-danger" title={ t(ctx, "domain.offline_hint") }>{ t(ctx, "domain.offline") }</span>
+			} else {
+				@certBadge(dm.Cert)
+			}
+		</td>
+		<td class="tuc-table__actions">
+			if d.CanAdmin && !d.SudoActive {
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm text-danger" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "domain.remove_named", "host", dm.Hostname) } title={ t(ctx, "domain.remove_sudo") }>
+					@Icon("trash", "size-3.5")
+				</button>
+			} else if d.CanAdmin {
+				<form data-confirm={ t(ctx, "confirm.domain_delete.title") } data-confirm-text={ t(ctx, "confirm.domain_delete.text") } data-confirm-ok={ t(ctx, "confirm.domain_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/domains/delete") }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="id" value={ dm.ID }/>
+					<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" aria-label={ t(ctx, "domain.remove_named", "host", dm.Hostname) } title={ t(ctx, "domain.remove") }>
+						@Icon("trash", "size-3.5")
+					</button>
+				</form>
+			}
+		</td>
+	</tr>
+}
+
+// clientsRow sums up the customers' domains; their settings live in the
+// clientsDialog modal.
+templ clientsRow(d ServiceData) {
+	<tr>
+		<td>
+			<span class="flex flex-col">
+				<strong class="text-[13px] font-semibold">{ t(ctx, "domain.clients.title") }</strong>
+				if d.Domains.DynamicElsewhere != "" && !d.Domains.Dynamic {
+					<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.elsewhere", "service", d.Domains.DynamicElsewhere) }</span>
+				} else if d.Domains.Dynamic && d.Domains.RequireTXT {
+					<span class="text-xs text-muted">{ t(ctx, "domain.clients.txt_on") }</span>
+				} else if d.Domains.Dynamic {
+					<span class="text-xs text-muted">{ t(ctx, "domain.clients.txt_off") }</span>
+				}
+			</span>
+		</td>
+		<td class="whitespace-nowrap">
+			if d.Domains.Dynamic {
+				<span class="tuc-badge is-success">{ t(ctx, "domain.clients.on") }</span>
+			} else {
+				<span class="tuc-badge">{ t(ctx, "domain.clients.off") }</span>
+			}
+		</td>
+		<td class="tuc-table__actions">
+			if d.Domains.Dynamic || (d.CanAdmin && d.Domains.DynamicElsewhere == "") {
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-clients">
+					if d.Domains.Dynamic {
+						@Icon("settings", "size-3.5")
+						{ t(ctx, "domain.clients.configure") }
+					} else {
+						{ t(ctx, "domain.clients.enable") }
+					}
+				</button>
+			}
+		</td>
+	</tr>
+}
+
+// clientsDialog holds the customers' domains settings: the two switches and
+// how the app takes part. It reopens after each change (ClientsOpen).
+templ clientsDialog(d ServiceData) {
+	<dialog class="tuc-modal is-md" id="domain-clients" aria-labelledby="domain-clients-title" data-open={ boolAttr(d.Domains.ClientsOpen) }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="domain-clients-title">{ t(ctx, "domain.clients.title") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<div class="tuc-modal__body flex flex-col gap-5">
+				<div class="flex flex-col gap-4">
+					if d.Domains.DynamicElsewhere != "" && !d.Domains.Dynamic {
+						<div class="flex min-w-0 flex-col gap-0.5">
+							<strong class="text-[13px] font-semibold">{ t(ctx, "domain.dynamic.switch") }</strong>
+							<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.elsewhere", "service", d.Domains.DynamicElsewhere) }</span>
+						</div>
+					} else {
+						<form class="flex items-center gap-4" data-confirm={ t(ctx, "confirm.dynamic.title") } data-confirm-text={ t(ctx, "confirm.dynamic.text") } data-confirm-ok={ t(ctx, "confirm.dynamic.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/domains/dynamic") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							if d.Domains.Dynamic {
+								<input type="hidden" name="action" value="disable"/>
+							} else {
+								<input type="hidden" name="action" value="enable"/>
+							}
+							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+								<strong class="text-[13px] font-semibold">{ t(ctx, "domain.dynamic.switch") }</strong>
+								<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.explain") }</span>
+							</div>
+							if d.CanAdmin && d.SudoActive {
+								<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.dynamic.switch") } checked?={ d.Domains.Dynamic } data-autosubmit/>
+							} else if d.CanAdmin {
+								@sudoButton(t(ctx, "domain.dynamic.unlock"))
+							} else {
+								<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.dynamic.switch") } checked?={ d.Domains.Dynamic } disabled/>
+							}
+						</form>
+					}
+					if d.Domains.Dynamic {
+						<form class="flex items-center gap-4" method="post" action={ templ.SafeURL(d.base() + "/domains/txt") }
+							if d.Domains.RequireTXT {
+								data-confirm={ t(ctx, "confirm.txt_off.title") }
+								data-confirm-text={ t(ctx, "confirm.txt_off.text") }
+								data-confirm-ok={ t(ctx, "confirm.txt_off.ok") }
+								data-tone="warning"
+							}
+						>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							if d.Domains.RequireTXT {
+								<input type="hidden" name="on" value="0"/>
+							} else {
+								<input type="hidden" name="on" value="1"/>
+							}
+							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+								<span class="flex items-center gap-2">
+									<strong class="text-[13px] font-semibold">{ t(ctx, "domain.txt.switch") }</strong>
+									<span class="tuc-badge">{ t(ctx, "domain.txt.optional") }</span>
+								</span>
+								<span class="text-xs text-muted">{ t(ctx, "domain.txt.explain") }</span>
+							</div>
+							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "domain.txt.switch") } checked?={ d.Domains.RequireTXT } disabled?={ !d.CanAdmin } data-autosubmit/>
+						</form>
+					}
+				</div>
+				if d.Domains.Dynamic {
+					<div class="flex flex-col gap-2">
+						<span class="tuc-label">{ t(ctx, "domain.clients.app") }</span>
+						<div class="rounded-sm border border-border">
+							<div class="flex items-center gap-3 border-b border-border px-3 py-2.5">
+								<span class="w-20 shrink-0 text-[13px] text-muted">{ t(ctx, "domain.clients.route") }</span>
+								<code class="min-w-0 grow font-mono text-xs break-all">{ d.Domains.CheckPath }</code>
+								<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Domains.CheckPath } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "export.copy") }>
+									@Icon("copy", "size-3.5")
+								</button>
+							</div>
+							<div class="flex flex-col gap-2 px-3 py-2.5">
+								<div class="flex items-center gap-3 [&_form]:inline-flex">
+									<span class="w-20 shrink-0 text-[13px] text-muted">{ t(ctx, "domain.clients.secret") }</span>
+									<code class="min-w-0 grow font-mono text-xs break-all">HANGAR_DOMAIN_CHECK_SECRET</code>
+									if d.Domains.CheckSecret == "" && d.CanAdmin && d.SudoCritical {
+										<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret") }>
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "domain.dynamic.reveal") } aria-label={ t(ctx, "domain.dynamic.reveal") }>
+												@Icon("eye", "size-3.5")
+											</button>
+										</form>
+									}
+									if d.CanAdmin && d.SudoActive {
+										<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret/rotate") } data-confirm={ t(ctx, "confirm.secret_rotate.title") } data-confirm-text={ t(ctx, "confirm.secret_rotate.text") } data-confirm-ok={ t(ctx, "confirm.secret_rotate.ok") } data-tone="warning">
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<button type="submit" class="tuc-btn is-outline is-sm">{ t(ctx, "domain.dynamic.rotate") }</button>
+										</form>
+									}
+								</div>
+								if d.Domains.CheckSecret != "" {
+									<div class="flex items-center gap-1.5">
+										<code class="grow rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs break-all select-all">{ d.Domains.CheckSecret }</code>
+										<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Domains.CheckSecret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "domain.dynamic.secret_copy") } title={ t(ctx, "domain.dynamic.secret_copy") }>
+											@Icon("copy", "size-3.5")
+										</button>
+									</div>
+								}
+							</div>
+						</div>
+					</div>
+				}
+				<div class="flex flex-wrap items-center gap-2">
+					if d.Domains.Dynamic {
+						<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-kit">
+							@Icon("file-code", "size-3.5")
+							{ t(ctx, "domain.kit.open") }
+						</button>
+						<a class="tuc-btn is-ghost is-sm" href="/domains">{ t(ctx, "domain.dynamic.requests") }</a>
+					}
+					<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(domainsDocURL) } target="_blank" rel="noopener">
+						@Icon("circle-question-mark", "size-3.5")
+						{ t(ctx, "domain.clients.how") }
+					</a>
+				</div>
+			</div>
+		</div>
+	</dialog>
+}
+
+// domainsDocURL explains the domains in depth; the panel keeps only the
+// short version.
+const domainsDocURL = "https://github.com/JuniorCarlini/hangar/blob/main/docs/03-dominios-customizados-tls.md"
 
 func isWildcard(host string) bool { return strings.HasPrefix(host, "*.") }
 
