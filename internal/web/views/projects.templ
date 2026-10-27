@@ -23,12 +23,12 @@ type ProjectData struct {
 	// SudoCritical: the critical actions (secrets, deleting data) may run
 	// now. SudoActive covers the rest; the level decides each one.
 	SudoCritical bool
-	Flash      string
+	Flash        string
 	// Git credentials: the project's own (settings), how many server-wide
 	// ones it can also use, and what the new-service form can pick.
-	GitCreds     []GitCredRow
-	ServerCreds  int
-	CredOpen     bool
+	GitCreds    []GitCredRow
+	ServerCreds int
+	CredOpen    bool
 }
 
 // Place is where a new service lands on the canvas and the service a line
@@ -256,21 +256,21 @@ type SuggestedVar struct {
 type ServiceData struct {
 	Validate        string // command run in the new container before it takes over
 	ValidateMinutes string
-	Volumes     []VolumeRow // disks: what survives deploys
+	Volumes         []VolumeRow // disks: what survives deploys
 	// LimitsAvailable: disks can get a size limit here (the root unit
 	// hangar-volumes answered); HostFree is the server's free disk.
 	LimitsAvailable bool
 	HostFree        string
 	HostFreeGB      int
-	CSRF        string
-	Project     string
-	ProjectName string
-	Slug        string
-	Image       string
+	CSRF            string
+	Project         string
+	ProjectName     string
+	Slug            string
+	Image           string
 	// ImageRepo and ImageTag split Image for the "Image" card (services run
 	// from an image; ImageTag is "" when it is pinned by digest).
-	ImageRepo string
-	ImageTag  string
+	ImageRepo   string
+	ImageTag    string
 	Port        int64
 	MemoryMB    int64
 	CPUs        string
@@ -296,9 +296,9 @@ type ServiceData struct {
 	// EnvText is the .env file as written, for the editor (secrets as
 	// "KEY=••••" below admin); EnvCopy, the same with references resolved
 	// (admins only), for the editor's copy button.
-	EnvText string
-	EnvCopy string
-	EnvSuggest  *EnvSuggest  // nil when the repository suggests nothing new
+	EnvText     string
+	EnvCopy     string
+	EnvSuggest  *EnvSuggest // nil when the repository suggests nothing new
 	Domains     DomainsSection
 	CanBackup   bool
 	Stateful    bool
@@ -310,23 +310,22 @@ type ServiceData struct {
 	Tab         string
 	// OpenTerminal opens the terminal modal on load (back from sudo).
 	OpenTerminal bool
-	Metrics     ServiceMetrics // filled only on the metrics tab
-	Backups     ServiceBackups // filled only on the backups tab
-	PreDeploy   string
-	HealthPath  string
-	Git         *GitView // nil for a service that runs an image
-	CanOperate  bool
-	CanAdmin    bool
-	SudoActive  bool
+	Metrics      ServiceMetrics // filled only on the metrics tab
+	Backups      ServiceBackups // filled only on the backups tab
+	PreDeploy    string
+	HealthPath   string
+	Git          *GitView // nil for a service that runs an image
+	CanOperate   bool
+	CanAdmin     bool
+	SudoActive   bool
 	// SudoCritical: the critical actions (secrets, deleting data) may run
 	// now. SudoActive covers the rest; the level decides each one.
 	SudoCritical bool
-	Error       string
-	Flash       string
+	Error        string
+	Flash        string
 }
 
 func (d ServiceData) base() string { return "/p/" + d.Project + "/s/" + d.Slug }
-
 
 // PortRow is a published port.
 type PortRow struct {
@@ -348,7 +347,7 @@ type DomainsSection struct {
 	// NoAutoLink: a public endpoint would have an automatic link, but the
 	// server has neither a base domain nor a public IP to build it.
 	NoAutoLink bool
-	Dynamic   bool
+	Dynamic    bool
 	// DynamicElsewhere names the service that already takes customer domains.
 	DynamicElsewhere string
 	CheckPath        string
@@ -728,6 +727,21 @@ func portValue(p int64) string {
 	return fmt.Sprint(p)
 }
 
+// deployField is a row of the deploy settings: the icon and label on the
+// left, the field and its hint on the right (stacked when the card is narrow, as in the drawer).
+templ deployField(icon, id, label, hint string) {
+	<div class="grid min-w-0 items-start gap-1.5 @xl:grid-cols-[190px_minmax(0,1fr)] @xl:gap-4">
+		<label class="tuc-label inline-flex items-center gap-2 @xl:h-9" for={ id }>
+			@Icon(icon, "size-4 shrink-0 text-muted")
+			{ label }
+		</label>
+		<div class="flex min-w-0 flex-col gap-1.5">
+			{ children... }
+			<p class="tuc-hint m-0">{ hint }</p>
+		</div>
+	</div>
+}
+
 templ deploySettings(d ServiceData) {
 	<section class={ cardClass } id="deploy-settings">
 		@cardHead(t(ctx, "deploy.settings.title")) {
@@ -748,31 +762,27 @@ templ deploySettings(d ServiceData) {
 				@notice("warning", "triangle-alert", t(ctx, "deploy.strategy.recreate_hint"))
 			}
 			if d.CanAdmin {
-				<form method="post" action={ templ.SafeURL(d.base() + "/deploy-settings") } class="flex flex-col gap-3">
+				<form method="post" action={ templ.SafeURL(d.base() + "/deploy-settings") } class="@container flex flex-col gap-4">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<div class="flex min-w-0 flex-col gap-1.5">
-						<label class="tuc-label" for="predeploy">{ t(ctx, "deploy.settings.predeploy") }</label>
+					@deployField("square-terminal", "predeploy", t(ctx, "deploy.settings.predeploy"), t(ctx, "deploy.settings.predeploy_hint")) {
 						<input class="tuc-input font-mono text-[13px]" id="predeploy" name="predeploy" value={ d.PreDeploy } placeholder={ t(ctx, "deploy.settings.predeploy_placeholder") } autocomplete="off"/>
-						<p class="tuc-hint">{ t(ctx, "deploy.settings.predeploy_hint") }</p>
-					</div>
-					<div class="flex min-w-0 flex-col gap-1.5">
-						<label class="tuc-label" for="health_path">{ t(ctx, "deploy.settings.health_path") }</label>
+					}
+					@deployField("activity", "health_path", t(ctx, "deploy.settings.health_path"), t(ctx, "deploy.settings.health_hint")) {
 						<input class="tuc-input font-mono text-[13px]" id="health_path" name="health_path" value={ d.HealthPath } placeholder={ t(ctx, "deploy.settings.health_placeholder") } autocomplete="off"/>
-						<p class="tuc-hint">{ t(ctx, "deploy.settings.health_hint") }</p>
-					</div>
-					<div class="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
-						<div class="flex min-w-0 flex-col gap-1.5">
-							<label class="tuc-label" for="validate">{ t(ctx, "deploy.settings.validate") }</label>
-							<input class="tuc-input font-mono text-[13px]" id="validate" name="validate" value={ d.Validate } placeholder={ t(ctx, "deploy.settings.validate_placeholder") } autocomplete="off"/>
+					}
+					@deployField("check-check", "validate", t(ctx, "deploy.settings.validate"), t(ctx, "deploy.settings.validate_hint")) {
+						<div class="flex min-w-0 items-center gap-2">
+							<input class="tuc-input min-w-0 grow font-mono text-[13px]" id="validate" name="validate" value={ d.Validate } placeholder={ t(ctx, "deploy.settings.validate_placeholder") } autocomplete="off"/>
+							<label class="sr-only" for="validate_timeout">{ t(ctx, "deploy.settings.validate_timeout") }</label>
+							<input class="tuc-input w-16 shrink-0 text-center font-mono text-[13px]" id="validate_timeout" name="validate_timeout" inputmode="numeric" maxlength="2" pattern="[1-9][0-9]?" value={ d.ValidateMinutes } placeholder="5" title={ t(ctx, "deploy.settings.validate_timeout") }/>
+							<span class="shrink-0 text-[13px] text-muted">min</span>
 						</div>
-						<div class="flex min-w-0 flex-col gap-1.5">
-							<label class="tuc-label" for="validate_timeout">{ t(ctx, "deploy.settings.validate_timeout") }</label>
-							<input class="tuc-input font-mono text-[13px]" id="validate_timeout" name="validate_timeout" inputmode="numeric" maxlength="2" pattern="[1-9][0-9]?" value={ d.ValidateMinutes } placeholder="5"/>
-						</div>
-					</div>
-					<p class="tuc-hint m-0 -mt-1">{ t(ctx, "deploy.settings.validate_hint") }</p>
-					<div class="flex flex-wrap items-center justify-between gap-3">
-						<span class="tuc-hint">{ t(ctx, "deploy.settings.next_deploy") }</span>
+					}
+					<div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+						<span class="inline-flex items-center gap-2 text-[13px] text-muted">
+							@Icon("info", "size-4 shrink-0")
+							{ t(ctx, "deploy.settings.next_deploy") }
+						</span>
 						<button class="tuc-btn is-outline" type="submit">
 							@Icon("save", "size-4")
 							{ t(ctx, "deploy.settings.save") }

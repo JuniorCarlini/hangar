@@ -479,7 +479,7 @@ templ envSuggestions(d ServiceData) {
 // portDialog opens a port (p nil) or edits one: the same form, filled in,
 // with "Remove port" next to "Save".
 templ portDialog(d ServiceData, p *PortRow) {
-	{{ id, action, title := "port-new", d.base() + "/ports", t(ctx, "port.open") }}
+	{{ id, action, title := "port-new", d.base()+"/ports", t(ctx, "port.open") }}
 	if p != nil {
 		{{ id, action, title = "port-"+p.ID, d.base()+"/ports/edit", t(ctx, "port.edit") }}
 	}
@@ -885,7 +885,6 @@ templ endpointRow(d ServiceData, e EndpointRow) {
 							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } disabled/>
 						</span>
 					}
-
 				}
 			</div>
 		</td>
@@ -1296,10 +1295,12 @@ templ imageCard(d ServiceData) {
 							<input class="tuc-input min-w-0 grow font-mono text-[13px]" id="image-tag" name="tag" value={ d.ImageTag } required maxlength="128" pattern="[a-z0-9_][a-z0-9._\-]*" autocomplete="off" spellcheck="false"/>
 						</div>
 					</div>
-					<button class="tuc-btn is-outline" type="submit">
-						@Icon("circle-arrow-up", "size-4")
-						{ t(ctx, "image_tag.change") }
-					</button>
+					<div class="flex grow justify-end">
+						<button class="tuc-btn is-outline" type="submit">
+							@Icon("circle-arrow-up", "size-4")
+							{ t(ctx, "image_tag.change") }
+						</button>
+					</div>
 				</form>
 			} else {
 				<div class="flex flex-wrap items-center justify-between gap-3">
@@ -1747,16 +1748,20 @@ func deleteServiceModal(sudo bool) string {
 // dangerZone is the red card at the bottom of a settings page: what the
 // action does on top, its button at the bottom right.
 templ dangerZone(title, hint string) {
-	<section class="flex flex-wrap items-center gap-3 rounded-md border border-danger/50 bg-surface px-4 py-3.5">
-		<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-danger-soft text-danger">
-			@Icon("triangle-alert", "size-4")
-		</span>
-		<div class="flex min-w-0 grow flex-col gap-1">
-			<h2 class="m-0 text-sm font-semibold">{ title }</h2>
-			<p class="m-0 text-[13px] leading-5 text-muted">{ hint }</p>
-		</div>
-		<div class="shrink-0">
-			{ children... }
+	<section class="@container rounded-md border border-danger/50 bg-surface px-4 py-3.5">
+		<div class="flex flex-col gap-3 @lg:flex-row @lg:items-center">
+			<div class="flex min-w-0 grow items-start gap-3">
+				<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-danger-soft text-danger">
+					@Icon("triangle-alert", "size-4")
+				</span>
+				<div class="flex min-w-0 flex-col gap-1">
+					<h2 class="m-0 text-sm font-semibold">{ title }</h2>
+					<p class="m-0 text-[13px] leading-5 text-muted">{ hint }</p>
+				</div>
+			</div>
+			<div class="flex shrink-0 justify-end">
+				{ children... }
+			</div>
 		</div>
 	</section>
 }
