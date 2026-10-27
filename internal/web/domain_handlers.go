@@ -88,7 +88,12 @@ func (h *handlers) dynamicDomains(w http.ResponseWriter, r *http.Request) {
 // setEndpointPublic puts a service's endpoint on the internet (it gets an
 // external link); the route takes an admin with sudo.
 func (h *handlers) setEndpointPublic(w http.ResponseWriter, r *http.Request) {
-	err := h.projects.SetEndpointPublic(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), r.PostFormValue("id"), true)
+	project, service, id := r.PathValue("project"), r.PathValue("service"), r.PostFormValue("id")
+	err := h.projects.SetEndpointPublic(r.Context(), actor(r), project, service, id, true)
+	// One switch on the page: "public" brings the automatic link with it.
+	if err == nil {
+		err = h.projects.SetEndpointSslip(r.Context(), actor(r), project, service, id, true)
+	}
 	h.endpointDone(w, r, err)
 }
 

@@ -127,6 +127,7 @@ var dynamicPrefixes = map[string][]string{
 	"canvas.kind.":         {"app", "db", "cache"},
 	"compose.kind.":        {"template", "image", "git", "skip"},
 	"port.access.":         {"any", "ips", "localhost"},
+	"port.access_short.":   {"any", "ips", "localhost"},
 	"deploy.phase.":        {"clone", "build", "pull", "predeploy", "start", "health", "validate", "switch", "restore"},
 	"template.category.":   {"database", "cache", "queue", "search", "storage", "automation", "monitoring", "admin", "other"},
 	"service.tab.":         {"overview", "variables", "network", "logs", "settings", "backups"},

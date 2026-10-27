@@ -476,6 +476,63 @@ templ envSuggestions(d ServiceData) {
 	</section>
 }
 
+// portDialog is one published port: who can reach it, how (the SSH tunnel
+// for a port open to the server only), until when, and closing it.
+templ portDialog(d ServiceData, p PortRow) {
+	<dialog class="tuc-modal is-md" id={ "port-" + p.ID } aria-labelledby={ "port-title-" + p.ID }>
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title font-mono" id={ "port-title-" + p.ID }>{ sz(int(p.HostPort)) } → { sz(int(p.ContainerPort)) }/{ p.Protocol }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<div class="tuc-modal__body flex flex-col gap-4">
+				<dl class="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 text-[13px]">
+					<dt class="text-muted">{ t(ctx, "port.access_label") }</dt>
+					<dd class="m-0"><span class={ portTone(p.Access) }>{ t(ctx, "port.access." + p.Access) }</span></dd>
+					if p.IPs != "" {
+						<dt class="text-muted">{ t(ctx, "port.ips") }</dt>
+						<dd class="m-0 font-mono break-all">{ p.IPs }</dd>
+					}
+					<dt class="text-muted">{ t(ctx, "port.expires") }</dt>
+					<dd class="m-0">
+						if p.Expires != "" {
+							{ p.Expires }
+						} else {
+							{ t(ctx, "port.expires_never") }
+						}
+					</dd>
+				</dl>
+				if p.Access == "localhost" {
+					<div class="flex flex-col gap-1.5">
+						<span class="tuc-label">{ t(ctx, "port.tunnel") }</span>
+						<div class="flex items-center gap-1.5">
+							<code class="grow rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs break-all">{ t(ctx, "port.ssh_command", "port", p.HostPort, "target", d.ServerHint) }</code>
+							<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ t(ctx, "port.ssh_command", "port", p.HostPort, "target", d.ServerHint) } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "export.copy") }>
+								@Icon("copy", "size-3.5")
+							</button>
+						</div>
+					</div>
+				}
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.close") }</button>
+					if d.CanAdmin {
+						<form data-confirm={ t(ctx, "confirm.port_close.title") } data-confirm-text={ t(ctx, "confirm.port_close.text") } data-confirm-ok={ t(ctx, "confirm.port_close.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/ports/delete") }>
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="id" value={ p.ID }/>
+							<button class="tuc-btn is-danger" type="submit">
+								@Icon("x", "size-3.5")
+								{ t(ctx, "port.close") }
+							</button>
+						</form>
+					}
+				</div>
+			</div>
+		</div>
+	</dialog>
+}
+
 templ tabPorts(d ServiceData) {
 	<section class={ cardClass } id="ports">
 		@cardHeadHelp(t(ctx, "port.title_plural"), t(ctx, "port.hint")+" "+t(ctx, "port.internal_hint")) {
@@ -489,47 +546,34 @@ templ tabPorts(d ServiceData) {
 			}
 		}
 		if len(d.Ports) > 0 {
-			<div class="tuc-table-wrap pt-3">
-				<table class="tuc-table is-compact w-full">
-					<thead><tr><th>{ t(ctx, "port.title") }</th><th>{ t(ctx, "port.access_label") }</th><th>{ t(ctx, "port.expires") }</th><th class="tuc-table__actions"></th></tr></thead>
-					<tbody>
-						for _, p := range d.Ports {
-							<tr>
-								<td class="font-mono text-[13px] whitespace-nowrap">{ sz(int(p.HostPort)) } → { sz(int(p.ContainerPort)) }/{ p.Protocol }</td>
-								<td>
-									<div class="flex flex-col gap-1">
-										<span><span class={ portTone(p.Access) }>{ t(ctx, "port.access." + p.Access) }</span></span>
-										if p.IPs != "" {
-											<span class="font-mono text-xs text-muted">{ p.IPs }</span>
-										}
-										if p.Access == "localhost" {
-											<span class="font-mono text-xs text-muted">{ t(ctx, "port.ssh_command", "port", p.HostPort, "target", d.ServerHint) }</span>
-										}
-									</div>
-								</td>
-								<td class="whitespace-nowrap text-muted">
-									if p.Expires != "" {
-										{ p.Expires }
-									} else {
-										{ t(ctx, "port.expires_never") }
-									}
-								</td>
-								<td class="tuc-table__actions">
-									if d.CanAdmin {
-										<form data-confirm={ t(ctx, "confirm.port_close.title") } data-confirm-text={ t(ctx, "confirm.port_close.text") } data-confirm-ok={ t(ctx, "confirm.port_close.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/ports/delete") }>
-											<input type="hidden" name="csrf" value={ d.CSRF }/>
-											<input type="hidden" name="id" value={ p.ID }/>
-											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "port.close_named", "port", p.HostPort) } title={ t(ctx, "port.close") }>
-												@Icon("x", "size-3.5")
-											</button>
-										</form>
-									}
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			</div>
+			// One short row per port; a click opens its details (who can
+			// reach it, the SSH tunnel) and the button to close it.
+			<table class="tuc-table is-compact w-full table-fixed">
+				<thead><tr><th>{ t(ctx, "port.title") }</th><th>{ t(ctx, "port.access_label") }</th><th class="w-28">{ t(ctx, "port.expires") }</th><th class="w-10"></th></tr></thead>
+				<tbody>
+					for _, p := range d.Ports {
+						<tr class="cursor-pointer hover:bg-surface-2" data-tuc-modal={ "#port-" + p.ID }>
+							<td class="truncate font-mono text-[13px]">{ sz(int(p.HostPort)) } → { sz(int(p.ContainerPort)) }/{ p.Protocol }</td>
+							<td class="truncate"><span class={ portTone(p.Access) }>{ t(ctx, "port.access_short." + p.Access) }</span></td>
+							<td class="truncate text-muted">
+								if p.Expires != "" {
+									{ p.Expires }
+								} else {
+									{ t(ctx, "port.expires_never") }
+								}
+							</td>
+							<td class="text-right">
+								<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal={ "#port-" + p.ID } aria-label={ t(ctx, "port.details_named", "port", p.HostPort) }>
+									@Icon("chevron-right", "size-3.5")
+								</button>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			for _, p := range d.Ports {
+				@portDialog(d, p)
+			}
 		} else {
 			@emptyState("plug", t(ctx, "port.empty"))
 		}
@@ -691,21 +735,26 @@ templ tabDomains(d ServiceData) {
 			// An older domain left on a service without a port is not
 			// served, but it must stay visible to be removed.
 			if len(d.Domains.Fixed) > 0 {
-				<div class={ cardBodyClass }>
-					@domainTable(d, false)
-				</div>
+				@domainTable(d, false)
 			}
 		} else {
-			<div class={ cardBodyClass }>
-				if !d.Domains.EdgeEnabled {
-					@notice("warning", "triangle-alert", t(ctx, "domain.edge_disabled"))
-				}
-				if d.Domains.EdgeEnabled && d.Domains.NoAutoLink {
-					@notice("info", "info", t(ctx, "endpoint.no_link"))
-				}
-				@domainTable(d, true)
-				@scaledBase(d)
-			</div>
+			if !d.Domains.EdgeEnabled || d.Domains.NoAutoLink {
+				<div class={ cardBodyClass }>
+					if !d.Domains.EdgeEnabled {
+						@notice("warning", "triangle-alert", t(ctx, "domain.edge_disabled"))
+					}
+					if d.Domains.EdgeEnabled && d.Domains.NoAutoLink {
+						@notice("info", "info", t(ctx, "endpoint.no_link"))
+					}
+				</div>
+			}
+			// Edge to edge, like the ports below.
+			@domainTable(d, true)
+			if d.Domains.Base.Domain != "" && hasDomain(d, "*."+d.Domains.Base.Domain) {
+				<div class={ cardBodyClass }>
+					@scaledBase(d)
+				</div>
+			}
 		}
 	</section>
 	if (d.Port != 0 || len(d.Domains.Endpoints) > 0) && d.CanAdmin && d.SudoActive {
@@ -723,7 +772,7 @@ templ tabDomains(d ServiceData) {
 // port only the fixed domains left behind show, to be removed. The
 // customers' domains are configured from the card's head (clientsDialog).
 templ domainTable(d ServiceData, served bool) {
-	<div class="tuc-table-wrap rounded-sm border border-border">
+	<div class="tuc-table-wrap">
 		<table class="tuc-table is-compact w-full">
 			<thead>
 				<tr>
@@ -803,23 +852,7 @@ templ endpointRow(d ServiceData, e EndpointRow) {
 							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.public") } disabled/>
 						</span>
 					}
-					if e.Public && e.SslipEnabled {
-						<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-off") }>
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<input type="hidden" name="id" value={ e.ID }/>
-							<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip_short") }</span>
-							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } checked data-autosubmit/>
-						</form>
-					} else if e.Public && d.CanAdmin && d.SudoActive {
-						<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/endpoints/sslip-on") } data-confirm={ t(ctx, "endpoint.sslip_confirm", "label", e.Label) } data-confirm-text={ t(ctx, "endpoint.sslip_confirm_text") } data-confirm-ok={ t(ctx, "endpoint.sslip_confirm_ok") } data-tone="warning">
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<input type="hidden" name="id" value={ e.ID }/>
-							<span class="text-xs text-muted">{ t(ctx, "endpoint.sslip_short") }</span>
-							<input type="checkbox" role="switch" class="tuc-switch shrink-0" aria-label={ t(ctx, "endpoint.sslip") } data-autosubmit/>
-						</form>
-					} else if e.Public && d.CanAdmin {
-						@sudoButton(t(ctx, "endpoint.sslip"))
-					}
+
 				}
 			</div>
 		</td>
