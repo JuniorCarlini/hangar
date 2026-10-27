@@ -153,14 +153,16 @@ templ svcBackupPolicy(d ServiceData) {
 					</div>
 				}
 				@deployField("bk-every", t(ctx, "svcbackup.every"), svcNextRun(ctx, d.Backups.NextRun)) {
-					<div class="grid grid-cols-[minmax(0,1fr)_auto_120px] items-center gap-2">
-						<select class="tuc-input" id="bk-every" name="every_hours" data-tuc-select data-clearable="false">
-							for _, h := range everyHours {
-								<option value={ fmt.Sprint(h) } selected?={ h == d.Backups.EveryHours }>{ t(ctx, "svcbackup.every_hours", "n", h) }</option>
-							}
-						</select>
-						<label class="text-[13px] text-muted" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
-						<input class="tuc-input" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
+					<div class="flex min-w-0 items-center gap-2">
+						<div class="min-w-0 grow">
+							<select class="tuc-input" id="bk-every" name="every_hours" data-tuc-select data-clearable="false">
+								for _, h := range everyHours {
+									<option value={ fmt.Sprint(h) } selected?={ h == d.Backups.EveryHours }>{ t(ctx, "svcbackup.every_hours", "n", h) }</option>
+								}
+							</select>
+						</div>
+						<label class="shrink-0 text-[13px] text-muted" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
+						<input class="tuc-input w-28 shrink-0" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
 					</div>
 				}
 				if d.Backups.WALSupported {
