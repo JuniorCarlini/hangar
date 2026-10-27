@@ -391,9 +391,11 @@ templ repoDialog(d NewServiceData) {
 							<select class="tuc-input font-mono" id="ns-gh-branch" name="branch" required data-repo-branches data-tuc-select data-clearable="false"></select>
 							<span class="tuc-hint">{ t(ctx, "myrepos.branch_hint") }</span>
 						</div>
-						@advanced(false) {
+						<div class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] items-start gap-3">
 							@smallField("ns-gh-subdir", "subdir", t(ctx, "git.subdir"), "", t(ctx, "git.subdir_placeholder"), "")
 							@smallField("ns-gh-dockerfile", "dockerfile", t(ctx, "git.dockerfile"), "", "Dockerfile", "")
+						</div>
+						@advanced(false) {
 							@smallField("ns-gh-port", "port", t(ctx, "project.form.port"), "", t(ctx, "new_service.port_expose"), "numeric")
 							@smallField("ns-gh-memory", "memory_mb", t(ctx, "project.form.memory"), "", "512", "numeric")
 							@smallField("ns-gh-cpus", "cpus", t(ctx, "project.form.cpus"), "", "1", "decimal")

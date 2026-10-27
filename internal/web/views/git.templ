@@ -71,9 +71,11 @@ templ newGitServiceForm(d NewServiceData) {
 		<div class="grid grid-cols-1 gap-3">
 			@gitCredPicker("git", d.CredOptions, d.CredSelected)
 		</div>
-		@advanced(d.Advanced && d.Tab == "git") {
+		<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] items-start gap-3">
 			@smallField("ns-git-subdir", "subdir", t(ctx, "git.subdir"), d.Form.Subdir, t(ctx, "git.subdir_placeholder"), "")
 			@smallField("ns-git-dockerfile", "dockerfile", t(ctx, "git.dockerfile"), d.Form.Dockerfile, "Dockerfile", "")
+		</div>
+		@advanced(d.Advanced && d.Tab == "git") {
 			@smallField("ns-git-port", "port", t(ctx, "project.form.port"), d.Form.Port, t(ctx, "new_service.port_auto"), "numeric")
 			@smallField("ns-git-memory", "memory_mb", t(ctx, "project.form.memory"), d.Form.MemoryMB, "512", "numeric")
 			@smallField("ns-git-cpus", "cpus", t(ctx, "project.form.cpus"), d.Form.CPUs, "1", "decimal")
