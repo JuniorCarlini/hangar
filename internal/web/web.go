@@ -196,6 +196,7 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/exports/reveal", h.revealExport, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backup", h.downloadBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.backup.download", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/ports", h.addPort, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "port.open", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/ports/edit", h.editPort, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "port.open", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/ports/delete", h.removePort, Policy{Role: auth.RoleAdmin, Audit: "port.close", AuditByHandler: true})
 	rt.HandleFunc("POST /p/{project}/tidy", h.tidyCanvas, Policy{Role: auth.RoleOperator, Audit: "project.tidy"})
 	rt.HandleFunc("POST /p/{project}/deploy-pending", h.deployPending, Policy{Role: auth.RoleOperator, Audit: "service.deploy", AuditByHandler: true})

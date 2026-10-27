@@ -35,8 +35,12 @@ SELECT pt.*, s.slug AS service_slug, p.slug AS project_slug
 FROM ports pt JOIN services s ON s.id = pt.service_id JOIN projects p ON p.id = s.project_id
 ORDER BY pt.host_port;
 
--- name: PortInUse :one
-SELECT count(*) FROM ports WHERE host_port = ? AND protocol = ?;
+-- name: PortInUseByOther :one
+SELECT count(*) FROM ports WHERE host_port = ? AND protocol = ? AND id <> ?;
+
+-- name: UpdatePort :execrows
+UPDATE ports SET host_port = ?, container_port = ?, protocol = ?, access = ?, allowed_ips = ?, expires_at = ?
+WHERE id = ? AND service_id = ?;
 
 -- name: ExpiredPorts :many
 SELECT pt.id, pt.service_id, pt.host_port, s.slug AS service_slug, p.slug AS project_slug

@@ -326,3 +326,41 @@ func TestCustomDomainTogglesEndpointSslip(t *testing.T) {
 		t.Error("a link the operator turned off must not come back with the domain's removal")
 	}
 }
+
+// Editing a port keeps its own host port free for itself, can keep its
+// closing time, and moves the firewall with the access in one redeploy.
+func TestEditPort(t *testing.T) {
+	f := newFixture(t)
+	fw := &fakeFirewall{}
+	f.m.SetFirewall(fw)
+	ctx := context.Background()
+	f.service(t)
+	if err := f.m.AddPort(ctx, f.who, "lab", "web", PortInput{HostPort: 9090, ContainerPort: 80, Protocol: "tcp", Access: AccessLocalhost, ExpiresIn: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	all, _ := f.m.ListAllPorts(ctx)
+	if len(all) != 1 {
+		t.Fatalf("ports: %+v", all)
+	}
+	id, closes := all[0].ID, all[0].ExpiresAt
+	// Same host port, now for two IPs, closing time kept.
+	in := PortInput{HostPort: 9090, ContainerPort: 81, Protocol: "tcp", Access: AccessIPs, IPs: []string{"200.1.2.3"}, KeepExpiry: true}
+	if err := f.m.UpdatePort(ctx, f.who, "lab", "web", id, in); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	all, _ = f.m.ListAllPorts(ctx)
+	if len(all) != 1 || all[0].ContainerPort != 81 || all[0].Access != AccessIPs || all[0].ExpiresAt != closes {
+		t.Errorf("after the edit: %+v", all)
+	}
+	if len(fw.rules) != 1 || fw.rules[0].Port != 9090 {
+		t.Errorf("firewall after the edit: %+v", fw.rules)
+	}
+	if spec, _ := f.n.spec("lab_web"); len(spec.Ports) != 1 || spec.Ports[0].ContainerPort != 81 {
+		t.Errorf("published: %+v", spec.Ports)
+	}
+	if err := f.m.UpdatePort(ctx, f.who, "lab", "web", "prt_nope", in); !errors.Is(err, ErrNotFound) {
+		t.Errorf("editing a port that does not exist: %v", err)
+	}
+}

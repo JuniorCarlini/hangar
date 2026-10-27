@@ -160,7 +160,9 @@ func (h *handlers) revealExport(w http.ResponseWriter, r *http.Request) {
 
 // --- ports ------------------------------------------------------------------
 
-func (h *handlers) addPort(w http.ResponseWriter, r *http.Request) {
+// portForm reads the open/edit port form; ok is false (and the page
+// answered) when a port number is not a number.
+func (h *handlers) portForm(w http.ResponseWriter, r *http.Request) (projects.PortInput, bool) {
 	in := projects.PortInput{
 		Protocol: r.PostFormValue("protocol"), Access: r.PostFormValue("access"),
 		IPs: strings.FieldsFunc(r.PostFormValue("ips"), func(c rune) bool { return c == ',' || c == ' ' || c == '\n' }),
@@ -171,7 +173,7 @@ func (h *handlers) addPort(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		h.renderService(w, r, serviceView{status: http.StatusUnprocessableEntity, errMsg: i18n.T(r.Context(), "project.form.number_invalid")})
-		return
+		return in, false
 	}
 	switch r.PostFormValue("expires") {
 	case "1h":
@@ -180,8 +182,30 @@ func (h *handlers) addPort(w http.ResponseWriter, r *http.Request) {
 		in.ExpiresIn = 24 * time.Hour
 	case "168h":
 		in.ExpiresIn = 7 * 24 * time.Hour
+	case "keep":
+		in.KeepExpiry = true
 	}
-	err = h.projects.AddPort(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), in)
+	return in, true
+}
+
+func (h *handlers) addPort(w http.ResponseWriter, r *http.Request) {
+	in, ok := h.portForm(w, r)
+	if !ok {
+		return
+	}
+	h.portDone(w, r, h.projects.AddPort(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), in))
+}
+
+// editPort changes a published port from the same form that opens one.
+func (h *handlers) editPort(w http.ResponseWriter, r *http.Request) {
+	in, ok := h.portForm(w, r)
+	if !ok {
+		return
+	}
+	h.portDone(w, r, h.projects.UpdatePort(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), r.PostFormValue("id"), in))
+}
+
+func (h *handlers) portDone(w http.ResponseWriter, r *http.Request, err error) {
 	if err != nil {
 		code, msg := userError(r, err)
 		h.renderService(w, r, serviceView{status: code, errMsg: msg})

@@ -552,17 +552,18 @@ func (q *Queries) ListVolumes(ctx context.Context, serviceID string) ([]ListVolu
 	return items, nil
 }
 
-const portInUse = `-- name: PortInUse :one
-SELECT count(*) FROM ports WHERE host_port = ? AND protocol = ?
+const portInUseByOther = `-- name: PortInUseByOther :one
+SELECT count(*) FROM ports WHERE host_port = ? AND protocol = ? AND id <> ?
 `
 
-type PortInUseParams struct {
+type PortInUseByOtherParams struct {
 	HostPort int64
 	Protocol string
+	ID       string
 }
 
-func (q *Queries) PortInUse(ctx context.Context, arg PortInUseParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, portInUse, arg.HostPort, arg.Protocol)
+func (q *Queries) PortInUseByOther(ctx context.Context, arg PortInUseByOtherParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, portInUseByOther, arg.HostPort, arg.Protocol, arg.ID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -579,6 +580,39 @@ type UnlinkProjectsParams struct {
 
 func (q *Queries) UnlinkProjects(ctx context.Context, arg UnlinkProjectsParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, unlinkProjects, arg.ProjectA, arg.ProjectB)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const updatePort = `-- name: UpdatePort :execrows
+UPDATE ports SET host_port = ?, container_port = ?, protocol = ?, access = ?, allowed_ips = ?, expires_at = ?
+WHERE id = ? AND service_id = ?
+`
+
+type UpdatePortParams struct {
+	HostPort      int64
+	ContainerPort int64
+	Protocol      string
+	Access        string
+	AllowedIps    string
+	ExpiresAt     sql.NullInt64
+	ID            string
+	ServiceID     string
+}
+
+func (q *Queries) UpdatePort(ctx context.Context, arg UpdatePortParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, updatePort,
+		arg.HostPort,
+		arg.ContainerPort,
+		arg.Protocol,
+		arg.Access,
+		arg.AllowedIps,
+		arg.ExpiresAt,
+		arg.ID,
+		arg.ServiceID,
+	)
 	if err != nil {
 		return 0, err
 	}

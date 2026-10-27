@@ -40,17 +40,48 @@ type PortInput struct {
 	Access        string
 	IPs           []string
 	ExpiresIn     time.Duration // 0 = never
+	// KeepExpiry: an edit leaves the port's closing time as it was.
+	KeepExpiry bool
 }
 
 // AddPort publishes a port and redeploys the service (Docker only publishes
 // ports when the container is created).
 func (m *Manager) AddPort(ctx context.Context, a Actor, projectSlug, serviceSlug string, in PortInput) error {
+	return m.savePort(ctx, a, projectSlug, serviceSlug, "", in)
+}
+
+// UpdatePort changes a published port (its ports, protocol, who can reach it
+// and when it closes) in one redeploy: the firewall follows first, so a
+// narrower access is never wider for a moment.
+func (m *Manager) UpdatePort(ctx context.Context, a Actor, projectSlug, serviceSlug, portID string, in PortInput) error {
+	return m.savePort(ctx, a, projectSlug, serviceSlug, portID, in)
+}
+
+// savePort creates the port (portID "") or replaces the one given, after
+// the same checks for both.
+func (m *Manager) savePort(ctx context.Context, a Actor, projectSlug, serviceSlug, portID string, in PortInput) error {
 	if err := m.requireNode(); err != nil {
 		return err
 	}
 	p, s, err := m.GetService(ctx, projectSlug, serviceSlug)
 	if err != nil {
 		return err
+	}
+	// An edit starts from the port as it is (its closing time, to keep).
+	var current *dbq.Port
+	if portID != "" {
+		ports, err := m.q.ListPorts(ctx, s.ID)
+		if err != nil {
+			return err
+		}
+		for i := range ports {
+			if ports[i].ID == portID {
+				current = &ports[i]
+			}
+		}
+		if current == nil {
+			return ErrNotFound
+		}
 	}
 	switch {
 	case in.HostPort < 1 || in.HostPort > 65535:
@@ -90,7 +121,7 @@ func (m *Manager) AddPort(ctx context.Context, a Actor, projectSlug, serviceSlug
 			return i18n.E("port.error.ips_count")
 		}
 	}
-	if n, err := m.q.PortInUse(ctx, dbq.PortInUseParams{HostPort: int64(in.HostPort), Protocol: in.Protocol}); err != nil {
+	if n, err := m.q.PortInUseByOther(ctx, dbq.PortInUseByOtherParams{HostPort: int64(in.HostPort), Protocol: in.Protocol, ID: portID}); err != nil {
 		return err
 	} else if n > 0 {
 		return i18n.E("port.error.in_use", "port", in.HostPort)
@@ -103,16 +134,34 @@ func (m *Manager) AddPort(ctx context.Context, a Actor, projectSlug, serviceSlug
 	if in.ExpiresIn > 0 {
 		expires = sql.NullInt64{Int64: m.now().Add(in.ExpiresIn).Unix(), Valid: true}
 	}
-	if err := m.q.CreatePort(ctx, dbq.CreatePortParams{
-		ID: ids.New("prt_"), ServiceID: s.ID, HostPort: int64(in.HostPort), ContainerPort: int64(in.ContainerPort),
-		Protocol: in.Protocol, Access: in.Access, AllowedIps: string(ipsJSON), ExpiresAt: expires,
-		CreatedBy: sql.NullString{String: a.UserID, Valid: a.UserID != ""}, CreatedAt: m.now().Unix(),
-	}); err != nil {
+	if in.KeepExpiry && current != nil {
+		expires = current.ExpiresAt
+	}
+	// A change is recorded as an opening too, so the security alerts
+	// (a port opened to any IP) see a port widened by editing it.
+	if portID == "" {
+		err = m.q.CreatePort(ctx, dbq.CreatePortParams{
+			ID: ids.New("prt_"), ServiceID: s.ID, HostPort: int64(in.HostPort), ContainerPort: int64(in.ContainerPort),
+			Protocol: in.Protocol, Access: in.Access, AllowedIps: string(ipsJSON), ExpiresAt: expires,
+			CreatedBy: sql.NullString{String: a.UserID, Valid: a.UserID != ""}, CreatedAt: m.now().Unix(),
+		})
+	} else {
+		var n int64
+		n, err = m.q.UpdatePort(ctx, dbq.UpdatePortParams{
+			HostPort: int64(in.HostPort), ContainerPort: int64(in.ContainerPort), Protocol: in.Protocol,
+			Access: in.Access, AllowedIps: string(ipsJSON), ExpiresAt: expires, ID: portID, ServiceID: s.ID,
+		})
+		if err == nil && n == 0 {
+			return ErrNotFound
+		}
+	}
+	if err != nil {
 		return err
 	}
 	m.record(ctx, a, "port.open", "service", s.ID, audit.OK, map[string]any{
 		"service": p.Slug + "/" + s.Slug, "host_port": in.HostPort, "container_port": in.ContainerPort,
 		"protocol": in.Protocol, "access": in.Access, "ips": allow, "expires_in": in.ExpiresIn.String(),
+		"changed": portID != "",
 	})
 	// The firewall goes first: a restricted port must never be open for a
 	// moment to everyone.

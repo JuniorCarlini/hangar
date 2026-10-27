@@ -476,61 +476,164 @@ templ envSuggestions(d ServiceData) {
 	</section>
 }
 
-// portDialog is one published port: who can reach it, how (the SSH tunnel
-// for a port open to the server only), until when, and closing it.
-templ portDialog(d ServiceData, p PortRow) {
-	<dialog class="tuc-modal is-md" id={ "port-" + p.ID } aria-labelledby={ "port-title-" + p.ID }>
+// portDialog opens a port (p nil) or edits one: the same form, filled in,
+// with "Remove port" next to "Save".
+templ portDialog(d ServiceData, p *PortRow) {
+	{{ id, action, title := "port-new", d.base() + "/ports", t(ctx, "port.open") }}
+	if p != nil {
+		{{ id, action, title = "port-"+p.ID, d.base()+"/ports/edit", t(ctx, "port.edit") }}
+	}
+	<dialog class="tuc-modal is-lg" id={ id } aria-labelledby={ id + "-title" }>
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
-				<h2 class="tuc-modal__title font-mono" id={ "port-title-" + p.ID }>{ sz(int(p.HostPort)) } → { sz(int(p.ContainerPort)) }/{ p.Protocol }</h2>
+				<h2 class="tuc-modal__title" id={ id + "-title" }>{ title }</h2>
 				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
 					@Icon("x", "size-4")
 				</button>
 			</div>
-			<div class="tuc-modal__body flex flex-col gap-4">
-				<dl class="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 text-[13px]">
-					<dt class="text-muted">{ t(ctx, "port.access_label") }</dt>
-					<dd class="m-0"><span class={ portTone(p.Access) }>{ t(ctx, "port.access." + p.Access) }</span></dd>
-					if p.IPs != "" {
-						<dt class="text-muted">{ t(ctx, "port.ips") }</dt>
-						<dd class="m-0 font-mono break-all">{ p.IPs }</dd>
-					}
-					<dt class="text-muted">{ t(ctx, "port.expires") }</dt>
-					<dd class="m-0">
-						if p.Expires != "" {
-							{ p.Expires }
-						} else {
-							{ t(ctx, "port.expires_never") }
-						}
-					</dd>
-				</dl>
-				if p.Access == "localhost" {
-					<div class="flex flex-col gap-1.5">
-						<span class="tuc-label">{ t(ctx, "port.tunnel") }</span>
+			<form method="post" action={ templ.SafeURL(action) } class="tuc-modal__body" id={ id + "-form" }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				if p != nil {
+					<input type="hidden" name="id" value={ p.ID }/>
+				}
+				<div class="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for={ id + "-host" }>{ t(ctx, "port.host_port") }</label>
+						<input class="tuc-input font-mono" id={ id + "-host" } name="host_port" required inputmode="numeric" maxlength="5" pattern="[1-9][0-9]{0,4}" data-allow="port" placeholder="5433" value={ portField(p, "host", d.Port) }/>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for={ id + "-container" }>{ t(ctx, "port.container_port") }</label>
+						<input class="tuc-input font-mono" id={ id + "-container" } name="container_port" required inputmode="numeric" maxlength="5" pattern="[1-9][0-9]{0,4}" data-allow="port" value={ portField(p, "container", d.Port) }/>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for={ id + "-protocol" }>{ t(ctx, "port.protocol") }</label>
+						<select class="tuc-input" id={ id + "-protocol" } name="protocol" data-tuc-select data-clearable="false">
+							<option value="tcp" selected?={ p == nil || p.Protocol == "tcp" }>TCP</option>
+							<option value="udp" selected?={ p != nil && p.Protocol == "udp" }>UDP</option>
+						</select>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for={ id + "-expires" }>{ t(ctx, "port.expires") }</label>
+						<select class="tuc-input" id={ id + "-expires" } name="expires" data-tuc-select data-clearable="false">
+							if p != nil {
+								<option value="keep" selected>
+									if p.Expires != "" {
+										{ t(ctx, "port.expires_keep", "when", p.Expires) }
+									} else {
+										{ t(ctx, "port.expires_never") }
+									}
+								</option>
+							}
+							<option value="1h">{ t(ctx, "port.expires_1h") }</option>
+							<option value="24h">{ t(ctx, "port.expires_24h") }</option>
+							<option value="168h">{ t(ctx, "port.expires_7d") }</option>
+							if p == nil || p.Expires != "" {
+								<option value="0">{ t(ctx, "port.expires_never") }</option>
+							}
+						</select>
+					</div>
+				</div>
+				<fieldset class="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
+					<legend class="tuc-label mb-1.5 p-0">{ t(ctx, "port.access_label") }</legend>
+					// The choice decides what else the form asks: IPs only
+					// for "only these IPs" (ui.js, data-shown-when), a
+					// warning for "any IP".
+					<div class="tuc-btn-group is-segmented port-access flex w-full" role="radiogroup" aria-label={ t(ctx, "port.access_label") }>
+						<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="ips" checked?={ p == nil || p.Access == "ips" }/>{ t(ctx, "port.access.ips") }</label>
+						<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="localhost" checked?={ p != nil && p.Access == "localhost" }/>{ t(ctx, "port.access.localhost") }</label>
+						<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="any" checked?={ p != nil && p.Access == "any" }/>{ t(ctx, "port.access.any") }</label>
+					</div>
+				</fieldset>
+				<div data-shown-when="access=localhost" hidden>
+					if p != nil {
 						<div class="flex items-center gap-1.5">
 							<code class="grow rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs break-all">{ t(ctx, "port.ssh_command", "port", p.HostPort, "target", d.ServerHint) }</code>
-							<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ t(ctx, "port.ssh_command", "port", p.HostPort, "target", d.ServerHint) } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "export.copy") }>
+							<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ t(ctx, "port.ssh_command", "port", p.HostPort, "target", d.ServerHint) } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") } title={ t(ctx, "port.tunnel") }>
 								@Icon("copy", "size-3.5")
 							</button>
 						</div>
-					</div>
-				}
-				<div class="flex justify-end gap-2">
-					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.close") }</button>
-					if d.CanAdmin {
-						<form data-confirm={ t(ctx, "confirm.port_close.title") } data-confirm-text={ t(ctx, "confirm.port_close.text") } data-confirm-ok={ t(ctx, "confirm.port_close.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/ports/delete") }>
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<input type="hidden" name="id" value={ p.ID }/>
-							<button class="tuc-btn is-danger" type="submit">
-								@Icon("x", "size-3.5")
-								{ t(ctx, "port.close") }
-							</button>
-						</form>
+					} else {
+						@notice("info", "info", t(ctx, "port.localhost_hint", "target", d.ServerHint))
 					}
 				</div>
+				<div data-shown-when="access=any" hidden>
+					if d.Stateful {
+						@notice("warning", "triangle-alert", t(ctx, "port.database_warning"))
+					} else {
+						@notice("warning", "triangle-alert", t(ctx, "port.any_warning"))
+					}
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5" data-shown-when="access=ips">
+					<label class="tuc-label" for={ id + "-ips" }>{ t(ctx, "port.ips") }</label>
+					<input class="tuc-input font-mono" id={ id + "-ips" } name="ips" required maxlength="600" data-allow="ips" value={ portIPs(p, d.ClientIP) } placeholder={ t(ctx, "port.ips_placeholder") } autocomplete="off"/>
+					if d.ClientIP != "" {
+						<span class="tuc-hint">{ t(ctx, "port.your_ip", "ip", d.ClientIP) }</span>
+					}
+				</div>
+				@notice("info", "refresh-cw", t(ctx, "port.recreate"))
+			</form>
+			// Remove sits apart from the form it does not belong to; Save
+			// submits the form by its id.
+			<div class="flex flex-wrap items-center gap-2 border-t border-border px-5 py-4">
+				if p != nil {
+					<form data-confirm={ t(ctx, "confirm.port_close.title") } data-confirm-text={ t(ctx, "confirm.port_close.text") } data-confirm-ok={ t(ctx, "confirm.port_close.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/ports/delete") }>
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<input type="hidden" name="id" value={ p.ID }/>
+						<button class="tuc-btn is-ghost text-danger" type="submit">
+							@Icon("trash", "size-3.5")
+							{ t(ctx, "port.remove") }
+						</button>
+					</form>
+				}
+				<span class="grow"></span>
+				<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+				<button class="tuc-btn is-primary" type="submit" form={ id + "-form" }>
+					if p != nil {
+						@Icon("save", "size-3.5")
+						{ t(ctx, "port.save") }
+					} else {
+						@Icon("plug", "size-3.5")
+						{ t(ctx, "port.open") }
+					}
+				</button>
 			</div>
 		</div>
 	</dialog>
+}
+
+// portTarget is what a click on a port row opens: its edit form, or the
+// identity check first (editing a port takes sudo), or nothing below admin.
+func portTarget(d ServiceData, p PortRow) string {
+	switch {
+	case d.CanAdmin && d.SudoActive:
+		return "#port-" + p.ID
+	case d.CanAdmin:
+		return "#sudo-dialog"
+	}
+	return ""
+}
+
+// portField fills the port form: the port being edited, or for a new one
+// the service's own port as the container port.
+func portField(p *PortRow, which string, servicePort int64) string {
+	switch {
+	case p != nil && which == "host":
+		return strconv.FormatInt(p.HostPort, 10)
+	case p != nil:
+		return strconv.FormatInt(p.ContainerPort, 10)
+	case which == "container":
+		return portValue(servicePort)
+	}
+	return ""
+}
+
+// portIPs fills the IPs field: the port's own, or the viewer's IP for a new
+// one.
+func portIPs(p *PortRow, clientIP string) string {
+	if p != nil {
+		return p.IPs
+	}
+	return clientIP
 }
 
 templ tabPorts(d ServiceData) {
@@ -552,7 +655,7 @@ templ tabPorts(d ServiceData) {
 				<thead><tr><th>{ t(ctx, "port.title") }</th><th>{ t(ctx, "port.access_label") }</th><th class="w-28">{ t(ctx, "port.expires") }</th><th class="w-10"></th></tr></thead>
 				<tbody>
 					for _, p := range d.Ports {
-						<tr class="cursor-pointer hover:bg-surface-2" data-tuc-modal={ "#port-" + p.ID }>
+						<tr class={ templ.KV("cursor-pointer hover:bg-surface-2", d.CanAdmin) } data-tuc-modal={ portTarget(d, p) }>
 							<td class="truncate font-mono text-[13px]">{ sz(int(p.HostPort)) } → { sz(int(p.ContainerPort)) }/{ p.Protocol }</td>
 							<td class="truncate"><span class={ portTone(p.Access) }>{ t(ctx, "port.access_short." + p.Access) }</span></td>
 							<td class="truncate text-muted">
@@ -563,97 +666,27 @@ templ tabPorts(d ServiceData) {
 								}
 							</td>
 							<td class="text-right">
-								<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal={ "#port-" + p.ID } aria-label={ t(ctx, "port.details_named", "port", p.HostPort) }>
-									@Icon("chevron-right", "size-3.5")
-								</button>
+								if d.CanAdmin {
+									<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal={ portTarget(d, p) } aria-label={ t(ctx, "port.edit_named", "port", p.HostPort) }>
+										@Icon("chevron-right", "size-3.5")
+									</button>
+								}
 							</td>
 						</tr>
 					}
 				</tbody>
 			</table>
-			for _, p := range d.Ports {
-				@portDialog(d, p)
+			if d.CanAdmin && d.SudoActive {
+				for i := range d.Ports {
+					@portDialog(d, &d.Ports[i])
+				}
 			}
 		} else {
 			@emptyState("plug", t(ctx, "port.empty"))
 		}
 	</section>
 	if d.CanAdmin && d.SudoActive {
-		<dialog class="tuc-modal is-lg" id="port-new" aria-labelledby="port-new-title">
-			<div class="tuc-modal__panel">
-				<div class="tuc-modal__header">
-					<h2 class="tuc-modal__title" id="port-new-title">{ t(ctx, "port.open") }</h2>
-					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
-						@Icon("x", "size-4")
-					</button>
-				</div>
-				<form method="post" action={ templ.SafeURL(d.base() + "/ports") } class="tuc-modal__body">
-					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<div class="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3">
-						<div class="flex min-w-0 flex-col gap-1.5">
-							<label class="tuc-label" for="host_port">{ t(ctx, "port.host_port") }</label>
-							<input class="tuc-input font-mono" id="host_port" name="host_port" required inputmode="numeric" maxlength="5" pattern="[1-9][0-9]{0,4}" data-allow="port" placeholder="5433"/>
-						</div>
-						<div class="flex min-w-0 flex-col gap-1.5">
-							<label class="tuc-label" for="container_port">{ t(ctx, "port.container_port") }</label>
-							<input class="tuc-input font-mono" id="container_port" name="container_port" required inputmode="numeric" maxlength="5" pattern="[1-9][0-9]{0,4}" data-allow="port" value={ portValue(d.Port) }/>
-						</div>
-						<div class="flex min-w-0 flex-col gap-1.5">
-							<label class="tuc-label" for="protocol">{ t(ctx, "port.protocol") }</label>
-							<select class="tuc-input" id="protocol" name="protocol" data-tuc-select data-clearable="false">
-								<option value="tcp">TCP</option>
-								<option value="udp">UDP</option>
-							</select>
-						</div>
-						<div class="flex min-w-0 flex-col gap-1.5">
-							<label class="tuc-label" for="expires">{ t(ctx, "port.expires") }</label>
-							<select class="tuc-input" id="expires" name="expires" data-tuc-select data-clearable="false">
-								<option value="1h">{ t(ctx, "port.expires_1h") }</option>
-								<option value="24h">{ t(ctx, "port.expires_24h") }</option>
-								<option value="168h">{ t(ctx, "port.expires_7d") }</option>
-								<option value="0">{ t(ctx, "port.expires_never") }</option>
-							</select>
-						</div>
-					</div>
-					<fieldset class="m-0 flex min-w-0 flex-col gap-1.5 border-0 p-0">
-						<legend class="tuc-label mb-1.5 p-0">{ t(ctx, "port.access_label") }</legend>
-						// The choice decides what else the form asks: IPs only
-						// for "only these IPs" (ui.js, data-shown-when), a
-						// warning for "any IP".
-						<div class="tuc-btn-group is-segmented port-access flex w-full" role="radiogroup" aria-label={ t(ctx, "port.access_label") }>
-							<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="ips" checked/>{ t(ctx, "port.access.ips") }</label>
-							<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="localhost"/>{ t(ctx, "port.access.localhost") }</label>
-							<label class="tuc-btn flex-1"><input type="radio" class="tuc-btn__input" name="access" value="any"/>{ t(ctx, "port.access.any") }</label>
-						</div>
-					</fieldset>
-					<div data-shown-when="access=localhost" hidden>
-						@notice("info", "info", t(ctx, "port.localhost_hint", "target", d.ServerHint))
-					</div>
-					<div data-shown-when="access=any" hidden>
-						if d.Stateful {
-							@notice("warning", "triangle-alert", t(ctx, "port.database_warning"))
-						} else {
-							@notice("warning", "triangle-alert", t(ctx, "port.any_warning"))
-						}
-					</div>
-					<div class="flex min-w-0 flex-col gap-1.5" data-shown-when="access=ips">
-						<label class="tuc-label" for="ips">{ t(ctx, "port.ips") }</label>
-						<input class="tuc-input font-mono" id="ips" name="ips" required maxlength="600" data-allow="ips" value={ d.ClientIP } placeholder={ t(ctx, "port.ips_placeholder") } autocomplete="off"/>
-						if d.ClientIP != "" {
-							<span class="tuc-hint">{ t(ctx, "port.your_ip", "ip", d.ClientIP) }</span>
-						}
-					</div>
-					@notice("info", "refresh-cw", t(ctx, "port.recreate"))
-					<div class="flex justify-end gap-2">
-						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
-						<button class="tuc-btn is-primary" type="submit">
-							@Icon("plug", "size-3.5")
-							{ t(ctx, "port.open") }
-						</button>
-					</div>
-				</form>
-			</div>
-		</dialog>
+		@portDialog(d, nil)
 	}
 }
 
