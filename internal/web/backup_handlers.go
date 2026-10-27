@@ -392,7 +392,7 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 	if rs, err := h.backups.Restores(ctx, s.ID, 10); err == nil {
 		for _, x := range rs {
 			row := views.RestoreRow{
-				When: x.StartedAt.Format(backupTime), Status: i18n.T(ctx, "backups.run_status."+x.Status), Error: x.Error,
+				When: x.StartedAt.Format(backupTime), Status: i18n.T(ctx, "svcbackup.restore_status."+x.Status), Error: x.Error,
 				Tone: map[string]string{"ok": "success", "failed": "danger", "running": "info"}[x.Status],
 			}
 			if x.Mode == backup.ModePITR {

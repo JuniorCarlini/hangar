@@ -874,9 +874,6 @@ connect_with = "Connect to"
 [export]
 copy = "Copy {ref}"
 
-[backup]
-hint = "Makes a pg_dump now and downloads it in the browser."
-download = "Download backup"
 
 [backup.error]
 mode = "Choose Simple or With a recovery kit."
@@ -2078,7 +2075,7 @@ monthly = "monthly"
 
 [backups.run_status]
 running = "running"
-ok = "ok"
+ok = "sent"
 failed = "failed"
 
 [backups.warning]
@@ -2222,18 +2219,26 @@ r2 = "Cloudflare R2"
 custom = "Other S3-compatible"
 
 [svcbackup]
+routine_daily = "Every day at {at}"
+routine_text = { one = "Every hour, from {at}", other = "Every {n} hours, from {at}" }
+routines = "Backup routines"
+routine_add = "Add routine"
+routines_empty = "No routine: backups only happen when you click Back up."
+routine_edit = "Edit routine"
+routine_remove = "Remove routine"
+routine_title = "Backup routine"
+routine_hint = "The day's first backup runs at this time; the others follow the interval."
 title = "Backups"
 not_ready_simple = "To turn it on, add a destination in Backups."
 unsupported = "Automatic backups exist for PostgreSQL. App volumes come in a later stage."
 every_hint = "Time of the day's first backup."
 not_ready = "To turn it on, confirm the recovery kit and pick a destination in Backups."
 open_backups = "Open Backups"
-policy = "Automatic backup"
-run_now = "Back up now"
+run_now = "Back up"
 running_now = "Backing up…"
 every = "Frequency"
 every_hours = { one = "every hour", other = "every {n} hours" }
-at = "from"
+at = "From"
 wal = "Back to any minute"
 next = "Next: {when}"
 save = "Save"
@@ -2241,7 +2246,6 @@ wal_title = "Point-in-time recovery"
 window = "You can go back to any moment between {from} and {to}."
 window_none = "There is no base to go back to a minute yet. One is taken right after WAL starts working."
 last_base = "Last base: {when}"
-download_hint = "Makes a pg_dump now, encrypted with your key. The link lasts 5 minutes."
 download_preparing = "Preparing: dump, test and encryption…"
 download_ready = "Download ({size})"
 download_expires = "The link is valid until {when} and works once."
@@ -3072,3 +3076,13 @@ save = "Save"
 key = "Server key"
 key_hint = "Optional: keep a copy off the server to open the backups if it is ever lost."
 key_show = "Show key"
+
+[confirm.routine_remove]
+title = "Remove the routine?"
+text = "This service's automatic backups stop. The ones already made stay stored."
+ok = "Remove"
+
+[svcbackup.restore_status]
+running = "running"
+ok = "done"
+failed = "failed"

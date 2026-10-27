@@ -144,10 +144,6 @@ func TestServiceBackupsTab(t *testing.T) {
 	if !strings.Contains(body, `href="/backups?tab=config"`) || strings.Contains(body, "/p/lab/s/db/backups/policy") {
 		t.Fatal("backups tab missing")
 	}
-	// Without a kit the plain download still works (the existing button).
-	if !strings.Contains(body, "Baixar backup") {
-		t.Fatal("download button missing")
-	}
 	// The schedule cannot be turned on before a kit and a destination exist.
 	rec := e.do(req{method: "POST", target: "/p/lab/s/db/backups/policy", form: url.Values{"csrf": {p.CSRFToken}, "enabled": {"1"}, "every_hours": {"24"}, "at": {"03:00"}}, cookies: []*http.Cookie{c}})
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "kit de recuperação") {

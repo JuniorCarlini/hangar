@@ -874,9 +874,6 @@ connect_with = "Conectar com"
 [export]
 copy = "Copiar {ref}"
 
-[backup]
-hint = "Gera um pg_dump na hora e baixa pelo navegador."
-download = "Baixar backup"
 
 [backup.error]
 mode = "Escolha Simples ou Com kit de recuperação."
@@ -2078,7 +2075,7 @@ monthly = "mensal"
 
 [backups.run_status]
 running = "em andamento"
-ok = "ok"
+ok = "enviado"
 failed = "falhou"
 
 [backups.warning]
@@ -2223,18 +2220,26 @@ r2 = "Cloudflare R2"
 custom = "Outro S3 compatível"
 
 [svcbackup]
+routine_daily = "Todo dia às {at}"
+routine_text = { one = "A cada hora, a partir das {at}", other = "A cada {n} horas, a partir das {at}" }
+routines = "Rotinas de backup"
+routine_add = "Adicionar rotina"
+routines_empty = "Nenhuma rotina: o backup só acontece quando você clica em Fazer backup."
+routine_edit = "Editar rotina"
+routine_remove = "Remover rotina"
+routine_title = "Rotina de backup"
+routine_hint = "O primeiro backup do dia sai nesse horário; os outros seguem o intervalo."
 title = "Backups"
 not_ready_simple = "Para ligar, cadastre um destino em Backups."
 unsupported = "Backup automático existe para PostgreSQL. Volumes de apps entram numa próxima etapa."
 every_hint = "Horário do primeiro backup do dia."
 not_ready = "Para ligar, confirme o kit de recuperação e escolha um destino em Backups."
 open_backups = "Abrir Backups"
-policy = "Backup automático"
-run_now = "Fazer backup agora"
+run_now = "Fazer backup"
 running_now = "Fazendo backup…"
 every = "Frequência"
 every_hours = { one = "a cada hora", other = "a cada {n} horas" }
-at = "a partir de"
+at = "A partir de"
 wal = "Voltar a qualquer minuto"
 next = "Próximo: {when}"
 save = "Salvar"
@@ -2242,7 +2247,6 @@ wal_title = "Recuperação até o minuto"
 window = "Dá para voltar a qualquer momento entre {from} e {to}."
 window_none = "Ainda não há base para voltar a um minuto. Ela é feita logo depois que o WAL começa a funcionar."
 last_base = "Última base: {when}"
-download_hint = "Gera um pg_dump na hora, cifrado com a sua chave. O link vale 5 minutos."
 download_preparing = "Preparando: dump, teste e cifra…"
 download_ready = "Baixar ({size})"
 download_expires = "O link vale até {when} e funciona uma vez."
@@ -3073,3 +3077,13 @@ save = "Salvar"
 key = "Chave do servidor"
 key_hint = "Opcional: guarde uma cópia fora do servidor para abrir os backups se ele sumir."
 key_show = "Mostrar chave"
+
+[confirm.routine_remove]
+title = "Remover a rotina?"
+text = "Os backups automáticos deste serviço param. Os que já foram feitos continuam guardados."
+ok = "Remover"
+
+[svcbackup.restore_status]
+running = "em andamento"
+ok = "concluída"
+failed = "falhou"

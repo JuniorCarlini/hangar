@@ -74,15 +74,10 @@ templ tabBackups(d ServiceData) {
 		if d.Backups.WAL {
 			@svcBackupWAL(d)
 		}
-		// One card: the actions on top, the schedule in one line, then what
-		// was backed up and restored.
-		<section class={ cardClass }>
-			@cardHead(t(ctx, "svcbackup.title")) {
-				@svcBackupActions(d)
-			}
-			if !d.Backups.Ready {
-				// Nothing works before a destination (and, with the kit, a
-				// confirmed key) exists: say where to set it up.
+		if !d.Backups.Ready {
+			// Nothing works before a destination (and, with the kit, a
+			// confirmed key) exists: say where to set it up.
+			<section class={ cardClass }>
 				@emptyState("database-backup", notReadyText(ctx, d.Backups.Simple, "svcbackup")) {
 					if d.CanAdmin {
 						<a class="tuc-btn is-outline is-sm" href="/backups?tab=config">
@@ -91,13 +86,15 @@ templ tabBackups(d ServiceData) {
 						</a>
 					}
 				}
-			} else if d.CanAdmin {
-				@svcBackupSchedule(d)
-			}
-			if d.CanAdmin && d.Backups.Download != nil {
-				<div class="flex flex-wrap items-center justify-end gap-3 border-b border-border px-4 py-3">
-					@svcDownloadState(*d.Backups.Download, d.SudoCritical)
-				</div>
+			</section>
+		} else {
+			@svcBackupRoutines(d)
+		}
+		// What was backed up and restored, with "back up now" and
+		// "restore" on top.
+		<section class={ cardClass }>
+			@cardHead(t(ctx, "svcbackup.title")) {
+				@svcBackupActions(d)
 			}
 			if d.Backups.Ready && len(d.Backups.Runs) == 0 && len(d.Backups.Restores) == 0 {
 				@emptyState("history", t(ctx, "backups.history.empty"))
@@ -140,42 +137,113 @@ templ tabBackups(d ServiceData) {
 	}
 }
 
-// svcBackupSchedule is the automatic backup in one line: on or off, how
-// often and from what time. "Back to any minute" (WAL) is advanced: it
-// shows only while on, so it can be turned off.
-templ svcBackupSchedule(d ServiceData) {
-	<form class="flex flex-col gap-2 border-b border-border px-4 py-3" method="post" action={ templ.SafeURL(d.base() + "/backups/policy") }>
-		<input type="hidden" name="csrf" value={ d.CSRF }/>
-		<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-			<label class="flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium" for="bk-enabled">
-				<input type="checkbox" role="switch" class="tuc-switch" id="bk-enabled" name="enabled" value="1" checked?={ d.Backups.Enabled }/>
-				{ t(ctx, "svcbackup.policy") }
-			</label>
-			<div class="flex min-w-0 flex-[1_1_300px] items-center gap-2">
-				<div class="min-w-0 grow">
-					<label class="sr-only" for="bk-every">{ t(ctx, "svcbackup.every") }</label>
-					<select class="tuc-input" id="bk-every" name="every_hours" data-tuc-select data-clearable="false">
-						for _, h := range everyHours {
-							<option value={ fmt.Sprint(h) } selected?={ h == d.Backups.EveryHours }>{ t(ctx, "svcbackup.every_hours", "n", h) }</option>
-						}
-					</select>
-				</div>
-				<label class="shrink-0 text-[13px] text-muted" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
-				<input class="tuc-input w-28 shrink-0" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
-			</div>
-			<button class="tuc-btn is-outline shrink-0" type="submit">
-				@Icon("save", "size-4")
-				{ t(ctx, "svcbackup.save") }
-			</button>
-		</div>
-		if d.Backups.WALSupported && d.Backups.WAL {
-			<label class="flex cursor-pointer items-center gap-2 text-[13px]" for="bk-wal">
-				<input type="checkbox" role="switch" class="tuc-switch" id="bk-wal" name="wal" value="1" checked/>
-				{ t(ctx, "svcbackup.wal") }
-			</label>
+// svcBackupRoutines lists when the service is backed up by itself. None
+// by default (no automatic backup); a routine is added and changed in a
+// dialog. The schedule holds one routine: every N hours from a time.
+templ svcBackupRoutines(d ServiceData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "svcbackup.routines")) {
+			if d.CanAdmin && !d.Backups.Enabled {
+				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#routine-modal">
+					@Icon("plus", "size-3.5")
+					{ t(ctx, "svcbackup.routine_add") }
+				</button>
+			}
 		}
-		<span class="tuc-hint">{ svcNextRun(ctx, d.Backups.NextRun) }</span>
-	</form>
+		if !d.Backups.Enabled {
+			@emptyState("clock", t(ctx, "svcbackup.routines_empty"))
+		} else {
+			<div class="flex flex-wrap items-center gap-3 px-4 py-3">
+				<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-muted">
+					@Icon("clock", "size-4")
+				</span>
+				<div class="flex min-w-0 grow flex-col gap-0.5">
+					<span class="text-sm font-medium">{ routineText(ctx, d.Backups.EveryHours, d.Backups.AtTime) }</span>
+					if d.Backups.NextRun != "" {
+						<span class="text-xs text-muted">{ t(ctx, "svcbackup.next", "when", d.Backups.NextRun) }</span>
+					}
+				</div>
+				if d.CanAdmin {
+					<span class="inline-flex items-center gap-1 [&_form]:inline-flex">
+						<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#routine-modal" title={ t(ctx, "svcbackup.routine_edit") } aria-label={ t(ctx, "svcbackup.routine_edit") }>
+							@Icon("pencil", "size-3.5")
+						</button>
+						<form method="post" action={ templ.SafeURL(d.base() + "/backups/policy") } data-confirm={ t(ctx, "confirm.routine_remove.title") } data-confirm-text={ t(ctx, "confirm.routine_remove.text") } data-confirm-ok={ t(ctx, "confirm.routine_remove.ok") } data-tone="warning">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<input type="hidden" name="every_hours" value={ fmt.Sprint(d.Backups.EveryHours) }/>
+							<input type="hidden" name="at" value={ d.Backups.AtTime }/>
+							if d.Backups.WAL {
+								<input type="hidden" name="wal" value="1"/>
+							}
+							<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "svcbackup.routine_remove") } aria-label={ t(ctx, "svcbackup.routine_remove") }>
+								@Icon("trash", "size-3.5")
+							</button>
+						</form>
+					</span>
+				}
+			</div>
+		}
+	</section>
+	if d.CanAdmin {
+		@svcRoutineDialog(d)
+	}
+}
+
+// routineText says when the routine runs: "every day at 03:00" for the
+// usual daily one.
+func routineText(ctx context.Context, hours int, at string) string {
+	if hours == 24 {
+		return t(ctx, "svcbackup.routine_daily", "at", at)
+	}
+	return t(ctx, "svcbackup.routine_text", "n", hours, "at", at)
+}
+
+// svcRoutineDialog adds or changes the routine: how often, from what time.
+// "Back to any minute" (WAL) is advanced: it shows only while on, so it
+// can be turned off.
+templ svcRoutineDialog(d ServiceData) {
+	<dialog class="tuc-modal is-md" id="routine-modal" aria-labelledby="routine-modal-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="routine-modal-title">{ t(ctx, "svcbackup.routine_title") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form class="tuc-modal__body" method="post" action={ templ.SafeURL(d.base() + "/backups/policy") }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<input type="hidden" name="enabled" value="1"/>
+				<p class="tuc-modal__text">{ t(ctx, "svcbackup.routine_hint") }</p>
+				<div class="grid grid-cols-2 gap-3">
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="bk-every">{ t(ctx, "svcbackup.every") }</label>
+						<select class="tuc-input" id="bk-every" name="every_hours" data-tuc-select data-clearable="false">
+							for _, h := range everyHours {
+								<option value={ fmt.Sprint(h) } selected?={ h == d.Backups.EveryHours }>{ t(ctx, "svcbackup.every_hours", "n", h) }</option>
+							}
+						</select>
+					</div>
+					<div class="flex min-w-0 flex-col gap-1.5">
+						<label class="tuc-label" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
+						<input class="tuc-input" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
+					</div>
+				</div>
+				if d.Backups.WALSupported && d.Backups.WAL {
+					<label class="tuc-choice is-end">
+						<input type="checkbox" role="switch" class="tuc-switch" name="wal" value="1" checked/>
+						<span>{ t(ctx, "svcbackup.wal") }</span>
+					</label>
+				}
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("save", "size-3.5")
+						{ t(ctx, "svcbackup.save") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
 }
 
 templ svcBackupWAL(d ServiceData) {
@@ -220,19 +288,6 @@ templ svcBackupActions(d ServiceData) {
 			{ t(ctx, "svcbackup.restore") }
 		</button>
 	}
-	if d.CanAdmin {
-		if d.SudoCritical {
-			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit) }>
-				<input type="hidden" name="csrf" value={ d.CSRF }/>
-				<button class="tuc-btn is-outline is-sm" type="submit">
-					@Icon("download", "size-3.5")
-					{ t(ctx, "backup.download") }
-				</button>
-			</form>
-		} else {
-			@sudoButton(t(ctx, "backup.download"))
-		}
-	}
 }
 
 // restoreModal opens the restore dialog, or the identity check first.
@@ -241,13 +296,6 @@ func restoreModal(d ServiceData) string {
 		return "#restore-modal"
 	}
 	return "#sudo-dialog"
-}
-
-func downloadHint(ctx context.Context, kit bool) string {
-	if kit {
-		return t(ctx, "svcbackup.download_hint")
-	}
-	return t(ctx, "backup.hint")
 }
 
 // svcNextRun is the frequency row's hint: when the next backup runs.
