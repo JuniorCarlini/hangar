@@ -152,7 +152,7 @@ func (h *handlers) connectOffers(r *http.Request, p dbq.Project, self string) []
 			continue
 		}
 		for _, row := range plan.Rows {
-			out = append(out, views.ConnectOffer{Service: to, Key: row.Key, Secret: row.Secret, Var: row.Var})
+			out = append(out, views.ConnectOffer{Service: to, Key: row.Key, Secret: row.Secret, Var: row.Var, Known: row.Known})
 		}
 	}
 	return out

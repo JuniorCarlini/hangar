@@ -279,12 +279,14 @@ templ tabVariables(d ServiceData) {
 	}
 }
 
-// connectorDialog lists the project's services that offer something. A
-// click writes that service's lines into the .env editor, as references
-// (DB_HOST=${{postgres.HOST}}), and opens it: renaming or removing a line
-// there is all the configuration there is.
+// connectorDialog: pick a service, then cross its values with the app's
+// variables. A field comes filled only when the name is certain (the app
+// already has it, or its .env.example lists it); otherwise it is empty with
+// the usual name as a hint, and "Use suggestions" fills the empty ones.
+// "Add to .env" writes the filled rows as references into the editor, to
+// check and save there; empty rows are left out.
 templ connectorDialog(d ServiceData) {
-	<dialog class="tuc-modal is-md" id="connector" aria-labelledby="connector-title">
+	<dialog class="tuc-modal is-lg" id="connector" aria-labelledby="connector-title" data-connector>
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
 				<h2 class="tuc-modal__title" id="connector-title">{ t(ctx, "connect.open") }</h2>
@@ -292,11 +294,11 @@ templ connectorDialog(d ServiceData) {
 					@Icon("x", "size-4")
 				</button>
 			</div>
-			<div class="tuc-modal__body flex flex-col gap-3">
+			<div class="tuc-modal__body flex flex-col gap-3" data-connector-list>
 				<p class="tuc-modal__text">{ t(ctx, "connect.pick_hint", "from", d.Slug) }</p>
 				<div class="flex flex-col gap-2">
-					for _, g := range offerGroups(d.ConnectOffers) {
-						<button type="button" class="tuc-btn h-auto justify-start gap-3 py-2.5 text-left" data-env-block={ envBlock(g) }>
+					for i, g := range offerGroups(d.ConnectOffers) {
+						<button type="button" class="tuc-btn h-auto justify-start gap-3 py-2.5 text-left" data-connector-pick={ strconv.Itoa(i) }>
 							<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
 								@Icon("cable", "size-4")
 							</span>
@@ -309,6 +311,82 @@ templ connectorDialog(d ServiceData) {
 					}
 				</div>
 			</div>
+			for i, g := range offerGroups(d.ConnectOffers) {
+				<div class="tuc-modal__body flex flex-col gap-3" data-connector-panel={ strconv.Itoa(i) } data-service={ g[0].Service } hidden>
+					<div class="flex flex-wrap items-center gap-2">
+						<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-connector-back aria-label={ t(ctx, "connect.back") }>
+							@Icon("arrow-left", "size-4")
+						</button>
+						<span class="grid size-7 place-items-center rounded-sm bg-accent-soft text-accent-text">
+							@Icon("cable", "size-3.5")
+						</span>
+						<strong class="grow text-[13px] font-semibold">{ g[0].Service }</strong>
+						<button type="button" class="tuc-btn is-outline is-sm" data-connector-suggest>{ t(ctx, "connect.use_suggestions") }</button>
+					</div>
+					<p class="m-0 text-[13px] text-muted">{ t(ctx, "connect.cross_hint", "from", d.Slug) }</p>
+					<div class="tuc-table-wrap max-h-[50vh] overflow-y-auto rounded-sm border border-border">
+						<table class="tuc-table is-compact w-full">
+							<thead class="sticky top-0 z-[1] bg-surface">
+								<tr>
+									<th>{ t(ctx, "connect.offered_col") }</th>
+									<th class="w-8"></th>
+									<th>{ t(ctx, "connect.receives", "service", d.Slug) }</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, o := range g {
+									<tr>
+										<td class="font-mono text-[13px] whitespace-nowrap">
+											<span class="inline-flex items-center gap-1.5">
+												{ o.Key }
+												if o.Secret {
+													<span title={ t(ctx, "connect.secret") }>
+														@Icon("lock", "size-3 text-subtle")
+													</span>
+												}
+											</span>
+										</td>
+										<td class="px-0 text-center text-accent-text">
+											@Icon("cable", "size-3.5")
+										</td>
+										<td>
+											<input
+												class="tuc-input font-mono text-[13px]"
+												data-key={ o.Key }
+												if o.Known {
+													value={ o.Var }
+												}
+												placeholder={ o.Var }
+												list="connector-vars"
+												pattern="[A-Za-z_][A-Za-z0-9_]{0,127}"
+												autocomplete="off"
+												aria-label={ t(ctx, "connect.var_for", "key", g[0].Service+" · "+o.Key) }
+											/>
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+					<div class="flex justify-end gap-2">
+						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+						<button type="button" class="tuc-btn is-primary" data-connector-add>
+							@Icon("file-text", "size-3.5")
+							{ t(ctx, "connect.add_to_env") }
+						</button>
+					</div>
+				</div>
+			}
+			<datalist id="connector-vars">
+				for _, v := range d.Env {
+					<option value={ v.Key }></option>
+				}
+				if d.EnvSuggest != nil {
+					for _, v := range d.EnvSuggest.Vars {
+						<option value={ v.Key }></option>
+					}
+				}
+			</datalist>
 		</div>
 	</dialog>
 }
@@ -324,18 +402,6 @@ func offerGroups(offers []ConnectOffer) [][]ConnectOffer {
 		}
 	}
 	return out
-}
-
-// envBlock is what the connector writes into the .env editor for one
-// service: a comment naming it, then one reference per value it offers,
-// under the name the app most likely uses (Var).
-func envBlock(g []ConnectOffer) string {
-	var b strings.Builder
-	b.WriteString("# " + g[0].Service + "\n")
-	for _, o := range g {
-		b.WriteString(o.Var + "=${{" + o.Service + "." + o.Key + "}}\n")
-	}
-	return b.String()
 }
 
 func offerKeys(g []ConnectOffer) string {

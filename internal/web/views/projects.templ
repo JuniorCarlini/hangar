@@ -213,9 +213,11 @@ type ConnectOffer struct {
 	Service string
 	Key     string
 	Secret  bool
-	// Var is the name the connector writes for it in the .env (DB_HOST
-	// for postgres' HOST), one the app already uses when there is one.
-	Var string
+	// Var is the usual name for it in the app (DB_HOST for postgres'
+	// HOST); Known: the app already has it or its .env.example lists it,
+	// so the connector fills it in instead of only hinting it.
+	Var   string
+	Known bool
 }
 
 // RefWarning is a reference in the variables that the next deploy cannot

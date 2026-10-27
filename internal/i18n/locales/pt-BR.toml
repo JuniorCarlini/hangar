@@ -3013,8 +3013,12 @@ idle = "Sai sozinho depois de 30 minutos parado."
 level = "Escolha um dos três níveis."
 
 [connect]
+back = "Voltar aos serviços"
+use_suggestions = "Usar sugestões"
+cross_hint = "Escreva, ao lado de cada valor, a variável de {from} que o recebe. Só vem preenchido o que é certeza; linha vazia fica de fora."
+add_to_env = "Adicionar ao .env"
 service = "Serviço"
-pick_hint = "Escolha o serviço: as linhas dele entram no .env de {from}, já ligadas. Lá você renomeia ou apaga o que não quiser e salva."
+pick_hint = "Escolha o serviço que {from} vai usar."
 title = "Conector · {from}"
 loading = "Carregando o que o serviço oferece…"
 failed = "Não deu para carregar. Feche e tente de novo."

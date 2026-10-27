@@ -72,17 +72,43 @@
     if (dlg._tucano && dlg._tucano.close) dlg._tucano.close(); else if (dlg.open) dlg.close();
   }
 
-  // A service picked in the connector: its lines go into the .env editor,
-  // which opens in its place.
+  // The connector: pick a service (its panel replaces the list), cross its
+  // values with the app's variables, then "Add to .env" writes the filled
+  // rows into the editor as references and opens it, to check and save.
+  function showPanel(dlg, idx) {
+    dlg.querySelector("[data-connector-list]").hidden = idx !== null;
+    dlg.querySelectorAll("[data-connector-panel]").forEach(function (p) {
+      p.hidden = p.getAttribute("data-connector-panel") !== idx;
+    });
+  }
   document.addEventListener("click", function (e) {
-    var b = e.target.closest && e.target.closest("[data-env-block]");
-    if (!b) return;
+    var t = e.target.closest && e.target.closest("[data-connector-pick], [data-connector-back], [data-connector-suggest], [data-connector-add]");
+    if (!t) return;
+    var dlg = t.closest("[data-connector]");
+    if (!dlg) return;
+    if (t.hasAttribute("data-connector-pick")) { showPanel(dlg, t.getAttribute("data-connector-pick")); return; }
+    if (t.hasAttribute("data-connector-back")) { showPanel(dlg, null); return; }
+    var panel = t.closest("[data-connector-panel]");
+    var inputs = panel.querySelectorAll("input[data-key]");
+    if (t.hasAttribute("data-connector-suggest")) {
+      inputs.forEach(function (i) { if (!i.value.trim()) i.value = i.placeholder; });
+      return;
+    }
+    var service = panel.getAttribute("data-service");
+    var lines = ["# " + service];
+    for (var i = 0; i < inputs.length; i++) {
+      var name = inputs[i].value.trim();
+      if (!name) continue;
+      if (!inputs[i].checkValidity()) { inputs[i].reportValidity(); return; }
+      lines.push(name + "=${{" + service + "." + inputs[i].getAttribute("data-key") + "}}");
+    }
+    if (lines.length < 2) { inputs[0].focus(); return; }
     var editor = document.getElementById("env-bulk");
     var form = editor && editor.querySelector("form[data-envimport]");
     if (!form) return;
-    appendBlock(form, b.getAttribute("data-env-block"));
-    var picker = b.closest("dialog");
-    if (picker) closeModal(picker);
+    appendBlock(form, lines.join("\n"));
+    closeModal(dlg);
+    showPanel(dlg, null);
     openModal(editor);
   });
 
