@@ -65,7 +65,7 @@ func (h *handlers) saveGitSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	in := projects.GitSourceInput{
-		URL: r.PostFormValue("repo"), Branch: r.PostFormValue("branch"),
+		URL: repoFromForm(r), Branch: r.PostFormValue("branch"),
 		Subdir: r.PostFormValue("subdir"), Dockerfile: r.PostFormValue("dockerfile"),
 	}
 	if err := h.projects.SetGitSource(r.Context(), actor(r), s.ID, in, r.PostFormValue("token")); err != nil {
@@ -264,4 +264,21 @@ func serveHook(pm *projects.Manager, fails *ipRate, log *slog.Logger, ip string,
 	default:
 		_, _ = io.WriteString(w, string(out)+"\n")
 	}
+}
+
+// repoFromForm is the repository address a form sent: whole ("repo"), or
+// in parts as the repository card edits it (host kept, owner and name
+// typed), joined back into https://host/owner/name.git. A malformed part
+// leaves an address the source check refuses.
+func repoFromForm(r *http.Request) string {
+	if u := r.PostFormValue("repo"); u != "" {
+		return u
+	}
+	host := strings.TrimSpace(r.PostFormValue("host"))
+	owner := strings.Trim(strings.TrimSpace(r.PostFormValue("owner")), "/")
+	name := strings.TrimSuffix(strings.Trim(strings.TrimSpace(r.PostFormValue("name")), "/"), ".git")
+	if host == "" || owner == "" || name == "" {
+		return ""
+	}
+	return "https://" + host + "/" + owner + "/" + name + ".git"
 }

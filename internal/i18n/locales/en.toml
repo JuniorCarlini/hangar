@@ -1922,6 +1922,8 @@ subdir = "The folder {dir} does not exist in the repository."
 build_timeout = "The build took more than {minutes} minutes and was stopped."
 
 [git]
+owner = "User or organization"
+name = "Repository"
 title = "Repository"
 copy = "Copy {what}"
 repo = "Repository (HTTPS)"

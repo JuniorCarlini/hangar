@@ -1922,6 +1922,8 @@ subdir = "A pasta {dir} não existe no repositório."
 build_timeout = "O build passou de {minutes} minutos e foi interrompido."
 
 [git]
+owner = "Usuário ou organização"
+name = "Repositório"
 title = "Repositório"
 copy = "Copiar {what}"
 repo = "Repositório (HTTPS)"

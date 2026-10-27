@@ -225,3 +225,23 @@ func TestWebhookEndpoint(t *testing.T) {
 		t.Errorf("webhook deploys: %d, want 2", n)
 	}
 }
+
+// The repository card edits the owner and the name; the address is
+// joined back from them, on the host the service already uses.
+func TestRepoFromFormParts(t *testing.T) {
+	for _, c := range []struct {
+		form url.Values
+		want string
+	}{
+		{url.Values{"repo": {"https://github.com/a/b.git"}}, "https://github.com/a/b.git"},
+		{url.Values{"host": {"github.com"}, "owner": {" JuniorCarlini "}, "name": {"lab.git"}}, "https://github.com/JuniorCarlini/lab.git"},
+		{url.Values{"host": {"gitlab.com"}, "owner": {"grupo/sub"}, "name": {"app"}}, "https://gitlab.com/grupo/sub/app.git"},
+		{url.Values{"host": {"github.com"}, "owner": {""}, "name": {"app"}}, ""},
+	} {
+		r := httptest.NewRequest("POST", "/", strings.NewReader(c.form.Encode()))
+		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if got := repoFromForm(r); got != c.want {
+			t.Errorf("%v: %q, want %q", c.form, got, c.want)
+		}
+	}
+}

@@ -1,6 +1,9 @@
 package views
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Build from Git (docs/07, Etapa 10): the "Repositório Git" tab of the new
 // service dialog and the repository and webhook cards of the service panel.
@@ -85,6 +88,19 @@ templ newGitServiceForm(d NewServiceData) {
 	</form>
 }
 
+// splitRepo cuts a repository address into what the card edits: the host
+// (kept as is), the owner (a GitLab group may have subgroups) and the
+// repository's name, without ".git".
+func splitRepo(u string) (host, owner, name string) {
+	rest := strings.TrimSuffix(strings.TrimPrefix(u, "https://"), "/")
+	host, path, _ := strings.Cut(rest, "/")
+	path = strings.TrimSuffix(path, ".git")
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		return host, path[:i], path[i+1:]
+	}
+	return host, "", path
+}
+
 func orRoot(ctx context.Context, subdir string) string {
 	if subdir == "" {
 		return t(ctx, "git.subdir_root")
@@ -99,20 +115,27 @@ templ gitCards(d ServiceData) {
 	{{ g := d.Git }}
 	<section class={ cardClass } id="git-source">
 		@cardHead(t(ctx, "git.title")) {
-			<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(g.URL) } rel="noopener noreferrer" target="_blank">
+			<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL(g.URL) } rel="noopener noreferrer" target="_blank" title={ g.Display } aria-label={ g.Display }>
 				@Icon("external-link", "size-3.5")
-				{ g.Display }
 			</a>
 		}
 		<div class={ cardBodyClass }>
 			if d.CanAdmin {
 				<form method="post" action={ templ.SafeURL(d.base() + "/git") } class="flex flex-col gap-3" autocomplete="off">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<div class="flex min-w-0 flex-col gap-1.5">
-						<label class="tuc-label" for="edit-repo">{ t(ctx, "git.repo") }</label>
-						<input class="tuc-input font-mono text-[13px]" id="edit-repo" name="repo" type="url" required maxlength="300" value={ g.URL }/>
+					{{ host, owner, name := splitRepo(g.URL) }}
+					<input type="hidden" name="host" value={ host }/>
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(160px,100%),1fr))] items-start gap-3">
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="edit-owner">{ t(ctx, "git.owner") }</label>
+							<input class="tuc-input font-mono text-[13px]" id="edit-owner" name="owner" required maxlength="200" value={ owner } autocomplete="off" spellcheck="false"/>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="edit-name">{ t(ctx, "git.name") }</label>
+							<input class="tuc-input font-mono text-[13px]" id="edit-name" name="name" required maxlength="100" value={ name } autocomplete="off" spellcheck="false"/>
+						</div>
 					</div>
-					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(140px,100%),1fr))] items-start gap-3">
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(120px,100%),1fr))] items-start gap-3">
 						<div class="flex min-w-0 flex-col gap-1.5">
 							<label class="tuc-label" for="edit-branch">{ t(ctx, "git.branch") }</label>
 							<input class="tuc-input font-mono text-[13px]" id="edit-branch" name="branch" required maxlength="200" value={ g.Branch }/>
