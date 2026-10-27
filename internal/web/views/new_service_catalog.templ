@@ -309,6 +309,19 @@ templ myReposTab(d NewServiceData) {
 					</span>
 				</div>
 				<span class="text-xs text-muted" data-myrepos-status>{ t(ctx, "myrepos.scope_hint") }</span>
+				// When GitHub refuses the credential (expired, revoked) or cannot
+				// be reached: the same block as having no credential, with the
+				// reason (assets/newservice.js fills and shows it).
+				<div class="flex flex-col items-center gap-3 px-4 py-8 text-center" data-myrepos-error hidden>
+					<span class="flex size-10 items-center justify-center rounded-md border border-border bg-surface-2 text-danger">
+						@Icon("triangle-alert", "size-5")
+					</span>
+					<p class="m-0 max-w-[420px] text-[13px] text-muted" data-myrepos-error-text></p>
+					<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#new-git-cred">
+						@Icon("key-round", "size-3.5")
+						{ t(ctx, "myrepos.add_cred") }
+					</button>
+				</div>
 				// The same cards as the template catalog, with GitHub's mark as
 				// the logo (assets/newservice.js clones it into each card).
 				<div class="grid max-h-[min(56vh,520px)] grid-cols-[repeat(auto-fill,minmax(min(230px,100%),1fr))] content-start gap-2.5 overflow-y-auto p-0.5" data-myrepos-list></div>

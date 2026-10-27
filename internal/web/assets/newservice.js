@@ -113,7 +113,15 @@
       if (text) n.textContent = text;
       return n;
     };
+    var errBox = mine.querySelector('[data-myrepos-error]');
+    var errText = mine.querySelector('[data-myrepos-error-text]');
     var setStatus = function (text) { status.textContent = text; };
+    var setError = function (text) {
+      errText.textContent = text || '';
+      errBox.hidden = !text;
+      status.hidden = !!text;
+      search.disabled = !!text;
+    };
     var render = function () {
       var words = (search.value || '').toLowerCase().split(/\s+/).filter(Boolean);
       list.textContent = '';
@@ -146,11 +154,12 @@
       loadedFor = cred;
       repos = [];
       list.textContent = '';
+      setError('');
       setStatus(mine.dataset.loading);
       fetch(mine.dataset.url + '?credential=' + encodeURIComponent(cred), { credentials: 'same-origin' })
         .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || mine.dataset.failed); return j; }); })
         .then(function (j) { if (loadedFor !== cred) return; repos = j.repos || []; render(); })
-        .catch(function (err) { if (loadedFor !== cred) return; loadedFor = null; setStatus(err.message || mine.dataset.failed); });
+        .catch(function (err) { if (loadedFor !== cred) return; loadedFor = null; setError(err.message || mine.dataset.failed); });
     };
     var out = function (k, v) { repoDlg.querySelectorAll('[data-repo-out="' + k + '"]').forEach(function (n) { n.textContent = v || '—'; }); };
     var pick = function (r) {
