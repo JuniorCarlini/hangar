@@ -224,7 +224,6 @@ templ Team(d TeamData) {
 					</div>
 				</section>
 			}
-			@teamRoles()
 		}
 		if d.SudoActive {
 			@teamInviteDialog(d)
@@ -248,29 +247,6 @@ templ projectList(all bool, projects []string) {
 			}
 		</span>
 	}
-}
-
-// teamRoles explains, in plain words, what each role may do.
-templ teamRoles() {
-	<section class={ cardClass }>
-		@cardHead(t(ctx, "team.roles_title"))
-		<div class="tuc-table-wrap">
-			<table class="tuc-table is-compact w-full">
-				<thead><tr><th>{ t(ctx, "team.col.role") }</th><th>{ t(ctx, "team.roles_can") }</th></tr></thead>
-				<tbody>
-					for _, r := range []string{"owner", "admin", "operator", "viewer"} {
-						<tr>
-							<td class="w-[140px]"><span class={ roleBadge(r) }>{ t(ctx, "role." + r) }</span></td>
-							<td class="text-muted">{ t(ctx, "team.role_can." + r) }</td>
-						</tr>
-					}
-				</tbody>
-			</table>
-		</div>
-		<div class={ cardBodyClass }>
-			@notice("info", "folder", t(ctx, "team.projects_note"))
-		</div>
-	</section>
 }
 
 // roleIcon is the icon of a role card.
