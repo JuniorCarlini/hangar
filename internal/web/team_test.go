@@ -163,3 +163,33 @@ func TestGuessingInviteLinksFromTheBrowser(t *testing.T) {
 		t.Fatalf("after %d guesses: %d", auth.LimitFailures, rec.Code)
 	}
 }
+
+// The service page names the one service with customer domains on, which
+// may live in a project the limited user cannot see: the name of that
+// project must not reach them.
+func TestLimitedUserDoesNotLearnTheDynamicServiceProject(t *testing.T) {
+	e := newEnv(t)
+	c := e.limitedSession(t)
+	ctx := context.Background()
+	a := projects.Actor{UserID: "usr_x"}
+	if _, err := e.pm.CreateService(ctx, a, "loja", projects.ServiceInput{Slug: "vitrine", Image: "nginx:1.29-alpine", Port: 80}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.pm.CreateService(ctx, a, "lab", projects.ServiceInput{Slug: "web", Image: "nginx:1.29-alpine", Port: 80}); err != nil {
+		t.Fatal(err)
+	}
+	e.pm.Wait()
+	if _, err := e.st.DB.Exec(`UPDATE services SET dynamic_domains = 1 WHERE slug = 'vitrine'`); err != nil {
+		t.Fatal(err)
+	}
+	body := e.do(req{method: "GET", target: "/p/lab/s/web?tab=domains", cookies: []*http.Cookie{c}}).Body.String()
+	if !strings.Contains(body, `id="domain-clients"`) {
+		t.Fatal("the customer-domains dialog is not on the page; the test no longer exercises the leak")
+	}
+	if strings.Contains(body, "loja/vitrine") || strings.Contains(body, "loja") {
+		t.Error("the service page named a project the user cannot see")
+	}
+	if !strings.Contains(body, "outro projeto") && !strings.Contains(body, "another project") {
+		t.Error("the page should still say the customer domains are on elsewhere")
+	}
+}

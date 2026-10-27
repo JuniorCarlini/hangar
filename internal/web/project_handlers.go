@@ -491,6 +491,11 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	}
 	if dp, ds, ok := h.projects.DynamicServiceRef(r.Context()); ok && (dp != p.Slug || ds != s.Slug) {
 		d.Domains.DynamicElsewhere = dp + "/" + ds
+		// A user limited to some projects does not learn the names of the
+		// others (the router answers 404 for them, policy.go).
+		if pr := PrincipalFrom(r.Context()); pr == nil || !pr.CanSeeProject(dp) {
+			d.Domains.DynamicElsewhere = i18n.T(r.Context(), "domain.dynamic.other_project")
+		}
 	}
 	if eps, err := h.projects.ListEndpoints(r.Context(), s.ID); err == nil {
 		ip, _ := netip.ParseAddr(h.autoLinkIP)
