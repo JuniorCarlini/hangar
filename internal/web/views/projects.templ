@@ -710,12 +710,10 @@ func portValue(p int64) string {
 	return fmt.Sprint(p)
 }
 
-// deployField is a row of the deploy settings: the icon and label on the
-// left, the field and its hint on the right (stacked when the card is narrow, as in the drawer).
-templ deployField(icon, id, label, hint string) {
+// deployField is a row of the deploy settings: the label on the left, the field and its hint on the right (stacked when the card is narrow, as in the drawer).
+templ deployField(id, label, hint string) {
 	<div class="grid min-w-0 items-start gap-1.5 @xl:grid-cols-[190px_minmax(0,1fr)] @xl:gap-4">
-		<label class="tuc-label inline-flex items-center gap-2 @xl:h-9" for={ id }>
-			@Icon(icon, "size-4 shrink-0 text-muted")
+		<label class="tuc-label inline-flex items-center @xl:h-9" for={ id }>
 			{ label }
 		</label>
 		<div class="flex min-w-0 flex-col gap-1.5">
@@ -748,13 +746,13 @@ templ deploySettings(d ServiceData) {
 			if d.CanAdmin {
 				<form method="post" action={ templ.SafeURL(d.base() + "/deploy-settings") } class="@container flex flex-col gap-4">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					@deployField("square-terminal", "predeploy", t(ctx, "deploy.settings.predeploy"), t(ctx, "deploy.settings.predeploy_hint")) {
+					@deployField("predeploy", t(ctx, "deploy.settings.predeploy"), t(ctx, "deploy.settings.predeploy_hint")) {
 						<input class="tuc-input font-mono text-[13px]" id="predeploy" name="predeploy" value={ d.PreDeploy } placeholder={ t(ctx, "deploy.settings.predeploy_placeholder") } autocomplete="off"/>
 					}
-					@deployField("activity", "health_path", t(ctx, "deploy.settings.health_path"), t(ctx, "deploy.settings.health_hint")) {
+					@deployField("health_path", t(ctx, "deploy.settings.health_path"), t(ctx, "deploy.settings.health_hint")) {
 						<input class="tuc-input font-mono text-[13px]" id="health_path" name="health_path" value={ d.HealthPath } placeholder={ t(ctx, "deploy.settings.health_placeholder") } autocomplete="off"/>
 					}
-					@deployField("check-check", "validate", t(ctx, "deploy.settings.validate"), t(ctx, "deploy.settings.validate_hint")) {
+					@deployField("validate", t(ctx, "deploy.settings.validate"), t(ctx, "deploy.settings.validate_hint")) {
 						<div class="flex min-w-0 items-center gap-2">
 							<input class="tuc-input min-w-0 grow font-mono text-[13px]" id="validate" name="validate" value={ d.Validate } placeholder={ t(ctx, "deploy.settings.validate_placeholder") } autocomplete="off"/>
 							<label class="sr-only" for="validate_timeout">{ t(ctx, "deploy.settings.validate_timeout") }</label>
