@@ -38,8 +38,8 @@ var (
 	ErrConnectNone    = &i18n.Error{Key: "connect.error.none"}
 )
 
-// Offers lists what a service offers: its exports and its offered variables
-// (an export wins over a variable with the same name, as in a reference).
+// Offers lists what a service offers: a template's exports, or, for a
+// service made by hand, every variable it has.
 func (m *Manager) Offers(ctx context.Context, serviceID string) ([]Offer, error) {
 	exps, err := m.q.ListExports(ctx, serviceID)
 	if err != nil {
@@ -51,13 +51,17 @@ func (m *Manager) Offers(ctx context.Context, serviceID string) ([]Offer, error)
 		seen[e.Key] = true
 		out = append(out, Offer{Key: e.Key, Secret: e.Secret == 1})
 	}
-	vars, err := m.q.ListOfferedVars(ctx, serviceID)
-	if err != nil {
-		return nil, err
-	}
-	for _, v := range vars {
-		if !seen[v.Key] {
-			out = append(out, Offer{Key: v.Key, Secret: v.Secret == 1, Variable: true})
+	// A service made by hand (no template exports) offers every variable
+	// it has: nothing to mark before another service connects to it.
+	if len(exps) == 0 {
+		vars, err := m.q.ListEnv(ctx, serviceID)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range vars {
+			if !seen[v.Key] {
+				out = append(out, Offer{Key: v.Key, Secret: v.Secret == 1, Variable: true})
+			}
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Key < out[j].Key })

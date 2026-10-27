@@ -121,22 +121,27 @@ func TestAdminCreatesProjectAndService(t *testing.T) {
 	}
 }
 
-func TestSecretNeverInHTMLUntilRevealedWithSudo(t *testing.T) {
+// Admins see every value in the Variables tab (the .env editor holds the
+// whole file); below admin a secret never reaches the HTML, on any tab, and
+// the reveal route still asks for sudo.
+func TestSecretOnlyForAdmins(t *testing.T) {
+	eo := newEnv(t)
+	eo.labService(t)
+	op, _ := eo.session(t, auth.RoleOperator)
+	for _, tab := range []string{"", "?tab=variables", "?tab=overview", "?tab=network", "?tab=deploys", "?tab=connection", "?tab=settings"} {
+		if strings.Contains(eo.do(req{method: "GET", target: "/p/lab/s/web" + tab, cookies: []*http.Cookie{op}}).Body.String(), "valor-super-secreto-42") {
+			t.Fatalf("an operator got the secret in the HTML of %q", tab)
+		}
+	}
 	e := newEnv(t)
 	e.labService(t)
 	c, p := e.session(t, auth.RoleAdmin)
-
-	page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{c}}).Body.String()
-	if strings.Contains(page, "valor-super-secreto-42") {
-		t.Fatal("secret appeared in the HTML")
+	page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{c}})
+	if !strings.Contains(page.Body.String(), "valor-super-secreto-42") {
+		t.Fatal("an admin does not see the secret's value")
 	}
-	for _, tab := range []string{"", "?tab=overview", "?tab=network", "?tab=deploys", "?tab=connection", "?tab=settings"} {
-		if strings.Contains(e.do(req{method: "GET", target: "/p/lab/s/web" + tab, cookies: []*http.Cookie{c}}).Body.String(), "valor-super-secreto-42") {
-			t.Fatalf("secret appeared in the HTML of %q", tab)
-		}
-	}
-	if !strings.Contains(page, "SECRET_KEY") {
-		t.Fatal("the variable name should appear")
+	if page.Header().Get("Cache-Control") != "no-store" {
+		t.Error("a page with secrets must not be cached")
 	}
 
 	rec := e.do(req{method: "POST", target: "/p/lab/s/web/env/reveal", form: url.Values{"csrf": {p.CSRFToken}, "key": {"SECRET_KEY"}}, cookies: []*http.Cookie{c}})

@@ -9,9 +9,10 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
-// A service that offers nothing cannot be connected to; marking one of its
-// variables as offered makes it connectable, and only that value shows.
-func TestConnectNeedsSomethingOffered(t *testing.T) {
+// A service made by hand offers every variable it has, with nothing to
+// mark first; with no variables it offers nothing and cannot be connected
+// to, and deleting a variable takes its offer with it.
+func TestHandMadeServiceOffersItsVariables(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	f.service(t) // lab/web
@@ -31,28 +32,59 @@ func TestConnectNeedsSomethingOffered(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := f.m.SetOffered(ctx, f.who, api.ID, "TOKEN", true); err != nil {
-		t.Fatal(err)
-	}
 	plan, err := f.m.PlanConnect(ctx, "lab", "web", "api")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Rows) != 1 || plan.Rows[0].Key != "TOKEN" || plan.Rows[0].Var != "API_TOKEN" || !plan.Rows[0].Checked {
+	if len(plan.Rows) != 2 || plan.Rows[1].Key != "TOKEN" || plan.Rows[1].Var != "API_TOKEN" {
 		t.Fatalf("plan = %+v", plan.Rows)
 	}
-	if _, err := f.m.Connect(ctx, f.who, "lab", "web", "api", []Mapping{{Key: "INTERNAL", Var: "X"}}, false); err == nil {
-		t.Error("connected to a variable that is not offered")
+	if _, err := f.m.Connect(ctx, f.who, "lab", "web", "api", []Mapping{{Key: "INTERNAL", Var: "X"}}, false); err != nil {
+		t.Errorf("connect to a variable of a hand-made service: %v", err)
 	}
 	if _, err := f.m.PlanConnect(ctx, "lab", "web", "web"); !errors.Is(err, ErrConnectSelf) {
 		t.Errorf("plan to itself: %v", err)
 	}
-	// Deleting the variable takes its offer with it.
-	if err := f.m.DeleteEnv(ctx, f.who, api.ID, "TOKEN"); err != nil {
-		t.Fatal(err)
+	for _, k := range []string{"TOKEN", "INTERNAL"} {
+		if err := f.m.DeleteEnv(ctx, f.who, api.ID, k); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if offers, _ := f.m.Offers(ctx, api.ID); len(offers) != 0 {
-		t.Errorf("offers after deleting the variable: %+v", offers)
+		t.Errorf("offers after deleting the variables: %+v", offers)
+	}
+}
+
+// The .env file is the whole truth when saved from a full editor: lines set
+// the variables, a missing one is deleted, an empty file deletes them all.
+func TestEnvFileReplaces(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, webID := f.service(t)
+	for k, v := range map[string]string{"KEEP": "1", "GONE": "2", "SECRET_KEY": "s3cret"} {
+		if err := f.m.SetEnv(ctx, f.who, webID, k, v, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.m.SetEnvFile(ctx, f.who, webID, "KEEP=1\nSECRET_KEY=s3cret\nNEW=${{db.HOST}}\n"); err != nil {
+		t.Fatal(err)
+	}
+	vals, err := f.m.ListEnvValues(ctx, webID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, v := range vals {
+		got[v.Key] = v.Value
+	}
+	if len(got) != 3 || got["KEEP"] != "1" || got["SECRET_KEY"] != "s3cret" || got["NEW"] != "${{db.HOST}}" {
+		t.Errorf("after the file: %v", got)
+	}
+	if _, err := f.m.SetEnvFile(ctx, f.who, webID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if vals, _ := f.m.ListEnvValues(ctx, webID); len(vals) != 0 {
+		t.Errorf("an empty file left %+v", vals)
 	}
 }
 

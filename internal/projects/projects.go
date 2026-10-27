@@ -792,6 +792,64 @@ func (m *Manager) ListEnv(ctx context.Context, serviceID string) ([]EnvVar, erro
 	return out, nil
 }
 
+// ListEnvValues is ListEnv with the secrets' values too: the panel shows
+// every value to admins, so the .env editor holds the whole file.
+func (m *Manager) ListEnvValues(ctx context.Context, serviceID string) ([]EnvVar, error) {
+	rows, err := m.q.ListEnv(ctx, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]EnvVar, 0, len(rows))
+	for _, r := range rows {
+		plain, err := m.box.Open(r.ValueEnc, envAD(serviceID, r.Key))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, EnvVar{Key: r.Key, Secret: r.Secret == 1, Value: string(plain)})
+	}
+	return out, nil
+}
+
+// SetEnvFile makes the service's variables exactly the .env text: lines set
+// as SetEnvBulk does, and a variable missing from the text is deleted. A
+// secret the editor could not show is a commented "# KEY=••••" line: it is
+// kept as it is. An empty text deletes every variable.
+func (m *Manager) SetEnvFile(ctx context.Context, a Actor, serviceID, text string) (int, error) {
+	vars, err := ParseEnvFile(text)
+	if err != nil {
+		return 0, err
+	}
+	changed := 0
+	if len(vars) > 0 {
+		if changed, err = m.SetEnvBulk(ctx, a, serviceID, text, false); err != nil {
+			return 0, err
+		}
+	}
+	keep := map[string]bool{}
+	for _, x := range vars {
+		keep[x.Key] = true
+	}
+	for _, line := range strings.Split(text, "\n") {
+		if g := hiddenSecretRE.FindStringSubmatch(strings.TrimSpace(line)); g != nil {
+			keep[g[1]] = true
+		}
+	}
+	cur, err := m.q.ListEnv(ctx, serviceID)
+	if err != nil {
+		return changed, err
+	}
+	for _, e := range cur {
+		if keep[e.Key] {
+			continue
+		}
+		if err := m.DeleteEnv(ctx, a, serviceID, e.Key); err != nil {
+			return changed, err
+		}
+		changed++
+	}
+	return changed, nil
+}
+
 // SetEnv creates or replaces a variable.
 // SetBaseDomain tells the manager the edge's base domain ("" = none).
 func (m *Manager) SetBaseDomain(d string) { m.cfgBase = strings.ToLower(strings.TrimSuffix(d, ".")) }
@@ -844,6 +902,10 @@ func (m *Manager) SetEnv(ctx context.Context, a Actor, serviceID, key, value str
 	m.record(ctx, a, "service.env.set", "service", serviceID, audit.OK, map[string]any{"key": key, "secret": secret})
 	return nil
 }
+
+// hiddenSecretRE is how the .env editor shows a secret it was not given:
+// "# KEY=••••".
+var hiddenSecretRE = regexp.MustCompile(`^#\s*([A-Za-z_][A-Za-z0-9_]*)=••••$`)
 
 // envSecretRE matches variable names that usually hold a secret.
 var envSecretRE = regexp.MustCompile(`(?i)(SECRET|PASSWORD|PASSWD|PASS$|_PASS_|TOKEN|PRIVATE|_KEY$|^KEY$|API_KEY|CREDENTIAL|DSN$)`)

@@ -72,11 +72,6 @@ func (h *handlers) connect(w http.ResponseWriter, r *http.Request) {
 	for _, field := range r.PostForm["key"] {
 		pairs = append(pairs, pair{field, r.PostFormValue("var_" + field)})
 	}
-	// The "connect variables" modal sends one pair: variable A ("var")
-	// receives variable B ("field", as "db|HOST").
-	if f := r.PostFormValue("field"); f != "" {
-		pairs = append(pairs, pair{f, strings.TrimSpace(r.PostFormValue("var"))})
-	}
 	for _, p := range pairs {
 		field, v := p.field, p.v
 		target, key, ok := strings.Cut(field, "|")
@@ -146,24 +141,18 @@ func (h *handlers) connectTargets(r *http.Request, projectID, self string) []str
 }
 
 // connectOffers are the values the project's other services offer, by
-// service name, for the connector's "variable B".
-func (h *handlers) connectOffers(r *http.Request, projectID, self string) []views.ConnectOffer {
-	svcs, err := h.projects.ListServices(r.Context(), projectID)
-	if err != nil {
-		return nil
-	}
-	slices.SortFunc(svcs, func(a, b dbq.Service) int { return strings.Compare(a.Slug, b.Slug) })
+// service name, each with the variable name the connector would write.
+func (h *handlers) connectOffers(r *http.Request, p dbq.Project, self string) []views.ConnectOffer {
+	targets := h.connectTargets(r, p.ID, self)
+	slices.Sort(targets)
 	var out []views.ConnectOffer
-	for _, s := range svcs {
-		if s.Slug == self {
-			continue
-		}
-		offers, err := h.projects.Offers(r.Context(), s.ID)
+	for _, to := range targets {
+		plan, err := h.projects.PlanConnect(r.Context(), p.Slug, self, to)
 		if err != nil {
 			continue
 		}
-		for _, o := range offers {
-			out = append(out, views.ConnectOffer{Service: s.Slug, Key: o.Key, Secret: o.Secret})
+		for _, row := range plan.Rows {
+			out = append(out, views.ConnectOffer{Service: to, Key: row.Key, Secret: row.Secret, Var: row.Var})
 		}
 	}
 	return out

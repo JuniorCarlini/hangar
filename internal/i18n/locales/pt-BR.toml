@@ -407,23 +407,16 @@ title = "Deploys"
 last = { one = "o último", other = "últimos {n}" }
 
 [service.env]
-empty = "Nenhuma variável ainda. Adicione uma ou cole um .env."
-reveal = "Revelar"
-delete = "Excluir"
-delete_named = "Excluir {key}"
+file_hint = "Este é o arquivo inteiro: o que você apagar aqui é apagado no serviço. Linhas como DB_HOST=${{postgres.HOST}} são conexões."
+empty = "Nenhuma variável ainda. Escreva no .env ou use o Conector."
 name = "Nome"
 value = "Valor"
-value_placeholder = "o valor fica cifrado"
-save = "Salvar variável"
 revealed = "Valor revelado nesta tela; a visualização ficou registrada na auditoria."
-add = "Nova variável"
 bulk = "Arquivo .env"
-bulk_hint = "Edite ou cole um arquivo .env inteiro. Os segredos aparecem como comentário e não mudam, a menos que você os substitua. Salvar adiciona ou atualiza as variáveis; não remove."
 bulk_label = "Conteúdo do .env"
 bulk_placeholder = "DJANGO_DEBUG=0"
 bulk_save = "Salvar"
 copy = "Copiar"
-next_deploy = "Fica pendente e entra no próximo deploy."
 broken_title = { one = "1 referência quebrada", other = "{n} referências quebradas" }
 broken_hint = "O próximo deploy deste serviço vai falhar até a referência ser corrigida ou removida."
 
@@ -883,13 +876,7 @@ disconnect_named = "Desconectar de {project}"
 connect_with = "Conectar com"
 
 [export]
-title = "Oferece aos outros"
-hint = "Use estes valores em outros serviços com uma referência, como {example}; ela é resolvida a cada deploy."
-key = "Chave"
-reference = "Referência"
 copy = "Copiar {ref}"
-empty = "Este serviço ainda não oferece nada aos outros. Para oferecer uma variável, use o ícone de cabo na linha dela, nas Variáveis acima. Templates como Postgres e Redis já oferecem a conexão pronta."
-offered_vars = "Oferece aos outros serviços do projeto: {list}. Eles se conectam pelo botão \"Conector\" ou arrastando no canvas."
 
 [backup]
 hint = "Gera um pg_dump na hora e baixa pelo navegador, sem abrir porta."
@@ -1185,14 +1172,8 @@ text = "Quem acessa de fora por ela perde a conexão."
 ok = "Fechar porta"
 
 [confirm.disconnect]
-title = "Desconectar {key}?"
-text = "A variável deixa de usar o valor de {service} e é apagada. Vale no próximo deploy."
-ok = "Desconectar"
 
 [confirm.env_delete]
-title = "Apagar esta variável?"
-text = "Entra como alteração pendente e vale no próximo deploy."
-ok = "Apagar"
 
 [confirm.domain_delete]
 title = "Remover este domínio?"
@@ -3031,14 +3012,7 @@ idle = "Sai sozinho depois de 30 minutos parado."
 level = "Escolha um dos três níveis."
 
 [connect]
-vars = "Conectar variáveis"
-help = "Uma variável deste serviço recebe o valor de outro serviço do projeto. Nada é copiado: o valor acompanha quando muda, a partir do próximo deploy."
-none = "Nenhuma conexão ainda."
-receives_from = "recebe de"
-var_a = "Variável de {service}"
-var_a_hint = "Escolha uma que já existe ou digite um nome novo."
-var_b = "Recebe o valor de"
-var_b_pick = "Escolha o serviço e o valor"
+pick_hint = "Escolha o serviço: as linhas dele entram no .env de {from}, já ligadas. Lá você renomeia ou apaga o que não quiser e salva."
 title = "Conector · {from}"
 loading = "Carregando o que o serviço oferece…"
 failed = "Não deu para carregar. Feche e tente de novo."
@@ -3059,13 +3033,6 @@ open = "Conector"
 no_targets = "Nenhum outro serviço deste projeto oferece valores. Num serviço feito por imagem ou Git, marque nas variáveis o que ele oferece."
 offered = "oferecida"
 offered_hint = "Os outros serviços do projeto podem se conectar a esta variável."
-offer = "Oferecer aos outros serviços"
-offer_named = "Oferecer {key} aos outros serviços"
-unoffer = "Parar de oferecer"
-unoffer_named = "Parar de oferecer {key}"
-from = "de"
-disconnect = "Desconectar"
-disconnect_named = "Desconectar {key}"
 used_by = "Usado por: {list}."
 used_by_item = "{service} ({var} ← {key})"
 delete_used = "Estes serviços usam este e vão falhar no próximo deploy: {list}. Desconecte-os ou aponte para outro serviço antes."

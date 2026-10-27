@@ -1,9 +1,9 @@
 // The ".env" modal of a service: the variables shown as a .env file the
-// operator can edit, paste over or copy out. Saving posts the text to
-// /env/bulk, which merges (adds/updates) — it never deletes. A secret's real
-// value never reaches the page: it is a commented line (# KEY=••••), skipped
-// on save, so editing the file never overwrites a secret unless the operator
-// types a new value for it.
+// operator can edit, paste over or copy out, and where the connector writes
+// its references. An admin's editor holds every value and saving replaces
+// the variables (a line taken out is deleted). For other roles a secret's
+// value never reaches the page: it is a commented line (# KEY=••••),
+// skipped on save, and saving only adds and updates.
 (function () {
   "use strict";
 
@@ -60,6 +60,55 @@
     if (text) text += "\n";
     ta.value = text + "# " + (src.getAttribute("data-comment") || "") + "\n" + lines.join("\n") + "\n";
   }
+
+  // appendBlock adds the connector's lines for one service (a comment, then
+  // KEY=${{service.VALUE}} references) to the end of the editor. A name
+  // already in the editor is left alone: the operator renames or removes
+  // lines there before saving.
+  function appendBlock(form, block) {
+    var ta = form.querySelector("[data-envimport-src]");
+    if (!ta) return;
+    var present = {};
+    var have = ta.value.split("\n");
+    for (var i = 0; i < have.length; i++) {
+      var m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(have[i]);
+      if (m) present[m[1]] = true;
+    }
+    var lines = block.split("\n").filter(function (l) {
+      var m = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(l);
+      return l && (!m || !present[m[1]]);
+    });
+    if (lines.length < 2) return;
+    var text = ta.value;
+    if (text && !/\n$/.test(text)) text += "\n";
+    if (text) text += "\n";
+    ta.value = text + lines.join("\n") + "\n";
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    ta.scrollTop = ta.scrollHeight;
+  }
+
+  function openModal(dlg) {
+    if (dlg._tucano && dlg._tucano.open) dlg._tucano.open(); else if (!dlg.open) dlg.showModal();
+  }
+  function closeModal(dlg) {
+    if (dlg._tucano && dlg._tucano.close) dlg._tucano.close(); else if (dlg.open) dlg.close();
+  }
+
+  // A service picked in the connector: its lines go into the .env editor,
+  // which opens in its place.
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-env-block]");
+    if (!b) return;
+    var editor = document.getElementById("env-bulk");
+    var form = editor && editor.querySelector("form[data-envimport]");
+    if (!form) return;
+    fill(form);
+    appendBlock(form, b.getAttribute("data-env-block"));
+    var picker = b.closest("dialog");
+    if (picker) closeModal(picker);
+    openModal(editor);
+  });
 
   function copy(btn) {
     var form = btn.closest("form[data-envimport]");

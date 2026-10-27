@@ -120,17 +120,16 @@ templ pendingBanner(d ServiceData) {
 
 templ tabVariables(d ServiceData) {
 	@pendingBanner(d)
-	@connectorCard(d)
-	<section class={ cardClass }>
+	<section class={ cardClass } id="variables">
 		@cardHead(t(ctx, "service.tab.variables")) {
 			if d.CanOperate {
-				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#env-bulk" aria-label={ t(ctx, "service.env.bulk") }>
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#connector" disabled?={ len(d.ConnectOffers) == 0 } title={ connectTitle(ctx, d) }>
+					@Icon("cable", "size-3.5")
+					{ t(ctx, "connect.open") }
+				</button>
+				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#env-bulk">
 					@Icon("file-text", "size-3.5")
 					.env
-				</button>
-				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#env-new">
-					@Icon("plus", "size-3.5")
-					{ t(ctx, "service.env.add") }
 				</button>
 			}
 		}
@@ -148,94 +147,52 @@ templ tabVariables(d ServiceData) {
 				</div>
 			</div>
 		}
-		if len(d.Env) > 0 {
+		if len(d.Env) > 0 || len(d.Exports) > 0 {
 			<div class="tuc-table-wrap">
 				<table class="tuc-table is-compact w-full">
-					<thead><tr><th>{ t(ctx, "service.env.name") }</th><th>{ t(ctx, "service.env.value") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<thead><tr><th>{ t(ctx, "service.env.name") }</th><th>{ t(ctx, "service.env.value") }</th></tr></thead>
 					<tbody>
 						for _, v := range d.Env {
 							<tr>
-								<td class="font-mono text-[13px]">
-									<span class="inline-flex items-center gap-1.5">
-										{ v.Key }
-										if v.Offered {
-											<span class="tuc-badge is-info is-plain" title={ t(ctx, "connect.offered_hint") }>{ t(ctx, "connect.offered") }</span>
-										}
-									</span>
-								</td>
-								<td class="max-w-[260px] truncate font-mono text-[13px] [&_form]:inline-flex">
-									if v.Secret && !v.Revealed {
-										<span class="tuc-reveal">
-											<span class="text-muted">••••••••••••</span>
-											if d.CanAdmin && d.SudoCritical {
-												<form method="post" action={ templ.SafeURL(d.base() + "/env/reveal") }>
-													<input type="hidden" name="csrf" value={ d.CSRF }/>
-													<input type="hidden" name="key" value={ v.Key }/>
-													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.reveal") }>
-														@Icon("eye", "size-3.5")
-													</button>
-												</form>
-											} else if d.CanAdmin {
-												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "service.env.reveal") }>
-													@Icon("eye", "size-3.5")
-												</button>
-											}
-										</span>
-									} else if broken := refWarnings(ctx, d.RefWarnings, v.Key); broken != "" {
+								<td class="font-mono text-[13px]">{ v.Key }</td>
+								<td class="max-w-[300px] truncate font-mono text-[13px]">
+									if broken := refWarnings(ctx, d.RefWarnings, v.Key); broken != "" {
 										<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
 										<span class="ref-text">{ v.Value }</span>
 									} else if svc, key := connection(v.Value); svc != "" {
-										<span class="inline-flex items-center gap-1.5 font-sans" title={ v.Value }>
+										<span class="inline-flex items-center gap-1.5" title={ v.Value }>
 											@Icon("cable", "size-3.5 text-accent-text")
-											<span class="text-muted">{ t(ctx, "connect.from") }</span>
-											<span class="font-mono">{ svc }</span>
+											<span class="text-muted">{ svc }</span>
 											<span class="text-subtle">·</span>
-											<span class="font-mono">{ key }</span>
+											{ key }
 										</span>
 									} else if isRef(v.Value) {
 										<span class="tuc-badge is-info ref-badge">ref</span>
 										<span class="ref-text">{ v.Value }</span>
+									} else if v.Secret && v.Value == "" {
+										<span class="text-muted">••••••••••••</span>
 									} else {
 										{ v.Value }
 									}
 								</td>
-								<td class="tuc-table__actions">
-									<span class="inline-flex items-center justify-end gap-1 [&_form]:inline-flex">
-										if d.CanAdmin && !d.HasExports && !isRef(v.Value) {
-											<form method="post" action={ templ.SafeURL(d.base() + "/env/offer") }>
-												<input type="hidden" name="csrf" value={ d.CSRF }/>
-												<input type="hidden" name="key" value={ v.Key }/>
-												if v.Offered {
-													<input type="hidden" name="on" value="0"/>
-													<button class="tuc-btn is-ghost is-icon is-sm text-accent-text" type="submit" aria-label={ t(ctx, "connect.unoffer_named", "key", v.Key) } title={ t(ctx, "connect.unoffer") }>
-														@Icon("cable", "size-3.5")
-													</button>
-												} else {
-													<input type="hidden" name="on" value="1"/>
-													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.offer_named", "key", v.Key) } title={ t(ctx, "connect.offer") }>
-														@Icon("cable", "size-3.5")
-													</button>
-												}
-											</form>
-										}
-										if svc, _ := connection(v.Value); svc != "" && d.CanOperate {
-											<form data-confirm={ t(ctx, "confirm.disconnect.title", "key", v.Key) } data-confirm-text={ t(ctx, "confirm.disconnect.text", "service", svc) } data-confirm-ok={ t(ctx, "confirm.disconnect.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
-												<input type="hidden" name="csrf" value={ d.CSRF }/>
-												<input type="hidden" name="key" value={ v.Key }/>
-												<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.disconnect_named", "key", v.Key) } title={ t(ctx, "connect.disconnect") }>
-													@Icon("unlink", "size-3.5")
-												</button>
-											</form>
-										} else if d.CanOperate {
-											<form data-confirm={ t(ctx, "confirm.env_delete.title") } data-confirm-text={ t(ctx, "confirm.env_delete.text") } data-confirm-ok={ t(ctx, "confirm.env_delete.ok") } data-tone="danger" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
-												<input type="hidden" name="csrf" value={ d.CSRF }/>
-												<input type="hidden" name="key" value={ v.Key }/>
-												<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.delete_named", "key", v.Key) } title={ t(ctx, "service.env.delete") }>
-													@Icon("trash", "size-3.5")
-												</button>
-											</form>
-										}
+							</tr>
+						}
+						// What a template offers the others (HOST, PASSWORD…): read
+						// only, it comes with the service.
+						for _, e := range d.Exports {
+							<tr>
+								<td class="font-mono text-[13px]">
+									<span class="inline-flex items-center gap-1.5">
+										{ e.Key }
+										<span class="tuc-badge is-info is-plain" title={ t(ctx, "connect.offered_hint") }>{ t(ctx, "connect.offered") }</span>
 									</span>
+								</td>
+								<td class="max-w-[300px] truncate font-mono text-[13px]">
+									if e.Secret && e.Value == "" {
+										<span class="text-muted">••••••••••••</span>
+									} else {
+										{ e.Value }
+									}
 								</td>
 							</tr>
 						}
@@ -256,35 +213,9 @@ templ tabVariables(d ServiceData) {
 		@envSuggestions(d)
 	}
 	if d.CanOperate {
-		<dialog class="tuc-modal is-md" id="env-new" aria-labelledby="env-new-title">
-			<div class="tuc-modal__panel">
-				<div class="tuc-modal__header">
-					<h2 class="tuc-modal__title" id="env-new-title">{ t(ctx, "service.env.add") }</h2>
-					<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
-						@Icon("x", "size-4")
-					</button>
-				</div>
-				<form method="post" action={ templ.SafeURL(d.base() + "/env") } class="tuc-modal__body">
-					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<div class="flex flex-col gap-1.5">
-						<label class="tuc-label" for="key">{ t(ctx, "service.env.name") }</label>
-						<input class="tuc-input font-mono" id="key" name="key" required pattern="[A-Za-z_][A-Za-z0-9_]{0,127}" placeholder="DATABASE_URL" autofocus/>
-					</div>
-					<div class="flex flex-col gap-1.5">
-						<label class="tuc-label" for="value">{ t(ctx, "service.env.value") }</label>
-						<input class="tuc-input font-mono" id="value" name="value" type="password" autocomplete="off" placeholder={ t(ctx, "service.env.value_placeholder") } data-tuc-reveal/>
-					</div>
-					@notice("info", "git-pull-request-arrow", t(ctx, "service.env.next_deploy"))
-					<div class="flex justify-end gap-2">
-						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
-						<button class="tuc-btn is-primary" type="submit">
-							@Icon("save", "size-3.5")
-							{ t(ctx, "service.env.save") }
-						</button>
-					</div>
-				</form>
-			</div>
-		</dialog>
+		if len(d.ConnectOffers) > 0 {
+			@connectorDialog(d)
+		}
 		<dialog class="tuc-modal is-lg" id="env-bulk" aria-labelledby="env-bulk-title">
 			<div class="tuc-modal__panel">
 				<div class="tuc-modal__header">
@@ -295,13 +226,14 @@ templ tabVariables(d ServiceData) {
 				</div>
 				<form method="post" action={ templ.SafeURL(d.base() + "/env/bulk") } class="tuc-modal__body" data-envimport>
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<p class="tuc-modal__text">{ t(ctx, "service.env.bulk_hint") }</p>
-					// Source the editor fills from. A secret's real value never
-					// reaches the page: it is an empty span, shown as a commented
-					// line so saving the file does not overwrite the secret.
+					// Saving is the whole file: a line taken out deletes that
+					// variable. A secret the editor could not show (not an
+					// admin's view) is a "# KEY=••••" line, and stays.
+					<input type="hidden" name="mode" value="replace"/>
+					<p class="tuc-modal__text">{ t(ctx, "service.env.file_hint") }</p>
 					<div hidden data-envfile>
 						for _, v := range d.Env {
-							if v.Secret && !v.Revealed {
+							if v.Secret && v.Value == "" {
 								<span data-k={ v.Key } data-secret="1"></span>
 							} else {
 								<span data-k={ v.Key }>{ v.Value }</span>
@@ -340,116 +272,38 @@ templ tabVariables(d ServiceData) {
 	}
 }
 
-// connectorCard lists the service's connections, one per line: its
-// variable A receives variable B of another service. "Connect variables"
-// opens a small modal to pick the two.
-templ connectorCard(d ServiceData) {
-	<section class={ cardClass } id="connector">
-		@cardHeadHelp(t(ctx, "connect.open"), t(ctx, "connect.help")) {
-			if d.CanOperate {
-				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#connect-vars" disabled?={ len(d.ConnectOffers) == 0 } title={ connectTitle(ctx, d) }>
-					@Icon("cable", "size-3.5")
-					{ t(ctx, "connect.vars") }
-				</button>
-			}
-		}
-		if links := connections(d.Env); len(links) == 0 {
-			<p class="m-0 px-4 py-4 text-[13px] text-muted">{ t(ctx, "connect.none") }</p>
-		} else {
-			<ul class="m-0 flex list-none flex-col p-0">
-				for _, l := range links {
-					<li class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_2rem] items-center gap-3 border-t border-border px-4 py-2.5 first:border-t-0">
-						<span class="truncate text-right font-mono text-[13px]">{ l.Var }</span>
-						<span class="grid size-7 place-items-center rounded-sm bg-accent-soft text-accent-text" aria-label={ t(ctx, "connect.receives_from") }>
-							@Icon("cable", "size-3.5")
-						</span>
-						<span class="truncate font-mono text-[13px]"><span class="text-muted">{ l.Service }</span><span class="text-subtle"> · </span>{ l.Key }</span>
-						if d.CanOperate {
-							<form class="inline-flex justify-end" data-confirm={ t(ctx, "confirm.disconnect.title", "key", l.Var) } data-confirm-text={ t(ctx, "confirm.disconnect.text", "service", l.Service) } data-confirm-ok={ t(ctx, "confirm.disconnect.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/env/delete") }>
-								<input type="hidden" name="csrf" value={ d.CSRF }/>
-								<input type="hidden" name="key" value={ l.Var }/>
-								<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "connect.disconnect_named", "key", l.Var) } title={ t(ctx, "connect.disconnect") }>
-									@Icon("x", "size-3.5")
-								</button>
-							</form>
-						}
-					</li>
-				}
-			</ul>
-		}
-	</section>
-	if d.CanOperate && len(d.ConnectOffers) > 0 {
-		@connectVarsDialog(d)
-	}
-}
-
-// connectVarsDialog connects one pair: variable A of this service (one
-// that exists or a new name) receives variable B of another service.
-templ connectVarsDialog(d ServiceData) {
-	<dialog class="tuc-modal is-md" id="connect-vars" aria-labelledby="connect-vars-title">
+// connectorDialog lists the project's services that offer something. A
+// click writes that service's lines into the .env editor, as references
+// (DB_HOST=${{postgres.HOST}}), and opens it: renaming or removing a line
+// there is all the configuration there is.
+templ connectorDialog(d ServiceData) {
+	<dialog class="tuc-modal is-md" id="connector" aria-labelledby="connector-title">
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
-				<h2 class="tuc-modal__title" id="connect-vars-title">{ t(ctx, "connect.vars") }</h2>
+				<h2 class="tuc-modal__title" id="connector-title">{ t(ctx, "connect.open") }</h2>
 				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
 					@Icon("x", "size-4")
 				</button>
 			</div>
-			<form method="post" action={ templ.SafeURL(d.base() + "/connect") } class="tuc-modal__body flex flex-col gap-4" autocomplete="off">
-				<input type="hidden" name="csrf" value={ d.CSRF }/>
-				<div class="flex flex-col gap-1.5">
-					<label class="tuc-label" for="connect-var-a">{ t(ctx, "connect.var_a", "service", d.Slug) }</label>
-					<input class="tuc-input font-mono" id="connect-var-a" name="var" list="connect-var-a-list" required maxlength="128" pattern="[A-Za-z_][A-Za-z0-9_]{0,127}" placeholder="DB_HOST" autofocus/>
-					<datalist id="connect-var-a-list">
-						for _, v := range d.Env {
-							<option value={ v.Key }></option>
-						}
-					</datalist>
-					<span class="tuc-hint">{ t(ctx, "connect.var_a_hint") }</span>
+			<div class="tuc-modal__body flex flex-col gap-3">
+				<p class="tuc-modal__text">{ t(ctx, "connect.pick_hint", "from", d.Slug) }</p>
+				<div class="flex flex-col gap-2">
+					for _, g := range offerGroups(d.ConnectOffers) {
+						<button type="button" class="tuc-btn h-auto justify-start gap-3 py-2.5 text-left" data-env-block={ envBlock(g) }>
+							<span class="grid size-8 shrink-0 place-items-center rounded-sm bg-accent-soft text-accent-text">
+								@Icon("cable", "size-4")
+							</span>
+							<span class="flex min-w-0 grow flex-col">
+								<strong class="text-[13px] font-semibold">{ g[0].Service }</strong>
+								<span class="truncate font-mono text-xs text-muted">{ offerKeys(g) }</span>
+							</span>
+							@Icon("chevron-right", "size-4 text-subtle")
+						</button>
+					}
 				</div>
-				<div class="grid place-items-center text-accent-text">
-					<span class="grid size-8 place-items-center rounded-sm bg-accent-soft">
-						@Icon("cable", "size-4")
-					</span>
-				</div>
-				<div class="flex flex-col gap-1.5">
-					<label class="tuc-label" for="connect-var-b">{ t(ctx, "connect.var_b") }</label>
-					<select class="tuc-input" id="connect-var-b" name="field" required data-tuc-select data-clearable="false" data-placeholder={ t(ctx, "connect.var_b_pick") }>
-						<option value=""></option>
-						for _, g := range offerGroups(d.ConnectOffers) {
-							<optgroup label={ g[0].Service }>
-								for _, o := range g {
-									<option value={ o.Service + "|" + o.Key }>{ o.Service } · { o.Key }</option>
-								}
-							</optgroup>
-						}
-					</select>
-				</div>
-				<p class="tuc-hint m-0">{ t(ctx, "connect.hint", "from", d.Slug) }</p>
-				<div class="flex justify-end gap-2">
-					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
-					<button class="tuc-btn is-primary" type="submit">
-						@Icon("cable", "size-3.5")
-						{ t(ctx, "connect.save") }
-					</button>
-				</div>
-			</form>
+			</div>
 		</div>
 	</dialog>
-}
-
-// connectLink is one connection of the service: Var receives Service's Key.
-type connectLink struct{ Var, Service, Key string }
-
-// connections are the service's variables that reference, whole, a value
-// another service offers.
-func connections(env []EnvRow) []connectLink {
-	var out []connectLink
-	for _, v := range env {
-		if svc, key := connection(v.Value); svc != "" {
-			out = append(out, connectLink{Var: v.Key, Service: svc, Key: key})
-		}
-	}
-	return out
 }
 
 // offerGroups splits the offers by service, keeping their order.
@@ -463,6 +317,26 @@ func offerGroups(offers []ConnectOffer) [][]ConnectOffer {
 		}
 	}
 	return out
+}
+
+// envBlock is what the connector writes into the .env editor for one
+// service: a comment naming it, then one reference per value it offers,
+// under the name the app most likely uses (Var).
+func envBlock(g []ConnectOffer) string {
+	var b strings.Builder
+	b.WriteString("# " + g[0].Service + "\n")
+	for _, o := range g {
+		b.WriteString(o.Var + "=${{" + o.Service + "." + o.Key + "}}\n")
+	}
+	return b.String()
+}
+
+func offerKeys(g []ConnectOffer) string {
+	keys := make([]string, 0, len(g))
+	for _, o := range g {
+		keys = append(keys, o.Key)
+	}
+	return strings.Join(keys, " · ")
 }
 
 func connectTitle(ctx context.Context, d ServiceData) string {
@@ -513,71 +387,6 @@ templ envSuggestions(d ServiceData) {
 			</table>
 		</div>
 	</section>
-}
-
-// tabConnection is the "Offers to others" card of the Variables tab: the
-// values other services reference instead of copying them.
-templ tabConnection(d ServiceData) {
-	if len(d.Exports) == 0 {
-		<section class={ cardClass }>
-			@cardHead(t(ctx, "export.title"))
-			if offered := offeredVars(d.Env); len(offered) > 0 {
-				<div class={ cardBodyClass }>
-					@notice("info", "cable", t(ctx, "export.offered_vars", "list", strings.Join(offered, ", ")))
-				</div>
-			} else {
-				@emptyState("cable", t(ctx, "export.empty"))
-			}
-		</section>
-	}
-	if len(d.Exports) > 0 {
-		<section class={ cardClass }>
-			@cardHead(t(ctx, "export.title"))
-			<div class={ cardBodyClass }>
-				@notice("info", "link", t(ctx, "export.hint", "example", refOf(d.Slug, "KEY")))
-			</div>
-			<div class="tuc-table-wrap border-t border-border">
-				<table class="tuc-table is-compact w-full">
-					<thead><tr><th>{ t(ctx, "export.key") }</th><th>{ t(ctx, "service.env.value") }</th><th class="tuc-table__actions">{ t(ctx, "export.reference") }</th></tr></thead>
-					<tbody>
-						for _, e := range d.Exports {
-							<tr>
-								<td class="font-mono text-[13px]">{ e.Key }</td>
-								<td class="max-w-[200px] truncate font-mono text-[13px] [&_form]:inline-flex">
-									if e.Secret && !e.Revealed {
-										<span class="tuc-reveal">
-											<span class="text-muted">••••••••••••</span>
-											if d.CanAdmin && d.SudoCritical {
-												<form method="post" action={ templ.SafeURL(d.base() + "/exports/reveal") }>
-													<input type="hidden" name="csrf" value={ d.CSRF }/>
-													<input type="hidden" name="key" value={ e.Key }/>
-													<button class="tuc-btn is-ghost is-icon is-sm" type="submit" aria-label={ t(ctx, "service.env.reveal") }>
-														@Icon("eye", "size-3.5")
-													</button>
-												</form>
-											} else if d.CanAdmin {
-												<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "service.env.reveal") }>
-													@Icon("eye", "size-3.5")
-												</button>
-											}
-										</span>
-									} else {
-										{ e.Value }
-									}
-								</td>
-								<td class="tuc-table__actions">
-									<button type="button" class="tuc-btn is-ghost is-sm" data-copy={ refOf(d.Slug, e.Key) } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy", "ref", refOf(d.Slug, e.Key)) }>
-										@Icon("copy", "size-3.5")
-										<span class="font-mono text-xs">{ refOf(d.Slug, e.Key) }</span>
-									</button>
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			</div>
-		</section>
-	}
 }
 
 templ tabPorts(d ServiceData) {

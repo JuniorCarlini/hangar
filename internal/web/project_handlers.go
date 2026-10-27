@@ -364,8 +364,13 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	if deps, err := h.projects.Dependents(r.Context(), p.Slug, s.Slug); err == nil {
 		d.UsedBy = dependentsLabel(r, deps)
 	}
-	d.ConnectOffers = h.connectOffers(r, p.ID, s.Slug)
-	if env, err := h.projects.ListEnv(r.Context(), s.ID); err == nil {
+	d.ConnectOffers = h.connectOffers(r, p, s.Slug)
+	// Admins see every value, in the table and in the .env editor.
+	listEnv := h.projects.ListEnv
+	if d.CanAdmin {
+		listEnv = h.projects.ListEnvValues
+	}
+	if env, err := listEnv(r.Context(), s.ID); err == nil {
 		for _, e := range env {
 			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret, Offered: offered[e.Key]}
 			if e.Key == v.revealKey {
@@ -412,7 +417,11 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.CanBackup, d.Stateful = h.projects.CanDownloadBackup(s.Template), s.Stateful == 1
 	d.Maintenance = s.Maintenance == 1
 	d.ServerHint = i18n.T(r.Context(), "port.ssh_target")
-	if exps, err := h.projects.ListExports(r.Context(), s.ID); err == nil {
+	listExports := h.projects.ListExports
+	if d.CanAdmin {
+		listExports = h.projects.ListExportValues
+	}
+	if exps, err := listExports(r.Context(), s.ID); err == nil {
 		for _, e := range exps {
 			row := views.ExportRow{Key: e.Key, Value: e.Value, Secret: e.Secret}
 			if e.Key == v.exportKey {
@@ -640,7 +649,15 @@ func (h *handlers) setEnvBulk(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := h.projects.SetEnvBulk(r.Context(), actor(r), s.ID, r.PostFormValue("env"), false); err != nil {
+	// "replace" comes from the .env editor: the text is the whole file and
+	// a line taken out is deleted (a secret it could not show stays).
+	var err error
+	if r.PostFormValue("mode") == "replace" {
+		_, err = h.projects.SetEnvFile(r.Context(), actor(r), s.ID, r.PostFormValue("env"))
+	} else {
+		_, err = h.projects.SetEnvBulk(r.Context(), actor(r), s.ID, r.PostFormValue("env"), false)
+	}
+	if err != nil {
 		code, msg := userError(r, err)
 		h.renderService(w, r, serviceView{status: code, errMsg: msg})
 		return

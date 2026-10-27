@@ -54,7 +54,7 @@ func TestConnectDialogAndSave(t *testing.T) {
 		t.Fatalf("connect: %d", code)
 	}
 	tab := get("/p/lab/s/web?tab=variables")
-	if !strings.Contains(tab, `title="${{db.HOST}}"`) || !strings.Contains(tab, "Desconectar PGHOST") {
+	if !strings.Contains(tab, `title="${{db.HOST}}"`) {
 		t.Error("the connected variable is not shown as a connection")
 	}
 	if db := get("/p/lab/s/db?tab=variables"); !strings.Contains(db, "Usado por: web (DATABASE_URL ← DATABASE_URL), web (PGHOST ← HOST).") {
@@ -94,18 +94,25 @@ func TestConnectDialogAndSave(t *testing.T) {
 		t.Error("connecting two services at once did not set both")
 	}
 
-	// The Connector card: "connect variables" sends one pair, variable A
-	// (a new name here) receiving variable B of another service, and the
-	// card lists it on its own line.
-	pair := url.Values{"var": {"CACHE_HOST"}, "field": {"db|HOST"}}
-	if code := post("/p/lab/s/web/connect", pair); code != http.StatusSeeOther {
-		t.Fatalf("connect one pair: %d", code)
+	// The connector writes a service's lines into the .env editor, under
+	// the names the app uses, and saving the editor is the whole file: a
+	// line taken out is deleted, a secret it could not show stays.
+	if !strings.Contains(tab, `id="connector"`) || !strings.Contains(tab, "PGHOST=${{db.HOST}}") {
+		t.Error("the connector does not offer the database's lines for the .env")
 	}
-	tab = get("/p/lab/s/web?tab=variables")
-	card, _, _ := strings.Cut(tab, `id="env-new"`)
-	for _, want := range []string{`id="connector"`, `id="connect-var-b"`, `<option value="db|HOST">db · HOST</option>`, "CACHE_HOST"} {
-		if !strings.Contains(card, want) {
-			t.Errorf("the connector lacks %q", want)
-		}
+	file := url.Values{"mode": {"replace"}, "env": {"PGHOST=${{db.HOST}}\n# SECRET_KEY=••••\n"}}
+	if code := post("/p/lab/s/web/env/bulk", file); code != http.StatusSeeOther {
+		t.Fatalf("save the .env: %d", code)
+	}
+	vals, err := e.pm.ListEnvValues(ctx, webID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, v := range vals {
+		got[v.Key] = true
+	}
+	if !got["PGHOST"] || !got["SECRET_KEY"] || got["UPSTREAM_TOKEN"] || got["DB_PASS"] {
+		t.Errorf("after saving the .env: %v", got)
 	}
 }

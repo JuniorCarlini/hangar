@@ -364,6 +364,23 @@ func (m *Manager) ListExports(ctx context.Context, serviceID string) ([]Export, 
 	return out, nil
 }
 
+// ListExportValues is ListExports with the secrets' values too, for admins.
+func (m *Manager) ListExportValues(ctx context.Context, serviceID string) ([]Export, error) {
+	rows, err := m.q.ListExports(ctx, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Export, 0, len(rows))
+	for _, r := range rows {
+		plain, err := m.box.Open(r.ValueEnc, exportAD(serviceID, r.Key))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, Export{Key: r.Key, Secret: r.Secret == 1, Value: string(plain)})
+	}
+	return out, nil
+}
+
 // RevealExport returns a secret export (the route requires sudo) and records
 // who saw it.
 func (m *Manager) RevealExport(ctx context.Context, a Actor, serviceID, key string) (string, error) {

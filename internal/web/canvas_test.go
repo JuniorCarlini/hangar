@@ -100,7 +100,7 @@ func TestBrokenReferencesWarn(t *testing.T) {
 		t.Error("a resolvable reference must not warn")
 	}
 	// A whole reference shows as a connection: where the value comes from.
-	if !strings.Contains(tab, `title="${{db.DATABASE_URL}}"`) || !strings.Contains(tab, `<span class="font-mono">db</span>`) {
+	if !strings.Contains(tab, `title="${{db.DATABASE_URL}}"`) || !strings.Contains(tab, `<span class="text-muted">db</span>`) {
 		t.Error("the variable does not show its connection")
 	}
 }
