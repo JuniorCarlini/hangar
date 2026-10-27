@@ -140,8 +140,8 @@ func TestServiceBackupsTab(t *testing.T) {
 	e.pm.Wait()
 	c, p := e.session(t, auth.RoleAdmin)
 	body := e.do(req{method: "GET", target: "/p/lab/s/db?tab=backups", cookies: []*http.Cookie{c}}).Body.String()
-	// Without a kit the schedule card only points to where to set one up.
-	if !strings.Contains(body, "Backup automático") || !strings.Contains(body, `href="/backups"`) || strings.Contains(body, "/p/lab/s/db/backups/policy") {
+	// Before a destination the tab only points to where to set one up.
+	if !strings.Contains(body, `href="/backups?tab=config"`) || strings.Contains(body, "/p/lab/s/db/backups/policy") {
 		t.Fatal("backups tab missing")
 	}
 	// Without a kit the plain download still works (the existing button).

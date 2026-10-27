@@ -71,23 +71,35 @@ templ tabBackups(d ServiceData) {
 			// ui.js reloads once the backup is over (data-busy-poll).
 			<span hidden data-busy-poll></span>
 		}
-		@svcBackupPolicy(d)
 		if d.Backups.WAL {
 			@svcBackupWAL(d)
 		}
-		if d.CanAdmin && d.Backups.Ready {
-			@svcBackupRestore(d)
-		}
+		// One card: the actions on top, the schedule in one line, then what
+		// was backed up and restored.
 		<section class={ cardClass }>
-			@cardHead(t(ctx, "svcbackup.history")) {
+			@cardHead(t(ctx, "svcbackup.title")) {
 				@svcBackupActions(d)
+			}
+			if !d.Backups.Ready {
+				// Nothing works before a destination (and, with the kit, a
+				// confirmed key) exists: say where to set it up.
+				@emptyState("database-backup", notReadyText(ctx, d.Backups.Simple, "svcbackup")) {
+					if d.CanAdmin {
+						<a class="tuc-btn is-outline is-sm" href="/backups?tab=config">
+							@Icon("settings", "size-3.5")
+							{ t(ctx, "svcbackup.open_backups") }
+						</a>
+					}
+				}
+			} else if d.CanAdmin {
+				@svcBackupSchedule(d)
 			}
 			if d.CanAdmin && d.Backups.Download != nil {
 				<div class="flex flex-wrap items-center justify-end gap-3 border-b border-border px-4 py-3">
 					@svcDownloadState(*d.Backups.Download, d.SudoCritical)
 				</div>
 			}
-			if len(d.Backups.Runs) == 0 && len(d.Backups.Restores) == 0 {
+			if d.Backups.Ready && len(d.Backups.Runs) == 0 && len(d.Backups.Restores) == 0 {
 				@emptyState("history", t(ctx, "backups.history.empty"))
 			}
 			if len(d.Backups.Runs) > 0 {
@@ -122,66 +134,48 @@ templ tabBackups(d ServiceData) {
 				</div>
 			}
 		</section>
+		if d.CanAdmin && d.Backups.Ready && d.SudoCritical {
+			@svcBackupRestore(d)
+		}
 	}
 }
 
-templ svcBackupPolicy(d ServiceData) {
-	<section class={ cardClass }>
-		@cardHead(t(ctx, "svcbackup.policy")) {
-			if d.Backups.Enabled {
-				<span class="tuc-badge is-success">{ t(ctx, "svcbackup.on") }</span>
-			} else if d.Backups.Ready {
-				<span class="tuc-badge">{ t(ctx, "svcbackup.off") }</span>
-			}
-		}
-		if !d.Backups.Ready {
-			// Nothing here works before the kit and a destination exist,
-			// so the card only says where to set them up.
-			@emptyState("database-backup", notReadyText(ctx, d.Backups.Simple, "svcbackup")) {
-				if d.CanAdmin {
-					<a class="tuc-btn is-outline is-sm" href="/backups">
-						@Icon("settings", "size-3.5")
-						{ t(ctx, "svcbackup.open_backups") }
-					</a>
-				}
-			}
-		} else if d.CanAdmin {
-			<form class={ cardBodyClass + " @container" } method="post" action={ templ.SafeURL(d.base() + "/backups/policy") }>
-				<input type="hidden" name="csrf" value={ d.CSRF }/>
-				@deployField("bk-enabled", t(ctx, "svcbackup.enabled"), t(ctx, "svcbackup.enabled_hint")) {
-					<div class="flex items-center @xl:h-9">
-						<input type="checkbox" role="switch" class="tuc-switch" id="bk-enabled" name="enabled" value="1" checked?={ d.Backups.Enabled }/>
-					</div>
-				}
-				@deployField("bk-every", t(ctx, "svcbackup.every"), svcNextRun(ctx, d.Backups.NextRun)) {
-					<div class="flex min-w-0 items-center gap-2">
-						<div class="min-w-0 grow">
-							<select class="tuc-input" id="bk-every" name="every_hours" data-tuc-select data-clearable="false">
-								for _, h := range everyHours {
-									<option value={ fmt.Sprint(h) } selected?={ h == d.Backups.EveryHours }>{ t(ctx, "svcbackup.every_hours", "n", h) }</option>
-								}
-							</select>
-						</div>
-						<label class="shrink-0 text-[13px] text-muted" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
-						<input class="tuc-input w-28 shrink-0" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
-					</div>
-				}
-				if d.Backups.WALSupported {
-					@deployField("bk-wal", t(ctx, "svcbackup.wal"), t(ctx, "svcbackup.wal_hint")) {
-						<div class="flex items-center @xl:h-9">
-							<input type="checkbox" role="switch" class="tuc-switch" id="bk-wal" name="wal" value="1" checked?={ d.Backups.WAL }/>
-						</div>
-					}
-				}
-				<div class="flex justify-end">
-					<button class="tuc-btn is-outline" type="submit">
-						@Icon("save", "size-4")
-						{ t(ctx, "svcbackup.save") }
-					</button>
+// svcBackupSchedule is the automatic backup in one line: on or off, how
+// often and from what time. "Back to any minute" (WAL) is advanced: it
+// shows only while on, so it can be turned off.
+templ svcBackupSchedule(d ServiceData) {
+	<form class="flex flex-col gap-2 border-b border-border px-4 py-3" method="post" action={ templ.SafeURL(d.base() + "/backups/policy") }>
+		<input type="hidden" name="csrf" value={ d.CSRF }/>
+		<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+			<label class="flex shrink-0 cursor-pointer items-center gap-2 text-sm font-medium" for="bk-enabled">
+				<input type="checkbox" role="switch" class="tuc-switch" id="bk-enabled" name="enabled" value="1" checked?={ d.Backups.Enabled }/>
+				{ t(ctx, "svcbackup.policy") }
+			</label>
+			<div class="flex min-w-0 flex-[1_1_300px] items-center gap-2">
+				<div class="min-w-0 grow">
+					<label class="sr-only" for="bk-every">{ t(ctx, "svcbackup.every") }</label>
+					<select class="tuc-input" id="bk-every" name="every_hours" data-tuc-select data-clearable="false">
+						for _, h := range everyHours {
+							<option value={ fmt.Sprint(h) } selected?={ h == d.Backups.EveryHours }>{ t(ctx, "svcbackup.every_hours", "n", h) }</option>
+						}
+					</select>
 				</div>
-			</form>
+				<label class="shrink-0 text-[13px] text-muted" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
+				<input class="tuc-input w-28 shrink-0" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
+			</div>
+			<button class="tuc-btn is-outline shrink-0" type="submit">
+				@Icon("save", "size-4")
+				{ t(ctx, "svcbackup.save") }
+			</button>
+		</div>
+		if d.Backups.WALSupported && d.Backups.WAL {
+			<label class="flex cursor-pointer items-center gap-2 text-[13px]" for="bk-wal">
+				<input type="checkbox" role="switch" class="tuc-switch" id="bk-wal" name="wal" value="1" checked/>
+				{ t(ctx, "svcbackup.wal") }
+			</label>
 		}
-	</section>
+		<span class="tuc-hint">{ svcNextRun(ctx, d.Backups.NextRun) }</span>
+	</form>
 }
 
 templ svcBackupWAL(d ServiceData) {
@@ -220,6 +214,12 @@ templ svcBackupActions(d ServiceData) {
 			</button>
 		</form>
 	}
+	if d.CanAdmin && len(d.Backups.Dumps) > 0 {
+		<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal={ restoreModal(d) }>
+			@Icon("archive-restore", "size-3.5")
+			{ t(ctx, "svcbackup.restore") }
+		</button>
+	}
 	if d.CanAdmin {
 		if d.SudoCritical {
 			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit) }>
@@ -233,6 +233,14 @@ templ svcBackupActions(d ServiceData) {
 			@sudoButton(t(ctx, "backup.download"))
 		}
 	}
+}
+
+// restoreModal opens the restore dialog, or the identity check first.
+func restoreModal(d ServiceData) string {
+	if d.SudoCritical {
+		return "#restore-modal"
+	}
+	return "#sudo-dialog"
 }
 
 func downloadHint(ctx context.Context, kit bool) string {
@@ -273,36 +281,48 @@ templ svcDownloadState(dl DownloadView, sudo bool) {
 // kit. The kit's private key goes only with this request, stays in memory
 // and is dropped when the restore ends.
 templ svcBackupRestore(d ServiceData) {
-	<section class={ cardClass }>
-		@cardHead(t(ctx, "svcbackup.restore_title")) {
-			if !d.Backups.Simple {
-				<span class="tuc-badge is-warning">
-					@Icon("lock", "size-3")
-					{ t(ctx, "svcbackup.restore_sudo") }
-				</span>
-			}
-		}
-		<form class={ cardBodyClass } method="post" action={ templ.SafeURL(d.base() + "/backups/restore") } enctype="multipart/form-data" data-confirm={ t(ctx, "confirm.restore.title") } data-confirm-text={ t(ctx, "confirm.restore.text") } data-confirm-ok={ t(ctx, "confirm.restore.ok") } data-tone="danger">
-			<input type="hidden" name="csrf" value={ d.CSRF }/>
-			<input type="hidden" name="tz_offset" value="" data-tz-offset/>
-			<fieldset class="tuc-choices">
-				<legend class="tuc-label">{ t(ctx, "svcbackup.restore_point") }</legend>
+	<dialog class="tuc-modal is-md" id="restore-modal" aria-labelledby="restore-modal-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="restore-modal-title">{ t(ctx, "svcbackup.restore_title") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form class="tuc-modal__body" method="post" action={ templ.SafeURL(d.base() + "/backups/restore") } enctype="multipart/form-data" data-confirm={ t(ctx, "confirm.restore.title") } data-confirm-text={ t(ctx, "confirm.restore.text") } data-confirm-ok={ t(ctx, "confirm.restore.ok") } data-tone="danger">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<input type="hidden" name="tz_offset" value="" data-tz-offset/>
 				if d.Backups.WindowOK {
-					<label class="tuc-choice">
-						<input type="radio" class="tuc-radio" name="mode" value="pitr" checked/>
-						<span>{ t(ctx, "svcbackup.mode_pitr") } <span class="tuc-choice__hint">{ d.Backups.Window }</span></span>
-					</label>
-					<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
-						<label class="tuc-label" for="rs-at">{ t(ctx, "svcbackup.at_moment") }</label>
-						<input class="tuc-input" id="rs-at" name="at" data-tuc-datepicker data-time="true" data-minute-step="1" data-max={ d.Backups.MaxAt } data-today="true"/>
-					</div>
-				}
-				<label class="tuc-choice">
-					<input type="radio" class="tuc-radio" name="mode" value="dump" checked?={ !d.Backups.WindowOK } disabled?={ len(d.Backups.Dumps) == 0 }/>
-					<span>{ t(ctx, "svcbackup.mode_dump") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.mode_dump_hint") }</span></span>
-				</label>
-				if len(d.Backups.Dumps) > 0 {
-					<div class="ml-7 flex max-w-[420px] flex-col gap-1.5">
+					<fieldset class="tuc-choices">
+						<legend class="tuc-label">{ t(ctx, "svcbackup.restore_point") }</legend>
+						if d.Backups.WindowOK {
+							<label class="tuc-choice">
+								<input type="radio" class="tuc-radio" name="mode" value="pitr" checked/>
+								<span>{ t(ctx, "svcbackup.mode_pitr") } <span class="tuc-choice__hint">{ d.Backups.Window }</span></span>
+							</label>
+							<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
+								<label class="tuc-label" for="rs-at">{ t(ctx, "svcbackup.at_moment") }</label>
+								<input class="tuc-input" id="rs-at" name="at" data-tuc-datepicker data-time="true" data-minute-step="1" data-max={ d.Backups.MaxAt } data-today="true"/>
+							</div>
+						}
+						<label class="tuc-choice">
+							<input type="radio" class="tuc-radio" name="mode" value="dump" checked?={ !d.Backups.WindowOK } disabled?={ len(d.Backups.Dumps) == 0 }/>
+							<span>{ t(ctx, "svcbackup.mode_dump") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.mode_dump_hint") }</span></span>
+						</label>
+						if len(d.Backups.Dumps) > 0 {
+							<div class="ml-7 flex max-w-[420px] flex-col gap-1.5">
+								<label class="tuc-label" for="rs-key">{ t(ctx, "svcbackup.dump_choice") }</label>
+								<select class="tuc-input" id="rs-key" name="key" data-tuc-select data-clearable="false">
+									for _, k := range d.Backups.Dumps {
+										<option value={ k.Key }>{ k.Label }</option>
+									}
+								</select>
+							</div>
+						}
+					</fieldset>
+				} else {
+					<input type="hidden" name="mode" value="dump"/>
+					<div class="flex flex-col gap-1.5">
 						<label class="tuc-label" for="rs-key">{ t(ctx, "svcbackup.dump_choice") }</label>
 						<select class="tuc-input" id="rs-key" name="key" data-tuc-select data-clearable="false">
 							for _, k := range d.Backups.Dumps {
@@ -311,49 +331,46 @@ templ svcBackupRestore(d ServiceData) {
 						</select>
 					</div>
 				}
-			</fieldset>
-			<fieldset class="tuc-choices">
-				<legend class="tuc-label">{ t(ctx, "svcbackup.restore_dest") }</legend>
-				<label class="tuc-choice">
-					<input type="radio" class="tuc-radio" name="destination" value="new" checked/>
-					<span>{ t(ctx, "svcbackup.dest_new") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_new_hint") }</span></span>
-				</label>
-				<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
-					<label class="tuc-label" for="rs-new">{ t(ctx, "svcbackup.new_name") }</label>
-					<input class="tuc-input font-mono" id="rs-new" name="new_service" value={ d.Backups.DefaultNew } pattern="[a-z][a-z0-9\-]{0,30}[a-z0-9]" maxlength="32"/>
-				</div>
-				<label class="tuc-choice">
-					<input type="radio" class="tuc-radio" name="destination" value="overwrite"/>
-					<span>{ t(ctx, "svcbackup.dest_overwrite") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_overwrite_hint") }</span></span>
-				</label>
-				<div class="ml-7 max-w-[320px]">
-					@confirmName("rs-confirm", t(ctx, "svcbackup.confirm_name"), d.Slug, false)
-				</div>
-			</fieldset>
-			if !d.Backups.Simple {
-			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
-				<div class="flex min-w-0 flex-col gap-1.5">
-					<span class="tuc-label is-required">{ t(ctx, "svcbackup.kit") }</span>
-					<input id="rs-kit" name="kit" type="file" accept=".txt,.age,text/plain" data-tuc-upload data-max-size="64KB" aria-label={ t(ctx, "svcbackup.kit") }/>
-					<span class="tuc-hint">{ t(ctx, "svcbackup.kit_hint") }</span>
-				</div>
-				<div class="flex min-w-0 flex-col gap-1.5">
-					<label class="tuc-label" for="rs-pass">{ t(ctx, "svcbackup.passphrase") }</label>
-					<input class="tuc-input" id="rs-pass" name="passphrase" type="password" autocomplete="off" data-tuc-reveal/>
-					<span class="tuc-hint">{ t(ctx, "svcbackup.passphrase_hint") }</span>
-				</div>
-			</div>
-			}
-			<div class="flex justify-end">
-				if d.SudoCritical {
+				<fieldset class="tuc-choices">
+					<legend class="tuc-label">{ t(ctx, "svcbackup.restore_dest") }</legend>
+					<label class="tuc-choice">
+						<input type="radio" class="tuc-radio" name="destination" value="new" checked/>
+						<span>{ t(ctx, "svcbackup.dest_new") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_new_hint") }</span></span>
+					</label>
+					<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
+						<label class="tuc-label" for="rs-new">{ t(ctx, "svcbackup.new_name") }</label>
+						<input class="tuc-input font-mono" id="rs-new" name="new_service" value={ d.Backups.DefaultNew } pattern="[a-z][a-z0-9\-]{0,30}[a-z0-9]" maxlength="32"/>
+					</div>
+					<label class="tuc-choice">
+						<input type="radio" class="tuc-radio" name="destination" value="overwrite"/>
+						<span>{ t(ctx, "svcbackup.dest_overwrite") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_overwrite_hint") }</span></span>
+					</label>
+					<div class="ml-7 max-w-[320px]">
+						@confirmName("rs-confirm", t(ctx, "svcbackup.confirm_name"), d.Slug, false)
+					</div>
+				</fieldset>
+				if !d.Backups.Simple {
+					<div class="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<span class="tuc-label is-required">{ t(ctx, "svcbackup.kit") }</span>
+							<input id="rs-kit" name="kit" type="file" accept=".txt,.age,text/plain" data-tuc-upload data-max-size="64KB" aria-label={ t(ctx, "svcbackup.kit") }/>
+							<span class="tuc-hint">{ t(ctx, "svcbackup.kit_hint") }</span>
+						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="rs-pass">{ t(ctx, "svcbackup.passphrase") }</label>
+							<input class="tuc-input" id="rs-pass" name="passphrase" type="password" autocomplete="off" data-tuc-reveal/>
+							<span class="tuc-hint">{ t(ctx, "svcbackup.passphrase_hint") }</span>
+						</div>
+					</div>
+				}
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
 					<button class="tuc-btn is-danger" type="submit">
 						@Icon("archive-restore", "size-3.5")
 						{ t(ctx, "svcbackup.restore") }
 					</button>
-				} else {
-					@sudoButton(t(ctx, "svcbackup.restore"))
-				}
-			</div>
-		</form>
-	</section>
+				</div>
+			</form>
+		</div>
+	</dialog>
 }

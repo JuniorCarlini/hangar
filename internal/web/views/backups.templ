@@ -539,12 +539,14 @@ templ backupRunsTable(runs []BackupRunRow, showLabel, admin, sudo bool) {
 						<td class="is-number whitespace-nowrap">{ r.Size }</td>
 						<td>
 							<span class="inline-flex flex-wrap items-center gap-1">
-								<span class={ badgeTone(r.Tone) }>{ r.Status }</span>
-								if r.Verified {
-									<span class="tuc-badge is-success is-plain" title={ r.Checked }>
+								// A tested backup says so in its one badge.
+								if r.Verified && r.Tone == "success" {
+									<span class="tuc-badge is-success" title={ r.Checked }>
 										@Icon("check", "size-3")
 										{ t(ctx, "backups.services.tested_yes") }
 									</span>
+								} else {
+									<span class={ badgeTone(r.Tone) }>{ r.Status }</span>
 								}
 								if r.Warning != "" {
 									<span class="tuc-badge is-warning">{ r.Warning }</span>
