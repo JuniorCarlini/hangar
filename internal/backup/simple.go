@@ -138,9 +138,18 @@ func (m *Manager) withServerIdentity(ctx context.Context, ids []age.Identity) []
 // OpenRun decrypts an older backup for download in the simple mode: the
 // panel holds the key, so the file arrives ready to use. It returns the
 // content and the file name without the encryption's extension.
-func (m *Manager) OpenRun(ctx context.Context, a Actor, runID string) (io.ReadCloser, string, error) {
+//
+// The panel's own backup carries the master key and the whole database,
+// which opens every secret the panel keeps for the owner alone (backup
+// keys, destinations, tokens, everyone's 2FA). Only an owner gets it
+// decrypted: ownerOK says the caller is one.
+func (m *Manager) OpenRun(ctx context.Context, a Actor, runID string, ownerOK bool) (io.ReadCloser, string, error) {
 	r, err := m.q.GetBackupRun(ctx, runID)
 	if err != nil || r.ObjectKey == "" || r.Status != "ok" {
+		return nil, "", projects.ErrNotFound
+	}
+	if r.Kind == archive.KindPanel && !ownerOK {
+		m.record(ctx, a, "backup.download", "backup_run", runID, audit.Denied, map[string]any{"label": r.Label, "kind": r.Kind, "reason": "owner_only"})
 		return nil, "", projects.ErrNotFound
 	}
 	ids := m.withServerIdentity(ctx, nil)

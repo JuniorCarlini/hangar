@@ -58,3 +58,29 @@ func TestSimpleModeNeedsNoKit(t *testing.T) {
 		t.Error("no kit to check in the simple mode")
 	}
 }
+
+// The panel's backup carries the master key and the whole database: in the
+// simple mode the server could open it for anyone with the admin download,
+// handing over every secret kept for the owner. Only an owner gets it.
+func TestPanelBackupDownloadIsOwnerOnly(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if err := f.m.q.SetSetting(ctx, dbq.SetSettingParams{Key: settingMode, ValueJson: `""`}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.m.AddTarget(ctx, f.who, validTarget()); err != nil {
+		t.Fatal(err)
+	}
+	runID, err := f.m.backupPanel(ctx, f.who, TriggerManual)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.m.OpenRun(ctx, f.who, runID, false); err == nil {
+		t.Fatal("an admin must not get the panel backup decrypted")
+	}
+	rc, _, err := f.m.OpenRun(ctx, f.who, runID, true)
+	if err != nil {
+		t.Fatalf("the owner opens the panel backup: %v", err)
+	}
+	_ = rc.Close()
+}

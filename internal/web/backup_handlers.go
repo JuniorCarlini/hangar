@@ -200,6 +200,13 @@ func runRow(ctx context.Context, r backup.Run) views.BackupRunRow {
 		Trigger: i18n.T(ctx, "backups.trigger."+r.Trigger), Verified: r.Verified, Error: r.Error,
 		CanLink: r.Status == "ok" && r.Key != "",
 	}
+	// The panel's backup holds the master key: only an owner may download it
+	// (backup.Manager.OpenRun refuses the rest).
+	if r.Kind == archive.KindPanel {
+		if p := PrincipalFrom(ctx); p == nil || p.Role < auth.RoleOwner {
+			row.CanLink = false
+		}
+	}
 	if r.Label == backup.PanelLabel {
 		row.Label = i18n.T(ctx, "backups.services.panel")
 	}
@@ -597,7 +604,8 @@ func (h *handlers) takeDownload(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) runDownload(w http.ResponseWriter, r *http.Request) {
 	// The simple mode's server holds the key: the file arrives open.
 	if h.backups.Mode(r.Context()) == backup.ModeSimple {
-		rc, name, err := h.backups.OpenRun(r.Context(), actor(r), r.PathValue("id"))
+		owner := PrincipalFrom(r.Context()).Role >= auth.RoleOwner
+		rc, name, err := h.backups.OpenRun(r.Context(), actor(r), r.PathValue("id"), owner)
 		if err != nil {
 			code, msg := userError(r, err)
 			h.renderBackups(w, r, code, msg, "")
