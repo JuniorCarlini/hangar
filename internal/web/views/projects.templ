@@ -733,6 +733,9 @@ templ deploySettings(d ServiceData) {
 			} else {
 				<span class="tuc-badge is-warning" title={ t(ctx, "deploy.strategy.recreate_hint") }>{ t(ctx, "deploy.strategy.recreate") }</span>
 			}
+			if d.CanAdmin {
+				@maintenanceButton(d)
+			}
 			if d.CanOperate {
 				<form class="inline-flex" data-confirm={ t(ctx, "confirm.rebuild.title") } data-confirm-text={ t(ctx, "confirm.rebuild.text") } data-confirm-ok={ t(ctx, "confirm.rebuild.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/rebuild") }>
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
@@ -761,11 +764,7 @@ templ deploySettings(d ServiceData) {
 							<span class="shrink-0 text-[13px] text-muted">min</span>
 						</div>
 					}
-					<div class="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-						<span class="inline-flex items-center gap-2 text-[13px] text-muted">
-							@Icon("info", "size-4 shrink-0")
-							{ t(ctx, "deploy.settings.next_deploy") }
-						</span>
+					<div class="flex justify-end">
 						<button class="tuc-btn is-outline" type="submit">
 							@Icon("save", "size-4")
 							{ t(ctx, "deploy.settings.save") }

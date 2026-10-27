@@ -435,12 +435,10 @@ dismiss = "Dismiss"
 comment = "Suggested by {file} in the repository"
 
 [service.maintenance]
-title = "Maintenance mode"
+button = "Maintenance"
 hint = "The domains show the maintenance page instead of the site; the container keeps running."
-active = "On: the domains are showing the maintenance page."
 no_edge = "Edge proxy off: the maintenance page does not show."
 no_domains = "No domain: the maintenance page has nowhere to show."
-turn_on = "Turn maintenance on"
 turn_off = "Turn maintenance off"
 badge = "Under maintenance"
 
@@ -1016,7 +1014,7 @@ cancel = "Cancel"
 log = "Deploy log"
 rollback = "Roll back to this version"
 rollback_short = "Roll back"
-rebuild = "Rebuild from scratch"
+rebuild = "Rebuild"
 rebuild_hint = "Builds again without cache and pulls the base images again"
 
 [deploy.phase]
@@ -2602,8 +2600,6 @@ usage_of = "{used} of {size}"
 usage_unknown = "measuring…"
 no_limit = "no limit"
 title = "Disks"
-count = { one = "1 disk", other = "{n} disks" }
-empty = "No disks. Everything the app writes is lost at the next deploy."
 name = "Name"
 path = "Path in the container"
 docker = "Volume on the server"

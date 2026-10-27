@@ -435,12 +435,10 @@ dismiss = "Dispensar"
 comment = "Sugeridas pelo {file} do repositório"
 
 [service.maintenance]
-title = "Modo manutenção"
+button = "Manutenção"
 hint = "Os domínios mostram a página \"Em manutenção\" no lugar do site; o container continua rodando."
-active = "Ligado: os domínios estão mostrando a página de manutenção."
 no_edge = "Proxy de borda desligado: a página de manutenção não aparece."
 no_domains = "Sem domínio: a página de manutenção não tem onde aparecer."
-turn_on = "Ligar manutenção"
 turn_off = "Desligar manutenção"
 badge = "Em manutenção"
 
@@ -1016,7 +1014,7 @@ cancel = "Cancelar"
 log = "Log do deploy"
 rollback = "Voltar para esta versão"
 rollback_short = "Voltar"
-rebuild = "Reconstruir do zero"
+rebuild = "Reconstruir"
 rebuild_hint = "Faz o build de novo sem cache e baixa de novo as imagens base"
 
 [deploy.phase]
@@ -2603,8 +2601,6 @@ usage_of = "{used} de {size}"
 usage_unknown = "medindo…"
 no_limit = "sem limite"
 title = "Discos"
-count = { one = "1 disco", other = "{n} discos" }
-empty = "Nenhum disco. Tudo o que o app grava se perde no próximo deploy."
 name = "Nome"
 path = "Caminho no container"
 docker = "Volume no servidor"

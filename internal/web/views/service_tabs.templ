@@ -1232,7 +1232,6 @@ templ tabSettings(d ServiceData) {
 	if d.Git == nil && d.ImageTag != "" {
 		@imageCard(d)
 	}
-	@maintenanceCard(d)
 	if d.CanAdmin {
 		@dangerZone(t(ctx, "service.danger.title"), t(ctx, "service.danger.hint")) {
 			<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteServiceModal(d.SudoCritical) }>
@@ -1310,52 +1309,42 @@ templ imageCard(d ServiceData) {
 	</section>
 }
 
-// maintenanceCard turns the maintenance page on and off for every domain
-// of the service. Turning it on takes the site off the air, so it asks
-// first; turning it off only brings the site back.
-templ maintenanceCard(d ServiceData) {
-	<section class={ cardClass } id="maintenance">
-		@cardHead(t(ctx, "service.maintenance.title")) {
-			if d.Maintenance {
-				<span class="tuc-badge is-warning">{ t(ctx, "service.maintenance.badge") }</span>
-			}
-		}
-		<div class={ cardBodyClass }>
-			if d.Maintenance {
-				@notice("warning", "wrench", t(ctx, "service.maintenance.active"))
-			} else {
-				<p class="m-0 text-[13px] text-muted">{ t(ctx, "service.maintenance.hint") }</p>
-			}
-			if !d.Domains.EdgeEnabled {
-				@notice("warning", "triangle-alert", t(ctx, "service.maintenance.no_edge"))
-			} else if len(d.Domains.Fixed) == 0 && !d.Domains.Dynamic {
-				@notice("info", "globe", t(ctx, "service.maintenance.no_domains"))
-			}
-			if d.CanAdmin {
-				<div class="flex justify-end [&_form]:inline-flex">
-					if d.Maintenance {
-						<form method="post" action={ templ.SafeURL(d.base() + "/maintenance") }>
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<input type="hidden" name="action" value="off"/>
-							<button class="tuc-btn is-primary is-sm" type="submit">
-								@Icon("play", "size-3.5")
-								{ t(ctx, "service.maintenance.turn_off") }
-							</button>
-						</form>
-					} else {
-						<form data-confirm={ t(ctx, "confirm.maintenance_on.title", "name", d.Slug) } data-confirm-text={ t(ctx, "confirm.maintenance_on.text") } data-confirm-ok={ t(ctx, "confirm.maintenance_on.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/maintenance") }>
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<input type="hidden" name="action" value="on"/>
-							<button class="tuc-btn is-outline is-sm" type="submit">
-								@Icon("wrench", "size-3.5")
-								{ t(ctx, "service.maintenance.turn_on") }
-							</button>
-						</form>
-					}
-				</div>
-			}
-		</div>
-	</section>
+// maintenanceButton turns the maintenance page on and off for every domain
+// of the service, from the Deploy head. Turning it on takes the site off
+// the air, so it asks first; turning it off only brings the site back.
+templ maintenanceButton(d ServiceData) {
+	if d.Maintenance {
+		<form id="maintenance" class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/maintenance") }>
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			<input type="hidden" name="action" value="off"/>
+			<button class="tuc-btn is-warning is-sm" type="submit" aria-pressed="true" title={ t(ctx, "service.maintenance.turn_off") }>
+				@Icon("wrench", "size-3.5")
+				{ t(ctx, "service.maintenance.button") }
+			</button>
+		</form>
+	} else {
+		<form id="maintenance" class="inline-flex" data-confirm={ t(ctx, "confirm.maintenance_on.title", "name", d.Slug) } data-confirm-text={ maintenanceConfirm(ctx, d) } data-confirm-ok={ t(ctx, "confirm.maintenance_on.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/maintenance") }>
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			<input type="hidden" name="action" value="on"/>
+			<button class="tuc-btn is-outline is-sm" type="submit" aria-pressed="false" title={ t(ctx, "service.maintenance.hint") }>
+				@Icon("wrench", "size-3.5")
+				{ t(ctx, "service.maintenance.button") }
+			</button>
+		</form>
+	}
+}
+
+// maintenanceConfirm is what turning maintenance on asks, with why the page
+// would not show when the edge is off or the service has no domain.
+func maintenanceConfirm(ctx context.Context, d ServiceData) string {
+	text := t(ctx, "confirm.maintenance_on.text")
+	switch {
+	case !d.Domains.EdgeEnabled:
+		text += " " + t(ctx, "service.maintenance.no_edge")
+	case len(d.Domains.Fixed) == 0 && !d.Domains.Dynamic:
+		text += " " + t(ctx, "service.maintenance.no_domains")
+	}
+	return text
 }
 
 // VolumeRow is a disk of the service.
@@ -1468,7 +1457,6 @@ func sudoOr(d ServiceData, modal string) string {
 templ volumesCard(d ServiceData) {
 	<section class={ cardClass } id="volumes">
 		@cardHead(t(ctx, "volume.title")) {
-			<span class="text-xs text-muted">{ t(ctx, "volume.count", "n", len(d.Volumes)) }</span>
 			if d.CanAdmin {
 				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#volume-new">
 					@Icon("plus", "size-3.5")
@@ -1476,10 +1464,8 @@ templ volumesCard(d ServiceData) {
 				</button>
 			}
 		}
-		<div class={ cardBodyClass }>
-			if len(d.Volumes) == 0 {
-				@emptyState("hard-drive", t(ctx, "volume.empty"))
-			} else {
+		if len(d.Volumes) > 0 {
+			<div class={ cardBodyClass }>
 				<div class="tuc-table-wrap">
 					<table class="tuc-table is-compact w-full">
 						<thead><tr><th>{ t(ctx, "volume.disk") }</th><th>{ t(ctx, "volume.usage") }</th><th class="tuc-table__actions"></th></tr></thead>
@@ -1560,8 +1546,8 @@ templ volumesCard(d ServiceData) {
 						</tbody>
 					</table>
 				</div>
-			}
-		</div>
+			</div>
+		}
 	</section>
 	if d.CanAdmin {
 		<dialog class="tuc-modal is-md" id="volume-new" aria-labelledby="volume-new-title">
