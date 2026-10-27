@@ -1,6 +1,9 @@
 package views
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // ServiceBackups is the service's Backups tab (docs/17 "Backups (do
 // serviço)").
@@ -67,28 +70,22 @@ templ tabBackups(d ServiceData) {
 			// ui.js reloads once the backup is over (data-busy-poll).
 			<span hidden data-busy-poll></span>
 		}
-		if !d.Backups.Ready {
-			<div class="tuc-alert is-info">
-				@Icon("info", "size-4")
-				<div class="tuc-alert__body"><p>{ t(ctx, "svcbackup.not_ready") }</p></div>
-				<div class="tuc-alert__actions">
-					<a class="tuc-btn is-outline is-sm" href="/backups">
-						@Icon("database-backup", "size-3.5")
-						{ t(ctx, "svcbackup.open_backups") }
-					</a>
-				</div>
-			</div>
-		}
 		@svcBackupPolicy(d)
 		if d.Backups.WAL {
 			@svcBackupWAL(d)
 		}
-		@svcBackupDownload(d)
 		if d.CanAdmin && d.Backups.Ready {
 			@svcBackupRestore(d)
 		}
 		<section class={ cardClass }>
-			@cardHead(t(ctx, "svcbackup.history"))
+			@cardHead(t(ctx, "svcbackup.history")) {
+				@svcBackupActions(d)
+			}
+			if d.CanAdmin && d.Backups.Download != nil {
+				<div class="flex flex-wrap items-center justify-end gap-3 border-b border-border px-4 py-3">
+					@svcDownloadState(*d.Backups.Download, d.SudoCritical)
+				</div>
+			}
 			if len(d.Backups.Runs) == 0 && len(d.Backups.Restores) == 0 {
 				@emptyState("history", t(ctx, "backups.history.empty"))
 			}
@@ -132,58 +129,50 @@ templ svcBackupPolicy(d ServiceData) {
 		@cardHead(t(ctx, "svcbackup.policy")) {
 			if d.Backups.Enabled {
 				<span class="tuc-badge is-success">{ t(ctx, "svcbackup.on") }</span>
-			} else {
+			} else if d.Backups.Ready {
 				<span class="tuc-badge">{ t(ctx, "svcbackup.off") }</span>
 			}
-			if d.CanOperate && d.Backups.Ready {
-				<form method="post" action={ templ.SafeURL(d.base() + "/backups/run") }>
-					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<button class="tuc-btn is-outline is-sm" type="submit" disabled?={ d.Backups.Busy }>
-						if d.Backups.Busy {
-							<span class="tuc-spinner" aria-hidden="true"></span>
-							{ t(ctx, "svcbackup.running_now") }
-						} else {
-							@Icon("database-backup", "size-3.5")
-							{ t(ctx, "svcbackup.run_now") }
-						}
-					</button>
-				</form>
-			}
 		}
-		if d.CanAdmin {
-			<form class={ cardBodyClass } method="post" action={ templ.SafeURL(d.base() + "/backups/policy") }>
+		if !d.Backups.Ready {
+			// Nothing here works before the kit and a destination exist,
+			// so the card only says where to set them up.
+			@emptyState("database-backup", t(ctx, "svcbackup.not_ready")) {
+				if d.CanAdmin {
+					<a class="tuc-btn is-outline is-sm" href="/backups">
+						@Icon("settings", "size-3.5")
+						{ t(ctx, "svcbackup.open_backups") }
+					</a>
+				}
+			}
+		} else if d.CanAdmin {
+			<form class={ cardBodyClass + " @container" } method="post" action={ templ.SafeURL(d.base() + "/backups/policy") }>
 				<input type="hidden" name="csrf" value={ d.CSRF }/>
-				<label class="tuc-choice is-end">
-					<input type="checkbox" role="switch" class="tuc-switch" name="enabled" value="1" checked?={ d.Backups.Enabled } disabled?={ !d.Backups.Ready }/>
-					<span>{ t(ctx, "svcbackup.enabled") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.enabled_hint") }</span></span>
-				</label>
-				<div class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
-					<div class="flex min-w-0 flex-col gap-1.5">
-						<label class="tuc-label" for="bk-every">{ t(ctx, "svcbackup.every") }</label>
+				@deployField("bk-enabled", t(ctx, "svcbackup.enabled"), t(ctx, "svcbackup.enabled_hint")) {
+					<div class="flex items-center @xl:h-9">
+						<input type="checkbox" role="switch" class="tuc-switch" id="bk-enabled" name="enabled" value="1" checked?={ d.Backups.Enabled }/>
+					</div>
+				}
+				@deployField("bk-every", t(ctx, "svcbackup.every"), svcNextRun(ctx, d.Backups.NextRun)) {
+					<div class="grid grid-cols-[minmax(0,1fr)_auto_120px] items-center gap-2">
 						<select class="tuc-input" id="bk-every" name="every_hours" data-tuc-select data-clearable="false">
 							for _, h := range everyHours {
 								<option value={ fmt.Sprint(h) } selected?={ h == d.Backups.EveryHours }>{ t(ctx, "svcbackup.every_hours", "n", h) }</option>
 							}
 						</select>
-					</div>
-					<div class="flex min-w-0 flex-col gap-1.5">
-						<label class="tuc-label" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
+						<label class="text-[13px] text-muted" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
 						<input class="tuc-input" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
 					</div>
-				</div>
-				if d.Backups.WALSupported {
-					<label class="tuc-choice is-end">
-						<input type="checkbox" role="switch" class="tuc-switch" name="wal" value="1" checked?={ d.Backups.WAL } disabled?={ !d.Backups.Ready }/>
-						<span>{ t(ctx, "svcbackup.wal") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.wal_hint") }</span></span>
-					</label>
 				}
-				<div class="flex flex-wrap items-center gap-3">
-					if d.Backups.NextRun != "" {
-						<span class="text-xs text-muted">{ t(ctx, "svcbackup.next", "when", d.Backups.NextRun) }</span>
+				if d.Backups.WALSupported {
+					@deployField("bk-wal", t(ctx, "svcbackup.wal"), t(ctx, "svcbackup.wal_hint")) {
+						<div class="flex items-center @xl:h-9">
+							<input type="checkbox" role="switch" class="tuc-switch" id="bk-wal" name="wal" value="1" checked?={ d.Backups.WAL }/>
+						</div>
 					}
-					<span class="grow"></span>
-					<button class="tuc-btn is-primary" type="submit" disabled?={ !d.Backups.Ready }>
-						@Icon("save", "size-3.5")
+				}
+				<div class="flex justify-end">
+					<button class="tuc-btn is-outline" type="submit">
+						@Icon("save", "size-4")
 						{ t(ctx, "svcbackup.save") }
 					</button>
 				</div>
@@ -211,44 +200,51 @@ templ svcBackupWAL(d ServiceData) {
 	</section>
 }
 
-templ svcBackupDownload(d ServiceData) {
-	if d.CanAdmin {
-		<section class={ cardClass }>
-			@cardHead(t(ctx, "backup.title")) {
-				if d.Backups.HasKit {
-					<span class="tuc-badge is-success">
-						@Icon("lock", "size-3")
-						{ t(ctx, "svcbackup.encrypted") }
-					</span>
-				}
-			}
-			<div class="flex flex-wrap items-center gap-4 p-4">
-				<div class="flex min-w-0 flex-[1_1_260px] flex-col gap-1">
-					if d.Backups.HasKit {
-						<p class="m-0 text-[13px] text-muted">{ t(ctx, "svcbackup.download_hint") }</p>
-						<span class="tuc-hint">{ t(ctx, "svcbackup.download_format") }</span>
-					} else {
-						<p class="m-0 text-[13px] text-muted">{ t(ctx, "backup.hint") }</p>
-						<span class="tuc-hint">{ t(ctx, "backup.format") }</span>
-					}
-				</div>
-				if d.Backups.Download != nil {
-					@svcDownloadState(*d.Backups.Download, d.SudoCritical)
-				}
-				if d.SudoCritical {
-					<form method="post" action={ templ.SafeURL(d.base() + "/backup") }>
-						<input type="hidden" name="csrf" value={ d.CSRF }/>
-						<button class="tuc-btn is-primary" type="submit">
-							@Icon("download", "size-3.5")
-							{ t(ctx, "backup.download") }
-						</button>
-					</form>
+// svcBackupActions are the history card's buttons: a backup that goes to
+// the destination now, and a pg_dump downloaded in the browser.
+templ svcBackupActions(d ServiceData) {
+	if d.CanOperate && d.Backups.Ready {
+		<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backups/run") }>
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			<button class="tuc-btn is-outline is-sm" type="submit" disabled?={ d.Backups.Busy }>
+				if d.Backups.Busy {
+					<span class="tuc-spinner" aria-hidden="true"></span>
+					{ t(ctx, "svcbackup.running_now") }
 				} else {
-					@sudoButton(t(ctx, "backup.download"))
+					@Icon("database-backup", "size-3.5")
+					{ t(ctx, "svcbackup.run_now") }
 				}
-			</div>
-		</section>
+			</button>
+		</form>
 	}
+	if d.CanAdmin {
+		if d.SudoCritical {
+			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit) }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<button class="tuc-btn is-outline is-sm" type="submit">
+					@Icon("download", "size-3.5")
+					{ t(ctx, "backup.download") }
+				</button>
+			</form>
+		} else {
+			@sudoButton(t(ctx, "backup.download"))
+		}
+	}
+}
+
+func downloadHint(ctx context.Context, kit bool) string {
+	if kit {
+		return t(ctx, "svcbackup.download_hint")
+	}
+	return t(ctx, "backup.hint")
+}
+
+// svcNextRun is the frequency row's hint: when the next backup runs.
+func svcNextRun(ctx context.Context, next string) string {
+	if next == "" {
+		return t(ctx, "svcbackup.every_hint")
+	}
+	return t(ctx, "svcbackup.next", "when", next)
 }
 
 templ svcDownloadState(dl DownloadView, sudo bool) {
