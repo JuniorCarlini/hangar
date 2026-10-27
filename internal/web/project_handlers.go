@@ -286,6 +286,49 @@ func flashFrom(r *http.Request) string {
 	return ""
 }
 
+// serviceAddresses lists how the service is reached, for the Variables
+// table: on the project network (one per web port), its public links and
+// domains, and its published ports (the server's IP and the open port,
+// while it stays open).
+func (h *handlers) serviceAddresses(r *http.Request, p dbq.Project, s dbq.Service, d *views.ServiceData) []views.AddressRow {
+	ctx := r.Context()
+	host := node.ContainerName(p.Slug, s.Slug)
+	var out []views.AddressRow
+	if len(d.Domains.Endpoints) > 1 {
+		for _, e := range d.Domains.Endpoints {
+			out = append(out, views.AddressRow{Name: i18n.T(ctx, "address.internal_named", "label", e.Label), Value: host + ":" + strconv.Itoa(e.Port)})
+		}
+	} else {
+		out = append(out, views.AddressRow{Name: i18n.T(ctx, "address.internal"), Value: projects.ServiceAddress(p, s)})
+	}
+	for _, e := range d.Domains.Endpoints {
+		if e.Public && e.SslipEnabled && e.AutoHost != "" {
+			name := i18n.T(ctx, "address.public")
+			if len(d.Domains.Endpoints) > 1 {
+				name = i18n.T(ctx, "address.public_named", "label", e.Label)
+			}
+			out = append(out, views.AddressRow{Name: name, Value: "https://" + e.AutoHost})
+		}
+	}
+	for _, dm := range d.Domains.Fixed {
+		if !strings.HasPrefix(dm.Hostname, "*.") && !dm.Offline {
+			out = append(out, views.AddressRow{Name: i18n.T(ctx, "address.domain"), Value: "https://" + dm.Hostname})
+		}
+	}
+	for _, pt := range d.Ports {
+		// A port open to this server only answers on its loopback.
+		v := strconv.FormatInt(pt.HostPort, 10)
+		switch {
+		case pt.Access == projects.AccessLocalhost:
+			v = "127.0.0.1:" + v
+		case h.serverIP != "":
+			v = h.serverIP + ":" + v
+		}
+		out = append(out, views.AddressRow{Name: i18n.T(ctx, "address.published"), Value: v})
+	}
+	return out
+}
+
 // clientsOpen reports whether the page answers a change made in the
 // customers' domains modal (a switch, the secret, or an error from them).
 func clientsOpen(r *http.Request) bool {
@@ -365,7 +408,6 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		}
 	}
 	d.ConnectOffers = h.connectOffers(r, p, s.Slug)
-	d.Address = projects.ServiceAddress(p, s)
 	// Admins see every value, in the table and in the .env editor; the
 	// table follows the order of the .env file.
 	if text, _, err := h.projects.EnvText(r.Context(), s.ID, d.CanAdmin); err == nil {
@@ -486,6 +528,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 			})
 		}
 	}
+	d.Addresses = h.serviceAddresses(r, p, s, &d)
 	d.Tab = serviceTab(r, d.CanBackup)
 	d.OpenTerminal = r.URL.Query().Get("terminal") == "1"
 	if d.Tab == "overview" {

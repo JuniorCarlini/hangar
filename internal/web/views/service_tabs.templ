@@ -142,10 +142,10 @@ templ tabVariables(d ServiceData) {
 			<table class="tuc-table is-compact w-full table-fixed">
 				<thead>
 					<tr>
-						<th class="w-[38%]">{ t(ctx, "service.env.name") }</th>
+						<th class="w-[34%]">{ t(ctx, "service.env.name") }</th>
 						<th class="w-7 px-0"><span class="sr-only">{ t(ctx, "connect.open") }</span></th>
 						<th>{ t(ctx, "service.env.value") }</th>
-						<th class="w-28"><span class="sr-only">{ t(ctx, "connect.service") }</span></th>
+						<th class="w-32"><span class="sr-only">{ t(ctx, "connect.service") }</span></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -185,20 +185,17 @@ templ tabVariables(d ServiceData) {
 							</td>
 						</tr>
 					}
+					@addressRows(d)
 				</tbody>
 			</table>
 		} else {
+			<table class="tuc-table is-compact w-full table-fixed">
+				<tbody>
+					@addressRows(d)
+				</tbody>
+			</table>
 			@emptyState("braces", t(ctx, "service.env.empty"))
 		}
-		// How the other services reach this one: what HOST and PORT give.
-		<div class="flex items-center gap-2 border-t border-border px-4 py-2.5 text-[13px] text-muted">
-			@Icon("network", "size-3.5 shrink-0")
-			<span class="shrink-0">{ t(ctx, "service.env.address") }</span>
-			<code class="min-w-0 truncate font-mono text-fg">{ d.Address }</code>
-			<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Address } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "common.copy_name", "name", d.Address) } title={ t(ctx, "service.env.address_hint") }>
-				@Icon("copy", "size-3.5")
-			</button>
-		</div>
 		if len(d.UsedByNames) > 0 {
 			<div class="flex items-center gap-2 border-t border-border px-4 py-3 text-[13px] text-muted" title={ strings.Join(d.UsedBy, ", ") }>
 				@Icon("cable", "size-3.5 shrink-0")
@@ -262,6 +259,25 @@ templ tabVariables(d ServiceData) {
 				</form>
 			</div>
 		</dialog>
+	}
+}
+
+// addressRows are how the service is reached, as rows of the variables
+// table under an "Addresses" divider: the same name, value and copy.
+templ addressRows(d ServiceData) {
+	if len(d.Addresses) > 0 {
+		<tr>
+			<th colspan="4" class="bg-surface-2 text-xs font-semibold text-muted">{ t(ctx, "address.title") }</th>
+		</tr>
+		for _, a := range d.Addresses {
+			<tr>
+				<td class="truncate text-[13px]" title={ a.Name }>{ a.Name }</td>
+				<td class="truncate font-mono text-[13px]" colspan="2" title={ a.Value }>{ a.Value }</td>
+				<td>
+					@valueTail(ctx, "", false, a.Name, a.Value)
+				</td>
+			</tr>
+		}
 	}
 }
 

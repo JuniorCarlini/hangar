@@ -209,6 +209,13 @@ type EnvRow struct {
 	Copy string
 }
 
+// AddressRow is one way to reach a service: "Rede interna" and
+// "conector_app:8000".
+type AddressRow struct {
+	Name  string
+	Value string
+}
+
 // ConnectOffer is one value another service offers to connect to.
 type ConnectOffer struct {
 	Service string
@@ -280,9 +287,9 @@ type ServiceData struct {
 	// ("app (DATABASE_URL ← DATABASE_URL)"); UsedByNames, those services.
 	UsedBy      []string
 	UsedByNames []string
-	// Address is how the project's other services reach this one
-	// ("conector_app:8000"): what HOST and PORT give in the connector.
-	Address string
+	// Addresses are how the service is reached (network, links, ports),
+	// listed under its variables to copy.
+	Addresses []AddressRow
 	// ConnectOffers are the values the project's other services offer, by
 	// service name, for the connector's "variable B".
 	ConnectOffers []ConnectOffer

@@ -407,8 +407,6 @@ title = "Deploys"
 last = { one = "o último", other = "últimos {n}" }
 
 [service.env]
-address = "Na rede do projeto:"
-address_hint = "Os outros serviços do projeto chegam aqui por este endereço (no Conector: HOST e PORT)."
 copy_hint = "Copia o arquivo com os valores de verdade (conexões resolvidas), pronto para colar fora do Hangar."
 empty_value = "vazia"
 file_hint = "Este é o arquivo inteiro: o que você apagar aqui é apagado no serviço. Linhas como DB_HOST=${{postgres.HOST}} são conexões."
@@ -3120,3 +3118,12 @@ how = "Como funciona"
 app = "Ligação com a app"
 route = "Rota"
 secret = "Segredo"
+
+[address]
+title = "Endereços"
+internal = "Rede interna"
+internal_named = "Rede interna · {label}"
+public = "Link público"
+public_named = "Link público · {label}"
+domain = "Domínio"
+published = "Porta publicada"

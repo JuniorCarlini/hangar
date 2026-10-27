@@ -407,8 +407,6 @@ title = "Deploys"
 last = { one = "the latest", other = "last {n}" }
 
 [service.env]
-address = "On the project network:"
-address_hint = "The project's other services reach this one at this address (in the connector: HOST and PORT)."
 copy_hint = "Copies the file with the real values (connections resolved), ready to paste outside Hangar."
 empty_value = "empty"
 file_hint = "This is the whole file: what you remove here is removed from the service. Lines such as DB_HOST=${{postgres.HOST}} are connections."
@@ -3119,3 +3117,12 @@ how = "How it works"
 app = "Link with the app"
 route = "Route"
 secret = "Secret"
+
+[address]
+title = "Addresses"
+internal = "Internal network"
+internal_named = "Internal network · {label}"
+public = "Public link"
+public_named = "Public link · {label}"
+domain = "Domain"
+published = "Published port"
