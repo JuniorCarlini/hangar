@@ -29,6 +29,7 @@ var sealedColumns = []sealedColumn{
 	{"git_credentials", "token_enc", []string{"id"}, func(k []string) string { return "git_credentials|" + k[0] + "|token" }},
 	{"service_git", "webhook_secret_enc", []string{"service_id"}, func(k []string) string { return "service_git|" + k[0] + "|webhook_secret" }},
 	{"edge_settings", "dns_token_enc", []string{"id"}, func(k []string) string { return "edge_settings|" + k[0] + "|dns_token" }},
+	{"backup_server_key", "identity_enc", []string{"id"}, func(k []string) string { return "backup_server_key|" + k[0] + "|identity" }},
 }
 
 // Rotate re-encrypts every secret in the database from oldBox to

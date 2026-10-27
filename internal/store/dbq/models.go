@@ -135,6 +135,12 @@ type BackupRun struct {
 	FinishedAt  sql.NullInt64
 }
 
+type BackupServerKey struct {
+	ID          string
+	IdentityEnc []byte
+	CreatedAt   int64
+}
+
 type BackupTarget struct {
 	ID             string
 	Name           string

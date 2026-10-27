@@ -126,6 +126,7 @@ type Overview struct {
 	Recipients []Recipient
 	Targets    []Target
 	Ready      bool
+	Mode       string // ModeSimple or ModeKit
 	Services   []Row
 	Panel      Row
 	Runs       []Run
@@ -173,6 +174,7 @@ func (m *Manager) Overview(ctx context.Context) (Overview, error) {
 		return o, err
 	}
 	o.Ready = m.Ready(ctx)
+	o.Mode = m.Mode(ctx)
 	all, err := m.q.ListAllServices(ctx)
 	if err != nil {
 		return o, err
@@ -224,7 +226,7 @@ func (m *Manager) alerts(o Overview) []Alert {
 	for _, r := range o.Recipients {
 		confirmed = confirmed || r.Confirmed
 	}
-	if !confirmed {
+	if !confirmed && o.Mode != ModeSimple {
 		out = append(out, Alert{Kind: AlertNoKit})
 	}
 	if len(o.Targets) == 0 {

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"filippo.io/age"
+
 	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/backup"
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
@@ -29,7 +31,7 @@ const backupTime = "02/01 15:04"
 func (h *handlers) backupsPage(w http.ResponseWriter, r *http.Request) {
 	flash := ""
 	switch ok := r.URL.Query().Get("ok"); ok {
-	case "key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued":
+	case "key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued", "mode":
 		flash = i18n.T(r.Context(), "flash.backups."+ok)
 	}
 	h.renderBackups(w, r, http.StatusOK, "", flash)
@@ -39,27 +41,53 @@ func (h *handlers) backupsPage(w http.ResponseWriter, r *http.Request) {
 // "config", and what was done there comes back to it.
 func backupsTab(r *http.Request) string {
 	ok := r.URL.Query().Get("ok")
-	if r.URL.Query().Get("tab") == "config" || strings.HasPrefix(ok, "key-") || strings.HasPrefix(ok, "target-") ||
-		strings.HasPrefix(r.URL.Path, "/backups/keys") || strings.HasPrefix(r.URL.Path, "/backups/targets") {
+	if r.URL.Query().Get("tab") == "config" || strings.HasPrefix(ok, "key-") || strings.HasPrefix(ok, "target-") || ok == "mode" ||
+		strings.HasPrefix(r.URL.Path, "/backups/keys") || strings.HasPrefix(r.URL.Path, "/backups/targets") ||
+		r.URL.Path == "/backups/mode" || r.URL.Path == "/backups/server-key" {
 		return "config"
 	}
 	return ""
 }
 
+// setBackupMode switches between the simple mode and the recovery kit.
+func (h *handlers) setBackupMode(w http.ResponseWriter, r *http.Request) {
+	if err := h.backups.SetMode(r.Context(), actor(r), r.PostFormValue("mode")); err != nil {
+		code, msg := userError(r, err)
+		h.renderBackups(w, r, code, msg, "")
+		return
+	}
+	redirectLocal(w, r, "/backups?tab=config&ok=mode")
+}
+
+// revealServerKey shows the simple mode's key once, on this response only.
+func (h *handlers) revealServerKey(w http.ResponseWriter, r *http.Request) {
+	key, err := h.backups.ServerKey(r.Context(), actor(r))
+	if err != nil {
+		code, msg := userError(r, err)
+		h.renderBackups(w, r, code, msg, "")
+		return
+	}
+	h.renderBackupsWith(w, r, http.StatusOK, "", "", key)
+}
+
 func (h *handlers) renderBackups(w http.ResponseWriter, r *http.Request, status int, errMsg, flash string) {
+	h.renderBackupsWith(w, r, status, errMsg, flash, "")
+}
+
+func (h *handlers) renderBackupsWith(w http.ResponseWriter, r *http.Request, status int, errMsg, flash, serverKey string) {
 	ctx := r.Context()
 	pr := PrincipalFrom(ctx)
 	d := views.BackupsData{
 		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
 		CanOwner: pr.Role >= auth.RoleOwner, SudoActive: pr.SudoFor(auth.SudoCritical, time.Now()), Error: errMsg, Flash: flash,
-		PanelQueued: h.backups.Queued(""), Tab: backupsTab(r),
+		PanelQueued: h.backups.Queued(""), Tab: backupsTab(r), ServerKey: serverKey,
 	}
 	o, err := h.backups.Overview(ctx)
 	if err != nil {
 		code, msg := userError(r, err)
 		status, d.Error = code, msg
 	}
-	d.Ready = o.Ready
+	d.Ready, d.Simple = o.Ready, o.Mode == backup.ModeSimple
 	for _, k := range o.Recipients {
 		d.Keys = append(d.Keys, views.BackupKeyRow{ID: k.ID, Label: k.Label, Public: k.PublicKey, Confirmed: k.Confirmed, Due: k.CheckDue(time.Now()), Created: k.CreatedAt.Format(backupTime)})
 	}
@@ -309,6 +337,7 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 	}
 	now := time.Now()
 	b.Ready = h.backups.Ready(ctx)
+	b.Simple = h.backups.Mode(ctx) == backup.ModeSimple
 	if keys, err := h.backups.Recipients(ctx); err == nil {
 		for _, k := range keys {
 			b.HasKit = b.HasKit || k.Confirmed
@@ -444,27 +473,30 @@ func (h *handlers) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
-	file, _, err := r.FormFile("kit")
-	if err != nil {
+	// The kit is optional in the simple mode: the server's key opens it.
+	var keys []*age.X25519Identity
+	if file, _, err := r.FormFile("kit"); err == nil {
+		raw, err := io.ReadAll(io.LimitReader(file, maxKitBytes))
+		_ = file.Close()
+		if err != nil {
+			fail(i18n.E("backup.error.kit"))
+			return
+		}
+		keys, err = archive.ParseKit(raw, r.PostFormValue("passphrase"))
+		clear(raw)
+		switch {
+		case errors.Is(err, archive.ErrKitPassphrase):
+			fail(i18n.E("backup.error.kit_passphrase"))
+			return
+		case err != nil:
+			fail(i18n.E("backup.error.kit"))
+			return
+		}
+	} else if h.backups.Mode(r.Context()) != backup.ModeSimple {
 		fail(i18n.E("backup.error.kit"))
 		return
 	}
-	raw, err := io.ReadAll(io.LimitReader(file, maxKitBytes))
-	_ = file.Close()
-	if err != nil {
-		fail(i18n.E("backup.error.kit"))
-		return
-	}
-	keys, err := archive.ParseKit(raw, r.PostFormValue("passphrase"))
-	clear(raw)
-	switch {
-	case errors.Is(err, archive.ErrKitPassphrase):
-		fail(i18n.E("backup.error.kit_passphrase"))
-		return
-	case err != nil:
-		fail(i18n.E("backup.error.kit"))
-		return
-	}
+	var err error
 	req := backup.RestoreRequest{
 		Project: r.PathValue("project"), Service: r.PathValue("service"), Mode: r.PostFormValue("mode"),
 		Key: r.PostFormValue("key"), Destination: r.PostFormValue("destination"),
@@ -521,7 +553,9 @@ func (h *handlers) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		h.renderService(w, r, serviceView{status: http.StatusConflict, errMsg: i18n.T(r.Context(), "backup.error.not_running")})
 		return
 	}
-	if err := h.backups.PrepareDownload(r.Context(), actor(r), p.Slug, s.Slug); err == nil {
+	if h.backups.Mode(r.Context()) == backup.ModeSimple {
+		// No kit to encrypt to for this browser: the plain dump below.
+	} else if err := h.backups.PrepareDownload(r.Context(), actor(r), p.Slug, s.Slug); err == nil {
 		redirectLocal(w, r, h.serviceBase(r)+"?ok=backup-preparing")
 		return
 	} else if !errors.Is(err, backup.ErrNotReady) {
@@ -561,6 +595,23 @@ func (h *handlers) takeDownload(w http.ResponseWriter, r *http.Request) {
 // runDownload sends the browser to a short-lived signed link in the
 // bucket.
 func (h *handlers) runDownload(w http.ResponseWriter, r *http.Request) {
+	// The simple mode's server holds the key: the file arrives open.
+	if h.backups.Mode(r.Context()) == backup.ModeSimple {
+		rc, name, err := h.backups.OpenRun(r.Context(), actor(r), r.PathValue("id"))
+		if err != nil {
+			code, msg := userError(r, err)
+			h.renderBackups(w, r, code, msg, "")
+			return
+		}
+		defer func() { _ = rc.Close() }()
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{}) // a big backup takes a while
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		if _, err := io.Copy(w, rc); err != nil {
+			loggerFrom(r.Context()).Error("backup download", "run", r.PathValue("id"), "error", err)
+		}
+		return
+	}
 	u, err := h.backups.RunDownloadURL(r.Context(), actor(r), r.PathValue("id"))
 	if err != nil {
 		code, msg := userError(r, err)

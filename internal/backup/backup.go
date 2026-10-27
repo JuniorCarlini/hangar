@@ -211,6 +211,9 @@ func (m *Manager) Recipients(ctx context.Context) ([]Recipient, error) {
 // KitCheckDue reports whether any confirmed kit key has gone KitCheckEvery
 // without a new confirmation.
 func (m *Manager) KitCheckDue(ctx context.Context) bool {
+	if m.Mode(ctx) == ModeSimple {
+		return false
+	}
 	keys, err := m.Recipients(ctx)
 	if err != nil {
 		return false
@@ -294,7 +297,8 @@ func (m *Manager) DeleteRecipient(ctx context.Context, a Actor, id string) error
 	return nil
 }
 
-// recipients are the confirmed public keys every backup is encrypted to.
+// recipients are the keys every backup is encrypted to: the confirmed kit
+// keys and, in the simple mode, the server's own.
 func (m *Manager) recipients(ctx context.Context) ([]age.Recipient, error) {
 	rs, err := m.Recipients(ctx)
 	if err != nil {
@@ -306,17 +310,32 @@ func (m *Manager) recipients(ctx context.Context) ([]age.Recipient, error) {
 			keys = append(keys, r.PublicKey)
 		}
 	}
-	if len(keys) == 0 {
+	var out []age.Recipient
+	if len(keys) > 0 {
+		if out, err = archive.ParseRecipients(keys); err != nil {
+			return nil, err
+		}
+	}
+	if m.Mode(ctx) == ModeSimple {
+		id, err := m.serverIdentity(ctx, true)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, id.Recipient())
+	}
+	if len(out) == 0 {
 		return nil, ErrNotReady
 	}
-	return archive.ParseRecipients(keys)
+	return out, nil
 }
 
-// Ready reports whether backups can run: a confirmed kit key and a
-// destination.
+// Ready reports whether backups can run: a destination and a key to
+// encrypt to (a confirmed kit, or the simple mode's own).
 func (m *Manager) Ready(ctx context.Context) bool {
-	if _, err := m.recipients(ctx); err != nil {
-		return false
+	if m.Mode(ctx) != ModeSimple {
+		if _, err := m.recipients(ctx); err != nil {
+			return false
+		}
 	}
 	ts, err := m.q.ListBackupTargets(ctx)
 	return err == nil && len(ts) > 0

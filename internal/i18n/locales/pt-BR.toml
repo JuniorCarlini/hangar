@@ -879,6 +879,8 @@ hint = "Gera um pg_dump na hora e baixa pelo navegador."
 download = "Baixar backup"
 
 [backup.error]
+mode = "Escolha Simples ou Com kit de recuperação."
+mode_kit = "Gere e confirme um kit de recuperação antes de usar este modo."
 queued = "Já tem um backup deste na fila ou rodando. Aguarde ele terminar."
 not_ready = "Configure o kit de recuperação (confirmado) e um destino em Backups primeiro."
 busy = "Já há um backup ou restauração deste serviço em andamento. Tente de novo em instantes."
@@ -1682,6 +1684,8 @@ security_level = "mudou o nível de segurança do painel"
 backup_key_add = "adicionou uma chave de backup"
 backup_key_confirm = "confirmou uma chave de backup"
 backup_key_remove = "removeu uma chave de backup"
+backup_mode = "mudou a segurança dos backups"
+backup_server_key_reveal = "viu a chave de backup do servidor"
 backup_restore_start = "iniciou uma restauração de backup"
 backup_target_add = "adicionou um destino de backup"
 backup_target_remove = "removeu um destino de backup"
@@ -1973,6 +1977,7 @@ ok = "Desligar"
 # --- Backups (docs/09) -------------------------------------------------------
 
 [backups]
+not_ready_simple = "Para começar, cadastre um destino."
 page_title = "Backups · Hangar"
 title = "Backups"
 panel_now = "Backup do painel agora"
@@ -2218,6 +2223,7 @@ r2 = "Cloudflare R2"
 custom = "Outro S3 compatível"
 
 [svcbackup]
+not_ready_simple = "Para ligar, cadastre um destino em Backups."
 unsupported = "Backup automático existe para PostgreSQL. Volumes de apps entram numa próxima etapa."
 every_hint = "Horário do primeiro backup do dia."
 not_ready = "Para ligar, confirme o kit de recuperação e escolha um destino em Backups."
@@ -2284,6 +2290,7 @@ restore = "restaurando o dump"
 done = "concluído"
 
 [flash.backups]
+mode = "Segurança dos backups salva."
 key-added = "Chave pública registrada. Agora confirme com o kit."
 key-confirmed = "Kit confirmado. Esta chave já cifra os backups."
 key-deleted = "Chave removida."
@@ -3061,3 +3068,14 @@ published = "Porta publicada"
 any = "Qualquer IP"
 ips = "Alguns IPs"
 localhost = "Só o servidor"
+
+[backups.mode]
+title = "Segurança dos backups"
+simple = "Simples"
+simple_hint = "Os backups vão cifrados para o bucket com uma chave que o próprio servidor guarda. Restaurar e baixar é um clique, sem kit."
+kit = "Com kit de recuperação"
+kit_hint = "Só quem tem o kit abre os backups, nem quem invadir o servidor. Restaurar pede o arquivo do kit."
+save = "Salvar"
+key = "Chave do servidor"
+key_hint = "Opcional: guarde uma cópia fora do servidor para abrir os backups se ele sumir."
+key_show = "Mostrar chave"

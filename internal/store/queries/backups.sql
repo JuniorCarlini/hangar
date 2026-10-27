@@ -124,3 +124,10 @@ UPDATE backup_restores SET status = 'failed', error = ?, finished_at = ? WHERE s
 
 -- name: MaxAuditID :one
 SELECT CAST(coalesce(max(id), 0) AS INTEGER) FROM audit_log;
+
+-- name: GetBackupServerKey :one
+SELECT identity_enc FROM backup_server_key WHERE id = 'server';
+
+-- name: CreateBackupServerKey :exec
+INSERT INTO backup_server_key (id, identity_enc, created_at) VALUES ('server', ?, ?)
+ON CONFLICT (id) DO NOTHING;

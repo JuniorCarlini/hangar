@@ -22,6 +22,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/secrets"
 	"github.com/JuniorCarlini/hangar/internal/store"
+	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
 // fakeNode is "Docker" for the backup tests: pg_dump answers dumpData,
@@ -238,6 +239,10 @@ func newFixture(t *testing.T) *fixture {
 	mem := newMemStore()
 	m.openStore = func(TargetConfig) (ObjectStore, error) { return mem, nil }
 	id, _ := age.GenerateX25519Identity()
+	// The tests below cover the recovery kit; the simple mode has its own.
+	if err := m.q.SetSetting(context.Background(), dbq.SetSettingParams{Key: settingMode, ValueJson: `"kit"`}); err != nil {
+		t.Fatal(err)
+	}
 	return &fixture{m: m, pm: pm, n: n, store: mem, id: id, who: Actor{UserID: "usr_1", IP: "189.1.2.3"}, dir: dir}
 }
 

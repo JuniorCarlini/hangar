@@ -9,7 +9,8 @@ import (
 // serviço)").
 type ServiceBackups struct {
 	Supported    bool
-	Ready        bool // a confirmed kit key and a destination
+	Ready        bool // a destination and a key to encrypt to
+	Simple       bool // the server keeps the key: no kit to restore
 	HasKit       bool
 	Enabled      bool
 	EveryHours   int
@@ -136,7 +137,7 @@ templ svcBackupPolicy(d ServiceData) {
 		if !d.Backups.Ready {
 			// Nothing here works before the kit and a destination exist,
 			// so the card only says where to set them up.
-			@emptyState("database-backup", t(ctx, "svcbackup.not_ready")) {
+			@emptyState("database-backup", notReadyText(ctx, d.Backups.Simple, "svcbackup")) {
 				if d.CanAdmin {
 					<a class="tuc-btn is-outline is-sm" href="/backups">
 						@Icon("settings", "size-3.5")
@@ -274,10 +275,12 @@ templ svcDownloadState(dl DownloadView, sudo bool) {
 templ svcBackupRestore(d ServiceData) {
 	<section class={ cardClass }>
 		@cardHead(t(ctx, "svcbackup.restore_title")) {
-			<span class="tuc-badge is-warning">
-				@Icon("lock", "size-3")
-				{ t(ctx, "svcbackup.restore_sudo") }
-			</span>
+			if !d.Backups.Simple {
+				<span class="tuc-badge is-warning">
+					@Icon("lock", "size-3")
+					{ t(ctx, "svcbackup.restore_sudo") }
+				</span>
+			}
 		}
 		<form class={ cardBodyClass } method="post" action={ templ.SafeURL(d.base() + "/backups/restore") } enctype="multipart/form-data" data-confirm={ t(ctx, "confirm.restore.title") } data-confirm-text={ t(ctx, "confirm.restore.text") } data-confirm-ok={ t(ctx, "confirm.restore.ok") } data-tone="danger">
 			<input type="hidden" name="csrf" value={ d.CSRF }/>
@@ -286,7 +289,7 @@ templ svcBackupRestore(d ServiceData) {
 				<legend class="tuc-label">{ t(ctx, "svcbackup.restore_point") }</legend>
 				if d.Backups.WindowOK {
 					<label class="tuc-choice">
-						<input type="radio" class="tuc-check" name="mode" value="pitr" checked/>
+						<input type="radio" class="tuc-radio" name="mode" value="pitr" checked/>
 						<span>{ t(ctx, "svcbackup.mode_pitr") } <span class="tuc-choice__hint">{ d.Backups.Window }</span></span>
 					</label>
 					<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
@@ -295,7 +298,7 @@ templ svcBackupRestore(d ServiceData) {
 					</div>
 				}
 				<label class="tuc-choice">
-					<input type="radio" class="tuc-check" name="mode" value="dump" checked?={ !d.Backups.WindowOK } disabled?={ len(d.Backups.Dumps) == 0 }/>
+					<input type="radio" class="tuc-radio" name="mode" value="dump" checked?={ !d.Backups.WindowOK } disabled?={ len(d.Backups.Dumps) == 0 }/>
 					<span>{ t(ctx, "svcbackup.mode_dump") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.mode_dump_hint") }</span></span>
 				</label>
 				if len(d.Backups.Dumps) > 0 {
@@ -312,7 +315,7 @@ templ svcBackupRestore(d ServiceData) {
 			<fieldset class="tuc-choices">
 				<legend class="tuc-label">{ t(ctx, "svcbackup.restore_dest") }</legend>
 				<label class="tuc-choice">
-					<input type="radio" class="tuc-check" name="destination" value="new" checked/>
+					<input type="radio" class="tuc-radio" name="destination" value="new" checked/>
 					<span>{ t(ctx, "svcbackup.dest_new") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_new_hint") }</span></span>
 				</label>
 				<div class="ml-7 flex max-w-[280px] flex-col gap-1.5">
@@ -320,13 +323,14 @@ templ svcBackupRestore(d ServiceData) {
 					<input class="tuc-input font-mono" id="rs-new" name="new_service" value={ d.Backups.DefaultNew } pattern="[a-z][a-z0-9\-]{0,30}[a-z0-9]" maxlength="32"/>
 				</div>
 				<label class="tuc-choice">
-					<input type="radio" class="tuc-check" name="destination" value="overwrite"/>
+					<input type="radio" class="tuc-radio" name="destination" value="overwrite"/>
 					<span>{ t(ctx, "svcbackup.dest_overwrite") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.dest_overwrite_hint") }</span></span>
 				</label>
 				<div class="ml-7 max-w-[320px]">
 					@confirmName("rs-confirm", t(ctx, "svcbackup.confirm_name"), d.Slug, false)
 				</div>
 			</fieldset>
+			if !d.Backups.Simple {
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(260px,100%),1fr))] gap-3">
 				<div class="flex min-w-0 flex-col gap-1.5">
 					<span class="tuc-label is-required">{ t(ctx, "svcbackup.kit") }</span>
@@ -339,6 +343,7 @@ templ svcBackupRestore(d ServiceData) {
 					<span class="tuc-hint">{ t(ctx, "svcbackup.passphrase_hint") }</span>
 				</div>
 			</div>
+			}
 			<div class="flex justify-end">
 				if d.SudoCritical {
 					<button class="tuc-btn is-danger" type="submit">

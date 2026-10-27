@@ -42,6 +42,8 @@ var SensitiveActions = []string{
 	"backup.key.add",
 	"backup.key.confirm",
 	"backup.key.remove",
+	"backup.mode",
+	"backup.server_key.reveal",
 	"backup.restore.start",
 	"backup.target.add",
 	"backup.target.remove",

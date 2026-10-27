@@ -306,6 +306,10 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST /backups/targets", h.addTarget, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.target.add", AuditByHandler: true})
 	rt.HandleFunc("POST /backups/targets/check", h.checkTarget, Policy{Role: auth.RoleAdmin, Audit: "backup.target.check", AuditByHandler: true})
 	rt.HandleFunc("POST /backups/targets/delete", h.deleteTarget, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.target.remove", AuditByHandler: true})
+	// Switching off the recovery kit lets the server open its own backups;
+	// its key is shown to keep a copy. Both are the owner's, with sudo.
+	rt.HandleFunc("POST /backups/mode", h.setBackupMode, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.mode", AuditByHandler: true})
+	rt.HandleFunc("POST /backups/server-key", h.revealServerKey, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "backup.server_key.reveal", AuditByHandler: true})
 	rt.HandleFunc("GET /backups/runs/{id}/download", h.runDownload, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "backup.download_link", AuditByHandler: true})
 	rt.HandleFunc("GET /backups/download/{token}", h.takeDownload, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.backup.download", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backups/policy", h.setBackupPolicy, Policy{Role: auth.RoleAdmin, Audit: "backup.policy.set", AuditByHandler: true})

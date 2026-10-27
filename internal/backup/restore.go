@@ -94,6 +94,7 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 	if err != nil {
 		return "", err
 	}
+	req.Identities = m.withServerIdentity(ctx, req.Identities)
 	if len(req.Identities) == 0 {
 		return "", i18n.E("backup.error.kit")
 	}

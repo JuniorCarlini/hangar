@@ -879,6 +879,8 @@ hint = "Makes a pg_dump now and downloads it in the browser."
 download = "Download backup"
 
 [backup.error]
+mode = "Choose Simple or With a recovery kit."
+mode_kit = "Generate and confirm a recovery kit before using this mode."
 queued = "A backup of this is already queued or running. Wait for it to finish."
 not_ready = "Set up the recovery kit (confirmed) and a destination in Backups first."
 busy = "A backup or restore of this service is already running. Try again shortly."
@@ -1682,6 +1684,8 @@ security_level = "changed the panel's security level"
 backup_key_add = "added a backup key"
 backup_key_confirm = "confirmed a backup key"
 backup_key_remove = "removed a backup key"
+backup_mode = "changed how backups are encrypted"
+backup_server_key_reveal = "viewed the server's backup key"
 backup_restore_start = "started a backup restore"
 backup_target_add = "added a backup destination"
 backup_target_remove = "removed a backup destination"
@@ -1973,6 +1977,7 @@ ok = "Turn off"
 # --- Backups (docs/09) -------------------------------------------------------
 
 [backups]
+not_ready_simple = "To start, add a destination."
 page_title = "Backups · Hangar"
 title = "Backups"
 panel_now = "Back up the panel now"
@@ -2217,6 +2222,7 @@ r2 = "Cloudflare R2"
 custom = "Other S3-compatible"
 
 [svcbackup]
+not_ready_simple = "To turn it on, add a destination in Backups."
 unsupported = "Automatic backups exist for PostgreSQL. App volumes come in a later stage."
 every_hint = "Time of the day's first backup."
 not_ready = "To turn it on, confirm the recovery kit and pick a destination in Backups."
@@ -2283,6 +2289,7 @@ restore = "restoring the dump"
 done = "done"
 
 [flash.backups]
+mode = "Backup security saved."
 key-added = "Public key registered. Now confirm it with the kit."
 key-confirmed = "Kit confirmed. This key now encrypts the backups."
 key-deleted = "Key removed."
@@ -3060,3 +3067,14 @@ published = "Published port"
 any = "Any IP"
 ips = "Some IPs"
 localhost = "Server only"
+
+[backups.mode]
+title = "Backup security"
+simple = "Simple"
+simple_hint = "Backups go to the bucket encrypted with a key the server itself keeps. Restoring and downloading take one click, no kit."
+kit = "With a recovery kit"
+kit_hint = "Only who holds the kit opens the backups, not even someone who breaks into the server. Restoring asks for the kit file."
+save = "Save"
+key = "Server key"
+key_hint = "Optional: keep a copy off the server to open the backups if it is ever lost."
+key_show = "Show key"

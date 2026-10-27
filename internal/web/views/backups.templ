@@ -1,6 +1,9 @@
 package views
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // Backups screens (docs/09): the overview, the recovery kit generated in
 // the browser, the destination form and the service's Backups tab.
@@ -16,6 +19,8 @@ type BackupsData struct {
 	// PanelQueued: the panel's own "back up now" waits or runs.
 	PanelQueued bool
 	Tab         string // "" (the backups) or "config" (kit and destinations)
+	Simple      bool   // the server keeps its own key: no kit needed
+	ServerKey   string // the simple mode's key, on the response that reveals it
 	Alerts      []BackupAlert
 	Keys        []BackupKeyRow
 	Targets     []BackupTargetRow
@@ -150,14 +155,17 @@ templ Backups(d BackupsData) {
 				</div>
 			</div>
 			if d.Tab == "config" {
-				@backupKeys(d)
+				@backupMode(d)
+				if !d.Simple || len(d.Keys) > 0 {
+					@backupKeys(d)
+				}
 				@backupTargets(d)
 				@backupRules(d)
 				<script src={ asset("kit.js") } defer></script>
 			} else {
 				if !d.Ready {
 					<section class={ cardClass }>
-						@emptyState("database-backup", t(ctx, "backups.not_ready")) {
+						@emptyState("database-backup", notReadyText(ctx, d.Simple, "backups")) {
 							<a class="tuc-btn is-primary is-sm" href="/backups?tab=config">
 								@Icon("settings", "size-3.5")
 								{ t(ctx, "backups.tab.open_config") }
@@ -173,6 +181,91 @@ templ Backups(d BackupsData) {
 			}
 		}
 	}
+}
+
+// notReadyText says what is missing before backups can run: in the
+// simple mode only a destination.
+func notReadyText(ctx context.Context, simple bool, section string) string {
+	switch {
+	case section == "svcbackup" && simple:
+		return t(ctx, "svcbackup.not_ready_simple")
+	case section == "svcbackup":
+		return t(ctx, "svcbackup.not_ready")
+	case simple:
+		return t(ctx, "backups.not_ready_simple")
+	}
+	return t(ctx, "backups.not_ready")
+}
+
+// backupMode chooses how backups are encrypted: the simple mode (the
+// server keeps the key) or the recovery kit (only who holds it opens them).
+templ backupMode(d BackupsData) {
+	<section class={ cardClass } id="backup-mode">
+		@cardHead(t(ctx, "backups.mode.title"))
+		<div class={ cardBodyClass }>
+			if d.CanOwner {
+				<form method="post" action="/backups/mode" class="flex flex-col gap-3">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<fieldset class="tuc-choices">
+						<legend class="sr-only">{ t(ctx, "backups.mode.title") }</legend>
+						<label class="tuc-choice">
+							<input type="radio" class="tuc-radio" name="mode" value="simple" checked?={ d.Simple }/>
+							<span>{ t(ctx, "backups.mode.simple") } <span class="tuc-choice__hint">{ t(ctx, "backups.mode.simple_hint") }</span></span>
+						</label>
+						<label class="tuc-choice">
+							<input type="radio" class="tuc-radio" name="mode" value="kit" checked?={ !d.Simple }/>
+							<span>{ t(ctx, "backups.mode.kit") } <span class="tuc-choice__hint">{ t(ctx, "backups.mode.kit_hint") }</span></span>
+						</label>
+					</fieldset>
+					<div class="flex justify-end">
+						if d.SudoActive {
+							<button class="tuc-btn is-outline" type="submit">
+								@Icon("save", "size-4")
+								{ t(ctx, "backups.mode.save") }
+							</button>
+						} else {
+							@sudoButton(t(ctx, "backups.mode.save"))
+						}
+					</div>
+				</form>
+			} else {
+				<p class="m-0 text-[13px] text-muted">
+					if d.Simple {
+						{ t(ctx, "backups.mode.simple") }
+					} else {
+						{ t(ctx, "backups.mode.kit") }
+					}
+				</p>
+			}
+			if d.Simple && d.CanOwner {
+				<div class="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+					<div class="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
+						<span class="text-sm font-semibold">{ t(ctx, "backups.mode.key") }</span>
+						<span class="text-[13px] text-muted">{ t(ctx, "backups.mode.key_hint") }</span>
+					</div>
+					if d.ServerKey != "" {
+						<div class="flex min-w-0 flex-[1_1_280px] items-center gap-2">
+							<input class="tuc-input min-w-0 grow font-mono text-xs" value={ d.ServerKey } readonly aria-label={ t(ctx, "backups.mode.key") }/>
+							<button type="button" class="tuc-btn is-outline is-sm" data-copy={ d.ServerKey } data-copied={ t(ctx, "common.copied") }>
+								@copyIcon()
+								{ t(ctx, "export.copy") }
+							</button>
+						</div>
+					} else if d.SudoActive {
+						<form method="post" action="/backups/server-key">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<button class="tuc-btn is-outline is-sm" type="submit">
+								@Icon("eye", "size-3.5")
+								{ t(ctx, "backups.mode.key_show") }
+							</button>
+						</form>
+					} else {
+						@sudoButton(t(ctx, "backups.mode.key_show"))
+					}
+				</div>
+			}
+		</div>
+	</section>
 }
 
 // backupKeys carries kit.js's messages: the confirmation reads the kit
@@ -380,7 +473,7 @@ templ backupServiceRow(s BackupServiceRow, link bool) {
 	<tr>
 		<td class="font-mono text-[13px]">
 			if link {
-				<a href={ templ.SafeURL(s.Href) }>{ s.Label }</a>
+				{ s.Label }
 			} else {
 				<span class="flex items-center gap-1.5 font-sans">
 					@Icon("server", "size-3.5 text-muted")

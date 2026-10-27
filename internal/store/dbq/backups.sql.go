@@ -138,6 +138,21 @@ func (q *Queries) CreateBackupRun(ctx context.Context, arg CreateBackupRunParams
 	return err
 }
 
+const createBackupServerKey = `-- name: CreateBackupServerKey :exec
+INSERT INTO backup_server_key (id, identity_enc, created_at) VALUES ('server', ?, ?)
+ON CONFLICT (id) DO NOTHING
+`
+
+type CreateBackupServerKeyParams struct {
+	IdentityEnc []byte
+	CreatedAt   int64
+}
+
+func (q *Queries) CreateBackupServerKey(ctx context.Context, arg CreateBackupServerKeyParams) error {
+	_, err := q.db.ExecContext(ctx, createBackupServerKey, arg.IdentityEnc, arg.CreatedAt)
+	return err
+}
+
 const createBackupTarget = `-- name: CreateBackupTarget :exec
 INSERT INTO backup_targets (id, name, provider, config_enc, lock_mode, object_lock_days, is_primary, checked_at, created_by, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -374,6 +389,17 @@ func (q *Queries) GetBackupRun(ctx context.Context, id string) (BackupRun, error
 		&i.FinishedAt,
 	)
 	return i, err
+}
+
+const getBackupServerKey = `-- name: GetBackupServerKey :one
+SELECT identity_enc FROM backup_server_key WHERE id = 'server'
+`
+
+func (q *Queries) GetBackupServerKey(ctx context.Context) ([]byte, error) {
+	row := q.db.QueryRowContext(ctx, getBackupServerKey)
+	var identity_enc []byte
+	err := row.Scan(&identity_enc)
+	return identity_enc, err
 }
 
 const getBackupTarget = `-- name: GetBackupTarget :one
