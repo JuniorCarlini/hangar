@@ -3,6 +3,7 @@ package views
 import (
 	"context"
 	"fmt"
+	"slices"
 )
 
 // ServiceBackups is the service's Backups tab (docs/17 "Backups (do
@@ -198,6 +199,20 @@ func routineText(ctx context.Context, hours int, at string) string {
 	return t(ctx, "svcbackup.routine_text", "n", hours, "at", at)
 }
 
+// routineTimes are the start times offered: whole hours, plus the
+// current one when it was set to another minute.
+func routineTimes(current string) []string {
+	out := make([]string, 0, 25)
+	for h := range 24 {
+		out = append(out, fmt.Sprintf("%02d:00", h))
+	}
+	if current != "" && !slices.Contains(out, current) {
+		out = append(out, current)
+		slices.Sort(out)
+	}
+	return out
+}
+
 // svcRoutineDialog adds or changes the routine: how often, from what time.
 // "Back to any minute" (WAL) is advanced: it shows only while on, so it
 // can be turned off.
@@ -225,7 +240,11 @@ templ svcRoutineDialog(d ServiceData) {
 					</div>
 					<div class="flex min-w-0 flex-col gap-1.5">
 						<label class="tuc-label" for="bk-at">{ t(ctx, "svcbackup.at") }</label>
-						<input class="tuc-input" id="bk-at" name="at" type="time" required value={ d.Backups.AtTime }/>
+						<select class="tuc-input" id="bk-at" name="at" data-tuc-select data-clearable="false">
+							for _, at := range routineTimes(d.Backups.AtTime) {
+								<option value={ at } selected?={ at == d.Backups.AtTime }>{ at }</option>
+							}
+						</select>
 					</div>
 				</div>
 				if d.Backups.WALSupported && d.Backups.WAL {
