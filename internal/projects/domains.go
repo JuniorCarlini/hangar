@@ -324,9 +324,10 @@ func (m *Manager) DisableDynamicDomains(ctx context.Context, a Actor, serviceID 
 	return m.applyEdge(ctx)
 }
 
-// RevealCheckSecret returns the HMAC secret (the route requires sudo) and
-// records who saw it.
-func (m *Manager) RevealCheckSecret(ctx context.Context, a Actor, serviceID string) (string, error) {
+// CheckSecret returns the HMAC secret of a service that takes customer
+// domains. The panel shows it to admins as it is, next to the route the app
+// answers, so they can copy it into the app's local setup.
+func (m *Manager) CheckSecret(ctx context.Context, serviceID string) (string, error) {
 	s, err := m.q.GetServiceByID(ctx, serviceID)
 	if err != nil {
 		return "", err
@@ -338,7 +339,6 @@ func (m *Manager) RevealCheckSecret(ctx context.Context, a Actor, serviceID stri
 	if err != nil {
 		return "", err
 	}
-	m.record(ctx, a, "secret.reveal", "service", s.ID, audit.OK, map[string]any{"key": CheckSecretEnv})
 	return string(plain), nil
 }
 

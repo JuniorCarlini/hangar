@@ -20,7 +20,8 @@ servidor pelo botão **Atualização** do painel.
 - **Domínios dos clientes num modal**: aceitar domínios, o TXT de posse, a
   rota da app, o segredo e o kit do desenvolvedor saíram da aba e ficam no
   botão **Configurar** da linha. Depois de mudar algo, o modal reabre com o
-  resultado.
+  resultado. O segredo da app aparece direto para administradores, com
+  botão de copiar, sem precisar confirmar a senha para ver.
 
 ### Corrigido
 

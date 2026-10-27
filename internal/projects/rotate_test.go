@@ -29,7 +29,7 @@ func TestMasterKeyRotationKeepsEverySecretReadable(t *testing.T) {
 	dynamic := g.m.EnableDynamicDomains(ctx, g.who, "lab", "web") == nil
 	check := ""
 	if dynamic {
-		if check, err = g.m.RevealCheckSecret(ctx, g.who, id); err != nil {
+		if check, err = g.m.CheckSecret(ctx, id); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -56,7 +56,7 @@ func TestMasterKeyRotationKeepsEverySecretReadable(t *testing.T) {
 		t.Errorf("webhook after rotation: %+v, %v", w, err)
 	}
 	if dynamic {
-		if v, err := m2.RevealCheckSecret(ctx, g.who, id); err != nil || v != check {
+		if v, err := m2.CheckSecret(ctx, id); err != nil || v != check {
 			t.Errorf("domain check secret after rotation: %v", err)
 		}
 	}

@@ -817,7 +817,6 @@ hour_cap = "The hourly limit goes from {min} to {max}."
 [domain.dynamic]
 explain = "The app confirms each domain before the certificate."
 elsewhere = "Already on for {service}."
-reveal = "Reveal secret"
 switch = "Accept customer domains"
 unlock = "Confirm identity to change"
 requests = "See certificate requests"

@@ -145,24 +145,6 @@ func (h *handlers) setMaintenance(w http.ResponseWriter, r *http.Request) {
 	redirectLocal(w, r, h.serviceBase(r)+"?ok=maintenance-"+r.PostFormValue("action")+"#maintenance")
 }
 
-// revealCheckSecret shows the HMAC secret once, in this response.
-func (h *handlers) revealCheckSecret(w http.ResponseWriter, r *http.Request) {
-	s, ok := h.withService(w, r)
-	if !ok {
-		return
-	}
-	v, err := h.projects.RevealCheckSecret(r.Context(), actor(r), s.ID)
-	if err != nil {
-		code, msg := userError(r, err)
-		h.renderService(w, r, serviceView{status: code, errMsg: msg})
-		return
-	}
-	h.renderService(w, r, serviceView{
-		status: http.StatusOK, checkSecret: v,
-		flash: i18n.T(r.Context(), "service.env.revealed"),
-	})
-}
-
 // rotateCheckSecret replaces the HMAC secret and shows the new one once, so
 // the operator can copy it and redeploy.
 func (h *handlers) rotateCheckSecret(w http.ResponseWriter, r *http.Request) {

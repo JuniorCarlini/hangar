@@ -289,16 +289,13 @@ func flashFrom(r *http.Request) string {
 
 // clientsOpen reports whether the page answers a change made in the
 // customers' domains modal (a switch, the secret, or an error from them).
-func clientsOpen(r *http.Request, v serviceView) bool {
-	if v.checkSecret != "" {
-		return true
-	}
+func clientsOpen(r *http.Request) bool {
 	switch r.URL.Query().Get("ok") {
 	case "dynamic-on", "txt-on", "txt-off":
 		return true
 	}
 	if r.Method == http.MethodPost {
-		for _, p := range []string{"/domains/dynamic", "/domains/txt", "/domains/secret", "/domains/secret/rotate"} {
+		for _, p := range []string{"/domains/dynamic", "/domains/txt", "/domains/secret/rotate"} {
 			if strings.HasSuffix(r.URL.Path, p) {
 				return true
 			}
@@ -397,7 +394,14 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		EdgeEnabled: h.projects.EdgeEnabled(), Dynamic: s.DynamicDomains == 1,
 		CheckPath: s.DomainCheckPath, CheckSecret: v.checkSecret,
 		RequireTXT: s.DomainRequireTxt == 1, Probe: v.probe,
-		ClientsOpen: clientsOpen(r, v),
+		ClientsOpen: clientsOpen(r),
+	}
+	// Admins see the app's signing secret as it is (it reaches the app's
+	// environment anyway); a rotation just put the new one in v.
+	if d.Domains.Dynamic && d.CanAdmin && d.Domains.CheckSecret == "" {
+		if secret, err := h.projects.CheckSecret(r.Context(), s.ID); err == nil {
+			d.Domains.CheckSecret = secret
+		}
 	}
 	if d.Domains.Dynamic && d.Domains.EdgeEnabled {
 		d.Domains.EntryHost = h.entryHost()

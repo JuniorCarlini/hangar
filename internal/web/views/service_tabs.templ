@@ -954,7 +954,20 @@ templ clientsDialog(d ServiceData) {
 				</div>
 				if d.Domains.Dynamic {
 					<div class="flex flex-col gap-2 border-t border-border pt-5">
-						<span class="tuc-label">{ t(ctx, "domain.clients.app") }</span>
+						<div class="flex items-center gap-2 [&_form]:inline-flex">
+							<span class="tuc-label grow">{ t(ctx, "domain.clients.app") }</span>
+							if d.CanAdmin && d.SudoActive {
+								<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret/rotate") } data-confirm={ t(ctx, "confirm.secret_rotate.title") } data-confirm-text={ t(ctx, "confirm.secret_rotate.text") } data-confirm-ok={ t(ctx, "confirm.secret_rotate.ok") } data-tone="warning">
+									<input type="hidden" name="csrf" value={ d.CSRF }/>
+									<button type="submit" class="tuc-btn is-outline is-sm">
+										@Icon("refresh-cw", "size-3.5")
+										{ t(ctx, "domain.dynamic.rotate") }
+									</button>
+								</form>
+							} else if d.CanAdmin {
+								@sudoButton(t(ctx, "domain.dynamic.rotate"))
+							}
+						</div>
 						<div class="rounded-sm border border-border">
 							<div class="flex items-center gap-3 border-b border-border px-3 py-2.5">
 								<span class="w-20 shrink-0 text-[13px] text-muted">{ t(ctx, "domain.clients.route") }</span>
@@ -963,43 +976,20 @@ templ clientsDialog(d ServiceData) {
 									@Icon("copy", "size-3.5")
 								</button>
 							</div>
-							<div class="flex flex-col gap-2 px-3 py-2.5">
-								// The secret stays hidden until an admin reveals it (critical
-								// sudo, as the variables' values).
-								<div class="flex items-center gap-3 [&_form]:inline-flex">
-									<span class="w-20 shrink-0 text-[13px] text-muted">{ t(ctx, "domain.clients.secret") }</span>
-									<span class="flex min-w-0 grow flex-col">
-										if d.Domains.CheckSecret == "" {
-											<span class="font-mono text-xs text-muted">••••••••••••</span>
-										}
-										<code class="font-mono text-[11px] text-subtle break-all">HANGAR_DOMAIN_CHECK_SECRET</code>
-									</span>
-									if d.Domains.CheckSecret == "" && d.CanAdmin && d.SudoCritical {
-										<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret") }>
-											<input type="hidden" name="csrf" value={ d.CSRF }/>
-											<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "domain.dynamic.reveal") } aria-label={ t(ctx, "domain.dynamic.reveal") }>
-												@Icon("eye", "size-3.5")
-											</button>
-										</form>
-									} else if d.Domains.CheckSecret == "" && d.CanAdmin {
-										<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" title={ t(ctx, "domain.dynamic.reveal") } aria-label={ t(ctx, "domain.dynamic.reveal") }>
-											@Icon("eye", "size-3.5")
-										</button>
+							// Admins see the secret as it is, ready to copy into the
+							// app's local setup; others only see the variable's name.
+							<div class="flex items-center gap-3 px-3 py-2.5">
+								<span class="w-20 shrink-0 text-[13px] text-muted">{ t(ctx, "domain.clients.secret") }</span>
+								<span class="flex min-w-0 grow flex-col">
+									if d.Domains.CheckSecret != "" {
+										<code class="font-mono text-xs break-all select-all">{ d.Domains.CheckSecret }</code>
 									}
-									if d.CanAdmin && d.SudoActive {
-										<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret/rotate") } data-confirm={ t(ctx, "confirm.secret_rotate.title") } data-confirm-text={ t(ctx, "confirm.secret_rotate.text") } data-confirm-ok={ t(ctx, "confirm.secret_rotate.ok") } data-tone="warning">
-											<input type="hidden" name="csrf" value={ d.CSRF }/>
-											<button type="submit" class="tuc-btn is-outline is-sm">{ t(ctx, "domain.dynamic.rotate") }</button>
-										</form>
-									}
-								</div>
+									<code class="font-mono text-[11px] text-subtle break-all">HANGAR_DOMAIN_CHECK_SECRET</code>
+								</span>
 								if d.Domains.CheckSecret != "" {
-									<div class="flex items-center gap-1.5">
-										<code class="grow rounded-sm border border-border bg-surface-2 px-2 py-1.5 font-mono text-xs break-all select-all">{ d.Domains.CheckSecret }</code>
-										<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Domains.CheckSecret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "domain.dynamic.secret_copy") } title={ t(ctx, "domain.dynamic.secret_copy") }>
-											@Icon("copy", "size-3.5")
-										</button>
-									</div>
+									<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Domains.CheckSecret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "domain.dynamic.secret_copy") } title={ t(ctx, "domain.dynamic.secret_copy") }>
+										@Icon("copy", "size-3.5")
+									</button>
 								}
 							</div>
 						</div>

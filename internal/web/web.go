@@ -189,7 +189,6 @@ func routes(rt *Router, h *handlers) {
 	// publishing does); turning it off only removes one.
 	rt.HandleFunc("POST "+svc+"/endpoints/sslip-on", h.endpointSslipOn, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.endpoint.sslip_on", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/endpoints/sslip-off", h.endpointSslipOff, Policy{Role: auth.RoleOperator, Audit: "service.endpoint.sslip_off", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/domains/secret", h.revealCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	// The ownership TXT and the kit's test (read only: it logs, counts and
 	// issues nothing, but it calls the app, so it is an admin's tool).
 	rt.HandleFunc("POST "+svc+"/domains/txt", h.domainTXT, Policy{Role: auth.RoleAdmin, Audit: "domain.txt", AuditByHandler: true})

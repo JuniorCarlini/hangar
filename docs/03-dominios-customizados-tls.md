@@ -279,8 +279,9 @@ O que está no ar:
 - **Domínios fixos** por serviço e **domínios dinâmicos** (um serviço por
   servidor), na seção "Domínios" do serviço. Ligar o dinâmico exige 2FA
   recente. O segredo HMAC é gerado pelo Hangar e chega na app sozinho, na
-  variável `HANGAR_DOMAIN_CHECK_SECRET`, no próximo deploy; revelar exige 2FA
-  e fica na auditoria.
+  variável `HANGAR_DOMAIN_CHECK_SECRET`, no próximo deploy. Administradores
+  veem o segredo no modal "Domínios dos clientes", pronto para copiar (para
+  rodar a app fora do Hangar); trocá-lo exige 2FA recente e fica na auditoria.
 - **Página "Domínios"**: pedidos de certificado recentes (agregados por hora,
   com motivo), lista de bloqueio, bloquear e desbloquear.
 - O `ask` faz, nesta ordem: formato, bloqueio, cache, domínio fixo, teto de

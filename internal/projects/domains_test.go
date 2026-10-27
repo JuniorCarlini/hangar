@@ -105,7 +105,7 @@ func TestDynamicDomainsInjectSecretAndAreExclusive(t *testing.T) {
 	if len(secret) != 64 || !spec.Edge {
 		t.Fatalf("secret not delivered or not on the edge network: %q edge=%v", secret, spec.Edge)
 	}
-	if got, _ := f.m.RevealCheckSecret(ctx, f.who, svcID); got != secret {
+	if got, _ := f.m.CheckSecret(ctx, svcID); got != secret {
 		t.Error("revealed secret differs from the delivered one")
 	}
 
@@ -120,7 +120,7 @@ func TestDynamicDomainsInjectSecretAndAreExclusive(t *testing.T) {
 	if err := f.m.DisableDynamicDomains(ctx, f.who, svcID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.m.RevealCheckSecret(ctx, f.who, svcID); !errors.Is(err, ErrNotFound) {
+	if _, err := f.m.CheckSecret(ctx, svcID); !errors.Is(err, ErrNotFound) {
 		t.Error("the secret must be gone after turning dynamic domains off")
 	}
 }
