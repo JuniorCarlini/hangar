@@ -389,7 +389,6 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 			})
 		}
 	}
-	d.Strategy = h.projects.ServiceStrategy(r.Context(), p, s)
 	ds := h.projects.GetDeploySettings(s)
 	d.PreDeploy, d.HealthPath, d.Validate = ds.PreDeploy, ds.HealthPath, ds.Validate
 	if ds.ValidateTimeout > 0 {

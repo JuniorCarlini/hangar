@@ -305,7 +305,6 @@ type ServiceData struct {
 	Maintenance bool // visitors get the maintenance page instead of the app
 	Ports       []PortRow
 	ServerHint  string
-	Strategy    string
 	ClientIP    string // shown as "your IP" when opening a port
 	Tab         string
 	// OpenTerminal opens the terminal modal on load (back from sudo).
@@ -749,9 +748,6 @@ templ deployField(id, label, hint string) {
 templ deploySettings(d ServiceData) {
 	<section class={ cardClass } id="deploy-settings">
 		@cardHead(t(ctx, "deploy.settings.title")) {
-			if d.Strategy != "rolling" {
-				<span class="tuc-badge is-warning" title={ t(ctx, "deploy.strategy.recreate_hint") }>{ t(ctx, "deploy.strategy.recreate") }</span>
-			}
 			if d.CanAdmin {
 				@maintenanceButton(d)
 			}

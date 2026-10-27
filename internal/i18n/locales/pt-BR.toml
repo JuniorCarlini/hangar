@@ -1037,10 +1037,6 @@ health_path = "O caminho do healthcheck começa com / e não tem espaços (ex.: 
 rollback = "Só dá para voltar para um dos últimos 5 deploys que ficaram ativos (e não o atual)."
 validate_timeout = "O tempo limite da validação vai de 1 a {max} minutos."
 
-[deploy.strategy]
-recreate = "Segundos fora do ar"
-recreate_hint = "Tem disco ou porta publicada: o deploy para o antigo antes de subir o novo (alguns segundos fora do ar)."
-
 [deploy.settings]
 validate = "Comando de validação"
 validate_placeholder = "python manage.py check --deploy"

@@ -172,15 +172,6 @@ func (m *Manager) RollbackTargets(ctx context.Context, serviceID string, deps []
 	return out
 }
 
-// ServiceStrategy tells how the service's next deploy will run.
-func (m *Manager) ServiceStrategy(ctx context.Context, p dbq.Project, s dbq.Service) string {
-	x, err := m.specExtras(ctx, p, s)
-	if err != nil {
-		return node.StrategyRecreate
-	}
-	return Strategy(s, x)
-}
-
 // Bounds of the validation command's time limit.
 const (
 	DefaultValidateTimeout = 5 * time.Minute

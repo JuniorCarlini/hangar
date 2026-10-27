@@ -1037,10 +1037,6 @@ command = "Invalid command (unclosed quote or too long)."
 health_path = "The healthcheck path starts with / and has no spaces (e.g. /healthz)."
 rollback = "You can only roll back to one of the last 5 deploys that went live (not the current one)."
 
-[deploy.strategy]
-recreate = "Seconds offline"
-recreate_hint = "Has a disk or published port: the deploy stops the old one before starting the new (a few seconds offline)."
-
 [deploy.settings]
 validate = "Validation command"
 validate_placeholder = "python manage.py check --deploy"
