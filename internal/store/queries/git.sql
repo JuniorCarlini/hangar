@@ -70,3 +70,16 @@ JOIN services s ON s.id = g.service_id
 JOIN projects p ON p.id = s.project_id
 WHERE g.credential_id = ?
 ORDER BY p.slug, s.slug;
+
+-- name: SetServiceGitAuto :exec
+UPDATE service_git SET auto_deploy = ?, auto_seen = ?, updated_at = ? WHERE service_id = ?;
+
+-- name: SetServiceGitSeen :exec
+UPDATE service_git SET auto_seen = ? WHERE service_id = ?;
+
+-- name: ListAutoDeployServices :many
+SELECT g.service_id, s.slug AS service_slug, p.slug AS project_slug
+FROM service_git g
+JOIN services s ON s.id = g.service_id
+JOIN projects p ON p.id = s.project_id
+WHERE g.auto_deploy = 1;

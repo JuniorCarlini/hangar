@@ -270,6 +270,24 @@ func Check(ctx context.Context, src Source) error {
 	return ErrNoBranch
 }
 
+// Head is the commit the branch points at on the remote (git ls-remote,
+// nothing downloaded): what automatic deploys compare with the last one
+// they saw.
+func Head(ctx context.Context, src Source) (string, error) {
+	rem := git.NewRemote(memory.NewStorage(), &gitconfig.RemoteConfig{Name: "origin", URLs: []string{src.URL}})
+	refs, err := rem.ListContext(ctx, &git.ListOptions{Auth: src.auth(), Timeout: 30})
+	if err != nil {
+		return "", mapErr(err)
+	}
+	want := plumbing.NewBranchReferenceName(src.Branch)
+	for _, r := range refs {
+		if r.Name() == want {
+			return r.Hash().String(), nil
+		}
+	}
+	return "", ErrNoBranch
+}
+
 // Clone makes a shallow clone of the branch into dir (which must not exist
 // or be empty): one commit, no tags, no submodules.
 func Clone(ctx context.Context, dir string, src Source) (Commit, error) {

@@ -435,6 +435,8 @@ type ServiceGit struct {
 	WebhookSecretEnc []byte
 	UpdatedAt        int64
 	CredentialID     sql.NullString
+	AutoDeploy       int64
+	AutoSeen         string
 }
 
 type ServiceOffer struct {

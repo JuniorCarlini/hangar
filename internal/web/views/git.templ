@@ -16,7 +16,8 @@ type GitView struct {
 	Subdir     string
 	Dockerfile string
 	HasToken   bool
-	Webhook    bool // automatic deploys on
+	Webhook    bool // a GitHub webhook is set (older automatic deploys)
+	AutoDeploy bool // the panel polls the branch and deploys new commits
 	// HooksPublic: a public hooks address is configured, so GitHub can
 	// reach the panel.
 	HooksPublic bool
@@ -115,6 +116,17 @@ templ gitCards(d ServiceData) {
 	{{ g := d.Git }}
 	<section class={ cardClass } id="git-source">
 		@cardHead(t(ctx, "git.title")) {
+			if d.CanAdmin {
+				<form class="flex items-center gap-2" method="post" action={ templ.SafeURL(d.base() + "/git/auto") } title={ t(ctx, "git.auto.hint", "branch", g.Branch) }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<label class="flex cursor-pointer items-center gap-2 text-xs text-muted" for="git-auto">
+						{ t(ctx, "git.auto.label") }
+						<input type="checkbox" role="switch" class="tuc-switch shrink-0" id="git-auto" name="on" value="1" checked?={ g.AutoDeploy } data-autosubmit/>
+					</label>
+				</form>
+			} else if g.AutoDeploy {
+				<span class="tuc-badge is-success" title={ t(ctx, "git.auto.hint", "branch", g.Branch) }>{ t(ctx, "git.auto.label") }</span>
+			}
 			<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL(g.URL) } rel="noopener noreferrer" target="_blank" title={ g.Display } aria-label={ g.Display }>
 				@Icon("external-link", "size-3.5")
 			</a>
@@ -199,7 +211,11 @@ templ gitCards(d ServiceData) {
 			}
 		</div>
 	</section>
-	@gitWebhookCard(d)
+	// The GitHub webhook card stays only for a service that still has one,
+	// so it can be turned off; new automatic deploys use the switch above.
+	if g.Webhook {
+		@gitWebhookCard(d)
+	}
 }
 
 templ gitWebhookCard(d ServiceData) {

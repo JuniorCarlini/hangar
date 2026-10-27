@@ -254,6 +254,7 @@ type GitSource struct {
 	Dockerfile string
 	HasToken   bool // a token of the service's own (before credentials)
 	Webhook    bool
+	AutoDeploy bool // the panel polls the branch and deploys new commits
 	// The saved credential it clones with ("" = none).
 	CredentialID   string
 	CredentialName string
@@ -271,7 +272,7 @@ func (m *Manager) GetGitSource(ctx context.Context, serviceID string) (GitSource
 	}
 	src := GitSource{
 		URL: g.RepoUrl, Display: gitsrc.Display(g.RepoUrl), Branch: g.Branch, Subdir: g.Subdir, Dockerfile: g.Dockerfile,
-		HasToken: len(g.TokenEnc) > 0, Webhook: g.WebhookTokenHash.Valid,
+		HasToken: len(g.TokenEnc) > 0, Webhook: g.WebhookTokenHash.Valid, AutoDeploy: g.AutoDeploy == 1,
 	}
 	if g.CredentialID.Valid {
 		src.CredentialID = g.CredentialID.String
@@ -642,6 +643,7 @@ func (m *Manager) pruneBuilds(ctx context.Context, serviceID string) {
 type queuedDeploy struct {
 	project, service string
 	actor            Actor
+	trigger          string // "webhook" or "auto"
 }
 
 // queue remembers one pending webhook deploy per service; more pushes while
@@ -664,8 +666,12 @@ func (m *Manager) runQueued(ctx context.Context, serviceID string) {
 	if !ok {
 		return
 	}
-	if _, err := m.Deploy(ctx, q.actor, q.project, q.service, "webhook"); err != nil {
-		m.log.Warn("queued webhook deploy", "service", q.project+"/"+q.service, "error", err)
+	trigger := q.trigger
+	if trigger == "" {
+		trigger = "webhook"
+	}
+	if _, err := m.Deploy(ctx, q.actor, q.project, q.service, trigger); err != nil {
+		m.log.Warn("queued automatic deploy", "service", q.project+"/"+q.service, "error", err)
 	}
 }
 

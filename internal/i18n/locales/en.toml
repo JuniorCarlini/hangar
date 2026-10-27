@@ -328,6 +328,7 @@ restore = "restore"
 create = "creation"
 manual = "manual"
 webhook = "webhook"
+auto = "automatic"
 rollback = "rollback"
 ports = "ports"
 
@@ -363,6 +364,8 @@ deploy-settings = "Deploy settings saved."
 git = "Repository saved. It applies from the next deploy."
 git-token = "Token saved."
 webhook-off = "Automatic deploys turned off."
+auto-on = "Automatic deploys on: each new push to the branch deploys within a minute."
+auto-off = "Automatic deploys turned off."
 maintenance-on = "Maintenance mode on. Visitors now see the maintenance page."
 maintenance-off = "Maintenance mode off. The site is answering again."
 domains-limit = "Hourly limit saved."
@@ -1941,6 +1944,10 @@ token_new = "New token"
 hint = "Hangar clones the branch, builds the Dockerfile and starts the service. Each push can become an automatic deploy later (Settings tab)."
 security = "Only HTTPS and public servers are accepted. The token is tested before saving, stored encrypted and masked in the build log."
 submit = "Create and deploy"
+
+[git.auto]
+label = "Automatic deploys"
+hint = "On, Hangar checks the {branch} branch every minute and deploys each new commit. It only goes live if it passes its checks."
 
 [git.webhook]
 title = "Automatic deploys"

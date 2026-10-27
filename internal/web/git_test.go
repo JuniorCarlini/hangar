@@ -131,7 +131,7 @@ func TestGitTokenNeverInHTMLUntilSudo(t *testing.T) {
 	if strings.Contains(page, token) {
 		t.Fatal("token in the HTML")
 	}
-	if !strings.Contains(page, `id="git-source"`) || !strings.Contains(page, `id="git-webhook"`) {
+	if !strings.Contains(page, `id="git-source"`) || !strings.Contains(page, `id="git-auto"`) {
 		t.Fatal("repository cards missing from the settings tab")
 	}
 	rec := e.do(req{method: "POST", target: "/p/lab/s/web/git/token/reveal", form: url.Values{"csrf": {p.CSRFToken}}, cookies: []*http.Cookie{c}})

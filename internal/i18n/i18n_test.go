@@ -116,7 +116,7 @@ func TestMessageTranslatesJoinedErrors(t *testing.T) {
 var dynamicPrefixes = map[string][]string{
 	"state.":               {"running", "deploying", "restarting", "exited", "dead", "created", "paused", "removing", "missing", "failed", "unknown"},
 	"deploy.status.":       {"live", "running", "failed", "superseded"},
-	"deploy.trigger.":      {"create", "manual", "webhook", "rollback", "ports", "restore", "rebuild", "image"},
+	"deploy.trigger.":      {"create", "manual", "webhook", "auto", "rollback", "ports", "restore", "rebuild", "image"},
 	"update.state.":        {"ok", "rolled_back", "failed", "applying"},
 	"team.role_can.":       {"owner", "admin", "operator", "viewer"},
 	"team.role_short.":     {"owner", "admin", "operator", "viewer"},
@@ -140,7 +140,7 @@ var dynamicPrefixes = map[string][]string{
 	"brand.error.": {"name", "contact", "color", "theme", "logo", "logo_size", "logo_dimensions", "page", "too_long"},
 	"flash.": {
 		"deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings",
-		"git", "git-token", "webhook-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-limit", "volume-unlimit",
+		"git", "git-token", "webhook-off", "auto-on", "auto-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-limit", "volume-unlimit",
 		"connected", "offered", "unoffered", "txt-on", "txt-off",
 	},
 	"flash.backups.":         {"key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued"},

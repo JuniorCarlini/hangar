@@ -153,6 +153,25 @@ func (h *handlers) revealWebhook(w http.ResponseWriter, r *http.Request) {
 	h.renderService(w, r, serviceView{status: http.StatusOK, hook: &hook, flash: i18n.T(r.Context(), "service.env.revealed")})
 }
 
+// setAutoDeploy flips the automatic-deploy switch of the repository card.
+func (h *handlers) setAutoDeploy(w http.ResponseWriter, r *http.Request) {
+	s, ok := h.withService(w, r)
+	if !ok {
+		return
+	}
+	on := r.PostFormValue("on") == "1"
+	if err := h.projects.SetAutoDeploy(r.Context(), actor(r), s.ID, on); err != nil {
+		code, msg := userError(r, err)
+		h.renderService(w, r, serviceView{status: code, errMsg: msg})
+		return
+	}
+	ok2 := "auto-off"
+	if on {
+		ok2 = "auto-on"
+	}
+	redirectLocal(w, r, h.serviceBase(r)+"?ok="+ok2)
+}
+
 // gitView fills the repository card of a service built from Git.
 func (h *handlers) gitView(r *http.Request, serviceID, projectID string, v serviceView) *views.GitView {
 	src, ok, err := h.projects.GetGitSource(r.Context(), serviceID)
@@ -161,7 +180,7 @@ func (h *handlers) gitView(r *http.Request, serviceID, projectID string, v servi
 	}
 	g := &views.GitView{
 		URL: src.URL, Display: src.Display, Branch: src.Branch, Subdir: src.Subdir, Dockerfile: src.Dockerfile,
-		HasToken: src.HasToken, Webhook: src.Webhook, Token: v.gitToken,
+		HasToken: src.HasToken, Webhook: src.Webhook, AutoDeploy: src.AutoDeploy, Token: v.gitToken,
 		HooksPublic:  h.hooksBase != "",
 		CredentialID: src.CredentialID, CredentialName: src.CredentialName, CredentialHost: src.CredentialHost,
 		CredentialMine: src.CredentialMine,

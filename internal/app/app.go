@@ -344,6 +344,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	if pm.DockerAvailable() {
 		go pm.RunReconciler(ctx, 30*time.Second)
 		go pm.RunPortExpiry(ctx, time.Minute)
+		go pm.RunAutoDeploy(ctx, time.Minute)
 		go pm.RunVolumeLimits(ctx)
 	}
 	// The applier writes the result only after this version marked itself

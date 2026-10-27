@@ -240,6 +240,7 @@ func routes(rt *Router, h *handlers) {
 	// image on the server: both ways need a fresh confirmation.
 	rt.HandleFunc("POST "+svc+"/volumes/limit", h.limitVolume, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.volume.limit", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/volumes/unlimit", h.unlimitVolume, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "service.volume.unlimit", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/git/auto", h.setAutoDeploy, Policy{Role: auth.RoleAdmin, Audit: "service.git.auto", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/credential", h.saveGitCredential, Policy{Role: auth.RoleAdmin, Audit: "service.git.token", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/token", h.saveGitToken, Policy{Role: auth.RoleAdmin, Audit: "service.git.token", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/git/token/reveal", h.revealGitToken, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})

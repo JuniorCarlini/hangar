@@ -278,7 +278,7 @@ func (h *handlers) servicePage(w http.ResponseWriter, r *http.Request) {
 // reaches the page directly).
 func flashFrom(r *http.Request) string {
 	switch ok := r.URL.Query().Get("ok"); ok {
-	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off",
+	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off", "auto-on", "auto-off",
 		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed",
 		"volume-limit", "volume-unlimit", "connected", "offered", "unoffered":
 		return i18n.T(r.Context(), "flash."+ok)
@@ -595,7 +595,7 @@ func inferTab(r *http.Request) string {
 		return "variables"
 	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed":
 		return "network"
-	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off":
+	case "deploy-settings", "git", "git-token", "webhook-off", "auto-on", "auto-off", "volume", "volume-removed", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off":
 		return "settings"
 	case "backup-policy", "backup-queued", "backup-preparing", "restore-started":
 		return "backups"

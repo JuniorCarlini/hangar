@@ -101,7 +101,7 @@ func (q *Queries) GetGitCredential(ctx context.Context, id string) (GitCredentia
 }
 
 const getServiceGit = `-- name: GetServiceGit :one
-SELECT service_id, repo_url, branch, subdir, dockerfile, token_enc, webhook_token_hash, webhook_token_enc, webhook_secret_enc, updated_at, credential_id FROM service_git WHERE service_id = ?
+SELECT service_id, repo_url, branch, subdir, dockerfile, token_enc, webhook_token_hash, webhook_token_enc, webhook_secret_enc, updated_at, credential_id, auto_deploy, auto_seen FROM service_git WHERE service_id = ?
 `
 
 func (q *Queries) GetServiceGit(ctx context.Context, serviceID string) (ServiceGit, error) {
@@ -119,12 +119,14 @@ func (q *Queries) GetServiceGit(ctx context.Context, serviceID string) (ServiceG
 		&i.WebhookSecretEnc,
 		&i.UpdatedAt,
 		&i.CredentialID,
+		&i.AutoDeploy,
+		&i.AutoSeen,
 	)
 	return i, err
 }
 
 const getServiceGitByWebhook = `-- name: GetServiceGitByWebhook :one
-SELECT g.service_id, g.repo_url, g.branch, g.subdir, g.dockerfile, g.token_enc, g.webhook_token_hash, g.webhook_token_enc, g.webhook_secret_enc, g.updated_at, g.credential_id, s.slug AS service_slug, p.slug AS project_slug
+SELECT g.service_id, g.repo_url, g.branch, g.subdir, g.dockerfile, g.token_enc, g.webhook_token_hash, g.webhook_token_enc, g.webhook_secret_enc, g.updated_at, g.credential_id, g.auto_deploy, g.auto_seen, s.slug AS service_slug, p.slug AS project_slug
 FROM service_git g
 JOIN services s ON s.id = g.service_id
 JOIN projects p ON p.id = s.project_id
@@ -143,6 +145,8 @@ type GetServiceGitByWebhookRow struct {
 	WebhookSecretEnc []byte
 	UpdatedAt        int64
 	CredentialID     sql.NullString
+	AutoDeploy       int64
+	AutoSeen         string
 	ServiceSlug      string
 	ProjectSlug      string
 }
@@ -162,10 +166,49 @@ func (q *Queries) GetServiceGitByWebhook(ctx context.Context, webhookTokenHash s
 		&i.WebhookSecretEnc,
 		&i.UpdatedAt,
 		&i.CredentialID,
+		&i.AutoDeploy,
+		&i.AutoSeen,
 		&i.ServiceSlug,
 		&i.ProjectSlug,
 	)
 	return i, err
+}
+
+const listAutoDeployServices = `-- name: ListAutoDeployServices :many
+SELECT g.service_id, s.slug AS service_slug, p.slug AS project_slug
+FROM service_git g
+JOIN services s ON s.id = g.service_id
+JOIN projects p ON p.id = s.project_id
+WHERE g.auto_deploy = 1
+`
+
+type ListAutoDeployServicesRow struct {
+	ServiceID   string
+	ServiceSlug string
+	ProjectSlug string
+}
+
+func (q *Queries) ListAutoDeployServices(ctx context.Context) ([]ListAutoDeployServicesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAutoDeployServices)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAutoDeployServicesRow{}
+	for rows.Next() {
+		var i ListAutoDeployServicesRow
+		if err := rows.Scan(&i.ServiceID, &i.ServiceSlug, &i.ProjectSlug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listGitCredentialUsers = `-- name: ListGitCredentialUsers :many
@@ -338,6 +381,27 @@ func (q *Queries) SetDeploymentCommit(ctx context.Context, arg SetDeploymentComm
 	return err
 }
 
+const setServiceGitAuto = `-- name: SetServiceGitAuto :exec
+UPDATE service_git SET auto_deploy = ?, auto_seen = ?, updated_at = ? WHERE service_id = ?
+`
+
+type SetServiceGitAutoParams struct {
+	AutoDeploy int64
+	AutoSeen   string
+	UpdatedAt  int64
+	ServiceID  string
+}
+
+func (q *Queries) SetServiceGitAuto(ctx context.Context, arg SetServiceGitAutoParams) error {
+	_, err := q.db.ExecContext(ctx, setServiceGitAuto,
+		arg.AutoDeploy,
+		arg.AutoSeen,
+		arg.UpdatedAt,
+		arg.ServiceID,
+	)
+	return err
+}
+
 const setServiceGitCredential = `-- name: SetServiceGitCredential :exec
 UPDATE service_git SET credential_id = ?, token_enc = NULL, updated_at = ? WHERE service_id = ?
 `
@@ -350,6 +414,20 @@ type SetServiceGitCredentialParams struct {
 
 func (q *Queries) SetServiceGitCredential(ctx context.Context, arg SetServiceGitCredentialParams) error {
 	_, err := q.db.ExecContext(ctx, setServiceGitCredential, arg.CredentialID, arg.UpdatedAt, arg.ServiceID)
+	return err
+}
+
+const setServiceGitSeen = `-- name: SetServiceGitSeen :exec
+UPDATE service_git SET auto_seen = ? WHERE service_id = ?
+`
+
+type SetServiceGitSeenParams struct {
+	AutoSeen  string
+	ServiceID string
+}
+
+func (q *Queries) SetServiceGitSeen(ctx context.Context, arg SetServiceGitSeenParams) error {
+	_, err := q.db.ExecContext(ctx, setServiceGitSeen, arg.AutoSeen, arg.ServiceID)
 	return err
 }
 
