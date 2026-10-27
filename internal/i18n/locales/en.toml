@@ -439,10 +439,10 @@ comment = "Suggested by {file} in the repository"
 
 [service.maintenance]
 title = "Maintenance mode"
-hint = "While on, every domain of this service shows the maintenance page (503) instead of the site. The container keeps running: you can migrate the database or check things calmly and turn it off when done. The page text lives in Brand."
-active = "On: visitors to this service's domains are seeing the maintenance page."
-no_edge = "The edge proxy is off on this server, so the maintenance page shows nowhere."
-no_domains = "This service has no domain yet: the maintenance page only shows on its domains."
+hint = "The domains show the maintenance page instead of the site; the container keeps running."
+active = "On: the domains are showing the maintenance page."
+no_edge = "Edge proxy off: the maintenance page does not show."
+no_domains = "No domain: the maintenance page has nowhere to show."
 turn_on = "Turn maintenance on"
 turn_off = "Turn maintenance off"
 badge = "Under maintenance"
@@ -450,7 +450,7 @@ badge = "Under maintenance"
 [service.danger]
 title = "Danger zone"
 type_name = "To delete, type"
-hint = "Removes the container and its configuration. Volumes are not deleted."
+hint = "Removes the container and its configuration; the disks stay."
 delete = "Delete service"
 name_mismatch = "The typed name does not match."
 
@@ -1040,21 +1040,21 @@ health_path = "The healthcheck path starts with / and has no spaces (e.g. /healt
 rollback = "You can only roll back to one of the last 5 deploys that went live (not the current one)."
 
 [deploy.strategy]
-rolling_hint = "The new version starts next to the old one and only takes over after passing the healthcheck. If it fails, the old one stays live."
-recreate_hint = "This service has a volume or a published port: two at once would corrupt data or fight over the port, so the deploy stops the old one before starting the new (a few seconds offline)."
+rolling_hint = "No downtime: the new version goes live only once healthy."
+recreate_hint = "Has a disk or published port: the deploy stops the old one before starting the new (a few seconds offline)."
 
 [deploy.settings]
 validate = "Validation command"
 validate_placeholder = "python manage.py check --deploy"
 validate_timeout = "Limit (min)"
-validate_hint = "Optional. Runs inside the new version once it is healthy and before it goes live; if it fails, nothing changes and the current version stays."
+validate_hint = "Optional. Runs in the new version before it goes live; if it fails, nothing changes."
 title = "Deploy"
 predeploy = "Pre-deploy command"
 predeploy_placeholder = "python manage.py migrate --noinput"
-predeploy_hint = "Runs once, with the new image, before switching. If it fails, the deploy stops and the current version stays."
+predeploy_hint = "Runs once before switching; if it fails, the current version stays."
 health_path = "Healthcheck path"
 health_placeholder = "/healthz"
-health_hint = "A GET on this path must answer below 400. Empty: uses the image healthcheck or checks the port."
+health_hint = "Must answer below 400. Empty: checks the port."
 next_deploy = "Applies from the next deploy."
 save = "Save"
 
@@ -2870,8 +2870,8 @@ branch_hint = "The repository's branches; the default one comes selected."
 
 [image_tag]
 title = "Image"
-hint = "Change the version (tag) of the image the service runs. The deploy starts right away; if the new version does not come up, the previous one stays live and the service goes back to it."
-stateful = "Database: only change within the same major version (e.g. 18.1 → 18.3). A new major version may convert the data, and then it cannot go back by itself: take a backup first."
+hint = "The deploy starts right away; if the new version does not come up, the previous one stays."
+stateful = "Database: only change within the same major version (e.g. 18.1 → 18.3) and take a backup first."
 tag = "Version (tag)"
 change = "Change version"
 

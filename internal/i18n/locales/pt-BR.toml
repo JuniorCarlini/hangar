@@ -439,10 +439,10 @@ comment = "Sugeridas pelo {file} do repositório"
 
 [service.maintenance]
 title = "Modo manutenção"
-hint = "Enquanto ligado, todos os domínios deste serviço mostram a página \"Em manutenção\" (503) em vez do site. O container continua rodando: dá para migrar o banco ou conferir algo com calma e desligar quando terminar. O texto da página fica em Marca."
-active = "Ligado: quem acessa os domínios deste serviço está vendo a página de manutenção."
-no_edge = "O proxy de borda está desligado neste servidor, então a página de manutenção não aparece em lugar nenhum."
-no_domains = "Este serviço ainda não tem domínio: a página de manutenção só aparece nos domínios dele."
+hint = "Os domínios mostram a página \"Em manutenção\" no lugar do site; o container continua rodando."
+active = "Ligado: os domínios estão mostrando a página de manutenção."
+no_edge = "Proxy de borda desligado: a página de manutenção não aparece."
+no_domains = "Sem domínio: a página de manutenção não tem onde aparecer."
 turn_on = "Ligar manutenção"
 turn_off = "Desligar manutenção"
 badge = "Em manutenção"
@@ -450,7 +450,7 @@ badge = "Em manutenção"
 [service.danger]
 title = "Zona de perigo"
 type_name = "Para apagar, digite"
-hint = "Remove o container e a configuração. Volumes não são apagados."
+hint = "Remove o container e a configuração; os discos ficam."
 delete = "Apagar serviço"
 name_mismatch = "O nome digitado não confere."
 
@@ -1040,21 +1040,21 @@ rollback = "Só dá para voltar para um dos últimos 5 deploys que ficaram ativo
 validate_timeout = "O tempo limite da validação vai de 1 a {max} minutos."
 
 [deploy.strategy]
-rolling_hint = "A versão nova sobe ao lado da antiga e só assume depois de passar no healthcheck. Se falhar, a antiga continua rodando."
-recreate_hint = "Este serviço tem volume ou porta publicada: dois ao mesmo tempo corromperiam os dados ou brigariam pela porta, então o deploy para o antigo antes de subir o novo (alguns segundos fora do ar)."
+rolling_hint = "Sem queda: a versão nova só entra no ar depois de saudável."
+recreate_hint = "Tem disco ou porta publicada: o deploy para o antigo antes de subir o novo (alguns segundos fora do ar)."
 
 [deploy.settings]
 validate = "Comando de validação"
 validate_placeholder = "python manage.py check --deploy"
 validate_timeout = "Limite (min)"
-validate_hint = "Opcional. Roda dentro da versão nova depois que ela fica saudável e antes de ir ao ar; se falhar, nada muda e a versão atual continua."
+validate_hint = "Opcional. Roda na versão nova antes de ir ao ar; se falhar, nada muda."
 title = "Deploy"
 predeploy = "Comando pré-deploy"
 predeploy_placeholder = "python manage.py migrate --noinput"
-predeploy_hint = "Roda uma vez, com a imagem nova, antes da troca. Se falhar, o deploy para e a versão atual continua."
+predeploy_hint = "Roda uma vez antes da troca; se falhar, a versão atual continua."
 health_path = "Caminho do healthcheck"
 health_placeholder = "/healthz"
-health_hint = "GET nesse caminho tem que responder abaixo de 400. Vazio: usa o healthcheck da imagem ou testa a porta."
+health_hint = "Tem que responder abaixo de 400. Vazio: testa a porta."
 next_deploy = "Vale a partir do próximo deploy."
 save = "Salvar"
 
@@ -2871,8 +2871,8 @@ branch_hint = "Os branches do repositório; o padrão já vem escolhido."
 
 [image_tag]
 title = "Imagem"
-hint = "Troque a versão (tag) da imagem que o serviço roda. O deploy começa na hora; se a versão nova não subir, a anterior continua no ar e o serviço volta para ela."
-stateful = "Banco de dados: troque só dentro da mesma versão principal (ex.: 18.1 → 18.3). Uma versão principal nova pode converter os dados, e aí não dá para voltar sozinho: faça backup antes."
+hint = "O deploy começa na hora; se a versão nova não subir, a anterior continua."
+stateful = "Banco de dados: troque só dentro da mesma versão principal (ex.: 18.1 → 18.3) e faça backup antes."
 tag = "Versão (tag)"
 change = "Trocar versão"
 
