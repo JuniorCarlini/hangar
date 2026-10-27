@@ -3012,6 +3012,7 @@ idle = "Sai sozinho depois de 30 minutos parado."
 level = "Escolha um dos três níveis."
 
 [connect]
+service = "Serviço"
 pick_hint = "Escolha o serviço: as linhas dele entram no .env de {from}, já ligadas. Lá você renomeia ou apaga o que não quiser e salva."
 title = "Conector · {from}"
 loading = "Carregando o que o serviço oferece…"

@@ -3011,6 +3011,7 @@ idle = "Logs you out after 30 minutes idle."
 level = "Pick one of the three levels."
 
 [connect]
+service = "Service"
 pick_hint = "Pick the service: its lines go into {from}'s .env, already connected. Rename or remove what you do not want there and save."
 title = "Connector · {from}"
 loading = "Loading what the service offers…"

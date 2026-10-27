@@ -150,23 +150,29 @@ templ tabVariables(d ServiceData) {
 		if len(d.Env) > 0 || len(d.Exports) > 0 {
 			<div class="tuc-table-wrap">
 				<table class="tuc-table is-compact w-full">
-					<thead><tr><th>{ t(ctx, "service.env.name") }</th><th>{ t(ctx, "service.env.value") }</th></tr></thead>
+					// A connected variable reads as a bridge: its name, the
+					// connector icon, the value it receives, and the service
+					// that value comes from at the end.
+					<thead><tr><th>{ t(ctx, "service.env.name") }</th><th class="w-8"><span class="sr-only">{ t(ctx, "connect.open") }</span></th><th>{ t(ctx, "service.env.value") }</th><th class="text-right"><span class="sr-only">{ t(ctx, "connect.service") }</span></th></tr></thead>
 					<tbody>
 						for _, v := range d.Env {
+							{{ svc, key := connection(v.Value) }}
+							{{ broken := refWarnings(ctx, d.RefWarnings, v.Key) }}
 							<tr>
 								<td class="font-mono text-[13px]">{ v.Key }</td>
+								<td class="px-0 text-center">
+									if svc != "" && broken == "" {
+										<span class="inline-grid place-items-center text-accent-text" title={ v.Value }>
+											@Icon("cable", "size-3.5")
+										</span>
+									}
+								</td>
 								<td class="max-w-[300px] truncate font-mono text-[13px]">
-									if broken := refWarnings(ctx, d.RefWarnings, v.Key); broken != "" {
+									if broken != "" {
 										<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
 										<span class="ref-text">{ v.Value }</span>
-									} else if svc, key := connection(v.Value); svc != "" {
-										<span class="flex items-center gap-3" title={ v.Value }>
-											<span class="min-w-0 grow truncate">{ key }</span>
-											<span class="inline-flex shrink-0 items-center gap-1 font-sans text-xs text-muted">
-												@Icon("cable", "size-3.5 text-accent-text")
-												{ svc }
-											</span>
-										</span>
+									} else if svc != "" {
+										<span title={ v.Value }>{ key }</span>
 									} else if isRef(v.Value) {
 										<span class="tuc-badge is-info ref-badge">ref</span>
 										<span class="ref-text">{ v.Value }</span>
@@ -174,6 +180,11 @@ templ tabVariables(d ServiceData) {
 										<span class="text-muted">••••••••••••</span>
 									} else {
 										{ v.Value }
+									}
+								</td>
+								<td class="text-right text-xs whitespace-nowrap text-muted">
+									if svc != "" && broken == "" {
+										{ svc }
 									}
 								</td>
 							</tr>
@@ -188,6 +199,7 @@ templ tabVariables(d ServiceData) {
 										<span class="tuc-badge is-info is-plain" title={ t(ctx, "connect.offered_hint") }>{ t(ctx, "connect.offered") }</span>
 									</span>
 								</td>
+								<td></td>
 								<td class="max-w-[300px] truncate font-mono text-[13px]">
 									if e.Secret && e.Value == "" {
 										<span class="text-muted">••••••••••••</span>
@@ -195,6 +207,7 @@ templ tabVariables(d ServiceData) {
 										{ e.Value }
 									}
 								</td>
+								<td></td>
 							</tr>
 						}
 					</tbody>
