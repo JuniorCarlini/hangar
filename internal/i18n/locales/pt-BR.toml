@@ -225,9 +225,9 @@ to_login = "Ir para o login"
 
 [sudo]
 confirm = "Confirmar"
-password_label = "Confirme sua senha para continuar"
+password_label = "Senha"
 title = "Confirme que é você"
-text = "Esta ação pede a sua senha de novo. A confirmação vale por alguns minutos (o nível de segurança decide quanto) e fica registrada na auditoria."
+text = "Digite sua senha de novo para continuar."
 
 [sudo.error]
 wrong_password = "Senha incorreta."

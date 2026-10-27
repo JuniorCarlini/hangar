@@ -225,9 +225,9 @@ to_login = "Go to sign in"
 
 [sudo]
 confirm = "Confirm"
-password_label = "Confirm your password to continue"
+password_label = "Password"
 title = "Confirm it's you"
-text = "This action asks for your password again. The confirmation lasts a few minutes (the security level decides how long) and is recorded in the audit log."
+text = "Type your password again to continue."
 
 [sudo.error]
 wrong_password = "Incorrect password."
