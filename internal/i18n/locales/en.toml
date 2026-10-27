@@ -828,12 +828,13 @@ app_bad_signature = "the app rejected the signature (deploy so it gets the curre
 txt_missing = "ownership TXT missing"
 
 [domains]
+list = "Domains"
+block_add = "Block a domain"
 subtitle = "service {service} takes the customer domains"
 reason_placeholder = "phishing"
 page_title = "Domains · Hangar"
 title = "Dynamic domains"
 no_dynamic = "No service takes dynamic domains. Turn it on in a service's Domains section."
-recent = "Recent certificate requests"
 recent_empty = "No requests yet."
 allowed = "Allowed"
 denied = "Denied"

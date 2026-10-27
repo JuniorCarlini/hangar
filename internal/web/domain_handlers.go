@@ -230,7 +230,7 @@ func (h *handlers) blockHostname(w http.ResponseWriter, r *http.Request) {
 		h.renderDomains(w, r, code, msg, "")
 		return
 	}
-	redirectLocal(w, r, "/domains?ok=blocked")
+	redirectLocal(w, r, "/domains?f=blocked&ok=blocked")
 }
 
 func (h *handlers) unblockHostname(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +239,7 @@ func (h *handlers) unblockHostname(w http.ResponseWriter, r *http.Request) {
 		h.renderDomains(w, r, code, msg, "")
 		return
 	}
-	redirectLocal(w, r, "/domains?ok=unblocked")
+	redirectLocal(w, r, "/domains?f=blocked&ok=unblocked")
 }
 
 // entryLabel names the address customers point their domains at.

@@ -22,9 +22,9 @@ type DomainsData struct {
 	EntryPath string
 	MinCap    int
 	MaxCap    int
-	CanAdmin    bool
-	Error       string
-	Flash       string
+	CanAdmin  bool
+	Error     string
+	Flash     string
 }
 
 // AskRow is one aggregated certificate decision.
@@ -203,116 +203,147 @@ templ Domains(d DomainsData) {
 			if d.EdgeEnabled {
 				@hourCapCard(d)
 			}
+			// One card, two lists: the certificate requests (all, denied or
+			// allowed) and the blocked domains, picked in the head.
 			<section class={ cardClass }>
-				@cardHead(t(ctx, "domains.recent")) {
+				@cardHead(t(ctx, "domains.list")) {
 					<form method="get" action="/domains" class="w-44">
 						<select class="tuc-input w-44" name="f" aria-label={ t(ctx, "domains.filter") } data-tuc-select data-clearable="false" data-autosubmit>
 							<option value="all" selected?={ d.Filter == "" || d.Filter == "all" }>{ t(ctx, "domains.filter_all") }</option>
 							<option value="deny" selected?={ selectedIf(d.Filter, "deny") }>{ t(ctx, "domains.filter_deny") }</option>
 							<option value="allow" selected?={ selectedIf(d.Filter, "allow") }>{ t(ctx, "domains.filter_allow") }</option>
+							<option value="blocked" selected?={ selectedIf(d.Filter, "blocked") }>{ t(ctx, "domains.blocked") }</option>
 						</select>
 					</form>
-				}
-				<div class={ cardBodyClass }>
-					if len(d.Recent) == 0 {
-						@emptyState("shield-check", t(ctx, "domains.recent_empty"))
-					} else {
-						<div class="tuc-table-wrap">
-							<table class="tuc-table is-compact w-full">
-								<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.decision") }</th><th>{ t(ctx, "domains.reason") }</th><th>{ t(ctx, "domains.path") }</th><th class="is-number">{ t(ctx, "domains.count") }</th><th>{ t(ctx, "domains.last") }</th><th class="tuc-table__actions"></th></tr></thead>
-								<tbody>
-									for _, a := range d.Recent {
-										<tr>
-											<td class="font-mono">{ a.Hostname }</td>
-											<td>
-												if a.Allowed {
-													<span class="tuc-badge is-success">{ t(ctx, "domains.allowed") }</span>
-												} else {
-													<span class="tuc-badge is-danger">{ t(ctx, "domains.denied") }</span>
-												}
-											</td>
-											<td class="text-muted">{ t(ctx, "domain.reason." + a.Reason) }</td>
-											<td>
-												if a.Via != "" {
-													<span class={ pathBadge(a.Via) }>{ t(ctx, "domain.path." + a.Via) }</span>
-												}
-											</td>
-											<td class="is-number">{ sz(int(a.Count)) }</td>
-											<td class="text-muted">{ a.When }</td>
-											<td class="tuc-table__actions">
-												if d.CanAdmin && !a.Blocked && a.Reason != "invalid_hostname" {
-													<form data-confirm={ t(ctx, "confirm.block.title") } data-confirm-text={ t(ctx, "confirm.block.text") } data-confirm-ok={ t(ctx, "confirm.block.ok") } data-tone="warning" method="post" action="/domains/block">
-														<input type="hidden" name="csrf" value={ d.CSRF }/>
-														<input type="hidden" name="hostname" value={ a.Hostname }/>
-														<button class="tuc-btn is-outline is-sm" type="submit" aria-label={ t(ctx, "domains.block_named", "host", a.Hostname) }>
-															@Icon("ban", "size-3.5")
-															{ t(ctx, "domains.block") }
-														</button>
-													</form>
-												}
-											</td>
-										</tr>
-									}
-								</tbody>
-							</table>
-						</div>
-					}
-				</div>
-			</section>
-			<section class={ cardClass }>
-				@cardHead(t(ctx, "domains.blocked"))
-				<div class={ cardBodyClass }>
-					if len(d.Blocked) == 0 {
-						@emptyState("ban", t(ctx, "domains.blocked_empty"))
-					} else {
-						<div class="tuc-table-wrap">
-							<table class="tuc-table is-compact w-full">
-								<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.reason") }</th><th>{ t(ctx, "domains.since") }</th><th class="tuc-table__actions"></th></tr></thead>
-								<tbody>
-									for _, b := range d.Blocked {
-										<tr>
-											<td class="font-mono">{ b.Hostname }</td>
-											<td>{ b.Reason }</td>
-											<td class="text-muted">{ b.When }</td>
-											<td class="tuc-table__actions">
-												if d.CanAdmin {
-													<form data-confirm={ t(ctx, "confirm.unblock.title") } data-confirm-text={ t(ctx, "confirm.unblock.text") } data-confirm-ok={ t(ctx, "confirm.unblock.ok") } data-tone="success" method="post" action="/domains/unblock">
-														<input type="hidden" name="csrf" value={ d.CSRF }/>
-														<input type="hidden" name="hostname" value={ b.Hostname }/>
-														<button class="tuc-btn is-outline is-sm" type="submit" aria-label={ t(ctx, "domains.unblock_named", "host", b.Hostname) }>
-															@Icon("circle-check", "size-3.5")
-															{ t(ctx, "domains.unblock") }
-														</button>
-													</form>
-												}
-											</td>
-										</tr>
-									}
-								</tbody>
-							</table>
-						</div>
-					}
 					if d.CanAdmin {
-						<form data-confirm={ t(ctx, "confirm.block.title") } data-confirm-text={ t(ctx, "confirm.block.text") } data-confirm-ok={ t(ctx, "confirm.block.ok") } data-tone="warning" method="post" action="/domains/block" class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2">
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<div class="flex min-w-0 flex-col gap-1.5">
-								<label class="tuc-label" for="hostname">{ t(ctx, "domain.hostname") }</label>
-								<input class="tuc-input font-mono" id="hostname" name="hostname" required maxlength="253" autocomplete="off" placeholder="golpe-banco.com"/>
-							</div>
-							<div class="flex min-w-0 flex-col gap-1.5">
-								<label class="tuc-label" for="reason">{ t(ctx, "domains.reason") }</label>
-								<input class="tuc-input" id="reason" name="reason" maxlength="200" placeholder={ t(ctx, "domains.reason_placeholder") }/>
-							</div>
-							<button class="tuc-btn is-danger" type="submit">
-								@Icon("ban", "size-3.5")
-								{ t(ctx, "domains.block") }
-							</button>
-						</form>
+						<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#block-modal">
+							@Icon("ban", "size-3.5")
+							{ t(ctx, "domains.block_add") }
+						</button>
 					}
-				</div>
+				}
+				if d.Filter == "blocked" {
+					@blockedTable(d)
+				} else {
+					@recentTable(d)
+				}
 			</section>
+			if d.CanAdmin {
+				@blockDialog(d)
+			}
 		}
 	}
+}
+
+templ recentTable(d DomainsData) {
+	if len(d.Recent) == 0 {
+		@emptyState("shield-check", t(ctx, "domains.recent_empty"))
+	} else {
+		<div class="tuc-table-wrap">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.decision") }</th><th>{ t(ctx, "domains.reason") }</th><th>{ t(ctx, "domains.path") }</th><th class="is-number">{ t(ctx, "domains.count") }</th><th>{ t(ctx, "domains.last") }</th><th class="tuc-table__actions"></th></tr></thead>
+				<tbody>
+					for _, a := range d.Recent {
+						<tr>
+							<td class="font-mono">{ a.Hostname }</td>
+							<td>
+								if a.Allowed {
+									<span class="tuc-badge is-success">{ t(ctx, "domains.allowed") }</span>
+								} else {
+									<span class="tuc-badge is-danger">{ t(ctx, "domains.denied") }</span>
+								}
+							</td>
+							<td class="text-muted">{ t(ctx, "domain.reason." + a.Reason) }</td>
+							<td>
+								if a.Via != "" {
+									<span class={ pathBadge(a.Via) }>{ t(ctx, "domain.path." + a.Via) }</span>
+								}
+							</td>
+							<td class="is-number">{ sz(int(a.Count)) }</td>
+							<td class="text-muted">{ a.When }</td>
+							<td class="tuc-table__actions">
+								if d.CanAdmin && !a.Blocked && a.Reason != "invalid_hostname" {
+									<form data-confirm={ t(ctx, "confirm.block.title") } data-confirm-text={ t(ctx, "confirm.block.text") } data-confirm-ok={ t(ctx, "confirm.block.ok") } data-tone="warning" method="post" action="/domains/block">
+										<input type="hidden" name="csrf" value={ d.CSRF }/>
+										<input type="hidden" name="hostname" value={ a.Hostname }/>
+										<button class="tuc-btn is-ghost is-icon is-sm" type="submit" title={ t(ctx, "domains.block_named", "host", a.Hostname) } aria-label={ t(ctx, "domains.block_named", "host", a.Hostname) }>
+											@Icon("ban", "size-3.5")
+										</button>
+									</form>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ blockedTable(d DomainsData) {
+	if len(d.Blocked) == 0 {
+		@emptyState("ban", t(ctx, "domains.blocked_empty"))
+	} else {
+		<div class="tuc-table-wrap">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "domain.hostname") }</th><th>{ t(ctx, "domains.reason") }</th><th>{ t(ctx, "domains.since") }</th><th class="tuc-table__actions"></th></tr></thead>
+				<tbody>
+					for _, b := range d.Blocked {
+						<tr>
+							<td class="font-mono">{ b.Hostname }</td>
+							<td>{ b.Reason }</td>
+							<td class="text-muted">{ b.When }</td>
+							<td class="tuc-table__actions">
+								if d.CanAdmin {
+									<form data-confirm={ t(ctx, "confirm.unblock.title") } data-confirm-text={ t(ctx, "confirm.unblock.text") } data-confirm-ok={ t(ctx, "confirm.unblock.ok") } data-tone="success" method="post" action="/domains/unblock">
+										<input type="hidden" name="csrf" value={ d.CSRF }/>
+										<input type="hidden" name="hostname" value={ b.Hostname }/>
+										<button class="tuc-btn is-outline is-sm" type="submit" aria-label={ t(ctx, "domains.unblock_named", "host", b.Hostname) }>
+											@Icon("circle-check", "size-3.5")
+											{ t(ctx, "domains.unblock") }
+										</button>
+									</form>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+// blockDialog blocks a domain by hand: it never gets a certificate here.
+templ blockDialog(d DomainsData) {
+	<dialog class="tuc-modal is-md" id="block-modal" aria-labelledby="block-modal-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="block-modal-title">{ t(ctx, "domains.block_add") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form class="tuc-modal__body" method="post" action="/domains/block">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<p class="tuc-modal__text">{ t(ctx, "confirm.block.text") }</p>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="hostname">{ t(ctx, "domain.hostname") }</label>
+					<input class="tuc-input font-mono" id="hostname" name="hostname" required maxlength="253" autocomplete="off" placeholder="golpe-banco.com" autofocus/>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="reason">{ t(ctx, "domains.reason") }</label>
+					<input class="tuc-input" id="reason" name="reason" maxlength="200" placeholder={ t(ctx, "domains.reason_placeholder") }/>
+				</div>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-danger" type="submit">
+						@Icon("ban", "size-3.5")
+						{ t(ctx, "domains.block") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
 }
 
 // subtitle names the service taking customer domains.

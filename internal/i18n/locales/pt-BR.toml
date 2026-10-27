@@ -828,12 +828,13 @@ app_bad_signature = "a app recusou a assinatura (faça deploy para ela receber o
 txt_missing = "falta o TXT de posse"
 
 [domains]
+list = "Domínios"
+block_add = "Bloquear domínio"
 subtitle = "serviço {service} recebe os domínios dos clientes"
 reason_placeholder = "phishing"
 page_title = "Domínios · Hangar"
 title = "Domínios dinâmicos"
 no_dynamic = "Nenhum serviço recebe domínios dinâmicos. Ligue na seção Domínios de um serviço."
-recent = "Pedidos de certificado recentes"
 recent_empty = "Nenhum pedido ainda."
 allowed = "Liberado"
 denied = "Negado"
