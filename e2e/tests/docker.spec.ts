@@ -57,7 +57,7 @@ test.describe('com Docker', () => {
 
     await tabs.getByRole('tab', { name: 'Variáveis' }).click();
     await expect(page).toHaveURL(/tab=variables/);
-    await expect(drawer.getByText('REDIS_PASSWORD')).toBeVisible();
+    await expect(drawer.getByRole('cell', { name: 'REDIS_PASSWORD', exact: true })).toBeVisible();
 
     // Closing goes back to the canvas.
     await drawer.getByRole('button', { name: 'Fechar' }).first().click();

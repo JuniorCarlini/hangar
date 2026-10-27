@@ -14,9 +14,12 @@ test('página de backups mostra a configuração e o menu', async ({ page }) => 
   await nav.getByRole('link', { name: 'Backups' }).click();
   await expect(page).toHaveURL('/backups');
   await expect(page.getByRole('heading', { level: 1, name: 'Backups' })).toBeVisible();
-  await expect(page.getByText('Como ligar os backups')).toBeVisible();
-  await expect(page.getByText('O que é salvo e quando')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Gerar kit de recuperação' }).first()).toBeVisible();
+  // Nothing configured yet: the list tab points to the configuration.
+  await expect(page.getByText('Para começar, cadastre um destino.')).toBeVisible();
+  await page.getByRole('link', { name: 'Abrir configuração' }).click();
+  await expect(page).toHaveURL('/backups?tab=config');
+  await expect(page.getByRole('heading', { name: 'Segurança dos backups' })).toBeVisible();
+  await expect(page.getByText('Limpeza automática no bucket')).toBeVisible();
 });
 
 test.describe('kit', () => {
@@ -64,7 +67,9 @@ test.describe('kit', () => {
     await register.click();
     // The redirect's ?ok= becomes a toast and leaves the address right away.
     await expect(page.getByText('Chave pública registrada.')).toBeVisible();
-    await expect(page).toHaveURL(/\/backups#kit-app$/);
+    await expect(page).toHaveURL('/backups');
+    // The keys card lives on the configuration tab now.
+    await page.goto('/backups?tab=config');
     await expect(page.getByText('aguardando confirmação')).toBeVisible();
 
     // Confirm with the file: read in the browser, only the code is sent.
@@ -79,6 +84,7 @@ test.describe('kit', () => {
     await expect(page.getByText('Kit conferido: código preenchido.')).toBeVisible();
     await page.getByRole('button', { name: 'Confirmar que guardei' }).click();
     await expect(page.getByText('Kit confirmado. Esta chave já cifra os backups.')).toBeVisible();
+    await page.goto('/backups?tab=config');
     await expect(page.locator('td', { hasText: 'confirmada' }).first()).toBeVisible();
 
     for (const s of sent) {
