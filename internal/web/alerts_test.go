@@ -72,7 +72,7 @@ func TestChannelSecretOnlyWithSudo(t *testing.T) {
 	}
 	id := chans[0].ID
 
-	page := e.do(req{method: "GET", target: "/alerts", cookies: []*http.Cookie{c}}).Body.String()
+	page := e.do(req{method: "GET", target: "/alerts?tab=config", cookies: []*http.Cookie{c}}).Body.String()
 	if strings.Contains(page, tgToken) || !strings.Contains(page, "Plantão") || !strings.Contains(page, "chat -100123") {
 		t.Fatal("channel list wrong or token in the HTML")
 	}

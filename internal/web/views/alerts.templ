@@ -13,16 +13,18 @@ type AlertsData struct {
 	// SudoCritical: the critical actions (secrets, deleting data) may run
 	// now. SudoActive covers the rest; the level decides each one.
 	SudoCritical bool
-	MutedUntil string // "" when not muted
-	Channels   []ChannelRow
-	Rules      []RuleRow
-	Security   []string // security alert kinds, always on
-	History    []AlertRow
-	Deliveries []DeliveryRow
-	Revealed   *RevealedSecret
-	Form       ChannelForm
-	Error      string
-	Flash      string
+	MutedUntil   string // "" when not muted
+	Channels     []ChannelRow
+	Rules        []RuleRow
+	Security     []string // security alert kinds, always on
+	History      []AlertRow
+	Deliveries   []DeliveryRow
+	Revealed     *RevealedSecret
+	Form         ChannelForm
+	Tab          string // "" (the alerts) or "config" (channels and rules)
+	List         string // "" (alerts) or "deliveries"
+	Error        string
+	Flash        string
 }
 
 // ChannelRow is one notification channel.
@@ -165,18 +167,10 @@ templ Alerts(d AlertsData) {
 						</button>
 					</form>
 				} else {
-					<form method="post" action="/alerts/mute" class="flex items-center gap-2">
-						<input type="hidden" name="csrf" value={ d.CSRF }/>
-						<select class="tuc-input w-36" name="minutes" aria-label={ t(ctx, "alerts.mute_for") } data-tuc-select data-clearable="false">
-							<option value="60">{ t(ctx, "alerts.mute_1h") }</option>
-							<option value="240">{ t(ctx, "alerts.mute_4h") }</option>
-							<option value="1440">{ t(ctx, "alerts.mute_24h") }</option>
-						</select>
-						<button class="tuc-btn is-outline" type="submit">
-							@Icon("bell-off", "size-3.5")
-							{ t(ctx, "alerts.mute") }
-						</button>
-					</form>
+					<button type="button" class="tuc-btn is-outline" data-tuc-modal="#mute-modal">
+						@Icon("bell-off", "size-3.5")
+						{ t(ctx, "alerts.mute") }
+					</button>
 				}
 			}
 		}
@@ -199,18 +193,28 @@ templ Alerts(d AlertsData) {
 					</div>
 				</div>
 			}
-			if d.CanAdmin {
-				@alertChannels(d)
+			<div class="tuc-tabs">
+				<div class="tuc-tabs__list" role="tablist" aria-label={ t(ctx, "alerts.title") }>
+					<a class="tuc-tabs__tab" role="tab" aria-selected={ tabClass(d.Tab, "") } href="/alerts">{ t(ctx, "alerts.tab.list") }</a>
+					<a class="tuc-tabs__tab" role="tab" aria-selected={ tabClass(d.Tab, "config") } href="/alerts?tab=config">{ t(ctx, "alerts.tab.config") }</a>
+				</div>
+			</div>
+			if d.Tab == "config" {
+				if d.CanAdmin {
+					@alertChannels(d)
+				}
+				@alertRules(d)
+			} else {
+				@alertHistory(d)
 			}
-			@alertRules(d)
-			@alertHistory(d)
 			if d.CanAdmin {
-				@alertDeliveries(d)
-				@sudoModal(d.CSRF, "/alerts", d.SudoCritical)
+				@sudoModal(d.CSRF, "/alerts?tab="+d.Tab, d.SudoCritical)
+				@muteDialog(d)
 				for _, k := range ChannelKinds {
 					@channelDialog(d, k)
 				}
 			}
+			@securityDialog(d)
 		}
 	}
 }
@@ -242,7 +246,6 @@ templ alertChannels(d AlertsData) {
 			</div>
 		}
 		<div class={ cardBodyClass }>
-			@notice("info", "send", t(ctx, "alerts.channels_hint"))
 			if len(d.Channels) == 0 {
 				@emptyState("bell", t(ctx, "alerts.channels_empty"))
 			} else {
@@ -435,45 +438,54 @@ func formName(ctx context.Context, f ChannelForm, kind string) string {
 
 templ alertRules(d AlertsData) {
 	<section class={ cardClass } id="rules">
-		@cardHead(t(ctx, "alerts.rules"))
-		<form method="post" action="/alerts/rules" class={ cardBodyClass }>
-			<input type="hidden" name="csrf" value={ d.CSRF }/>
-			@notice("info", "info", t(ctx, "alerts.rules_hint"))
-			<div class="flex flex-col">
-				for _, r := range d.Rules {
-					<div class="flex flex-wrap items-center gap-3 border-b border-border py-2.5 last:border-b-0">
-						<input type="hidden" name="rule" value={ r.Kind }/>
-						<label class="flex min-w-0 grow items-start gap-3">
-							<input type="checkbox" role="switch" class="tuc-switch mt-0.5" name={ "on_" + r.Kind } value="1" checked?={ r.Enabled } disabled?={ !d.CanAdmin }/>
-							<span class="flex min-w-0 flex-col">
-								<strong class="text-[13px] font-semibold">{ t(ctx, "alerts.rule." + r.Kind) }</strong>
-								<span class="text-xs text-muted">{ t(ctx, "alerts.rule_desc." + r.Kind) }</span>
-							</span>
-						</label>
-						if r.Threshold {
-							<span class="flex items-center gap-1.5">
-								<input class="tuc-input w-20 text-right tabular-nums" type="number" name={ "v_" + r.Kind } min={ fmt.Sprint(r.Min) } max={ fmt.Sprint(r.Max) } value={ fmt.Sprint(r.Value) } aria-label={ t(ctx, "alerts.threshold_for", "rule", t(ctx, "alerts.rule." + r.Kind)) } disabled?={ !d.CanAdmin }/>
-								<span class="w-28 text-xs text-muted">{ unitText(ctx, r.Kind) }</span>
-							</span>
-						}
-					</div>
-				}
-			</div>
+		@cardHead(t(ctx, "alerts.rules")) {
 			if d.CanAdmin {
-				<div class="flex justify-end">
-					<button class="tuc-btn is-primary" type="submit">
-						@Icon("save", "size-3.5")
-						{ t(ctx, "alerts.save_rules") }
-					</button>
+				<button class="tuc-btn is-outline is-sm" type="submit" form="rules-form">
+					@Icon("save", "size-3.5")
+					{ t(ctx, "alerts.save_rules") }
+				</button>
+			}
+		}
+		<form method="post" action="/alerts/rules" id="rules-form" class="flex flex-col px-4">
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			for _, r := range d.Rules {
+				<div class="flex min-h-12 flex-wrap items-center gap-3 border-b border-border py-2">
+					<input type="hidden" name="rule" value={ r.Kind }/>
+					<label class="flex min-w-0 grow items-center gap-3" title={ t(ctx, "alerts.rule_desc."+r.Kind) }>
+						<input type="checkbox" role="switch" class="tuc-switch" name={ "on_" + r.Kind } value="1" checked?={ r.Enabled } disabled?={ !d.CanAdmin }/>
+						<span class="text-[13px] font-medium">{ t(ctx, "alerts.rule." + r.Kind) }</span>
+					</label>
+					if r.Threshold {
+						<span class="flex items-center gap-1.5">
+							<input class="tuc-input w-20 text-right tabular-nums" type="number" name={ "v_" + r.Kind } min={ fmt.Sprint(r.Min) } max={ fmt.Sprint(r.Max) } value={ fmt.Sprint(r.Value) } aria-label={ t(ctx, "alerts.threshold_for", "rule", t(ctx, "alerts.rule."+r.Kind)) } disabled?={ !d.CanAdmin }/>
+							<span class="w-28 text-xs text-muted">{ unitText(ctx, r.Kind) }</span>
+						</span>
+					}
 				</div>
 			}
-			<div class="mt-2 flex flex-col gap-2 rounded-md border border-border bg-surface-2 p-3">
-				<div class="flex items-center gap-2">
-					@Icon("shield-check", "size-4 text-success")
-					<h3 class="m-0 text-[13px] font-semibold">{ t(ctx, "alerts.security") }</h3>
-				</div>
-				@notice("warning", "shield-alert", t(ctx, "alerts.security_hint"))
-				<ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-4 gap-y-1.5 p-0">
+			// Security alerts are not rules: always on, every channel.
+			<div class="flex flex-wrap items-center gap-2 py-3 text-[13px] text-muted">
+				@Icon("shield-check", "size-4 text-success")
+				{ t(ctx, "alerts.security_line") }
+				<button type="button" class="tuc-btn is-ghost is-sm" data-tuc-modal="#security-modal">{ t(ctx, "alerts.security_list") }</button>
+			</div>
+		</form>
+	</section>
+}
+
+// securityDialog lists the security alerts, which are always on.
+templ securityDialog(d AlertsData) {
+	<dialog class="tuc-modal is-md" id="security-modal" aria-labelledby="security-modal-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="security-modal-title">{ t(ctx, "alerts.security") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<div class="tuc-modal__body">
+				<p class="tuc-modal__text">{ t(ctx, "alerts.security_hint") }</p>
+				<ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-4 gap-y-1.5 p-0">
 					for _, k := range d.Security {
 						<li class="flex items-center gap-2 text-[13px]">
 							@Icon("lock", "size-3.5 text-subtle")
@@ -482,8 +494,41 @@ templ alertRules(d AlertsData) {
 					}
 				</ul>
 			</div>
-		</form>
-	</section>
+		</div>
+	</dialog>
+}
+
+// muteDialog silences the alerts for a while.
+templ muteDialog(d AlertsData) {
+	<dialog class="tuc-modal is-sm" id="mute-modal" aria-labelledby="mute-modal-title">
+		<div class="tuc-modal__panel">
+			<div class="tuc-modal__header">
+				<h2 class="tuc-modal__title" id="mute-modal-title">{ t(ctx, "alerts.mute") }</h2>
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
+					@Icon("x", "size-4")
+				</button>
+			</div>
+			<form class="tuc-modal__body" method="post" action="/alerts/mute">
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<p class="tuc-modal__text">{ t(ctx, "alerts.mute_text") }</p>
+				<div class="flex flex-col gap-1.5">
+					<label class="tuc-label" for="mute-minutes">{ t(ctx, "alerts.mute_for") }</label>
+					<select class="tuc-input" id="mute-minutes" name="minutes" data-tuc-select data-clearable="false">
+						<option value="60">{ t(ctx, "alerts.mute_1h") }</option>
+						<option value="240">{ t(ctx, "alerts.mute_4h") }</option>
+						<option value="1440">{ t(ctx, "alerts.mute_24h") }</option>
+					</select>
+				</div>
+				<div class="flex justify-end gap-2">
+					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+					<button class="tuc-btn is-primary" type="submit">
+						@Icon("bell-off", "size-3.5")
+						{ t(ctx, "alerts.mute") }
+					</button>
+				</div>
+			</form>
+		</div>
+	</dialog>
 }
 
 func unitText(ctx context.Context, kind string) string {
@@ -493,78 +538,92 @@ func unitText(ctx context.Context, kind string) string {
 	return "%"
 }
 
+// alertHistory is one card, two lists: the alerts and, for admins, what
+// was sent to each channel.
 templ alertHistory(d AlertsData) {
 	<section class={ cardClass } id="history">
-		@cardHead(t(ctx, "alerts.history"))
-		<div class={ cardBodyClass }>
-			if len(d.History) == 0 {
-				@emptyState("bell", t(ctx, "alerts.history_empty"))
-			} else {
-				<ul class="m-0 flex list-none flex-col p-0">
-					for _, a := range d.History {
-						<li class="flex items-center gap-3 border-b border-border py-3 last:border-b-0">
-							<span class={ severityDot(a.Severity, a.Resolved) } aria-hidden="true"></span>
-							<span class="flex min-w-0 grow flex-col gap-0.5">
-								<span class="flex flex-wrap items-center gap-1.5">
-									<strong class="text-[13px] font-semibold">{ a.Title }</strong>
-									if a.Security {
-										<span class="tuc-badge">
-											{ t(ctx, "alerts.security_badge") }
-										</span>
-									}
-									if !a.Resolved {
-										<span class={ "tuc-badge is-" + SeverityTone(a.Severity, false) }>{ t(ctx, "alerts.level." + a.Severity) }</span>
-									}
-									if a.Muted {
-										<span class="tuc-badge">{ t(ctx, "alerts.muted") }</span>
-									}
-									if a.Repeats > 0 {
-										<span class="text-xs text-subtle">{ t(ctx, "alerts.repeats", "n", a.Repeats) }</span>
-									}
-								</span>
-								<span class="text-xs text-muted">{ a.Text }</span>
-							</span>
-							<span class="shrink-0 text-xs text-subtle tabular-nums">{ a.When }</span>
-						</li>
-					}
-				</ul>
+		@cardHead(t(ctx, "alerts.history")) {
+			if d.CanAdmin {
+				<form method="get" action="/alerts" class="w-40">
+					<select class="tuc-input w-40" name="f" aria-label={ t(ctx, "alerts.list") } data-tuc-select data-clearable="false" data-autosubmit>
+						<option value="" selected?={ d.List != "deliveries" }>{ t(ctx, "alerts.list_alerts") }</option>
+						<option value="deliveries" selected?={ d.List == "deliveries" }>{ t(ctx, "alerts.deliveries") }</option>
+					</select>
+				</form>
 			}
-		</div>
+		}
+		if d.CanAdmin && d.List == "deliveries" {
+			@alertDeliveries(d)
+		} else if len(d.History) == 0 {
+			@emptyState("bell", t(ctx, "alerts.history_empty"))
+		} else {
+			<ul class="m-0 flex list-none flex-col px-4 py-1">
+				for _, a := range d.History {
+					<li class="flex items-center gap-3 border-b border-border py-2.5 last:border-b-0" title={ alertTip(ctx, a) }>
+						<span class={ severityDot(a.Severity, a.Resolved) } aria-hidden="true"></span>
+						<span class="min-w-0 grow truncate text-[13px]">
+							<span class="font-medium">{ a.Title }</span>
+							if a.Text != "" {
+								<span class="text-muted">{ " · " + a.Text }</span>
+							}
+						</span>
+						@alertBadge(a)
+						<span class="shrink-0 text-xs text-subtle tabular-nums">{ a.When }</span>
+					</li>
+				}
+			</ul>
+		}
 	</section>
 }
 
+// alertBadge is the one badge an alert shows: muted, security, its level
+// while open, or resolved.
+templ alertBadge(a AlertRow) {
+	switch  {
+		case a.Muted:
+			<span class="tuc-badge">{ t(ctx, "alerts.muted") }</span>
+		case a.Security:
+			<span class="tuc-badge is-warning">{ t(ctx, "alerts.security_badge") }</span>
+		case !a.Resolved:
+			<span class={ "tuc-badge is-" + SeverityTone(a.Severity, false) }>{ t(ctx, "alerts.level." + a.Severity) }</span>
+		default:
+			<span class="tuc-badge is-success">{ t(ctx, "alerts.resolved") }</span>
+	}
+}
+
+// alertTip is the row's tip: the full text and how often it repeated.
+func alertTip(ctx context.Context, a AlertRow) string {
+	if a.Repeats > 0 {
+		return a.Text + " · " + t(ctx, "alerts.repeats", "n", a.Repeats)
+	}
+	return a.Text
+}
+
 templ alertDeliveries(d AlertsData) {
-	<section class={ cardClass } id="deliveries">
-		@cardHead(t(ctx, "alerts.deliveries"))
-		<div class={ cardBodyClass }>
-			if len(d.Deliveries) == 0 {
-				@emptyState("send", t(ctx, "alerts.deliveries_empty"))
-			} else {
-				<div class="tuc-table-wrap">
-					<table class="tuc-table is-compact w-full">
-						<thead><tr><th>{ t(ctx, "alerts.delivery.when") }</th><th>{ t(ctx, "alerts.delivery.channel") }</th><th>{ t(ctx, "alerts.delivery.alert") }</th><th>{ t(ctx, "alerts.delivery.status") }</th><th class="is-number">{ t(ctx, "alerts.delivery.attempts") }</th><th>{ t(ctx, "alerts.delivery.error") }</th></tr></thead>
-						<tbody>
-							for _, x := range d.Deliveries {
-								<tr>
-									<td class="text-muted tabular-nums">{ x.When }</td>
-									<td>
-										<span class="flex items-center gap-1.5">
-											@Icon(kindIcon(x.Kind), "size-3.5 text-muted")
-											{ x.Channel }
-										</span>
-									</td>
-									<td class="max-w-[280px] truncate">{ x.Alert }</td>
-									<td><span class={ "tuc-badge " + statusTone(x.Status) }>{ t(ctx, "alerts.status." + x.Status) }</span></td>
-									<td class="is-number">{ fmt.Sprint(x.Attempts) }</td>
-									<td class="max-w-[320px] truncate font-mono text-xs text-muted" title={ x.Error }>{ x.Error }</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</div>
-			}
+	if len(d.Deliveries) == 0 {
+		@emptyState("send", t(ctx, "alerts.deliveries_empty"))
+	} else {
+		<div class="tuc-table-wrap">
+			<table class="tuc-table is-compact w-full">
+				<thead><tr><th>{ t(ctx, "alerts.delivery.when") }</th><th>{ t(ctx, "alerts.delivery.channel") }</th><th>{ t(ctx, "alerts.delivery.alert") }</th><th>{ t(ctx, "alerts.delivery.status") }</th></tr></thead>
+				<tbody>
+					for _, x := range d.Deliveries {
+						<tr>
+							<td class="whitespace-nowrap text-muted tabular-nums">{ x.When }</td>
+							<td>
+								<span class="flex items-center gap-1.5">
+									@Icon(kindIcon(x.Kind), "size-3.5 text-muted")
+									{ x.Channel }
+								</span>
+							</td>
+							<td class="max-w-[280px] truncate">{ x.Alert }</td>
+							<td><span class={ "tuc-badge " + statusTone(x.Status) } title={ x.Error }>{ t(ctx, "alerts.status." + x.Status) }</span></td>
+						</tr>
+					}
+				</tbody>
+			</table>
 		</div>
-	</section>
+	}
 }
 
 // sudoModal is the "Confirm it's you" dialog for pages outside a service.

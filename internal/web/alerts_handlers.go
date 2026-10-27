@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/alerts"
@@ -80,6 +81,17 @@ func (h *handlers) alertsPage(w http.ResponseWriter, r *http.Request) {
 	_ = h.alerts.MarkSeen(r.Context(), p.UserID, p.Role >= auth.RoleAdmin)
 }
 
+// alertsTab is the page's tab: the channels and rules live in "config",
+// and what was done there comes back to it.
+func alertsTab(r *http.Request) string {
+	ok := r.URL.Query().Get("ok")
+	if r.URL.Query().Get("tab") == "config" || strings.HasPrefix(ok, "channel-") || ok == "rules" ||
+		strings.HasPrefix(r.URL.Path, "/alerts/channels") || r.URL.Path == "/alerts/rules" {
+		return "config"
+	}
+	return ""
+}
+
 func (h *handlers) renderAlerts(w http.ResponseWriter, r *http.Request, v alertsView) {
 	ctx := r.Context()
 	p := PrincipalFrom(ctx)
@@ -87,6 +99,7 @@ func (h *handlers) renderAlerts(w http.ResponseWriter, r *http.Request, v alerts
 	d := views.AlertsData{
 		CSRF: p.CSRFToken, CanAdmin: admin, SudoActive: p.SudoFor(auth.SudoStrict, time.Now()), SudoCritical: p.SudoFor(auth.SudoCritical, time.Now()),
 		Security: alerts.SecurityKinds, Revealed: v.revealed, Form: v.form, Error: v.errMsg, Flash: v.flash,
+		Tab: alertsTab(r), List: r.URL.Query().Get("f"),
 	}
 	if until := h.alerts.MutedUntil(ctx); !until.IsZero() {
 		d.MutedUntil = until.Format("02/01 15:04")
@@ -175,7 +188,7 @@ func (h *handlers) createChannel(w http.ResponseWriter, r *http.Request) {
 		h.renderAlerts(w, r, alertsView{status: code, form: form})
 		return
 	}
-	redirectLocal(w, r, "/alerts?ok=channel-added#channels")
+	redirectLocal(w, r, "/alerts?tab=config&ok=channel-added")
 }
 
 func (h *handlers) testChannel(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +200,7 @@ func (h *handlers) testChannel(w http.ResponseWriter, r *http.Request) {
 		h.alertsError(w, r, err)
 		return
 	}
-	redirectLocal(w, r, "/alerts?ok=tested#deliveries")
+	redirectLocal(w, r, "/alerts?f=deliveries&ok=tested")
 }
 
 func (h *handlers) revealChannel(w http.ResponseWriter, r *http.Request) {
@@ -226,7 +239,7 @@ func (h *handlers) toggleChannel(w http.ResponseWriter, r *http.Request) {
 	if on {
 		ok = "channel-resumed"
 	}
-	redirectLocal(w, r, "/alerts?ok="+ok+"#channels")
+	redirectLocal(w, r, "/alerts?tab=config&ok="+ok)
 }
 
 func (h *handlers) deleteChannel(w http.ResponseWriter, r *http.Request) {
@@ -238,7 +251,7 @@ func (h *handlers) deleteChannel(w http.ResponseWriter, r *http.Request) {
 		h.alertsError(w, r, err)
 		return
 	}
-	redirectLocal(w, r, "/alerts?ok=channel-deleted#channels")
+	redirectLocal(w, r, "/alerts?tab=config&ok=channel-deleted")
 }
 
 func (h *handlers) saveAlertRules(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +280,7 @@ func (h *handlers) saveAlertRules(w http.ResponseWriter, r *http.Request) {
 		h.alertsError(w, r, err)
 		return
 	}
-	redirectLocal(w, r, "/alerts?ok=rules#rules")
+	redirectLocal(w, r, "/alerts?tab=config&ok=rules")
 }
 
 func (h *handlers) muteAlerts(w http.ResponseWriter, r *http.Request) {
