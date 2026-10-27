@@ -651,6 +651,12 @@ templ tabDomains(d ServiceData) {
 	// data-refresh/data-live) until it shows "HTTPS ativo".
 	<section class={ cardClass } id="domains" data-live { certRefresh(d)... }>
 		@cardHeadHelp(t(ctx, "domain.title"), t(ctx, "domain.help")) {
+			if (d.Port != 0 || len(d.Domains.Endpoints) > 0) && (d.Domains.Dynamic || (d.CanAdmin && d.Domains.DynamicElsewhere == "")) {
+				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-clients" title={ t(ctx, "domain.clients.title") }>
+					@Icon("settings", "size-3.5")
+					{ t(ctx, "domain.clients.configure") }
+				</button>
+			}
 			if d.Port != 0 || len(d.Domains.Endpoints) > 0 {
 				if d.CanAdmin && d.SudoActive {
 					<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#domain-new">
@@ -696,7 +702,8 @@ templ tabDomains(d ServiceData) {
 }
 
 // domainTable lists every address of the service in one table. Without a
-// port only the fixed domains left behind show, to be removed.
+// port only the fixed domains left behind show, to be removed. The
+// customers' domains are configured from the card's head (clientsDialog).
 templ domainTable(d ServiceData, served bool) {
 	<div class="tuc-table-wrap rounded-sm border border-border">
 		<table class="tuc-table is-compact w-full">
@@ -715,9 +722,6 @@ templ domainTable(d ServiceData, served bool) {
 				}
 				for _, dm := range d.Domains.Fixed {
 					@fixedRow(d, dm)
-				}
-				if served {
-					@clientsRow(d)
 				}
 			</tbody>
 		</table>
@@ -844,44 +848,6 @@ templ fixedRow(d ServiceData, dm DomainRow) {
 						@Icon("trash", "size-3.5")
 					</button>
 				</form>
-			}
-		</td>
-	</tr>
-}
-
-// clientsRow sums up the customers' domains; their settings live in the
-// clientsDialog modal.
-templ clientsRow(d ServiceData) {
-	<tr>
-		<td>
-			<span class="flex flex-col">
-				<strong class="text-[13px] font-semibold whitespace-nowrap">{ t(ctx, "domain.clients.title") }</strong>
-				if d.Domains.DynamicElsewhere != "" && !d.Domains.Dynamic {
-					<span class="text-xs text-muted">{ t(ctx, "domain.dynamic.elsewhere", "service", d.Domains.DynamicElsewhere) }</span>
-				} else if d.Domains.Dynamic && d.Domains.RequireTXT {
-					<span class="text-xs text-muted">{ t(ctx, "domain.clients.txt_on") }</span>
-				} else if d.Domains.Dynamic {
-					<span class="text-xs text-muted">{ t(ctx, "domain.clients.txt_off") }</span>
-				}
-			</span>
-		</td>
-		<td class="whitespace-nowrap">
-			if d.Domains.Dynamic {
-				<span class="tuc-badge is-success">{ t(ctx, "domain.clients.on") }</span>
-			} else {
-				<span class="tuc-badge">{ t(ctx, "domain.clients.off") }</span>
-			}
-		</td>
-		<td class="tuc-table__actions">
-			if d.Domains.Dynamic || (d.CanAdmin && d.Domains.DynamicElsewhere == "") {
-				<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-clients">
-					if d.Domains.Dynamic {
-						@Icon("settings", "size-3.5")
-						{ t(ctx, "domain.clients.configure") }
-					} else {
-						{ t(ctx, "domain.clients.enable") }
-					}
-				</button>
 			}
 		</td>
 	</tr>

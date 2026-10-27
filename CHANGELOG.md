@@ -15,13 +15,14 @@ servidor pelo botão **Atualização** do painel.
 ### Mudado
 
 - **Aba Rede mais limpa**: os domínios do serviço viram uma tabela só (link
-  automático, domínios fixos e a linha "Domínios dos clientes"), sem os
-  textos longos. As explicações ficam no **?** ao lado do título.
+  automático e domínios fixos), sem os textos longos. As explicações ficam
+  no **?** ao lado do título.
 - **Domínios dos clientes num modal**: aceitar domínios, o TXT de posse, a
   rota da app, o segredo e o kit do desenvolvedor saíram da aba e ficam no
-  botão **Configurar** da linha. Depois de mudar algo, o modal reabre com o
-  resultado. O segredo da app aparece direto para administradores, com
-  botão de copiar, sem precisar confirmar a senha para ver.
+  botão **Configurar**, ao lado de "Adicionar domínio". Depois de mudar
+  algo, o modal reabre com o resultado. O segredo da app aparece direto
+  para administradores, com botão de copiar, sem precisar confirmar a senha
+  para ver.
 
 ### Corrigido
 

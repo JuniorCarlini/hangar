@@ -3146,12 +3146,7 @@ internal = "só no projeto"
 
 [domain.clients]
 title = "Domínios dos clientes"
-on = "ligado"
-off = "desligado"
-txt_on = "TXT de posse exigido"
-txt_off = "TXT de posse opcional"
 configure = "Configurar"
-enable = "Ligar"
 how = "Como funciona"
 app = "Ligação com a app"
 route = "Rota"

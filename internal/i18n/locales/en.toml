@@ -3145,12 +3145,7 @@ internal = "project only"
 
 [domain.clients]
 title = "Customer domains"
-on = "on"
-off = "off"
-txt_on = "Ownership TXT required"
-txt_off = "Ownership TXT optional"
 configure = "Configure"
-enable = "Turn on"
 how = "How it works"
 app = "Link with the app"
 route = "Route"
