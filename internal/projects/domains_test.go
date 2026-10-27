@@ -200,7 +200,4 @@ func TestHourCapAndOwnershipTXT(t *testing.T) {
 	if e.applied != before+1 {
 		t.Error("turning the TXT on must reload the edge")
 	}
-	if _, err := f.m.ProbeDomain(ctx, "loja.com.br"); err == nil {
-		t.Error("the test needs an edge that can probe")
-	}
 }

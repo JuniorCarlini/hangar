@@ -188,14 +188,12 @@ subdomínio novo leva alguns segundos a mais (emissão do certificado).
   cinza**: um CNAME de outra conta Cloudflare para um nome laranja dá o
   erro 1014. A tela Domínios avisa.
 
-### Kit do desenvolvedor
+### Como funciona (para quem escreve a app)
 
-Na seção Domínios do serviço que aceita domínios dos clientes, o botão
-"Kit do desenvolvedor" mostra a chamada assinada, o código do TXT em
-Python/Node/PHP (testado contra o Go em `domain_kit_test.go`), o texto
-pronto para o cliente e um **teste** que roda DNS, TXT e a resposta da app
-para um domínio sem gravar, cachear, contar no limite nem emitir nada
-(só admin).
+No modal "Domínios dos clientes" (botão Configurar da seção Domínios), o
+**?** ao lado do título abre o "Como funciona": a chamada assinada que a app
+responde, o código do TXT em Python/Node/PHP (testado contra o Go em
+`domain_kit_test.go`) e o texto pronto para o cliente.
 
 Cada decisão é registrada (tabela `tls_ask_log`) para auditoria e para a tela
 de "Domínios dinâmicos" no painel.

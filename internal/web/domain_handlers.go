@@ -289,21 +289,3 @@ func (h *handlers) domainTXT(w http.ResponseWriter, r *http.Request) {
 	}
 	h.domainsDone(w, r, flash, h.projects.SetDomainRequireTXT(r.Context(), actor(r), s.ID, on))
 }
-
-// probeDomain runs the developer kit's test of a customer domain: read
-// only, nothing is logged, counted or issued.
-func (h *handlers) probeDomain(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.withService(w, r); !ok {
-		return
-	}
-	p, err := h.projects.ProbeDomain(r.Context(), r.PostFormValue("hostname"))
-	if err != nil {
-		code, msg := userError(r, err)
-		h.renderService(w, r, serviceView{status: code, errMsg: msg})
-		return
-	}
-	h.renderService(w, r, serviceView{status: http.StatusOK, probe: &views.DomainProbe{
-		Host: p.Host, Path: string(p.Path), TXTRequired: p.TXTRequired, TXTFound: p.TXTFound,
-		TXTRecord: p.TXTRecord, TXTCode: p.TXTCode, App: p.App,
-	}})
-}

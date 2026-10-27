@@ -118,29 +118,3 @@ func TestOwnershipTXTSparesServedHosts(t *testing.T) {
 		t.Fatalf("new host without the TXT: %v %s", ok, why)
 	}
 }
-
-// The panel's test shows every check and leaves no trace: no log row, no
-// cache entry, nothing counted toward the hourly cap.
-func TestProbeHasNoSideEffects(t *testing.T) {
-	f := newFixture(t, true)
-	ctx := context.Background()
-	f.a.LookupTXT = func(_ context.Context, name string) ([]string, error) {
-		return []string{OwnershipCode(checkSecret, "loja1.com.br")}, nil
-	}
-	p, err := f.a.Probe(ctx, "Loja1.com.br")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.Host != "loja1.com.br" || p.App != ReasonAppAllowed || !p.TXTFound || p.TXTRecord != "_hangar.loja1.com.br" {
-		t.Errorf("probe: %+v", p)
-	}
-	if rows, _ := f.q.RecentAsks(ctx, 5); len(rows) != 0 {
-		t.Errorf("the probe was logged: %+v", rows)
-	}
-	if len(f.a.cache) != 0 {
-		t.Error("the probe was cached")
-	}
-	if _, err := f.a.Probe(ctx, "1.2.3.4"); !IsInvalidHost(err) {
-		t.Errorf("an IP is not a hostname: %v", err)
-	}
-}

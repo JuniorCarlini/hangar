@@ -860,6 +860,11 @@ templ clientsDialog(d ServiceData) {
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
 				<h2 class="tuc-modal__title" id="domain-clients-title">{ t(ctx, "domain.clients.title") }</h2>
+				if d.Domains.Dynamic {
+					<button type="button" class="tuc-btn is-ghost is-icon is-sm -ml-1 text-subtle" data-tuc-modal="#domain-kit" data-tuc-tip={ t(ctx, "domain.clients.how") } aria-label={ t(ctx, "domain.clients.how") }>
+						@Icon("circle-question-mark", "size-3.5")
+					</button>
+				}
 				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-modal__close" data-tuc-modal-close aria-label={ t(ctx, "tucano.close") }>
 					@Icon("x", "size-4")
 				</button>
@@ -961,28 +966,10 @@ templ clientsDialog(d ServiceData) {
 						</div>
 					</div>
 				}
-				<div class="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-					if d.Domains.Dynamic {
-						<button type="button" class="tuc-btn is-outline is-sm" data-tuc-modal="#domain-kit">
-							@Icon("file-code", "size-3.5")
-							{ t(ctx, "domain.kit.open") }
-						</button>
-						<a class="tuc-btn is-ghost is-sm" href="/domains">{ t(ctx, "domain.dynamic.requests") }</a>
-					}
-					<span class="grow"></span>
-					<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(domainsDocURL) } target="_blank" rel="noopener">
-						@Icon("circle-question-mark", "size-3.5")
-						{ t(ctx, "domain.clients.how") }
-					</a>
-				</div>
 			</div>
 		</div>
 	</dialog>
 }
-
-// domainsDocURL explains the domains in depth; the panel keeps only the
-// short version.
-const domainsDocURL = "https://github.com/JuniorCarlini/hangar/blob/main/docs/03-dominios-customizados-tls.md"
 
 func isWildcard(host string) bool { return strings.HasPrefix(host, "*.") }
 

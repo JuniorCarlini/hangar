@@ -583,7 +583,7 @@ func TestClientsModalReopens(t *testing.T) {
 		{http.MethodGet, base + "?tab=network&ok=domain", false},
 		{http.MethodPost, base + "/domains/txt", true},
 		{http.MethodPost, base + "/domains/secret/rotate", true},
-		{http.MethodPost, base + "/domains/probe", false},
+		{http.MethodPost, base + "/domains/dns-token", false},
 	} {
 		r := httptest.NewRequest(c.method, c.target, nil)
 		if got := clientsOpen(r); got != c.want {

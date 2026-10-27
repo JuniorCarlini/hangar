@@ -267,7 +267,6 @@ type serviceView struct {
 	exportValue   string
 	gitToken      string            // the clone token, right after a sudo reveal
 	hook          *projects.Webhook // webhook URL token and secret, right after rotate or reveal
-	probe         *views.DomainProbe
 	status        int
 }
 
@@ -393,7 +392,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.Domains = views.DomainsSection{
 		EdgeEnabled: h.projects.EdgeEnabled(), Dynamic: s.DynamicDomains == 1,
 		CheckPath: s.DomainCheckPath, CheckSecret: v.checkSecret,
-		RequireTXT: s.DomainRequireTxt == 1, Probe: v.probe,
+		RequireTXT:  s.DomainRequireTxt == 1,
 		ClientsOpen: clientsOpen(r),
 	}
 	// Admins see the app's signing secret as it is (it reaches the app's

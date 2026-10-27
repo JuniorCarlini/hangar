@@ -445,28 +445,6 @@ func (m *Manager) SetDomainRequireTXT(ctx context.Context, a Actor, serviceID st
 	return m.applyEdge(ctx)
 }
 
-type domainProber interface {
-	ProbeDomain(ctx context.Context, host string) (edge.Probe, error)
-}
-
-// ProbeDomain runs, for the panel's test, the checks a customer domain goes
-// through (DNS path, ownership TXT, the app's answer) without logging,
-// counting or issuing anything.
-func (m *Manager) ProbeDomain(ctx context.Context, host string) (edge.Probe, error) {
-	p, ok := m.edgeProxy().(domainProber)
-	if !ok {
-		return edge.Probe{}, i18n.E("domain.edge_disabled")
-	}
-	r, err := p.ProbeDomain(ctx, host)
-	switch {
-	case edge.IsInvalidHost(err):
-		return r, i18n.E("domain.error.hostname")
-	case errors.Is(err, edge.ErrNoDynamic):
-		return r, ErrNotFound
-	}
-	return r, err
-}
-
 // DomainActivity lists recent certificate decisions (all, or only "allow"
 // or "deny") and the blocklist, with the numbers on top of the page.
 func (m *Manager) DomainActivity(ctx context.Context, decision string) (DomainActivity, error) {

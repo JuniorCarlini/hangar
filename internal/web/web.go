@@ -192,7 +192,6 @@ func routes(rt *Router, h *handlers) {
 	// The ownership TXT and the kit's test (read only: it logs, counts and
 	// issues nothing, but it calls the app, so it is an admin's tool).
 	rt.HandleFunc("POST "+svc+"/domains/txt", h.domainTXT, Policy{Role: auth.RoleAdmin, Audit: "domain.txt", AuditByHandler: true})
-	rt.HandleFunc("POST "+svc+"/domains/probe", h.probeDomain, Policy{Role: auth.RoleAdmin, Audit: "domain.probe"})
 	rt.HandleFunc("POST "+svc+"/domains/secret/rotate", h.rotateCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "domain.dynamic.rotate_secret", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/exports/reveal", h.revealExport, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backup", h.downloadBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.backup.download", AuditByHandler: true})

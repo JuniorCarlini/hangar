@@ -47,33 +47,25 @@ func TestKitSnippetsMatchTheEdge(t *testing.T) {
 
 // After a test the kit opens by itself with each check and the customer
 // text carries that domain's code; only admins get the test form.
-func TestKitShowsTheProbe(t *testing.T) {
-	d := ServiceData{Project: "lab", Slug: "web", CSRF: "tok", Domains: DomainsSection{
+func TestKitExplainsWithoutTesting(t *testing.T) {
+	d := ServiceData{Project: "lab", Slug: "web", CSRF: "tok", CanAdmin: true, Domains: DomainsSection{
 		Dynamic: true, CheckPath: "/.well-known/hangar/domain-check", EntryHost: "entrada.203-0-113-10.sslip.io", RequireTXT: true,
 	}}
-	render := func(d ServiceData) string {
-		var b strings.Builder
-		if err := domainKit(d).Render(context.Background(), &b); err != nil {
-			t.Fatal(err)
-		}
-		return b.String()
+	var b strings.Builder
+	if err := domainKit(d).Render(context.Background(), &b); err != nil {
+		t.Fatal(err)
 	}
-	if html := render(d); strings.Contains(html, "/domains/probe") || strings.Contains(html, `data-open="true"`) {
-		t.Error("a non-admin gets the test, or the kit opens without a test")
-	}
-	d.CanAdmin = true
-	d.Domains.Probe = &DomainProbe{
-		Host: "loja.cliente.com.br", Path: "cloudflare", TXTRequired: true, TXTRecord: "_hangar.loja.cliente.com.br",
-		TXTCode: "hg-0123456789ab", App: "app_authorized",
-	}
-	html := render(d)
+	html := b.String()
 	for _, want := range []string{
-		`data-open="true"`, `action="/p/lab/s/web/domains/probe"`, "_hangar.loja.cliente.com.br  →  hg-0123456789ab",
-		"loja.cliente.com.br  →  entrada.203-0-113-10.sslip.io", `value="loja.cliente.com.br"`,
+		"GET /.well-known/hangar/domain-check?domain=loja.cliente.com.br", "def hangar_txt(domain):",
+		"loja.cliente.com.br  →  entrada.203-0-113-10.sslip.io", "_hangar.loja.cliente.com.br  →  hg-…",
 	} {
 		if !strings.Contains(html, want) {
 			t.Errorf("kit without %q", want)
 		}
+	}
+	if strings.Contains(html, "/domains/probe") || strings.Contains(html, `data-open="true"`) {
+		t.Error("the kit still has the domain test")
 	}
 }
 
