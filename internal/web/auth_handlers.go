@@ -362,9 +362,12 @@ func (h *handlers) sudo(w http.ResponseWriter, r *http.Request) {
 }
 
 // safeNext only accepts a local path: it prevents an open redirect to a
-// phishing site (/sudo?next=https://evil).
+// phishing site (/sudo?next=https://evil). Control characters are refused
+// too: browsers drop a tab or a newline from a URL, so "/\t/evil" would
+// arrive as "//evil", another site.
 func safeNext(next string) string {
-	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.ContainsAny(next, "\\\r\n") {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.Contains(next, "\\") ||
+		strings.ContainsFunc(next, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
 		return "/"
 	}
 	return next
