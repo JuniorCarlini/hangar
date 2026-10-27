@@ -103,35 +103,31 @@ templ tabBackups(d ServiceData) {
 			if len(d.Backups.Runs) > 0 {
 				@backupRunsTable(d.Backups.Runs, false, d.CanAdmin, d.SudoCritical)
 			}
-			if len(d.Backups.Restores) > 0 {
-				<div class="border-t border-border">
-					<p class="m-0 px-4 pt-3 text-xs font-semibold text-muted">{ t(ctx, "svcbackup.restores") }</p>
-					<div class="tuc-table-wrap">
-						<table class="tuc-table is-compact w-full">
-							<thead><tr><th>{ t(ctx, "backups.history.when") }</th><th>{ t(ctx, "svcbackup.restore_point") }</th><th>{ t(ctx, "svcbackup.restore_dest") }</th><th>{ t(ctx, "backups.history.result") }</th></tr></thead>
-							<tbody>
-								for _, r := range d.Backups.Restores {
-									<tr>
-										<td class="whitespace-nowrap text-muted">{ r.When }</td>
-										<td>{ r.What }</td>
-										<td class="font-mono text-[13px]">{ r.Dest }</td>
-										<td>
-											<span class={ badgeTone(r.Tone) }>{ r.Status }</span>
-											if r.Step != "" {
-												<span class="block text-xs text-subtle">{ r.Step }</span>
-											}
-											if r.Error != "" {
-												<span class="block max-w-[360px] truncate text-xs text-danger" title={ r.Error }>{ r.Error }</span>
-											}
-										</td>
-									</tr>
-								}
-							</tbody>
-						</table>
-					</div>
-				</div>
-			}
 		</section>
+		if len(d.Backups.Restores) > 0 {
+			<section class={ cardClass }>
+				@cardHead(t(ctx, "svcbackup.restores"))
+				<div class="tuc-table-wrap">
+					<table class="tuc-table is-compact w-full">
+						<thead><tr><th>{ t(ctx, "backups.history.when") }</th><th>{ t(ctx, "svcbackup.restore_dest") }</th><th>{ t(ctx, "backups.history.result") }</th></tr></thead>
+						<tbody>
+							for _, r := range d.Backups.Restores {
+								<tr title={ r.What }>
+									<td class="whitespace-nowrap text-muted">{ r.When }</td>
+									<td class="font-mono text-[13px] whitespace-nowrap">{ r.Dest }</td>
+									<td>
+										<span class={ badgeTone(r.Tone) } title={ r.Error }>{ r.Status }</span>
+										if r.Step != "" {
+											<span class="block text-xs text-subtle">{ r.Step }</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		}
 		if d.CanAdmin && d.Backups.Ready && d.SudoCritical {
 			@svcBackupRestore(d)
 		}
