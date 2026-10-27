@@ -11,8 +11,8 @@ import (
 )
 
 // A service made by hand offers every variable it has, with nothing to
-// mark first; with no variables it offers nothing and cannot be connected
-// to, and deleting a variable takes its offer with it.
+// mark first, plus its address (HOST, PORT) even with no variables; a
+// deleted variable takes its offer with it.
 func TestHandMadeServiceOffersItsVariables(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
@@ -22,8 +22,10 @@ func TestHandMadeServiceOffersItsVariables(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.m.Wait()
-	if _, err := f.m.PlanConnect(ctx, "lab", "web", "api"); !errors.Is(err, ErrNothingOffered) {
-		t.Fatalf("plan with nothing offered: %v", err)
+	// With no variables it still offers its address on the network.
+	plan, err := f.m.PlanConnect(ctx, "lab", "web", "api")
+	if err != nil || len(plan.Rows) != 2 || plan.Rows[0].Key != "HOST" || plan.Rows[1].Key != "PORT" {
+		t.Fatalf("plan with no variables: %+v %v", plan.Rows, err)
 	}
 	if _, err := f.m.Connect(ctx, f.who, "lab", "web", "api", []Mapping{{Key: "TOKEN", Var: "API_TOKEN"}}, false); err == nil {
 		t.Fatal("connected to a value nobody offers")
@@ -33,11 +35,11 @@ func TestHandMadeServiceOffersItsVariables(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	plan, err := f.m.PlanConnect(ctx, "lab", "web", "api")
+	plan, err = f.m.PlanConnect(ctx, "lab", "web", "api")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Rows) != 2 || plan.Rows[1].Key != "TOKEN" || plan.Rows[1].Var != "API_TOKEN" {
+	if len(plan.Rows) != 4 || plan.Rows[3].Key != "TOKEN" || plan.Rows[3].Var != "API_TOKEN" {
 		t.Fatalf("plan = %+v", plan.Rows)
 	}
 	if _, err := f.m.Connect(ctx, f.who, "lab", "web", "api", []Mapping{{Key: "INTERNAL", Var: "X"}}, false); err != nil {
@@ -51,8 +53,8 @@ func TestHandMadeServiceOffersItsVariables(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if offers, _ := f.m.Offers(ctx, api.ID); len(offers) != 0 {
-		t.Errorf("offers after deleting the variables: %+v", offers)
+	if offers, _ := f.m.Offers(ctx, api.ID); len(offers) != 2 {
+		t.Errorf("offers after deleting the variables: %+v (want only HOST and PORT)", offers)
 	}
 }
 

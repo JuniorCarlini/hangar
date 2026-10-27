@@ -365,6 +365,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		}
 	}
 	d.ConnectOffers = h.connectOffers(r, p, s.Slug)
+	d.Address = projects.ServiceAddress(p, s)
 	// Admins see every value, in the table and in the .env editor; the
 	// table follows the order of the .env file.
 	if text, _, err := h.projects.EnvText(r.Context(), s.ID, d.CanAdmin); err == nil {

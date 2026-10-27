@@ -190,6 +190,15 @@ templ tabVariables(d ServiceData) {
 		} else {
 			@emptyState("braces", t(ctx, "service.env.empty"))
 		}
+		// How the other services reach this one: what HOST and PORT give.
+		<div class="flex items-center gap-2 border-t border-border px-4 py-2.5 text-[13px] text-muted">
+			@Icon("network", "size-3.5 shrink-0")
+			<span class="shrink-0">{ t(ctx, "service.env.address") }</span>
+			<code class="min-w-0 truncate font-mono text-fg">{ d.Address }</code>
+			<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Address } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "common.copy_name", "name", d.Address) } title={ t(ctx, "service.env.address_hint") }>
+				@Icon("copy", "size-3.5")
+			</button>
+		</div>
 		if len(d.UsedByNames) > 0 {
 			<div class="flex items-center gap-2 border-t border-border px-4 py-3 text-[13px] text-muted" title={ strings.Join(d.UsedBy, ", ") }>
 				@Icon("cable", "size-3.5 shrink-0")

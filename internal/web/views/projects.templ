@@ -280,6 +280,9 @@ type ServiceData struct {
 	// ("app (DATABASE_URL ← DATABASE_URL)"); UsedByNames, those services.
 	UsedBy      []string
 	UsedByNames []string
+	// Address is how the project's other services reach this one
+	// ("conector_app:8000"): what HOST and PORT give in the connector.
+	Address string
 	// ConnectOffers are the values the project's other services offer, by
 	// service name, for the connector's "variable B".
 	ConnectOffers []ConnectOffer

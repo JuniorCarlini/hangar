@@ -68,8 +68,27 @@ func (m *Manager) Offers(ctx context.Context, serviceID string) ([]Offer, error)
 			out = append(out, Offer{Key: e.Key, Secret: e.Secret == 1})
 		}
 	}
+	// HOST and PORT come with every service (a reference resolves them,
+	// see refs.go), so one made by hand can be connected to by address.
+	if s, err := m.q.GetServiceByID(ctx, serviceID); err == nil {
+		if !hasOffer(out, "HOST") {
+			out = append(out, Offer{Key: "HOST"})
+		}
+		if s.InternalPort > 0 && !hasOffer(out, "PORT") {
+			out = append(out, Offer{Key: "PORT"})
+		}
+	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil
+}
+
+func hasOffer(out []Offer, key string) bool {
+	for _, o := range out {
+		if o.Key == key {
+			return true
+		}
+	}
+	return false
 }
 
 // offerAlias reports whether a template's export only repeats one of its

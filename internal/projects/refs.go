@@ -6,8 +6,10 @@ import (
 	"errors"
 	"regexp"
 	"sort"
+	"strconv"
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -125,6 +127,15 @@ func (l *refLookup) load(ctx context.Context, projectSlug, serviceSlug string) (
 		}
 		vals[r.Key] = string(plain)
 	}
+	// Every service is reachable on the project's network: HOST and PORT
+	// are there even when it declares nothing (a service made by hand).
+	host, port := serviceAddress(target, s)
+	if _, ok := vals["HOST"]; !ok {
+		vals["HOST"] = host
+	}
+	if _, ok := vals["PORT"]; !ok && port != "" {
+		vals["PORT"] = port
+	}
 	return refTarget{vals: vals}, nil
 }
 
@@ -183,6 +194,26 @@ func (l *refLookup) resolveIn(ctx context.Context, project, service, key string,
 		return "", problem, failed
 	}
 	return out, "", nil
+}
+
+// serviceAddress is how the project's other services reach s: its
+// container's name on the project network, and its internal port ("" when
+// it has none).
+func serviceAddress(p dbq.Project, s dbq.Service) (host, port string) {
+	host = node.ContainerName(p.Slug, s.Slug)
+	if s.InternalPort > 0 {
+		port = strconv.FormatInt(s.InternalPort, 10)
+	}
+	return host, port
+}
+
+// ServiceAddress is serviceAddress for the panel: "conector_app:8000".
+func ServiceAddress(p dbq.Project, s dbq.Service) string {
+	host, port := serviceAddress(p, s)
+	if port == "" {
+		return host
+	}
+	return host + ":" + port
 }
 
 // resolveRefs replaces references in the variable values with the target's

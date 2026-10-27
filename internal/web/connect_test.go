@@ -45,8 +45,9 @@ func TestConnectDialogAndSave(t *testing.T) {
 			t.Errorf("dialog lacks %q", want)
 		}
 	}
-	if body := get("/p/lab/s/web/connect?to=api"); !strings.Contains(body, "não oferece nenhum valor") {
-		t.Error("connecting to a service that offers nothing is not refused")
+	// A service with no variables still offers its address.
+	if body := get("/p/lab/s/web/connect?to=api"); !strings.Contains(body, `value="api|HOST"`) {
+		t.Error("a service with no variables does not offer its address")
 	}
 
 	form := url.Values{"to": {"db"}, "key": {"HOST", "DATABASE_URL"}, "var_HOST": {"PGHOST"}, "var_DATABASE_URL": {"DATABASE_URL"}}
@@ -68,7 +69,7 @@ func TestConnectDialogAndSave(t *testing.T) {
 	if code := post("/p/lab/s/api/env/offer", url.Values{"key": {"API_TOKEN"}, "on": {"1"}}); code != http.StatusSeeOther {
 		t.Fatalf("offer: %d", code)
 	}
-	if canvas := get("/p/lab"); !strings.Contains(canvas, `data-exports="API_TOKEN"`) {
+	if canvas := get("/p/lab"); !strings.Contains(canvas, `data-exports="API_TOKEN HOST"`) {
 		t.Error("the canvas card does not offer the variable")
 	}
 	if body := get("/p/lab/s/web/connect?to=api"); !strings.Contains(body, `name="var_api|API_TOKEN" value="API_TOKEN"`) {
