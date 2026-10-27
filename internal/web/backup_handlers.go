@@ -35,13 +35,24 @@ func (h *handlers) backupsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderBackups(w, r, http.StatusOK, "", flash)
 }
 
+// backupsTab is the overview's tab: the kit and the destinations live in
+// "config", and what was done there comes back to it.
+func backupsTab(r *http.Request) string {
+	ok := r.URL.Query().Get("ok")
+	if r.URL.Query().Get("tab") == "config" || strings.HasPrefix(ok, "key-") || strings.HasPrefix(ok, "target-") ||
+		strings.HasPrefix(r.URL.Path, "/backups/keys") || strings.HasPrefix(r.URL.Path, "/backups/targets") {
+		return "config"
+	}
+	return ""
+}
+
 func (h *handlers) renderBackups(w http.ResponseWriter, r *http.Request, status int, errMsg, flash string) {
 	ctx := r.Context()
 	pr := PrincipalFrom(ctx)
 	d := views.BackupsData{
 		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
 		CanOwner: pr.Role >= auth.RoleOwner, SudoActive: pr.SudoFor(auth.SudoCritical, time.Now()), Error: errMsg, Flash: flash,
-		PanelQueued: h.backups.Queued(""),
+		PanelQueued: h.backups.Queued(""), Tab: backupsTab(r),
 	}
 	o, err := h.backups.Overview(ctx)
 	if err != nil {
@@ -74,20 +85,13 @@ func (h *handlers) renderBackups(w http.ResponseWriter, r *http.Request, status 
 	for _, f := range archive.Folders {
 		d.Folders = append(d.Folders, views.BackupFolder{Folder: f, Days: archive.DefaultRetentionDays[f], What: i18n.T(ctx, "backups.rules.folders."+f)})
 	}
-	d.Status = "ok"
-	switch {
-	case !o.Ready:
-		d.Status = "setup"
-	case len(o.Alerts) > 0:
-		d.Status = "warning"
-	}
 	for _, a := range o.Alerts {
 		if a.Kind == backup.AlertNoKit || a.Kind == backup.AlertNoTarget {
 			continue
 		}
 		tone := "warning"
 		if a.Kind == backup.AlertStale || a.Kind == backup.AlertFailed || a.Kind == backup.AlertWALLag || a.Kind == backup.AlertWALFailing || a.Kind == backup.AlertTargetError {
-			tone, d.Status = "danger", "danger"
+			tone = "danger"
 		}
 		d.Alerts = append(d.Alerts, views.BackupAlert{Tone: tone, Text: alertText(ctx, a)})
 	}
@@ -237,7 +241,7 @@ func (h *handlers) addKey(w http.ResponseWriter, r *http.Request) {
 		h.renderKit(w, r, code, msg)
 		return
 	}
-	redirectLocal(w, r, "/backups?ok=key-added#kit-app")
+	redirectLocal(w, r, "/backups?ok=key-added")
 }
 
 func (h *handlers) confirmKey(w http.ResponseWriter, r *http.Request) {

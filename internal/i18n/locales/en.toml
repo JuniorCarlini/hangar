@@ -1165,9 +1165,7 @@ title = "Close this port?"
 text = "Whoever connects through it from outside loses the connection."
 ok = "Close port"
 
-[confirm.disconnect]
 
-[confirm.env_delete]
 
 [confirm.domain_delete]
 title = "Remove this domain?"
@@ -1983,41 +1981,17 @@ kit_generate = "Generate recovery kit"
 sudo_label = "Authenticator app code to change keys and destinations"
 status_running = "running"
 
-[backups.status]
-ok = "all up to date"
-warning = "attention"
-danger = "problem"
+not_ready = "To start, generate the recovery kit and add a destination."
 
-[backups.setup]
-title = "How to turn backups on"
-intro = "Three steps, done once. After that everything happens by itself, every day."
-kit = "1. Generate your recovery kit"
-kit_text = "It is a file with the key that opens your backups. Download it, keep it (in a password manager or printed) and confirm you kept it. The server only keeps the part that locks: not even someone who breaks into the server can open the backups."
-target = "2. Create a bucket and add it here"
-target_text = "A bucket is a storage folder in the cloud (Backblaze B2, Wasabi, Cloudflare R2 or AWS S3). Create it on the provider's site with Object Lock turned on: it stops anyone from deleting the backups. Hangar does not create the bucket on purpose: the key it gets can only write and read, never create or delete. So whoever breaks into the server cannot destroy the copies."
-services = "3. Turn backups on in your databases"
-services_text = "Open the PostgreSQL service, Backups tab, and pick how often. The panel itself is already saved by itself, every day."
+[backups.tab]
+list = "Backups"
+config = "Settings"
+open_config = "Open settings"
 
-[backups.when]
-title = "What is saved and when"
-what = "What"
-how_often = "When"
-kept = "Kept for"
-panel = "The panel (projects, settings, secrets and the master key)"
-panel_often = "Every day before dawn, and also up to 2 h after you change a setting"
-panel_kept = "35 days"
-pg = "PostgreSQL databases"
-pg_often = "At the interval you pick on the service: every 1, 6, 12 or 24 hours"
-pg_kept = "7 days for regular copies; the first of each week, 35 days; the first of each month, 400 days"
-wal = "PostgreSQL minute by minute (optional)"
-wal_often = "Continuous: the database can go back to any minute"
-wal_kept = "9 days"
-others = "MariaDB, MongoDB, Redis and app files"
-others_often = "No automatic backup yet (coming)."
+
 
 [backups.keys]
 title = "Recovery kit"
-hint = "Backups open with any of the confirmed keys"
 empty = "No key yet. Without the kit, no backup is made."
 label = "Name"
 public = "Public key"
@@ -2039,7 +2013,6 @@ action = "Confirm the kit"
 
 [backups.targets]
 title = "Destinations"
-hint = "Every backup goes to every destination"
 empty = "No destination. Backups need a bucket with Object Lock."
 name = "Name"
 where = "Endpoint / bucket / folder"
@@ -2057,13 +2030,10 @@ title = "Services"
 service = "Service"
 schedule = "Schedule"
 last = "Last backup"
-wal = "WAL"
 size = "Size"
-tested = "Tested"
 tested_yes = "tested"
 open = "Open"
 panel = "Hangar panel"
-none = "No database with automatic backups yet: create a Postgres from the template."
 off = "off"
 every = { one = "every {n} h, from {at}", other = "every {n} h, from {at}" }
 failed_at = "failed {when}"
@@ -2079,8 +2049,6 @@ title = "History"
 empty = "No backup made yet."
 when = "When"
 what = "What"
-kind = "Kind"
-check = "Test"
 result = "Result"
 counts = "{tables} tables, {rows} rows"
 download = "Download (5-minute signed link)"

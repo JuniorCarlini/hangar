@@ -15,16 +15,16 @@ type BackupsData struct {
 	Ready      bool
 	// PanelQueued: the panel's own "back up now" waits or runs.
 	PanelQueued bool
-	Status     string // "ok", "warning", "danger", "setup"
-	Alerts     []BackupAlert
-	Keys       []BackupKeyRow
-	Targets    []BackupTargetRow
-	Services   []BackupServiceRow
-	Panel      BackupServiceRow
-	Runs       []BackupRunRow
-	Folders    []BackupFolder
-	Error      string
-	Flash      string
+	Tab         string // "" (the backups) or "config" (kit and destinations)
+	Alerts      []BackupAlert
+	Keys        []BackupKeyRow
+	Targets     []BackupTargetRow
+	Services    []BackupServiceRow
+	Panel       BackupServiceRow
+	Runs        []BackupRunRow
+	Folders     []BackupFolder
+	Error       string
+	Flash       string
 }
 
 // BackupAlert is an alert already in the user's language.
@@ -110,18 +110,8 @@ func alertTone(tone string) string {
 	return "tuc-alert is-warning"
 }
 
-templ backupStatusBadge(status string) {
-	switch status {
-		case "ok":
-			<span class="tuc-badge is-success">{ t(ctx, "backups.status.ok") }</span>
-		case "warning":
-			<span class="tuc-badge is-warning">{ t(ctx, "backups.status.warning") }</span>
-		case "danger":
-			<span class="tuc-badge is-danger">{ t(ctx, "backups.status.danger") }</span>
-	}
-}
-
-// Backups is the backups overview (docs/09 "Tela de Backups").
+// Backups is the backups overview (docs/09 "Tela de Backups"): what was
+// backed up, and in a second tab the kit and the destinations.
 templ Backups(d BackupsData) {
 	@shell(t(ctx, "backups.page_title")) {
 		if d.PanelQueued {
@@ -129,7 +119,6 @@ templ Backups(d BackupsData) {
 			<span hidden data-busy-poll></span>
 		}
 		@pageHead(t(ctx, "backups.title"), "") {
-			@backupStatusBadge(d.Status)
 			if d.CanOperate && d.Ready {
 				<form method="post" action="/backups/panel">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
@@ -144,16 +133,6 @@ templ Backups(d BackupsData) {
 					</button>
 				</form>
 			}
-			if d.CanOwner {
-				<a class="tuc-btn is-outline" href="/backups/targets/new">
-					@Icon("cloud-upload", "size-3.5")
-					{ t(ctx, "backups.target_add") }
-				</a>
-				<a class="tuc-btn is-primary" href="/backups/kit">
-					@Icon("key-round", "size-3.5")
-					{ t(ctx, "backups.kit_generate") }
-				</a>
-			}
 		}
 		@pageBody() {
 			@errorAlert(d.Error)
@@ -164,58 +143,36 @@ templ Backups(d BackupsData) {
 					<div class="tuc-alert__body"><p>{ a.Text }</p></div>
 				</div>
 			}
-			if !d.Ready {
-				@backupSetup(d)
+			<div class="tuc-tabs">
+				<div class="tuc-tabs__list" role="tablist" aria-label={ t(ctx, "backups.title") }>
+					<a class="tuc-tabs__tab" role="tab" aria-selected={ tabClass(d.Tab, "") } href="/backups">{ t(ctx, "backups.tab.list") }</a>
+					<a class="tuc-tabs__tab" role="tab" aria-selected={ tabClass(d.Tab, "config") } href="/backups?tab=config">{ t(ctx, "backups.tab.config") }</a>
+				</div>
+			</div>
+			if d.Tab == "config" {
+				@backupKeys(d)
+				@backupTargets(d)
+				@backupRules(d)
+				<script src={ asset("kit.js") } defer></script>
+			} else {
+				if !d.Ready {
+					<section class={ cardClass }>
+						@emptyState("database-backup", t(ctx, "backups.not_ready")) {
+							<a class="tuc-btn is-primary is-sm" href="/backups?tab=config">
+								@Icon("settings", "size-3.5")
+								{ t(ctx, "backups.tab.open_config") }
+							</a>
+						}
+					</section>
+				}
+				@backupServices(d)
+				@backupHistory(d)
 			}
-			@backupKeys(d)
-			@backupTargets(d)
-			@backupSchedule(d)
-			@backupServices(d)
-			@backupHistory(d)
-			@backupRules(d)
-			<script src={ asset("kit.js") } defer></script>
+			if d.CanAdmin {
+				@sudoModal(d.CSRF, "/backups?tab="+d.Tab, d.SudoActive)
+			}
 		}
 	}
-}
-
-// backupSetup is the checklist shown until backups can run.
-templ backupSetup(d BackupsData) {
-	<section class={ cardClass }>
-		@cardHead(t(ctx, "backups.setup.title"))
-		<div class={ cardBodyClass }>
-			@notice("info", "shield-check", t(ctx, "backups.setup.intro"))
-			<ol class="tuc-timeline">
-				<li class={ "tuc-timeline__item " + stepTone(hasConfirmedKey(d.Keys)) }>
-					<div class="tuc-timeline__head"><p class="tuc-timeline__title">{ t(ctx, "backups.setup.kit") }</p></div>
-					<div class="tuc-timeline__body">{ t(ctx, "backups.setup.kit_text") }</div>
-				</li>
-				<li class={ "tuc-timeline__item " + stepTone(len(d.Targets) > 0) }>
-					<div class="tuc-timeline__head"><p class="tuc-timeline__title">{ t(ctx, "backups.setup.target") }</p></div>
-					<div class="tuc-timeline__body">{ t(ctx, "backups.setup.target_text") }</div>
-				</li>
-				<li class="tuc-timeline__item">
-					<div class="tuc-timeline__head"><p class="tuc-timeline__title">{ t(ctx, "backups.setup.services") }</p></div>
-					<div class="tuc-timeline__body">{ t(ctx, "backups.setup.services_text") }</div>
-				</li>
-			</ol>
-		</div>
-	</section>
-}
-
-func stepTone(done bool) string {
-	if done {
-		return "is-success is-filled"
-	}
-	return "is-accent"
-}
-
-func hasConfirmedKey(keys []BackupKeyRow) bool {
-	for _, k := range keys {
-		if k.Confirmed {
-			return true
-		}
-	}
-	return false
 }
 
 // backupKeys carries kit.js's messages: the confirmation reads the kit
@@ -229,7 +186,12 @@ templ backupKeys(d BackupsData) {
 		data-file-ok={ t(ctx, "kit.file_ok") }
 	>
 		@cardHead(t(ctx, "backups.keys.title")) {
-			<span class="text-xs text-muted">{ t(ctx, "backups.keys.hint") }</span>
+			if d.CanOwner && len(d.Keys) > 0 {
+				<a class="tuc-btn is-outline is-sm" href="/backups/kit">
+					@Icon("key-round", "size-3.5")
+					{ t(ctx, "backups.kit_generate") }
+				</a>
+			}
 		}
 		if len(d.Keys) == 0 {
 			@emptyState("key-round", t(ctx, "backups.keys.empty")) {
@@ -322,7 +284,12 @@ templ kitConfirmForm(csrf string, k BackupKeyRow, sudo bool) {
 templ backupTargets(d BackupsData) {
 	<section class={ cardClass }>
 		@cardHead(t(ctx, "backups.targets.title")) {
-			<span class="text-xs text-muted">{ t(ctx, "backups.targets.hint") }</span>
+			if d.CanOwner && len(d.Targets) > 0 {
+				<a class="tuc-btn is-outline is-sm" href="/backups/targets/new">
+					@Icon("plus", "size-3.5")
+					{ t(ctx, "backups.target_add") }
+				</a>
+			}
 		}
 		if len(d.Targets) == 0 {
 			@emptyState("cloud-upload", t(ctx, "backups.targets.empty")) {
@@ -397,7 +364,7 @@ templ backupServices(d BackupsData) {
 		@cardHead(t(ctx, "backups.services.title"))
 		<div class="tuc-table-wrap">
 			<table class="tuc-table is-compact w-full">
-				<thead><tr><th>{ t(ctx, "backups.services.service") }</th><th>{ t(ctx, "backups.services.schedule") }</th><th>{ t(ctx, "backups.services.last") }</th><th>{ t(ctx, "backups.services.wal") }</th><th class="is-number">{ t(ctx, "backups.services.size") }</th><th>{ t(ctx, "backups.services.tested") }</th><th class="tuc-table__actions"></th></tr></thead>
+				<thead><tr><th>{ t(ctx, "backups.services.service") }</th><th>{ t(ctx, "backups.services.schedule") }</th><th>{ t(ctx, "backups.services.last") }</th><th class="tuc-table__actions"></th></tr></thead>
 				<tbody>
 					for _, s := range d.Services {
 						@backupServiceRow(s, true)
@@ -406,9 +373,6 @@ templ backupServices(d BackupsData) {
 				</tbody>
 			</table>
 		</div>
-		if len(d.Services) == 0 {
-			<p class="m-0 border-t border-border px-4 py-3 text-[13px] text-muted">{ t(ctx, "backups.services.none") }</p>
-		}
 	</section>
 }
 
@@ -418,7 +382,7 @@ templ backupServiceRow(s BackupServiceRow, link bool) {
 			if link {
 				<a href={ templ.SafeURL(s.Href) }>{ s.Label }</a>
 			} else {
-				<span class="flex items-center gap-1.5">
+				<span class="flex items-center gap-1.5 font-sans">
 					@Icon("server", "size-3.5 text-muted")
 					{ t(ctx, "backups.services.panel") }
 				</span>
@@ -432,29 +396,10 @@ templ backupServiceRow(s BackupServiceRow, link bool) {
 				<span class="text-muted">—</span>
 			}
 		</td>
-		<td>
-			if s.WAL != "" {
-				<span class={ badgeTone(s.WALTone) }>{ s.WAL }</span>
-			} else {
-				<span class="text-muted">—</span>
-			}
-		</td>
-		<td class="is-number">{ s.Size }</td>
-		<td>
-			if s.Tested {
-				<span class="tuc-badge is-success is-plain">
-					@Icon("check", "size-3")
-					{ t(ctx, "backups.services.tested_yes") }
-				</span>
-			} else {
-				<span class="text-muted">—</span>
-			}
-		</td>
 		<td class="tuc-table__actions">
 			if link {
-				<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(s.Href) }>
-					@Icon("settings", "size-3.5")
-					{ t(ctx, "backups.services.open") }
+				<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL(s.Href) } aria-label={ t(ctx, "backups.services.open") } title={ t(ctx, "backups.services.open") }>
+					@Icon("chevron-right", "size-4")
 				</a>
 			}
 		</td>
@@ -467,23 +412,22 @@ templ backupHistory(d BackupsData) {
 		if len(d.Runs) == 0 {
 			@emptyState("history", t(ctx, "backups.history.empty"))
 		} else {
-			@backupRunsTable(d.Runs, true, d.CanAdmin && d.SudoActive)
+			@backupRunsTable(d.Runs, true, d.CanAdmin, d.SudoActive)
 		}
 	</section>
 }
 
-templ backupRunsTable(runs []BackupRunRow, showLabel, canLink bool) {
+// backupRunsTable lists backups: when, what (the overview) or which kind
+// (a service's tab), size and result, and a download for admins (behind
+// sudo: the file holds the data).
+templ backupRunsTable(runs []BackupRunRow, showLabel, admin, sudo bool) {
 	<div class="tuc-table-wrap">
 		<table class="tuc-table is-compact w-full">
 			<thead>
 				<tr>
 					<th>{ t(ctx, "backups.history.when") }</th>
-					if showLabel {
-						<th>{ t(ctx, "backups.history.what") }</th>
-					}
-					<th>{ t(ctx, "backups.history.kind") }</th>
+					<th>{ t(ctx, "backups.history.what") }</th>
 					<th class="is-number">{ t(ctx, "backups.services.size") }</th>
-					<th>{ t(ctx, "backups.history.check") }</th>
 					<th>{ t(ctx, "backups.history.result") }</th>
 					<th class="tuc-table__actions"></th>
 				</tr>
@@ -492,43 +436,42 @@ templ backupRunsTable(runs []BackupRunRow, showLabel, canLink bool) {
 				for _, r := range runs {
 					<tr>
 						<td class="whitespace-nowrap text-muted">{ r.When }</td>
-						if showLabel {
-							<td class="font-mono text-[13px]">{ r.Label }</td>
-						}
 						<td>
-							{ r.Kind }
-							if r.Class != "" {
-								<span class="tuc-badge is-plain ml-1">{ r.Class }</span>
+							if showLabel {
+								<span class="font-mono text-[13px]">{ r.Label }</span>
+							} else {
+								{ r.Kind }
 							}
-							<span class="block text-xs text-subtle">{ r.Trigger }</span>
 						</td>
-						<td class="is-number">{ r.Size }</td>
-						<td class="text-xs text-muted">
-							if r.Verified {
-								<span class="tuc-badge is-success is-plain">
-					@Icon("check", "size-3")
-					{ t(ctx, "backups.services.tested_yes") }
-				</span>
-							}
-							{ r.Checked }
-						</td>
+						<td class="is-number whitespace-nowrap">{ r.Size }</td>
 						<td>
-							<span class={ badgeTone(r.Tone) }>{ r.Status }</span>
-							if r.Warning != "" {
-								<span class="tuc-badge is-warning ml-1">{ r.Warning }</span>
-							}
-							if r.Uploads != "" {
-								<span class="block text-xs text-subtle">{ r.Uploads }</span>
-							}
+							<span class="inline-flex flex-wrap items-center gap-1">
+								<span class={ badgeTone(r.Tone) }>{ r.Status }</span>
+								if r.Verified {
+									<span class="tuc-badge is-success is-plain" title={ r.Checked }>
+										@Icon("check", "size-3")
+										{ t(ctx, "backups.services.tested_yes") }
+									</span>
+								}
+								if r.Warning != "" {
+									<span class="tuc-badge is-warning">{ r.Warning }</span>
+								}
+							</span>
 							if r.Error != "" {
 								<span class="block max-w-[360px] truncate text-xs text-danger" title={ r.Error }>{ r.Error }</span>
 							}
 						</td>
 						<td class="tuc-table__actions">
-							if canLink && r.CanLink {
-								<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL("/backups/runs/" + r.ID + "/download") } aria-label={ t(ctx, "backups.history.download") } title={ t(ctx, "backups.history.download") }>
-									@Icon("download", "size-3.5")
-								</a>
+							if admin && r.CanLink {
+								if sudo {
+									<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL("/backups/runs/" + r.ID + "/download") } aria-label={ t(ctx, "backups.history.download") } title={ t(ctx, "backups.history.download") }>
+										@Icon("download", "size-3.5")
+									</a>
+								} else {
+									<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "backups.history.download") } title={ t(ctx, "backups.history.download") }>
+										@Icon("download", "size-3.5")
+									</button>
+								}
 							}
 						</td>
 					</tr>
@@ -540,44 +483,13 @@ templ backupRunsTable(runs []BackupRunRow, showLabel, canLink bool) {
 
 // backupRules tells how to set the bucket up: what the server's credential
 // may do and the lifecycle rules that expire old backups.
-// backupSchedule says, in plain words, what is saved, how often and for
-// how long (the retention comes from the bucket's lifecycle rules).
-templ backupSchedule(d BackupsData) {
-	<section class={ cardClass }>
-		@cardHead(t(ctx, "backups.when.title"))
-		<div class="tuc-table-wrap">
-			<table class="tuc-table is-compact w-full">
-				<thead><tr><th>{ t(ctx, "backups.when.what") }</th><th>{ t(ctx, "backups.when.how_often") }</th><th>{ t(ctx, "backups.when.kept") }</th></tr></thead>
-				<tbody>
-					<tr>
-						<td>{ t(ctx, "backups.when.panel") }</td>
-						<td class="text-muted">{ t(ctx, "backups.when.panel_often") }</td>
-						<td class="text-muted">{ t(ctx, "backups.when.panel_kept") }</td>
-					</tr>
-					<tr>
-						<td>{ t(ctx, "backups.when.pg") }</td>
-						<td class="text-muted">{ t(ctx, "backups.when.pg_often") }</td>
-						<td class="text-muted">{ t(ctx, "backups.when.pg_kept") }</td>
-					</tr>
-					<tr>
-						<td>{ t(ctx, "backups.when.wal") }</td>
-						<td class="text-muted">{ t(ctx, "backups.when.wal_often") }</td>
-						<td class="text-muted">{ t(ctx, "backups.when.wal_kept") }</td>
-					</tr>
-					<tr>
-						<td>{ t(ctx, "backups.when.others") }</td>
-						<td class="text-muted" colspan="2">{ t(ctx, "backups.when.others_often") }</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
-	</section>
-}
-
 templ backupRules(d BackupsData) {
-	<section class={ cardClass }>
-		@cardHead(t(ctx, "backups.rules.title"))
-		<div class={ cardBodyClass }>
+	<details class={ cardClass + " group" }>
+		<summary class="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold">
+			@Icon("chevron-right", "size-4 text-muted transition group-open:rotate-90")
+			{ t(ctx, "backups.rules.title") }
+		</summary>
+		<div class={ cardBodyClass + " border-t border-border" }>
 			@notice("info", "info", t(ctx, "backups.rules.intro"))
 			<div class="tuc-table-wrap">
 				<table class="tuc-table is-compact w-full">
@@ -603,7 +515,7 @@ templ backupRules(d BackupsData) {
 			<p class="m-0 text-[13px] text-muted">{ t(ctx, "backups.rules.cofre") }</p>
 			<pre class="m-0 overflow-auto rounded-sm border border-border bg-surface-2 p-3 font-mono text-xs">{ "hangar-cofre setup-bucket" }</pre>
 		</div>
-	</section>
+	</details>
 }
 
 // KitData feeds the recovery kit page.

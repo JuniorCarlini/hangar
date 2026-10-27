@@ -90,7 +90,7 @@ templ tabBackups(d ServiceData) {
 				@emptyState("history", t(ctx, "backups.history.empty"))
 			}
 			if len(d.Backups.Runs) > 0 {
-				@backupRunsTable(d.Backups.Runs, false, d.CanAdmin && d.SudoCritical)
+				@backupRunsTable(d.Backups.Runs, false, d.CanAdmin, d.SudoCritical)
 			}
 			if len(d.Backups.Restores) > 0 {
 				<div class="border-t border-border">

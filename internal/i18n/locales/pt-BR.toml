@@ -1165,9 +1165,7 @@ title = "Fechar esta porta?"
 text = "Quem acessa de fora por ela perde a conexão."
 ok = "Fechar porta"
 
-[confirm.disconnect]
 
-[confirm.env_delete]
 
 [confirm.domain_delete]
 title = "Remover este domínio?"
@@ -1983,41 +1981,17 @@ kit_generate = "Gerar kit de recuperação"
 sudo_label = "Código do app autenticador para mexer em chaves e destinos"
 status_running = "em andamento"
 
-[backups.status]
-ok = "tudo em dia"
-warning = "atenção"
-danger = "problema"
+not_ready = "Para começar, gere o kit de recuperação e cadastre um destino."
 
-[backups.setup]
-title = "Como ligar os backups"
-intro = "São três passos, uma vez só. Depois disso tudo acontece sozinho, todo dia."
-kit = "1. Gere o seu Kit de recuperação"
-kit_text = "É um arquivo com a chave que abre os seus backups. Você baixa, guarda (no gerenciador de senhas ou impresso) e confirma que guardou. O servidor fica só com a parte que tranca: nem quem invadir o servidor consegue abrir os backups."
-target = "2. Crie um bucket e cadastre aqui"
-target_text = "Um bucket é uma pasta de armazenamento na nuvem (Backblaze B2, Wasabi, Cloudflare R2 ou AWS S3). Crie no site do provedor com a opção Object Lock ligada: ela impede que alguém apague os backups. O Hangar não cria o bucket sozinho de propósito: a chave que ele recebe só pode gravar e ler, nunca criar nem apagar. Assim, quem invadir o servidor não destrói as cópias."
-services = "3. Ligue o backup nos seus bancos"
-services_text = "Abra o serviço PostgreSQL, aba Backups, e escolha de quanto em quanto tempo. O painel em si já é salvo sozinho, todo dia."
+[backups.tab]
+list = "Backups"
+config = "Configuração"
+open_config = "Abrir configuração"
 
-[backups.when]
-title = "O que é salvo e quando"
-what = "O quê"
-how_often = "Quando"
-kept = "Guardado por"
-panel = "O painel (projetos, configurações, segredos e a chave mestra)"
-panel_often = "Todo dia de madrugada, e também até 2 h depois de você mudar alguma configuração"
-panel_kept = "35 dias"
-pg = "Bancos PostgreSQL"
-pg_often = "No intervalo que você escolher no serviço: a cada 1, 6, 12 ou 24 horas"
-pg_kept = "7 dias as cópias comuns; a primeira de cada semana, 35 dias; a primeira de cada mês, 400 dias"
-wal = "PostgreSQL minuto a minuto (opcional)"
-wal_often = "Contínuo: dá para voltar o banco para qualquer minuto"
-wal_kept = "9 dias"
-others = "MariaDB, MongoDB, Redis e arquivos dos apps"
-others_often = "Ainda não têm backup automático (em breve)."
+
 
 [backups.keys]
 title = "Kit de recuperação"
-hint = "Os backups abrem com qualquer uma das chaves confirmadas"
 empty = "Nenhuma chave ainda. Sem o kit, nenhum backup é feito."
 label = "Nome"
 public = "Chave pública"
@@ -2039,7 +2013,6 @@ action = "Confirmar o kit"
 
 [backups.targets]
 title = "Destinos"
-hint = "Cada backup vai para todos os destinos"
 empty = "Nenhum destino. Os backups precisam de um bucket com Object Lock."
 name = "Nome"
 where = "Endpoint / bucket / pasta"
@@ -2057,13 +2030,10 @@ title = "Serviços"
 service = "Serviço"
 schedule = "Agenda"
 last = "Último backup"
-wal = "WAL"
 size = "Tamanho"
-tested = "Testado"
 tested_yes = "testado"
 open = "Abrir"
 panel = "Painel Hangar"
-none = "Nenhum banco com backup automático ainda: crie um Postgres pelo template."
 off = "desligado"
 every = { one = "a cada {n} h, desde {at}", other = "a cada {n} h, desde {at}" }
 failed_at = "falhou {when}"
@@ -2079,8 +2049,6 @@ title = "Histórico"
 empty = "Nenhum backup feito ainda."
 when = "Quando"
 what = "O quê"
-kind = "Tipo"
-check = "Teste"
 result = "Resultado"
 counts = "{tables} tabelas, {rows} linhas"
 download = "Baixar (link assinado de 5 min)"

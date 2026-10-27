@@ -220,7 +220,7 @@ func tabBackups(d ServiceData) templ.Component {
 				}
 			}
 			if len(d.Backups.Runs) > 0 {
-				templ_7745c5c3_Err = backupRunsTable(d.Backups.Runs, false, d.CanAdmin && d.SudoCritical).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = backupRunsTable(d.Backups.Runs, false, d.CanAdmin, d.SudoCritical).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -39,8 +39,12 @@ func TestBackupsPageShowsSetupToEveryone(t *testing.T) {
 	c, _ := e.session(t, auth.RoleViewer)
 	rec := e.do(req{method: "GET", target: "/backups", cookies: []*http.Cookie{c}})
 	body := rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, "Como ligar os backups") || !strings.Contains(body, "O que é salvo e quando") || !strings.Contains(body, "diario/") {
+	if rec.Code != http.StatusOK || !strings.Contains(body, "Para começar") || !strings.Contains(body, `href="/backups?tab=config"`) {
 		t.Fatalf("backups page: %d", rec.Code)
+	}
+	rec = e.do(req{method: "GET", target: "/backups?tab=config", cookies: []*http.Cookie{c}})
+	if body = rec.Body.String(); rec.Code != http.StatusOK || !strings.Contains(body, "diario/") {
+		t.Fatalf("backups settings: %d", rec.Code)
 	}
 	if strings.Contains(body, `href="/backups/kit"`) {
 		t.Error("a viewer must not get the kit button")
@@ -74,7 +78,7 @@ func TestKitRegistrationNeedsOwnerSudoAndCode(t *testing.T) {
 	if len(keys) != 1 || keys[0].Confirmed {
 		t.Fatalf("keys: %+v", keys)
 	}
-	page := e.do(req{method: "GET", target: "/backups", cookies: []*http.Cookie{sc}}).Body.String()
+	page := e.do(req{method: "GET", target: "/backups?tab=config", cookies: []*http.Cookie{sc}}).Body.String()
 	if !strings.Contains(page, "aguardando confirmação") || !strings.Contains(page, `data-kit-file`) {
 		t.Fatal("the pending key must offer the confirmation form")
 	}
@@ -200,7 +204,7 @@ func TestOldKitConfirmationAsksAgain(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), i18n.Tl("pt-BR", "backups.kit_check.banner")) {
 		t.Fatal("the overview should ask about the kit")
 	}
-	rec = e.do(req{method: "GET", target: "/backups", cookies: []*http.Cookie{session}})
+	rec = e.do(req{method: "GET", target: "/backups?tab=config", cookies: []*http.Cookie{session}})
 	body := rec.Body.String()
 	if !strings.Contains(body, i18n.Tl("pt-BR", "backups.keys.due")) || !strings.Contains(body, `action="/backups/keys/confirm"`) {
 		t.Fatal("the backups page should offer to confirm the key again")
