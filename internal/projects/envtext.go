@@ -181,3 +181,32 @@ func (m *Manager) storeEnvFile(ctx context.Context, serviceID, text string) erro
 	}
 	return m.q.UpsertEnvFile(ctx, dbq.UpsertEnvFileParams{ServiceID: serviceID, TextEnc: enc, UpdatedAt: m.now().Unix()})
 }
+
+// ResolvedEnvText is EnvText (with every value) where each reference is
+// replaced by what it resolves to: the .env as the container gets it, to
+// copy and paste outside Hangar. Comments and order are kept; a reference
+// that cannot be resolved stays as written.
+func (m *Manager) ResolvedEnvText(ctx context.Context, p dbq.Project, serviceID string) (string, error) {
+	text, _, err := m.EnvText(ctx, serviceID, true)
+	if err != nil || !strings.Contains(text, "${{") {
+		return text, err
+	}
+	env := map[string]string{}
+	for _, line := range envLines(text) {
+		if kv, skip, ok := parseEnvLine(line); !skip && ok {
+			env[kv.Key] = kv.Value
+		}
+	}
+	resolved := m.ResolvedValues(ctx, p, env)
+	lines := envLines(strings.TrimSuffix(text, "\n"))
+	for i, line := range lines {
+		kv, skip, ok := parseEnvLine(line)
+		if skip || !ok || !strings.Contains(kv.Value, "${{") {
+			continue
+		}
+		if v, ok := resolved[kv.Key]; ok {
+			lines[i] = kv.Key + "=" + v
+		}
+	}
+	return strings.Join(lines, "\n") + "\n", nil
+}

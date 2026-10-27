@@ -407,6 +407,7 @@ title = "Deploys"
 last = { one = "o último", other = "últimos {n}" }
 
 [service.env]
+copy_hint = "Copia o arquivo com os valores de verdade (conexões resolvidas), pronto para colar fora do Hangar."
 empty_value = "vazia"
 file_hint = "Este é o arquivo inteiro: o que você apagar aqui é apagado no serviço. Linhas como DB_HOST=${{postgres.HOST}} são conexões."
 empty = "Nenhuma variável ainda. Escreva no .env ou use o Conector."
@@ -3013,6 +3014,9 @@ idle = "Sai sozinho depois de 30 minutos parado."
 level = "Escolha um dos três níveis."
 
 [connect]
+offered_as = "como {keys}"
+offered_as_hint = "Os outros serviços conectam a este valor pelo nome {keys}."
+computed = "gerado pelo Hangar"
 back = "Voltar aos serviços"
 use_suggestions = "Usar sugestões"
 cross_hint = "Escreva, ao lado de cada valor, a variável de {from} que o recebe. Só vem preenchido o que é certeza; linha vazia fica de fora."
@@ -3037,8 +3041,6 @@ save = "Conectar"
 nothing = "{service} não oferece nenhum valor para conectar. Nas variáveis dele, marque o que ele oferece."
 open = "Conector"
 no_targets = "Nenhum outro serviço deste projeto oferece valores. Num serviço feito por imagem ou Git, marque nas variáveis o que ele oferece."
-offered = "oferecida"
-offered_hint = "Os outros serviços do projeto podem se conectar a esta variável."
 used_by = "Usado por: {list}."
 used_by_item = "{service} ({var} ← {key})"
 delete_used = "Estes serviços usam este e vão falhar no próximo deploy: {list}. Desconecte-os ou aponte para outro serviço antes."

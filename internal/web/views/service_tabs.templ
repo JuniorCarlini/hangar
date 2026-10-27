@@ -148,80 +148,87 @@ templ tabVariables(d ServiceData) {
 			</div>
 		}
 		if len(d.Env) > 0 || len(d.Exports) > 0 {
-			<div class="tuc-table-wrap">
-				<table class="tuc-table is-compact w-full">
-					// A connected variable reads as a bridge: its name, the
-					// connector icon, the value it receives, and the service
-					// that value comes from at the end.
-					<thead><tr><th>{ t(ctx, "service.env.name") }</th><th class="w-8"><span class="sr-only">{ t(ctx, "connect.open") }</span></th><th>{ t(ctx, "service.env.value") }</th><th class="text-right"><span class="sr-only">{ t(ctx, "connect.service") }</span></th></tr></thead>
-					<tbody>
-						for _, v := range d.Env {
-							{{ svc, key := connection(v.Value) }}
-							{{ broken := refWarnings(ctx, d.RefWarnings, v.Key) }}
-							<tr>
-								<td class="font-mono text-[13px]">{ v.Key }</td>
-								<td class="px-0 text-center">
-									if svc != "" && broken == "" {
-										<span class="inline-grid place-items-center text-accent-text" title={ v.Value }>
-											@Icon("cable", "size-3.5")
-										</span>
-									}
-								</td>
-								<td class="max-w-[300px] truncate font-mono text-[13px]">
-									if broken != "" {
-										<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
-										<span class="ref-text">{ v.Value }</span>
-									} else if svc != "" {
-										<span class="rounded-sm bg-accent-soft px-1.5 py-0.5 text-accent-text" title={ v.Value }>{ key }</span>
-									} else if isRef(v.Value) {
-										<span class="tuc-badge is-info ref-badge">ref</span>
-										<span class="ref-text">{ v.Value }</span>
-									} else if v.Secret && v.Value == "" {
-										<span class="text-muted">••••••••••••</span>
-									} else if v.Value == "" {
-										<span class="font-sans text-xs text-subtle">{ t(ctx, "service.env.empty_value") }</span>
-									} else {
-										{ v.Value }
-									}
-								</td>
-								<td class="text-right text-xs whitespace-nowrap text-muted">
-									if svc != "" && broken == "" {
-										{ svc }
-									}
-								</td>
-							</tr>
-						}
-						// What a template offers the others (HOST, PASSWORD…): read
-						// only, it comes with the service.
-						for _, e := range d.Exports {
-							<tr>
-								<td class="font-mono text-[13px]">
-									<span class="inline-flex items-center gap-1.5">
-										{ e.Key }
-										<span class="tuc-badge is-info is-plain" title={ t(ctx, "connect.offered_hint") }>{ t(ctx, "connect.offered") }</span>
+			// Fixed layout: a long value is cut with "…" (its copy button
+			// gives it whole) instead of scrolling the table sideways.
+			<table class="tuc-table is-compact w-full table-fixed">
+				<thead>
+					<tr>
+						<th class="w-[38%]">{ t(ctx, "service.env.name") }</th>
+						<th class="w-7 px-0"><span class="sr-only">{ t(ctx, "connect.open") }</span></th>
+						<th>{ t(ctx, "service.env.value") }</th>
+						<th class="w-28"><span class="sr-only">{ t(ctx, "connect.service") }</span></th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, v := range d.Env {
+						{{ svc, key := connection(v.Value) }}
+						{{ broken := refWarnings(ctx, d.RefWarnings, v.Key) }}
+						<tr>
+							<td class="truncate font-mono text-[13px]" title={ v.Key }>
+								{ v.Key }
+								if len(v.Aliases) > 0 {
+									<span class="block truncate font-sans text-[11px] text-subtle" title={ t(ctx, "connect.offered_as_hint", "keys", strings.Join(v.Aliases, ", ")) }>{ t(ctx, "connect.offered_as", "keys", strings.Join(v.Aliases, ", ")) }</span>
+								}
+							</td>
+							<td class="px-0 text-center">
+								if svc != "" && broken == "" {
+									<span class="inline-grid place-items-center text-accent-text" title={ v.Value }>
+										@Icon("cable", "size-3.5")
 									</span>
-								</td>
-								<td></td>
-								<td class="max-w-[300px] truncate font-mono text-[13px]">
-									if e.Secret && e.Value == "" {
-										<span class="text-muted">••••••••••••</span>
-									} else {
-										{ e.Value }
-									}
-								</td>
-								<td></td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			</div>
+								}
+							</td>
+							<td class="truncate font-mono text-[13px]">
+								if broken != "" {
+									<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
+									<span class="ref-text">{ v.Value }</span>
+								} else if svc != "" {
+									<span class="rounded-sm bg-accent-soft px-1.5 py-0.5 text-accent-text" title={ v.Value }>{ key }</span>
+								} else if isRef(v.Value) {
+									<span class="tuc-badge is-info ref-badge">ref</span>
+									<span class="ref-text">{ v.Value }</span>
+								} else if v.Secret && v.Value == "" {
+									<span class="text-muted">••••••••••••</span>
+								} else if v.Value == "" {
+									<span class="font-sans text-xs text-subtle">{ t(ctx, "service.env.empty_value") }</span>
+								} else {
+									<span title={ v.Value }>{ v.Value }</span>
+								}
+							</td>
+							<td>
+								@valueTail(ctx, svc, broken == "", v.Key, v.Copy)
+							</td>
+						</tr>
+					}
+					// What only the panel computes for a template (HOST,
+					// DATABASE_URL): read only, other services connect to it.
+					for _, e := range d.Exports {
+						<tr>
+							<td class="truncate font-mono text-[13px]" title={ e.Key }>
+								{ e.Key }
+								<span class="block truncate font-sans text-[11px] text-subtle">{ t(ctx, "connect.computed") }</span>
+							</td>
+							<td class="px-0"></td>
+							<td class="truncate font-mono text-[13px]">
+								if e.Secret && e.Value == "" {
+									<span class="text-muted">••••••••••••</span>
+								} else {
+									<span title={ e.Value }>{ e.Value }</span>
+								}
+							</td>
+							<td>
+								@valueTail(ctx, "", false, e.Key, e.Value)
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
 		} else {
 			@emptyState("braces", t(ctx, "service.env.empty"))
 		}
-		if len(d.UsedBy) > 0 {
-			<div class="flex items-start gap-2 border-t border-border px-4 py-3 text-[13px] text-muted">
-				@Icon("cable", "size-3.5 mt-0.5 shrink-0")
-				<span>{ t(ctx, "connect.used_by", "list", strings.Join(d.UsedBy, ", ")) }</span>
+		if len(d.UsedByNames) > 0 {
+			<div class="flex items-center gap-2 border-t border-border px-4 py-3 text-[13px] text-muted" title={ strings.Join(d.UsedBy, ", ") }>
+				@Icon("cable", "size-3.5 shrink-0")
+				<span class="truncate">{ t(ctx, "connect.used_by", "list", strings.Join(d.UsedByNames, ", ")) }</span>
 			</div>
 		}
 	</section>
@@ -259,12 +266,17 @@ templ tabVariables(d ServiceData) {
 					<div class="flex flex-col gap-1.5">
 						<div class="flex items-center justify-between gap-2">
 							<label class="tuc-label" for="bulk-env">{ t(ctx, "service.env.bulk_label") }</label>
-							<button type="button" class="tuc-btn is-ghost is-sm" data-env-copy data-copied={ t(ctx, "common.copied") }>
+							<button type="button" class="tuc-btn is-ghost is-sm" data-env-copy data-copied={ t(ctx, "common.copied") } title={ t(ctx, "service.env.copy_hint") }>
 								@Icon("copy", "size-3.5")
 								<span data-env-copy-label>{ t(ctx, "service.env.copy") }</span>
 							</button>
 						</div>
 						<textarea class="tuc-input font-mono text-[13px]" id="bulk-env" name="env" rows="16" spellcheck="false" autocomplete="off" placeholder={ t(ctx, "service.env.bulk_placeholder") } data-envimport-src>{ d.EnvText }</textarea>
+						// The copy button gives this (references resolved) while
+						// the editor is untouched; once edited, the editor's text.
+						if d.EnvCopy != "" {
+							<template data-env-resolved>{ d.EnvCopy }</template>
+						}
 					</div>
 					<div class="flex justify-end gap-2">
 						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
@@ -277,6 +289,21 @@ templ tabVariables(d ServiceData) {
 			</div>
 		</dialog>
 	}
+}
+
+// valueTail ends a variable's row: the service a connected value comes
+// from, then the copy button (when there is something to copy).
+templ valueTail(ctx context.Context, svc string, showSvc bool, key, copy string) {
+	<span class="flex items-center justify-end gap-1">
+		if svc != "" && showSvc {
+			<span class="truncate text-xs text-muted">{ svc }</span>
+		}
+		if copy != "" {
+			<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ copy } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "common.copy_name", "name", key) } title={ t(ctx, "common.copy_name", "name", key) }>
+				@Icon("copy", "size-3.5")
+			</button>
+		}
+	</span>
 }
 
 // connectorDialog: pick a service, then cross its values with the app's

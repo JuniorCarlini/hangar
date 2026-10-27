@@ -125,8 +125,12 @@
       label.textContent = msg;
       setTimeout(function () { label.textContent = old; }, 1500);
     }
+    // Untouched editor: the file with references resolved, so it works
+    // pasted outside Hangar. Edited: exactly what is in the editor.
+    var resolved = form.querySelector("template[data-env-resolved]");
+    var text = resolved && ta.value === ta.defaultValue ? resolved.content.textContent : ta.value;
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(ta.value).then(done, function () {});
+      navigator.clipboard.writeText(text).then(done, function () {});
     } else {
       ta.select();
       try { document.execCommand("copy"); done(); } catch (e) { /* ignore */ }

@@ -57,7 +57,7 @@ func TestConnectDialogAndSave(t *testing.T) {
 	if !strings.Contains(tab, `title="${{db.HOST}}"`) {
 		t.Error("the connected variable is not shown as a connection")
 	}
-	if db := get("/p/lab/s/db?tab=variables"); !strings.Contains(db, "Usado por: web (DATABASE_URL ← DATABASE_URL), web (PGHOST ← HOST).") {
+	if db := get("/p/lab/s/db?tab=variables"); !strings.Contains(db, "Usado por: web.") || !strings.Contains(db, "web (DATABASE_URL ← DATABASE_URL), web (PGHOST ← HOST)") {
 		t.Error("the database does not list who uses it")
 	}
 

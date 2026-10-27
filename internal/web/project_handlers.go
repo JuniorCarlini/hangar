@@ -363,12 +363,26 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	}
 	if deps, err := h.projects.Dependents(r.Context(), p.Slug, s.Slug); err == nil {
 		d.UsedBy = dependentsLabel(r, deps)
+		for _, dep := range deps {
+			name := dep.Service
+			if dep.Project != "" {
+				name = dep.Project + "/" + dep.Service
+			}
+			if !slices.Contains(d.UsedByNames, name) {
+				d.UsedByNames = append(d.UsedByNames, name)
+			}
+		}
 	}
 	d.ConnectOffers = h.connectOffers(r, p, s.Slug)
 	// Admins see every value, in the table and in the .env editor; the
 	// table follows the order of the .env file.
 	if text, _, err := h.projects.EnvText(r.Context(), s.ID, d.CanAdmin); err == nil {
 		d.EnvText = text
+	}
+	if d.CanAdmin {
+		if text, err := h.projects.ResolvedEnvText(r.Context(), p, s.ID); err == nil {
+			d.EnvCopy = text
+		}
 	}
 	if env, err := h.projects.EnvInFileOrder(r.Context(), s.ID, d.CanAdmin); err == nil {
 		for _, e := range env {
@@ -428,6 +442,26 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 				row.Value, row.Revealed = v.exportValue, true
 			}
 			d.Exports = append(d.Exports, row)
+		}
+	}
+	// One row per value: an export repeating a variable becomes a tag on it.
+	d.Exports = views.MergeExports(d.Env, d.Exports)
+	// What the copy buttons give. Admins get every value with references
+	// resolved; below admin, only plain values that are not secret.
+	if d.CanAdmin {
+		env := make(map[string]string, len(d.Env))
+		for _, e := range d.Env {
+			env[e.Key] = e.Value
+		}
+		resolved := h.projects.ResolvedValues(r.Context(), p, env)
+		for i := range d.Env {
+			d.Env[i].Copy = resolved[d.Env[i].Key]
+		}
+	} else {
+		for i, e := range d.Env {
+			if !e.Secret && !strings.Contains(e.Value, "${{") {
+				d.Env[i].Copy = e.Value
+			}
 		}
 	}
 	if ports, err := h.projects.ListPorts(r.Context(), s.ID); err == nil {

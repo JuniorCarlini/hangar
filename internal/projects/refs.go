@@ -264,3 +264,27 @@ func (m *Manager) BrokenRefs(ctx context.Context, p dbq.Project) ([]BrokenRef, e
 	})
 	return out, nil
 }
+
+// ResolvedValues is what each variable is worth once its references are
+// resolved, for the panel's copy buttons: pasting it elsewhere has to work.
+// A variable whose reference cannot be resolved is left out.
+func (m *Manager) ResolvedValues(ctx context.Context, p dbq.Project, env map[string]string) map[string]string {
+	l := m.newRefLookup(p)
+	out := make(map[string]string, len(env))
+	for key, val := range env {
+		ok := true
+		v := refRE.ReplaceAllStringFunc(val, func(ref string) string {
+			g := refRE.FindStringSubmatch(ref)
+			got, problem, err := l.resolve(ctx, g[1], g[2], g[3])
+			if err != nil || problem != "" {
+				ok = false
+				return ref
+			}
+			return got
+		})
+		if ok {
+			out[key] = v
+		}
+	}
+	return out
+}

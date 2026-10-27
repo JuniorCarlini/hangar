@@ -320,3 +320,29 @@ EMPTY=
 		t.Errorf("the stored file lost the secret's line:\n%s", full)
 	}
 }
+
+// Copying the .env gives the file as the container gets it: references
+// resolved, comments and order kept, so it works pasted outside Hangar.
+func TestResolvedEnvText(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, webID := f.service(t)
+	if _, err := f.m.CreateFromTemplate(ctx, f.who, "lab", "postgres", "db", nil); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	if _, err := f.m.SetEnvFile(ctx, f.who, webID, "# banco\nDB_HOST=${{db.HOST}}\nDEBUG=0\n"); err != nil {
+		t.Fatal(err)
+	}
+	p, _, err := f.m.GetService(ctx, "lab", "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.m.ResolvedEnvText(ctx, p, webID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(got, "# banco\nDB_HOST=") || strings.Contains(got, "${{") || !strings.HasSuffix(got, "DEBUG=0\n") {
+		t.Errorf("resolved file:\n%s", got)
+	}
+}

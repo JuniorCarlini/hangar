@@ -1,6 +1,9 @@
 package views
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ServiceRow is a service on the project page.
 type ServiceRow struct {
@@ -206,6 +209,12 @@ type EnvRow struct {
 	Revealed bool
 	// Offered: the other services can connect to this variable.
 	Offered bool
+	// Aliases are the names other services use for this value (a
+	// template's POSTGRES_USER is offered as USER).
+	Aliases []string
+	// Copy is what the copy button gives: the value, with references
+	// resolved, so it works pasted anywhere. Empty: nothing to copy.
+	Copy string
 }
 
 // ConnectOffer is one value another service offers to connect to.
@@ -279,14 +288,17 @@ type ServiceData struct {
 	// else the variables marked as offered are what it offers.
 	HasExports bool
 	// UsedBy are the variables of other services that reference this one
-	// ("app (DATABASE_URL ← DATABASE_URL)").
-	UsedBy []string
+	// ("app (DATABASE_URL ← DATABASE_URL)"); UsedByNames, those services.
+	UsedBy      []string
+	UsedByNames []string
 	// ConnectOffers are the values the project's other services offer, by
 	// service name, for the connector's "variable B".
 	ConnectOffers []ConnectOffer
 	// EnvText is the .env file as written, for the editor (secrets as
-	// "KEY=••••" below admin).
+	// "KEY=••••" below admin); EnvCopy, the same with references resolved
+	// (admins only), for the editor's copy button.
 	EnvText string
+	EnvCopy string
 	EnvSuggest  *EnvSuggest  // nil when the repository suggests nothing new
 	Domains     DomainsSection
 	Exports     []ExportRow
@@ -323,6 +335,36 @@ type ExportRow struct {
 	Value    string
 	Secret   bool
 	Revealed bool
+}
+
+// aliasOf reports whether env is the variable a template offers as export:
+// the same name, or the image's own prefixed form (POSTGRES_USER for USER,
+// POSTGRES_DB for DATABASE).
+func aliasOf(env, export string) bool {
+	return env == export || strings.HasSuffix(env, "_"+export) ||
+		(export == "DATABASE" && strings.HasSuffix(env, "_DB"))
+}
+
+// MergeExports attaches each export that only repeats a variable (same
+// value under the template's other name) to that variable, and returns
+// the exports left: the ones only the panel computes (HOST, DATABASE_URL).
+func MergeExports(env []EnvRow, exports []ExportRow) []ExportRow {
+	var rest []ExportRow
+	for _, e := range exports {
+		matched := false
+		for i := range env {
+			same := env[i].Value == "" || e.Value == "" || env[i].Value == e.Value
+			if same && aliasOf(env[i].Key, e.Key) {
+				env[i].Aliases = append(env[i].Aliases, e.Key)
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			rest = append(rest, e)
+		}
+	}
+	return rest
 }
 
 // PortRow is a published port.

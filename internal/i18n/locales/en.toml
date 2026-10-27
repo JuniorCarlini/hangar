@@ -407,6 +407,7 @@ title = "Deploys"
 last = { one = "the latest", other = "last {n}" }
 
 [service.env]
+copy_hint = "Copies the file with the real values (connections resolved), ready to paste outside Hangar."
 empty_value = "empty"
 file_hint = "This is the whole file: what you remove here is removed from the service. Lines such as DB_HOST=${{postgres.HOST}} are connections."
 empty = "No variables yet. Write them in the .env or use the Connector."
@@ -3012,6 +3013,9 @@ idle = "Logs you out after 30 minutes idle."
 level = "Pick one of the three levels."
 
 [connect]
+offered_as = "as {keys}"
+offered_as_hint = "Other services connect to this value by the name {keys}."
+computed = "made by Hangar"
 back = "Back to the services"
 use_suggestions = "Use suggestions"
 cross_hint = "Next to each value, write the {from} variable that receives it. Only what is certain comes filled; an empty row is left out."
@@ -3036,8 +3040,6 @@ save = "Connect"
 nothing = "{service} offers no value to connect to. In its variables, mark what it offers."
 open = "Connector"
 no_targets = "No other service in this project offers values. On a service built from an image or Git, mark in its variables what it offers."
-offered = "offered"
-offered_hint = "The project's other services can connect to this variable."
 used_by = "Used by: {list}."
 used_by_item = "{service} ({var} ← {key})"
 delete_used = "These services use this one and will fail at their next deploy: {list}. Disconnect them or point them at another service first."
