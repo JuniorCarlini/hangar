@@ -94,3 +94,26 @@ func TestValidation(t *testing.T) {
 		t.Error("an image wider than 2048 px was accepted")
 	}
 }
+
+// Caddy runs these pages through its templates handler with [[ ]]: text
+// typed in the brand must never become a template action on the sites.
+func TestBrandTextCannotInjectCaddyTemplates(t *testing.T) {
+	b := Brand{
+		Name:    `Loja [[.Req.Header]]`,
+		Contact: `[[env "HOME"]]`,
+		Pages:   map[string]Page{Kinds[0]: {Title: `[[httpInclude "/x"]]`, Text: `oi [[ .OriginalReq.URL.Query.Get "q" ]]`}},
+	}
+	out, err := Render(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := string(out[File(Kinds[0])])
+	for _, bad := range []string{"[[.Req", `[[env`, `[[httpInclude`, "[[ .OriginalReq"} {
+		if strings.Contains(page, bad) {
+			t.Errorf("the page still carries %q", bad)
+		}
+	}
+	if !strings.Contains(page, "[[") {
+		t.Error("the page's own Caddy actions should be untouched")
+	}
+}

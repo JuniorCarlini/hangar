@@ -264,18 +264,27 @@ func Render(b Brand) (map[string][]byte, error) {
 	return out, nil
 }
 
+// noDelims breaks Caddy's template delimiters in text the operator typed:
+// Caddy serves these pages through its templates handler with [[ ]], so a
+// "[[ .Req.Header ]]" in a brand text would run on every hosted site. A
+// zero-width space keeps the text looking the same.
+func noDelims(s string) string {
+	return strings.NewReplacer("[[", "[\u200b[", "]]", "]\u200b]").Replace(s)
+}
+
 func renderOne(b Brand, kind string) ([]byte, error) {
 	d := builtin[kind]
+	b.Name, b.Contact = noDelims(b.Name), noDelims(b.Contact)
 	data := pageData{
 		Lang: "pt-BR", Title: d.title, Text: d.text, Code: d.code, Tone: d.tone, Theme: b.Theme,
 		Rings: d.rings, Retry: d.retry, Icon: template.HTML(icons[kind]), Extra: extra(kind), //nolint:gosec // fixed markup
 		Brand: b, T: map[string]string{"help": "Precisa de ajuda?"},
 	}
 	if p := b.Pages[kind]; p.Title != "" {
-		data.Title = p.Title
+		data.Title = noDelims(p.Title)
 	}
 	if p := b.Pages[kind]; p.Text != "" {
-		data.Text = p.Text
+		data.Text = noDelims(p.Text)
 	}
 	accent := b.Color
 	if accent == "" {
