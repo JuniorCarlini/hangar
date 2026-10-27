@@ -138,11 +138,12 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 .svc-meta { padding: 0 20px 4px; }
 /* The main actions (deploy, restart, stop, terminal): side by side, full
    width, wrapping on a narrow drawer. */
-/* Two per row: deploy and restart, then start/stop beside the terminal.
-   An odd one out (no terminal for non-admins) takes the whole row. */
-.svc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 20px 16px; }
-.svc-actions > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+.svc-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 20px 16px; }
+.svc-actions > * { flex: 1 1 auto; }
 .svc-actions form { display: flex; min-width: 0; }
+/* The second row: automatic deploys beside the terminal, half each. */
+.svc-actions__pair { display: flex; flex-basis: 100%; gap: 8px; min-width: 0; }
+.svc-actions__pair > * { flex: 1 1 0; min-width: 0; }
 /* The tabs in a narrow drawer: tighter. */
 .svc-drawer .tuc-tabs__list { overflow-x: auto; padding: 0 12px; scrollbar-width: none; }
 .svc-drawer .tuc-tabs__tab { padding-inline: 8px; font-size: 13px; white-space: nowrap; }
@@ -468,7 +469,8 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
   .card-head .tuc-btn.is-sm:not(.is-icon):not(.is-ghost) { width: 100%; }
   :is(.page-body, .svc-body) form:has(> .tuc-btn:only-of-type) { width: 100%; }
   /* A service's actions: two equal columns. */
-  .svc-actions { padding: 12px 16px 14px; }
+  .svc-actions { display: grid; grid-template-columns: 1fr 1fr; padding: 12px 16px 14px; }
+  .svc-actions__pair { grid-column: 1 / -1; }
   /* The "changes to apply" notice puts its button under the text. */
   .svc-body [role=status].flex { flex-wrap: wrap; }
   /* Fixed widths meant for a desktop give way. */

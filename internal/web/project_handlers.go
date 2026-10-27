@@ -595,7 +595,7 @@ func inferTab(r *http.Request) string {
 		return "variables"
 	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed":
 		return "network"
-	case "deploy-settings", "git", "git-token", "webhook-off", "auto-on", "auto-off", "volume", "volume-removed", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off":
+	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off":
 		return "settings"
 	case "backup-policy", "backup-queued", "backup-preparing", "restore-started":
 		return "backups"

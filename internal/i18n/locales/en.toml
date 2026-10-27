@@ -1946,7 +1946,8 @@ security = "Only HTTPS and public servers are accepted. The token is tested befo
 submit = "Create and deploy"
 
 [git.auto]
-label = "Automatic deploys"
+on = "Turn on automatic deploys"
+off = "Turn off automatic deploys"
 hint = "On, Hangar checks the {branch} branch every minute and deploys each new commit. It only goes live if it passes its checks."
 
 [git.webhook]

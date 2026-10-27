@@ -1946,7 +1946,8 @@ security = "O endereço só aceita HTTPS e servidores públicos. O token é test
 submit = "Criar e fazer deploy"
 
 [git.auto]
-label = "Deploy automático"
+on = "Ligar deploy automático"
+off = "Desligar deploy automático"
 hint = "Ligado, o Hangar confere o branch {branch} a cada minuto e faz o deploy de cada commit novo. Ele só entra no ar se passar nas verificações."
 
 [git.webhook]

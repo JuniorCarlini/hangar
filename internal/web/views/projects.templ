@@ -455,7 +455,10 @@ templ serviceActions(d ServiceData) {
 		// The terminal opens in a large modal (terminalDialogs); without
 		// sudo the button asks for it first, then the page comes back with
 		// the terminal open.
-		<div class="flex min-w-0">
+		<div class="svc-actions__pair">
+			if d.Git != nil {
+				@autoDeployButton(d)
+			}
 			if d.State != "running" {
 				<button type="button" class="tuc-btn is-outline w-full" disabled title={ t(ctx, "terminal.not_running") }>
 					@Icon("square-terminal", "size-4")
@@ -474,6 +477,26 @@ templ serviceActions(d ServiceData) {
 			}
 		</div>
 	}
+}
+
+// autoDeployButton turns the branch polling on or off, the same two-state
+// button as start/stop.
+templ autoDeployButton(d ServiceData) {
+	<form method="post" action={ templ.SafeURL(d.base() + "/git/auto") } title={ t(ctx, "git.auto.hint", "branch", d.Git.Branch) }>
+		<input type="hidden" name="csrf" value={ d.CSRF }/>
+		if d.Git.AutoDeploy {
+			<button class="tuc-btn is-outline w-full" type="submit" id="git-auto">
+				@Icon("refresh-cw", "size-4")
+				{ t(ctx, "git.auto.off") }
+			</button>
+		} else {
+			<input type="hidden" name="on" value="1"/>
+			<button class="tuc-btn is-success w-full" type="submit" id="git-auto">
+				@Icon("refresh-cw", "size-4")
+				{ t(ctx, "git.auto.on") }
+			</button>
+		}
+	</form>
 }
 
 templ logsCard(d ServiceData) {
