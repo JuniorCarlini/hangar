@@ -3,7 +3,7 @@
 // does opens the connect dialog, where each offered value gets the variable
 // of the dragged service that receives it (a reference such as
 // DB_HOST = ${{db.HOST}}), applied by the next deploy. The Variables tab
-// opens the same dialog from "Connect to…". Texts come from data-*.
+// opens the same dialog from "Connector". Texts come from data-*.
 (function () {
   var modal = document.getElementById('connect-modal');
   if (!modal) return;

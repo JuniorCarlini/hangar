@@ -310,7 +310,7 @@ renomear nada. Nada é copiado: o valor é lido a cada deploy.
   serviço feito por imagem ou Git oferece as variáveis que um admin marca
   (ícone de cabo na linha da variável; tabela `service_offers`). Quem não
   oferece nada não recebe conexão: o canvas avisa e não salva.
-- **Conectar:** arrastar de um card a outro no canvas, ou **Conectar a…** na
+- **Conectar:** arrastar de um card a outro no canvas, ou **Conector** na
   aba Variáveis. A janela lista o que o outro oferece e, para cada valor, a
   variável que o recebe. O nome sugerido é um que o app já usa ou que o
   `.env.example` dele documenta (`PGHOST`, `POSTGRES_PASSWORD`, `DB_NAME`…);
