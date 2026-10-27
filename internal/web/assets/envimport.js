@@ -38,31 +38,43 @@
     ta.value = text + "# " + (src.getAttribute("data-comment") || "") + "\n" + lines.join("\n") + "\n";
   }
 
-  // appendBlock adds the connector's lines for one service (a comment, then
-  // KEY=${{service.VALUE}} references) to the end of the editor. A name
-  // already in the editor is left alone: the operator renames or removes
-  // lines there before saving.
+  // appendBlock puts the connector's lines (a "# service" comment, then
+  // KEY=${{service.VALUE}} references) into the editor. A variable already
+  // in the file is changed where it is: same line, same place, comments
+  // around it untouched. Only the new ones go to the end, under the
+  // comment. Returns how many lines changed.
   function appendBlock(form, block) {
     var ta = form.querySelector("[data-envimport-src]");
-    if (!ta) return;
-    var present = {};
-    var have = ta.value.split("\n");
-    for (var i = 0; i < have.length; i++) {
-      var m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(have[i]);
-      if (m) present[m[1]] = true;
+    if (!ta) return 0;
+    var lines = ta.value.split("\n");
+    var at = {};
+    for (var i = 0; i < lines.length; i++) {
+      var m = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(lines[i]);
+      if (m && !(m[1] in at)) at[m[1]] = i;
     }
-    var lines = block.split("\n").filter(function (l) {
+    var head = "";
+    var added = [];
+    var changed = 0;
+    block.split("\n").forEach(function (l) {
+      if (!l) return;
       var m = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(l);
-      return l && (!m || !present[m[1]]);
+      if (!m) { head = l; return; }
+      if (m[1] in at) {
+        if (lines[at[m[1]]] !== l) { lines[at[m[1]]] = l; changed++; }
+      } else {
+        added.push(l);
+      }
     });
-    if (lines.length < 2) return;
-    var text = ta.value;
+    var text = lines.join("\n");
+    if (added.length) {
+      text = text.replace(/\n*$/, "");
+      if (text) text += "\n\n";
+      text += (head ? head + "\n" : "") + added.join("\n");
+    }
     if (text && !/\n$/.test(text)) text += "\n";
-    if (text) text += "\n";
-    ta.value = text + lines.join("\n") + "\n";
+    ta.value = text;
     ta.focus();
-    ta.setSelectionRange(ta.value.length, ta.value.length);
-    ta.scrollTop = ta.scrollHeight;
+    return changed + added.length;
   }
 
   function openModal(dlg) {
