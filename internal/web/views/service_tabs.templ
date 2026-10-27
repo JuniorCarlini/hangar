@@ -1315,9 +1315,9 @@ templ maintenanceButton(d ServiceData) {
 		<form id="maintenance" class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/maintenance") }>
 			<input type="hidden" name="csrf" value={ d.CSRF }/>
 			<input type="hidden" name="action" value="off"/>
-			<button class="tuc-btn is-warning is-sm" type="submit" aria-pressed="true" title={ t(ctx, "service.maintenance.turn_off") }>
+			<button class="tuc-btn is-outline is-sm" type="submit" aria-pressed="true">
 				@Icon("wrench", "size-3.5")
-				{ t(ctx, "service.maintenance.button") }
+				{ t(ctx, "service.maintenance.turn_off") }
 			</button>
 		</form>
 	} else {
