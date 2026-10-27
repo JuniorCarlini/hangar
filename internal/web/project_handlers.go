@@ -361,8 +361,6 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	}
 	if d.Git = h.gitView(r, s.ID, s.ProjectID, v); d.Git != nil {
 		d.Image = d.Git.Display + "@" + d.Git.Branch
-	} else if !strings.Contains(s.Image, "@") {
-		d.ImageRepo, d.ImageTag = projects.SplitImage(s.Image)
 	}
 	d.State = h.serviceState(r.Context(), p.Slug, s)
 	d.Deploying = d.State == "deploying"
@@ -628,11 +626,19 @@ func (h *handlers) deployService(w http.ResponseWriter, r *http.Request) {
 	redirectLocal(w, r, h.serviceBase(r)+"?ok=deploy")
 }
 
-// changeImage points the service at another tag of its image and deploys
-// it (from the Settings tab, or from the updates page when a newer tag
-// fixes a vulnerability). A deploy that fails puts the previous tag back.
+// changeImage points the service at another image (the Settings tab sends
+// the whole reference) or another tag of its image (the updates page, when
+// a newer tag fixes a vulnerability) and deploys it. A deploy that fails
+// puts the previous image back.
 func (h *handlers) changeImage(w http.ResponseWriter, r *http.Request) {
-	if _, err := h.projects.ChangeImageTag(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), r.PostFormValue("tag")); err != nil {
+	project, service := r.PathValue("project"), r.PathValue("service")
+	var err error
+	if image := r.PostFormValue("image"); image != "" {
+		_, err = h.projects.ChangeImage(r.Context(), actor(r), project, service, image)
+	} else {
+		_, err = h.projects.ChangeImageTag(r.Context(), actor(r), project, service, r.PostFormValue("tag"))
+	}
+	if err != nil {
 		code, msg := userError(r, err)
 		h.renderService(w, r, serviceView{status: code, errMsg: msg})
 		return

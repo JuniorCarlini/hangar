@@ -16,6 +16,7 @@ var (
 	ErrImageGit  = &i18n.Error{Key: "image_tag.error.git"}
 	ErrImageTag  = &i18n.Error{Key: "image_tag.error.tag"}
 	ErrImageSame = &i18n.Error{Key: "image_tag.error.same"}
+	ErrImage     = &i18n.Error{Key: "image_tag.error.image"}
 	// ErrImageChanged: someone changed the service's image meanwhile.
 	ErrImageChanged = &i18n.Error{Key: "image_tag.error.changed"}
 )
@@ -36,14 +37,30 @@ func SplitImage(image string) (repo, tag string) {
 }
 
 // ChangeImageTag points a service run from an image at another tag of the
-// same repository and deploys it: only the tag can change, so this never
-// swaps what the service is (another image would need the same trust as
-// creating a service). The deploy keeps the previous version serving when
-// the new one does not become healthy (rolling), or starts it again
-// (recreate, under the same rules as any deploy); either way the service
-// goes back to the previous tag, so the next deploy does not retry the
-// broken one.
+// same repository and deploys it (the updates page: a newer tag that fixes
+// a vulnerability). See ChangeImage.
 func (m *Manager) ChangeImageTag(ctx context.Context, a Actor, projectSlug, serviceSlug, tag string) (string, error) {
+	_, s, err := m.GetService(ctx, projectSlug, serviceSlug)
+	if err != nil {
+		return "", err
+	}
+	tag = strings.TrimSpace(tag)
+	repo, _ := SplitImage(s.Image)
+	if strings.Contains(s.Image, "@") || !tagRE.MatchString(tag) || !node.ImageRE.MatchString(repo+":"+tag) {
+		return "", ErrImageTag
+	}
+	return m.ChangeImage(ctx, a, projectSlug, serviceSlug, repo+":"+tag)
+}
+
+// ChangeImage points a service run from an image at another image
+// reference (usually another tag, but the repository may change too) and
+// deploys it. Swapping what a service runs takes the same trust as
+// creating one, which the route asks for (admin and sudo). The deploy
+// keeps the previous version serving when the new one does not become
+// healthy (rolling), or starts it again (recreate, under the same rules as
+// any deploy); either way the service goes back to the previous image, so
+// the next deploy does not retry the broken one.
+func (m *Manager) ChangeImage(ctx context.Context, a Actor, projectSlug, serviceSlug, image string) (string, error) {
 	if err := m.requireNode(); err != nil {
 		return "", err
 	}
@@ -56,17 +73,12 @@ func (m *Manager) ChangeImageTag(ctx context.Context, a Actor, projectSlug, serv
 	} else if isGit {
 		return "", ErrImageGit
 	}
-	tag = strings.TrimSpace(tag)
-	repo, cur := SplitImage(s.Image)
-	if strings.Contains(s.Image, "@") || !tagRE.MatchString(tag) {
-		return "", ErrImageTag
-	}
-	if tag == cur {
-		return "", ErrImageSame
-	}
-	image := repo + ":" + tag
+	image = strings.TrimSpace(image)
 	if !node.ImageRE.MatchString(image) {
-		return "", ErrImageTag
+		return "", ErrImage
+	}
+	if image == s.Image {
+		return "", ErrImageSame
 	}
 	n, err := m.q.SetServiceImage(ctx, dbq.SetServiceImageParams{Image: image, UpdatedAt: m.now().Unix(), ID: s.ID, OldImage: s.Image})
 	if err != nil {

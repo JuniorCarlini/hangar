@@ -40,7 +40,7 @@ func TestChangeImageNeedsAdminAndSudo(t *testing.T) {
 	}
 	sp, _ := e.svc.Authenticate(context.Background(), sc.Value)
 	page = e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{sc}}).Body.String()
-	if !strings.Contains(page, `action="/p/lab/s/web/image"`) || !strings.Contains(page, `value="1.29-alpine"`) {
+	if !strings.Contains(page, `action="/p/lab/s/web/image"`) || !strings.Contains(page, `value="nginx:1.29-alpine"`) {
 		t.Error("settings tab with sudo: no image form with the current tag")
 	}
 	form.Set("csrf", sp.CSRFToken)
@@ -57,6 +57,20 @@ func TestChangeImageNeedsAdminAndSudo(t *testing.T) {
 	if err := e.st.DB.QueryRow(`SELECT summary_json FROM audit_log WHERE action = 'service.image.change' AND outcome = 'ok'`).Scan(&summary); err != nil ||
 		!strings.Contains(summary, "nginx:1.29-alpine") || !strings.Contains(summary, "nginx:1.31-alpine") {
 		t.Errorf("audit = %q %v", summary, err)
+	}
+
+	// The settings card sends the whole reference: the repository may change.
+	e.pm.Wait()
+	rec = e.do(req{method: "POST", target: "/p/lab/s/web/image", form: url.Values{"csrf": {sp.CSRFToken}, "image": {"ghcr.io/lab/web:2"}}, cookies: []*http.Cookie{sc}})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("change the whole image: %d %s", rec.Code, rec.Body)
+	}
+	e.pm.Wait()
+	if _, s, _ = e.pm.GetService(context.Background(), "lab", "web"); s.Image != "ghcr.io/lab/web:2" {
+		t.Errorf("image = %q", s.Image)
+	}
+	if rec := e.do(req{method: "POST", target: "/p/lab/s/web/image", form: url.Values{"csrf": {sp.CSRFToken}, "image": {"Not An Image"}}, cookies: []*http.Cookie{sc}}); rec.Code == http.StatusSeeOther {
+		t.Error("accepted an invalid image")
 	}
 
 	// Another repository is not a tag.
