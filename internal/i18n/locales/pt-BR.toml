@@ -1050,7 +1050,6 @@ predeploy_hint = "Roda uma vez antes da troca; se falhar, a versão atual contin
 health_path = "Caminho do healthcheck"
 health_placeholder = "/healthz"
 health_hint = "Tem que responder abaixo de 400. Vazio: testa a porta."
-next_deploy = "Vale a partir do próximo deploy."
 save = "Salvar"
 
 [overview]
@@ -1924,8 +1923,6 @@ build_timeout = "O build passou de {minutes} minutos e foi interrompido."
 
 [git]
 title = "Repositório"
-edit = "Editar"
-edit_title = "Repositório do serviço"
 copy = "Copiar {what}"
 repo = "Repositório (HTTPS)"
 repo_hint = "O endereço do GitHub, GitLab ou Gitea, como aparece no botão “Code” → HTTPS."
@@ -1935,13 +1932,8 @@ subdir_placeholder = "raiz do repositório"
 subdir_root = "raiz do repositório"
 dockerfile = "Dockerfile"
 token = "Token de leitura"
-token_none = "Sem token (repositório público)"
 token_reveal = "Revelar"
 token_new = "Token novo"
-token_keep = "vazio mantém o token atual"
-token_save = "Testar e salvar"
-build_hint = "Cada deploy baixa o último commit do branch, faz o build com BuildKit e sobe a imagem com a mesma troca sem downtime. As variáveis do serviço não entram no build."
-repo_change_hint = "O acesso é testado antes de salvar. Trocar de repositório apaga o token salvo, a não ser que você informe um novo."
 
 [git.new]
 hint = "O Hangar clona o branch, faz o build do Dockerfile e sobe o serviço. Cada push pode virar um deploy automático depois (aba Configurações)."
@@ -2485,8 +2477,6 @@ pick_new = "Adicionar um token novo…"
 pick_hint = "As do projeto aparecem primeiro, depois as do servidor."
 own_token = "Token próprio deste serviço"
 own_token_hint = "Salvo antes das credenciais existirem. Troque por uma credencial para não ter que colar de novo em cada serviço."
-change = "Trocar credencial"
-change_hint = "O Hangar testa o acesso ao repositório antes de salvar. Vale a partir do próximo deploy."
 fail = "Não deu para falar com o GitHub agora. Tente de novo."
 
 [gitcred.col]
