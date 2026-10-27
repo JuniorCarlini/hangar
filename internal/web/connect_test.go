@@ -81,16 +81,16 @@ func TestConnectDialogAndSave(t *testing.T) {
 	if a, b := strings.Index(all, `value="api|API_TOKEN"`), strings.Index(all, `value="db|HOST"`); a < 0 || b < 0 || a > b {
 		t.Errorf("the list is not every offering service in order (api %d, db %d)", a, b)
 	}
-	dup := url.Values{"key": {"api|API_TOKEN", "db|PASSWORD"}, "var_api|API_TOKEN": {"SHARED"}, "var_db|PASSWORD": {"SHARED"}}
+	dup := url.Values{"key": {"api|API_TOKEN", "db|POSTGRES_PASSWORD"}, "var_api|API_TOKEN": {"SHARED"}, "var_db|POSTGRES_PASSWORD": {"SHARED"}}
 	if code := post("/p/lab/s/web/connect", dup); code != http.StatusBadRequest {
 		t.Errorf("one variable for two services: %d", code)
 	}
-	both := url.Values{"key": {"api|API_TOKEN", "db|PASSWORD"}, "var_api|API_TOKEN": {"UPSTREAM_TOKEN"}, "var_db|PASSWORD": {"DB_PASS"}}
+	both := url.Values{"key": {"api|API_TOKEN", "db|POSTGRES_PASSWORD"}, "var_api|API_TOKEN": {"UPSTREAM_TOKEN"}, "var_db|POSTGRES_PASSWORD": {"DB_PASS"}}
 	if code := post("/p/lab/s/web/connect", both); code != http.StatusSeeOther {
 		t.Fatalf("connect two services at once: %d", code)
 	}
 	tab = get("/p/lab/s/web?tab=variables")
-	if !strings.Contains(tab, `title="${{api.API_TOKEN}}"`) || !strings.Contains(tab, `title="${{db.PASSWORD}}"`) {
+	if !strings.Contains(tab, `title="${{api.API_TOKEN}}"`) || !strings.Contains(tab, `title="${{db.POSTGRES_PASSWORD}}"`) {
 		t.Error("connecting two services at once did not set both")
 	}
 

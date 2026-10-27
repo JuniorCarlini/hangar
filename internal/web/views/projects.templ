@@ -1,9 +1,6 @@
 package views
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 // ServiceRow is a service on the project page.
 type ServiceRow struct {
@@ -207,11 +204,6 @@ type EnvRow struct {
 	Value    string
 	Secret   bool
 	Revealed bool
-	// Offered: the other services can connect to this variable.
-	Offered bool
-	// Aliases are the names other services use for this value (a
-	// template's POSTGRES_USER is offered as USER).
-	Aliases []string
 	// Copy is what the copy button gives: the value, with references
 	// resolved, so it works pasted anywhere. Empty: nothing to copy.
 	Copy string
@@ -284,9 +276,6 @@ type ServiceData struct {
 	Deploys     []DeployRow
 	Env         []EnvRow
 	RefWarnings []RefWarning // broken references in Env
-	// HasExports: a template declares what it offers (the Exports card);
-	// else the variables marked as offered are what it offers.
-	HasExports bool
 	// UsedBy are the variables of other services that reference this one
 	// ("app (DATABASE_URL ← DATABASE_URL)"); UsedByNames, those services.
 	UsedBy      []string
@@ -301,7 +290,6 @@ type ServiceData struct {
 	EnvCopy string
 	EnvSuggest  *EnvSuggest  // nil when the repository suggests nothing new
 	Domains     DomainsSection
-	Exports     []ExportRow
 	CanBackup   bool
 	Stateful    bool
 	Maintenance bool // visitors get the maintenance page instead of the app
@@ -329,43 +317,6 @@ type ServiceData struct {
 
 func (d ServiceData) base() string { return "/p/" + d.Project + "/s/" + d.Slug }
 
-// ExportRow is a connection value other services can reference.
-type ExportRow struct {
-	Key      string
-	Value    string
-	Secret   bool
-	Revealed bool
-}
-
-// aliasOf reports whether env is the variable a template offers as export:
-// the same name, or the image's own prefixed form (POSTGRES_USER for USER,
-// POSTGRES_DB for DATABASE).
-func aliasOf(env, export string) bool {
-	return env == export || strings.HasSuffix(env, "_"+export) ||
-		(export == "DATABASE" && strings.HasSuffix(env, "_DB"))
-}
-
-// MergeExports attaches each export that only repeats a variable (same
-// value under the template's other name) to that variable, and returns
-// the exports left: the ones only the panel computes (HOST, DATABASE_URL).
-func MergeExports(env []EnvRow, exports []ExportRow) []ExportRow {
-	var rest []ExportRow
-	for _, e := range exports {
-		matched := false
-		for i := range env {
-			same := env[i].Value == "" || e.Value == "" || env[i].Value == e.Value
-			if same && aliasOf(env[i].Key, e.Key) {
-				env[i].Aliases = append(env[i].Aliases, e.Key)
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			rest = append(rest, e)
-		}
-	}
-	return rest
-}
 
 // PortRow is a published port.
 type PortRow struct {

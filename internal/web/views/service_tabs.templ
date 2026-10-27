@@ -13,17 +13,6 @@ import (
 
 func isRef(v string) bool { return strings.Contains(v, "${{") }
 
-// offeredVars are the variables a service made by hand offers.
-func offeredVars(env []EnvRow) []string {
-	var out []string
-	for _, v := range env {
-		if v.Offered {
-			out = append(out, v.Key)
-		}
-	}
-	return out
-}
-
 // wholeRefRE is a value that is exactly one reference: a connection.
 var wholeRefRE = regexp.MustCompile(`^\$\{\{\s*((?:[a-z][a-z0-9-]*\.)?[a-z][a-z0-9-]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}$`)
 
@@ -147,7 +136,7 @@ templ tabVariables(d ServiceData) {
 				</div>
 			</div>
 		}
-		if len(d.Env) > 0 || len(d.Exports) > 0 {
+		if len(d.Env) > 0 {
 			// Fixed layout: a long value is cut with "…" (its copy button
 			// gives it whole) instead of scrolling the table sideways.
 			<table class="tuc-table is-compact w-full table-fixed">
@@ -166,9 +155,6 @@ templ tabVariables(d ServiceData) {
 						<tr>
 							<td class="truncate font-mono text-[13px]" title={ v.Key }>
 								{ v.Key }
-								if len(v.Aliases) > 0 {
-									<span class="block truncate font-sans text-[11px] text-subtle" title={ t(ctx, "connect.offered_as_hint", "keys", strings.Join(v.Aliases, ", ")) }>{ t(ctx, "connect.offered_as", "keys", strings.Join(v.Aliases, ", ")) }</span>
-								}
 							</td>
 							<td class="px-0 text-center">
 								if svc != "" && broken == "" {
@@ -196,27 +182,6 @@ templ tabVariables(d ServiceData) {
 							</td>
 							<td>
 								@valueTail(ctx, svc, broken == "", v.Key, v.Copy)
-							</td>
-						</tr>
-					}
-					// What only the panel computes for a template (HOST,
-					// DATABASE_URL): read only, other services connect to it.
-					for _, e := range d.Exports {
-						<tr>
-							<td class="truncate font-mono text-[13px]" title={ e.Key }>
-								{ e.Key }
-								<span class="block truncate font-sans text-[11px] text-subtle">{ t(ctx, "connect.computed") }</span>
-							</td>
-							<td class="px-0"></td>
-							<td class="truncate font-mono text-[13px]">
-								if e.Secret && e.Value == "" {
-									<span class="text-muted">••••••••••••</span>
-								} else {
-									<span title={ e.Value }>{ e.Value }</span>
-								}
-							</td>
-							<td>
-								@valueTail(ctx, "", false, e.Key, e.Value)
 							</td>
 						</tr>
 					}

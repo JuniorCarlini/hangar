@@ -3013,9 +3013,6 @@ idle = "Logs you out after 30 minutes idle."
 level = "Pick one of the three levels."
 
 [connect]
-offered_as = "as {keys}"
-offered_as_hint = "Other services connect to this value by the name {keys}."
-computed = "made by Hangar"
 back = "Back to the services"
 use_suggestions = "Use suggestions"
 cross_hint = "Next to each value, write the {from} variable that receives it. Only what is certain comes filled; an empty row is left out."

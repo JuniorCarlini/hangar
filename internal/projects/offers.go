@@ -38,34 +38,61 @@ var (
 	ErrConnectNone    = &i18n.Error{Key: "connect.error.none"}
 )
 
-// Offers lists what a service offers: a template's exports, or, for a
-// service made by hand, every variable it has.
+// Offers lists what a service offers, under its own names: every variable
+// it has (a template's POSTGRES_PASSWORD as such; the service that
+// receives it renames it), plus what a template's panel computes on its own
+// (HOST, PORT, DATABASE_URL). A template export that only repeats one of
+// its variables (PASSWORD for POSTGRES_PASSWORD) is not listed again; a
+// reference to it still resolves.
 func (m *Manager) Offers(ctx context.Context, serviceID string) ([]Offer, error) {
+	vars, err := m.q.ListEnv(ctx, serviceID)
+	if err != nil {
+		return nil, err
+	}
 	exps, err := m.q.ListExports(ctx, serviceID)
 	if err != nil {
 		return nil, err
 	}
+	out := make([]Offer, 0, len(vars)+len(exps))
 	seen := map[string]bool{}
-	out := make([]Offer, 0, len(exps))
-	for _, e := range exps {
-		seen[e.Key] = true
-		out = append(out, Offer{Key: e.Key, Secret: e.Secret == 1})
+	for _, v := range vars {
+		seen[v.Key] = true
+		out = append(out, Offer{Key: v.Key, Secret: v.Secret == 1, Variable: true})
 	}
-	// A service made by hand (no template exports) offers every variable
-	// it has: nothing to mark before another service connects to it.
-	if len(exps) == 0 {
-		vars, err := m.q.ListEnv(ctx, serviceID)
-		if err != nil {
-			return nil, err
-		}
+	for _, e := range exps {
+		repeats := false
 		for _, v := range vars {
-			if !seen[v.Key] {
-				out = append(out, Offer{Key: v.Key, Secret: v.Secret == 1, Variable: true})
-			}
+			repeats = repeats || offerAlias(v.Key, e.Key)
+		}
+		if !repeats && !seen[e.Key] {
+			out = append(out, Offer{Key: e.Key, Secret: e.Secret == 1})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil
+}
+
+// offerAlias reports whether a template's export only repeats one of its
+// variables: the image's own prefixed name (POSTGRES_USER for USER,
+// POSTGRES_DB for DATABASE).
+func offerAlias(variable, export string) bool {
+	return variable == export || strings.HasSuffix(variable, "_"+export) ||
+		(export == "DATABASE" && strings.HasSuffix(variable, "_DB"))
+}
+
+// canonicalKey is what an offered value is, whatever the provider calls
+// it, for suggesting the receiving name: POSTGRES_PASSWORD is a PASSWORD,
+// POSTGRES_DB a DATABASE.
+func canonicalKey(key string) string {
+	for _, k := range []string{"PASSWORD", "USER", "HOST", "PORT", "DATABASE"} {
+		if strings.HasSuffix(key, "_"+k) {
+			return k
+		}
+	}
+	if strings.HasSuffix(key, "_DB") {
+		return "DATABASE"
+	}
+	return key
 }
 
 // SetOffered marks one of the service's variables as offered to the others,
@@ -171,14 +198,20 @@ func (m *Manager) PlanConnect(ctx context.Context, projectSlug, fromSlug, target
 	for _, o := range offers {
 		row := ConnectRow{Key: o.Key, Secret: o.Secret}
 		ref := "${{" + target + "." + o.Key + "}}"
-		for _, name := range varCandidates(o.Key, to) {
+		// A template's own name (POSTGRES_PASSWORD) is suggested by what it
+		// is (a PASSWORD); a hand-made service's names are kept as they are.
+		kind := o.Key
+		if to.Template != "" {
+			kind = canonicalKey(o.Key)
+		}
+		for _, name := range varCandidates(kind, to) {
 			if known[name] && !used[name] {
 				row.Var, row.Known = name, true
 				break
 			}
 		}
 		if row.Var == "" {
-			row.Var = defaultVarName(o.Key, to)
+			row.Var = defaultVarName(kind, to)
 		}
 		used[row.Var] = true
 		if v, ok := current[row.Var]; ok {

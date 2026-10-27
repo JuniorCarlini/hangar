@@ -3014,9 +3014,6 @@ idle = "Sai sozinho depois de 30 minutos parado."
 level = "Escolha um dos três níveis."
 
 [connect]
-offered_as = "como {keys}"
-offered_as_hint = "Os outros serviços conectam a este valor pelo nome {keys}."
-computed = "gerado pelo Hangar"
 back = "Voltar aos serviços"
 use_suggestions = "Usar sugestões"
 cross_hint = "Escreva, ao lado de cada valor, a variável de {from} que o recebe. Só vem preenchido o que é certeza; linha vazia fica de fora."

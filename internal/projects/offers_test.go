@@ -116,14 +116,20 @@ func TestConnectBridgesDifferentNames(t *testing.T) {
 	if r := rows["HOST"]; r.Var != "POSTGRES_HOST" || !r.Known || !r.Current || !r.Checked {
 		t.Errorf("HOST row = %+v", r)
 	}
-	if r := rows["PASSWORD"]; r.Var != "PGPASSWORD" || !r.Checked {
-		t.Errorf("PASSWORD row = %+v", r)
+	// A template offers its own names; the plan suggests by what the value
+	// is (POSTGRES_PASSWORD is a password, which this app reads as
+	// PGPASSWORD), and the repeated export (PASSWORD) is not offered again.
+	if r := rows["POSTGRES_PASSWORD"]; r.Var != "PGPASSWORD" || !r.Checked {
+		t.Errorf("POSTGRES_PASSWORD row = %+v", r)
+	}
+	if _, ok := rows["PASSWORD"]; ok {
+		t.Error("the export repeating POSTGRES_PASSWORD is offered again")
 	}
 	if r := rows["DATABASE_URL"]; r.Var != "DATABASE_URL" || r.Known || !r.Checked {
 		t.Errorf("DATABASE_URL row = %+v", r)
 	}
-	if r := rows["USER"]; r.Var != "DB_USER" || r.Checked {
-		t.Errorf("USER row = %+v (a part the app does not use stays off)", r)
+	if r := rows["POSTGRES_USER"]; r.Var != "DB_USER" || r.Checked {
+		t.Errorf("POSTGRES_USER row = %+v (a part the app does not use stays off)", r)
 	}
 
 	maps := []Mapping{{Key: "HOST", Var: "POSTGRES_HOST"}, {Key: "DATABASE_URL", Var: "DATABASE_URL"}}
@@ -331,7 +337,7 @@ func TestResolvedEnvText(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.m.Wait()
-	if _, err := f.m.SetEnvFile(ctx, f.who, webID, "# banco\nDB_HOST=${{db.HOST}}\nDEBUG=0\n"); err != nil {
+	if _, err := f.m.SetEnvFile(ctx, f.who, webID, "# banco\nDB_HOST=${{db.HOST}}\nOLD=${{db.PASSWORD}}\nNEW=${{db.POSTGRES_PASSWORD}}\nDEBUG=0\n"); err != nil {
 		t.Fatal(err)
 	}
 	p, _, err := f.m.GetService(ctx, "lab", "web")
@@ -344,5 +350,19 @@ func TestResolvedEnvText(t *testing.T) {
 	}
 	if !strings.HasPrefix(got, "# banco\nDB_HOST=") || strings.Contains(got, "${{") || !strings.HasSuffix(got, "DEBUG=0\n") {
 		t.Errorf("resolved file:\n%s", got)
+	}
+	// An older connection to the template's repeated name (PASSWORD) and a
+	// new one to its own (POSTGRES_PASSWORD) give the same password.
+	var oldV, newV string
+	for _, line := range strings.Split(got, "\n") {
+		if v, ok := strings.CutPrefix(line, "OLD="); ok {
+			oldV = v
+		}
+		if v, ok := strings.CutPrefix(line, "NEW="); ok {
+			newV = v
+		}
+	}
+	if oldV == "" || oldV != newV {
+		t.Errorf("old %q and new %q connections differ", oldV, newV)
 	}
 }

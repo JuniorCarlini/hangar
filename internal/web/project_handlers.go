@@ -352,15 +352,6 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	if ds.ValidateTimeout > 0 {
 		d.ValidateMinutes = strconv.Itoa(int(ds.ValidateTimeout.Minutes()))
 	}
-	offered := map[string]bool{}
-	if offers, err := h.projects.Offers(r.Context(), s.ID); err == nil {
-		for _, o := range offers {
-			offered[o.Key] = o.Variable
-			if !o.Variable {
-				d.HasExports = true
-			}
-		}
-	}
 	if deps, err := h.projects.Dependents(r.Context(), p.Slug, s.Slug); err == nil {
 		d.UsedBy = dependentsLabel(r, deps)
 		for _, dep := range deps {
@@ -386,7 +377,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	}
 	if env, err := h.projects.EnvInFileOrder(r.Context(), s.ID, d.CanAdmin); err == nil {
 		for _, e := range env {
-			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret, Offered: offered[e.Key]}
+			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret}
 			if e.Key == v.revealKey {
 				row.Value, row.Revealed = v.revealValue, true
 			}
@@ -431,21 +422,6 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.CanBackup, d.Stateful = h.projects.CanDownloadBackup(s.Template), s.Stateful == 1
 	d.Maintenance = s.Maintenance == 1
 	d.ServerHint = i18n.T(r.Context(), "port.ssh_target")
-	listExports := h.projects.ListExports
-	if d.CanAdmin {
-		listExports = h.projects.ListExportValues
-	}
-	if exps, err := listExports(r.Context(), s.ID); err == nil {
-		for _, e := range exps {
-			row := views.ExportRow{Key: e.Key, Value: e.Value, Secret: e.Secret}
-			if e.Key == v.exportKey {
-				row.Value, row.Revealed = v.exportValue, true
-			}
-			d.Exports = append(d.Exports, row)
-		}
-	}
-	// One row per value: an export repeating a variable becomes a tag on it.
-	d.Exports = views.MergeExports(d.Env, d.Exports)
 	// What the copy buttons give. Admins get every value with references
 	// resolved; below admin, only plain values that are not secret.
 	if d.CanAdmin {
