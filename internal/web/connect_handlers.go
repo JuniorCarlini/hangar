@@ -3,6 +3,8 @@ package web
 import (
 	"errors"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
@@ -10,43 +12,86 @@ import (
 )
 
 // connectForm is the body of the connect dialog (canvas.js and the
-// Variables tab load it): what the target offers, each with the variable
-// of this service that would receive it.
+// Variables tab load it): what each service offers, with the variable of
+// this one that would receive it. ?to= limits it to one service (a drag on
+// the canvas); without it, every service that offers something, by name.
 func (h *handlers) connectForm(w http.ResponseWriter, r *http.Request) {
 	pr := PrincipalFrom(r.Context())
 	project, from, target := r.PathValue("project"), r.PathValue("service"), r.URL.Query().Get("to")
-	d := views.ConnectFormData{CSRF: pr.CSRFToken, Project: project, From: from, Target: target}
-	plan, err := h.projects.PlanConnect(r.Context(), project, from, target)
-	switch {
-	case errors.Is(err, projects.ErrNotFound):
-		http.NotFound(w, r)
-		return
-	case err != nil:
-		_, d.Error = userError(r, err)
-	default:
-		d.Vars = plan.Vars
-		for _, row := range plan.Rows {
-			d.Rows = append(d.Rows, views.ConnectRow{
-				Key: row.Key, Secret: row.Secret, Var: row.Var, Known: row.Known,
-				Current: row.Current, Linked: row.Linked, Checked: row.Checked,
-			})
+	d := views.ConnectFormData{CSRF: pr.CSRFToken, Project: project, From: from}
+	targets := []string{target}
+	if target == "" {
+		p, s, err := h.projects.GetService(r.Context(), project, from)
+		if err != nil {
+			http.NotFound(w, r)
+			return
 		}
+		targets = h.connectTargets(r, p.ID, s.Slug)
+		slices.Sort(targets)
+	}
+	for _, to := range targets {
+		plan, err := h.projects.PlanConnect(r.Context(), project, from, to)
+		switch {
+		case errors.Is(err, projects.ErrNotFound):
+			http.NotFound(w, r)
+			return
+		case err != nil:
+			_, d.Error = userError(r, err)
+		default:
+			d.Vars = plan.Vars
+			g := views.ConnectGroup{Target: to}
+			for _, row := range plan.Rows {
+				g.Rows = append(g.Rows, views.ConnectRow{
+					Key: row.Key, Secret: row.Secret, Var: row.Var, Known: row.Known,
+					Current: row.Current, Linked: row.Linked, Checked: row.Checked,
+				})
+			}
+			d.Groups = append(d.Groups, g)
+		}
+		if d.Error != "" {
+			break
+		}
+	}
+	if d.Error == "" && len(d.Groups) == 0 {
+		d.Error = i18n.T(r.Context(), "connect.no_targets")
 	}
 	render(w, r, http.StatusOK, views.ConnectForm(d))
 }
 
-// connect saves the chosen connections: each ticked value goes into the
-// variable written next to it, as a reference.
+// connect saves the chosen connections: each ticked value ("db|HOST") goes
+// into the variable written next to it, as a reference, service by
+// service. Forms from before the list name one service in "to".
 func (h *handlers) connect(w http.ResponseWriter, r *http.Request) {
-	project, from, target := r.PathValue("project"), r.PathValue("service"), r.PostFormValue("to")
-	var maps []projects.Mapping
-	for _, key := range r.PostForm["key"] {
-		maps = append(maps, projects.Mapping{Key: key, Var: r.PostFormValue("var_" + key)})
+	project, from := r.PathValue("project"), r.PathValue("service")
+	var order []string
+	maps := map[string][]projects.Mapping{}
+	seen := map[string]bool{}
+	for _, field := range r.PostForm["key"] {
+		target, key, ok := strings.Cut(field, "|")
+		if !ok {
+			target, key = r.PostFormValue("to"), field
+		}
+		v := r.PostFormValue("var_" + field)
+		// One variable cannot take two values, even from two services.
+		if seen[v] {
+			h.renderService(w, r, serviceView{status: http.StatusBadRequest, errMsg: i18n.T(r.Context(), "connect.error.duplicate", "var", v)})
+			return
+		}
+		seen[v] = true
+		if _, ok := maps[target]; !ok {
+			order = append(order, target)
+		}
+		maps[target] = append(maps[target], projects.Mapping{Key: key, Var: v})
 	}
-	if _, err := h.projects.Connect(r.Context(), actor(r), project, from, target, maps, true); err != nil {
-		code, msg := userError(r, err)
-		h.renderService(w, r, serviceView{status: code, errMsg: msg})
-		return
+	if len(order) == 0 {
+		order = []string{r.PostFormValue("to")}
+	}
+	for _, target := range order {
+		if _, err := h.projects.Connect(r.Context(), actor(r), project, from, target, maps[target], true); err != nil {
+			code, msg := userError(r, err)
+			h.renderService(w, r, serviceView{status: code, errMsg: msg})
+			return
+		}
 	}
 	redirectLocal(w, r, h.serviceBase(r)+"?tab=variables&ok=connected")
 }

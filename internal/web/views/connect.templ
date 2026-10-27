@@ -16,70 +16,90 @@ type ConnectRow struct {
 	Checked bool
 }
 
-// ConnectFormData feeds the body of the connect dialog.
+// ConnectGroup is one service that offers values, with its rows.
+type ConnectGroup struct {
+	Target string
+	Rows   []ConnectRow
+}
+
+// ConnectFormData feeds the body of the connect dialog: one group per
+// service that offers something (only the dragged one from the canvas).
 type ConnectFormData struct {
 	CSRF    string
 	Project string
 	From    string
-	Target  string
-	Rows    []ConnectRow
+	Groups  []ConnectGroup
 	Vars    []string // the app's variables, to pick one by hand
 	Error   string
 }
 
-// ConnectForm is the dialog's body, loaded on demand.
+// connectField names a row's fields: "db|HOST" ticks it and
+// "var_db|HOST" is the variable that receives it.
+func connectField(target, key string) string { return target + "|" + key }
+
+// ConnectForm is the dialog's body, loaded on demand: every service that
+// offers something, in order, in one scrolling list.
 templ ConnectForm(d ConnectFormData) {
 	if d.Error != "" {
 		@notice("warning", "circle-alert", d.Error)
 	} else {
 		<form method="post" action={ templ.SafeURL("/p/" + d.Project + "/s/" + d.From + "/connect") } class="flex flex-col gap-3">
 			<input type="hidden" name="csrf" value={ d.CSRF }/>
-			<input type="hidden" name="to" value={ d.Target }/>
-			<p class="m-0 text-[13px] text-muted">{ t(ctx, "connect.intro", "from", d.From, "to", d.Target) }</p>
-			<div class="tuc-table-wrap">
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "connect.intro", "from", d.From) }</p>
+			<div class="tuc-table-wrap max-h-[55vh] overflow-y-auto rounded-sm border border-border">
 				<table class="tuc-table is-compact connect-table w-full">
-					<thead>
+					<thead class="sticky top-0 z-[1] bg-surface">
 						<tr>
 							<th class="w-8"><span class="sr-only">{ t(ctx, "connect.use") }</span></th>
-							<th>{ t(ctx, "connect.offers", "service", d.Target) }</th>
+							<th>{ t(ctx, "connect.offered_col") }</th>
 							<th class="w-6"></th>
 							<th>{ t(ctx, "connect.receives", "service", d.From) }</th>
 						</tr>
 					</thead>
-					<tbody>
-						for _, r := range d.Rows {
+					for _, g := range d.Groups {
+						<tbody>
 							<tr>
-								<td>
-									<input type="checkbox" class="tuc-check" name="key" value={ r.Key } checked?={ r.Checked } aria-label={ t(ctx, "connect.use_named", "key", r.Key) }/>
-								</td>
-								<td class="font-mono text-[13px] whitespace-nowrap">
-									<span class="inline-flex items-center gap-1.5">
-										{ r.Key }
-										if r.Secret {
-											<span title={ t(ctx, "connect.secret") }>
-												@Icon("lock", "size-3 text-subtle")
-											</span>
-										}
+								<th colspan="4" class="bg-surface-2 text-[13px] font-semibold">
+									<span class="inline-flex items-center gap-2">
+										@Icon("cable", "size-3.5 text-accent-text")
+										{ g.Target }
 									</span>
-								</td>
-								<td class="text-subtle">
-									@Icon("arrow-right", "size-3.5")
-								</td>
-								<td>
-									<div class="flex min-w-0 flex-col gap-1">
-										<input class="tuc-input font-mono text-[13px]" name={ "var_" + r.Key } value={ r.Var } list="connect-vars" required pattern="[A-Za-z_][A-Za-z0-9_]{0,127}" aria-label={ t(ctx, "connect.var_for", "key", r.Key) }/>
-										if r.Linked {
-											<span class="text-xs text-success">{ t(ctx, "connect.linked") }</span>
-										} else if r.Current {
-											<span class="text-xs text-warning">{ t(ctx, "connect.replaces") }</span>
-										} else if r.Known {
-											<span class="text-xs text-muted">{ t(ctx, "connect.known") }</span>
-										}
-									</div>
-								</td>
+								</th>
 							</tr>
-						}
-					</tbody>
+							for _, r := range g.Rows {
+								<tr>
+									<td>
+										<input type="checkbox" class="tuc-check" name="key" value={ connectField(g.Target, r.Key) } checked?={ r.Checked } aria-label={ t(ctx, "connect.use_named", "key", g.Target+" · "+r.Key) }/>
+									</td>
+									<td class="font-mono text-[13px] whitespace-nowrap">
+										<span class="inline-flex items-center gap-1.5">
+											{ r.Key }
+											if r.Secret {
+												<span title={ t(ctx, "connect.secret") }>
+													@Icon("lock", "size-3 text-subtle")
+												</span>
+											}
+										</span>
+									</td>
+									<td class="text-subtle">
+										@Icon("arrow-right", "size-3.5")
+									</td>
+									<td>
+										<div class="flex min-w-0 flex-col gap-1">
+											<input class="tuc-input font-mono text-[13px]" name={ "var_" + connectField(g.Target, r.Key) } value={ r.Var } list="connect-vars" required pattern="[A-Za-z_][A-Za-z0-9_]{0,127}" aria-label={ t(ctx, "connect.var_for", "key", g.Target+" · "+r.Key) }/>
+											if r.Linked {
+												<span class="text-xs text-success">{ t(ctx, "connect.linked") }</span>
+											} else if r.Current {
+												<span class="text-xs text-warning">{ t(ctx, "connect.replaces") }</span>
+											} else if r.Known {
+												<span class="text-xs text-muted">{ t(ctx, "connect.known") }</span>
+											}
+										</div>
+									</td>
+								</tr>
+							}
+						</tbody>
+					}
 				</table>
 			</div>
 			<datalist id="connect-vars">
@@ -87,7 +107,7 @@ templ ConnectForm(d ConnectFormData) {
 					<option value={ v }></option>
 				}
 			</datalist>
-			<p class="tuc-hint">{ t(ctx, "connect.hint", "from", d.From, "to", d.Target) }</p>
+			<p class="tuc-hint">{ t(ctx, "connect.hint", "from", d.From) }</p>
 			<div class="flex justify-end gap-2">
 				<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
 				<button class="tuc-btn is-primary" type="submit">
@@ -99,8 +119,7 @@ templ ConnectForm(d ConnectFormData) {
 	}
 }
 
-// connectModal is the shell canvas.js fills: who connects, to which
-// service (a picker when opened from the Variables tab) and the form.
+// connectModal is the shell canvas.js fills with the form.
 templ connectModal(project string) {
 	<dialog
 		class="tuc-modal is-lg"
@@ -119,10 +138,6 @@ templ connectModal(project string) {
 				</button>
 			</div>
 			<div class="tuc-modal__body">
-				<div class="flex flex-col gap-1.5" id="connect-pick" hidden>
-					<label class="tuc-label" for="connect-to">{ t(ctx, "connect.pick") }</label>
-					<select class="tuc-input" id="connect-to"></select>
-				</div>
 				<div id="connect-body"></div>
 			</div>
 		</div>

@@ -124,7 +124,7 @@ templ tabVariables(d ServiceData) {
 		@cardHead(t(ctx, "service.tab.variables")) {
 			if d.CanOperate {
 				if len(d.ConnectTargets) > 0 {
-					<button type="button" class="tuc-btn is-outline is-sm" data-connect-from={ d.Slug } data-connect-targets={ strings.Join(d.ConnectTargets, " ") }>
+					<button type="button" class="tuc-btn is-outline is-sm" data-connect-from={ d.Slug }>
 						@Icon("cable", "size-3.5")
 						{ t(ctx, "connect.open") }
 					</button>

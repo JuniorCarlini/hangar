@@ -9,8 +9,6 @@
   if (!modal) return;
   var project = modal.dataset.project;
   var body = document.getElementById('connect-body');
-  var pick = document.getElementById('connect-pick');
-  var select = document.getElementById('connect-to');
   var title = document.getElementById('connect-modal-title');
   var from = '';
 
@@ -20,35 +18,26 @@
     p.className = 'm-0 text-[13px] text-muted';
     p.textContent = modal.dataset.loading;
     body.appendChild(p);
-    fetch('/p/' + project + '/s/' + encodeURIComponent(from) + '/connect?to=' + encodeURIComponent(to), { credentials: 'same-origin' })
+    fetch('/p/' + project + '/s/' + encodeURIComponent(from) + '/connect' + (to ? '?to=' + encodeURIComponent(to) : ''), { credentials: 'same-origin' })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(function (html) { body.innerHTML = html; })
       .catch(function () { p.textContent = modal.dataset.failed; });
   }
   function open() { if (modal._tucano) modal._tucano.open(); else modal.showModal(); }
 
-  // window.hangarConnect opens the dialog: to is the target ("db") or empty,
-  // targets the services to pick from (the Variables tab).
-  window.hangarConnect = function (fromSlug, to, targets) {
+  // window.hangarConnect opens the dialog: to is one service ("db", a drag
+  // on the canvas) or empty for every service that offers something.
+  window.hangarConnect = function (fromSlug, to) {
     from = fromSlug;
     title.textContent = modal.dataset.title.replace('{from}', from);
-    select.textContent = '';
-    (targets || []).forEach(function (t) {
-      var o = document.createElement('option');
-      o.value = t; o.textContent = t;
-      select.appendChild(o);
-    });
-    pick.hidden = !targets || targets.length < 2;
-    var first = to || (targets && targets[0]) || '';
-    if (first) { select.value = first; load(first); } else { body.textContent = ''; }
+    load(to || '');
     open();
   };
-  select.addEventListener('change', function () { load(select.value); });
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-connect-from]');
     if (!b) return;
     e.preventDefault();
-    window.hangarConnect(b.dataset.connectFrom, '', (b.dataset.connectTargets || '').split(' ').filter(Boolean));
+    window.hangarConnect(b.dataset.connectFrom, '');
   });
 })();
 
@@ -123,7 +112,7 @@
       if (window.Tucano) window.Tucano.toast({ type: 'warning', text: svg.dataset.nothing.replace('{service}', target.dataset.slug) });
       return;
     }
-    if (window.hangarConnect) window.hangarConnect(from, target.dataset.ref, null);
+    if (window.hangarConnect) window.hangarConnect(from, target.dataset.ref);
   });
 })();
 
