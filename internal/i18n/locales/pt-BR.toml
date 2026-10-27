@@ -1035,9 +1035,7 @@ rollback = "Só dá para voltar para um dos últimos 5 deploys que ficaram ativo
 validate_timeout = "O tempo limite da validação vai de 1 a {max} minutos."
 
 [deploy.strategy]
-rolling = "Sem queda"
 recreate = "Segundos fora do ar"
-rolling_hint = "A versão nova só entra no ar depois de saudável."
 recreate_hint = "Tem disco ou porta publicada: o deploy para o antigo antes de subir o novo (alguns segundos fora do ar)."
 
 [deploy.settings]

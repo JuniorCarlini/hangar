@@ -728,9 +728,7 @@ templ deployField(icon, id, label, hint string) {
 templ deploySettings(d ServiceData) {
 	<section class={ cardClass } id="deploy-settings">
 		@cardHead(t(ctx, "deploy.settings.title")) {
-			if d.Strategy == "rolling" {
-				<span class="tuc-badge is-success" title={ t(ctx, "deploy.strategy.rolling_hint") }>{ t(ctx, "deploy.strategy.rolling") }</span>
-			} else {
+			if d.Strategy != "rolling" {
 				<span class="tuc-badge is-warning" title={ t(ctx, "deploy.strategy.recreate_hint") }>{ t(ctx, "deploy.strategy.recreate") }</span>
 			}
 			if d.CanAdmin {
