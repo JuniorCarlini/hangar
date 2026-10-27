@@ -12,8 +12,35 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.20] - 2026-10-27
+
+### Novo
+
+- **Backup no modo simples**: basta cadastrar um destino para os backups
+  começarem, sem gerar o kit de recuperação antes. O servidor guarda a
+  chave e entrega os arquivos já abertos no download. O kit continua
+  disponível para quem quer que só você consiga abrir os backups.
+- **Conector de variáveis**: um cartão liga uma variável de um serviço à de
+  outro (o endereço do banco, a senha do cache…). Cada serviço oferece os
+  próprios nomes e endereços, e quem recebe escolhe como chamar.
+- **Trocar a imagem inteira de um serviço** pelas configurações, com
+  confirmação.
+- **Um diálogo para os discos**: adicionar, editar e remover no mesmo lugar.
+  Ao excluir um serviço, os discos dele podem ir junto.
+- **Deploy automático com um switch**: o painel acompanha o branch e faz o
+  deploy quando ele muda, sem precisar configurar webhook.
+- **Editar a porta publicada** no mesmo formulário que a abre.
+
 ### Mudado
 
+- **Variáveis num cartão só**: o arquivo `.env` é a fonte da verdade, com
+  comentários, seções e ordem preservados, e um botão de copiar em cada
+  valor.
+- **Telas mais simples** de alertas (histórico e configuração em abas),
+  backups (rotinas como lista, restaurações com cartão próprio) e equipe
+  (a lista de pessoas, com a confirmação de senha no diálogo).
+- **Abas Configurações e Deploy enxutas**: manutenção virou um botão no
+  topo do deploy, e o repositório é editado direto no cartão dele.
 - **Aba Rede mais limpa**: os domínios do serviço viram uma tabela só (link
   automático e domínios fixos), sem os textos longos. As explicações ficam
   no **?** ao lado do título.
@@ -626,7 +653,22 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.5...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.20...HEAD
+[0.5.20]: https://github.com/JuniorCarlini/hangar/compare/v0.5.19...v0.5.20
+[0.5.19]: https://github.com/JuniorCarlini/hangar/compare/v0.5.18...v0.5.19
+[0.5.18]: https://github.com/JuniorCarlini/hangar/compare/v0.5.17...v0.5.18
+[0.5.17]: https://github.com/JuniorCarlini/hangar/compare/v0.5.16...v0.5.17
+[0.5.16]: https://github.com/JuniorCarlini/hangar/compare/v0.5.15...v0.5.16
+[0.5.15]: https://github.com/JuniorCarlini/hangar/compare/v0.5.14...v0.5.15
+[0.5.14]: https://github.com/JuniorCarlini/hangar/compare/v0.5.13...v0.5.14
+[0.5.13]: https://github.com/JuniorCarlini/hangar/compare/v0.5.12...v0.5.13
+[0.5.12]: https://github.com/JuniorCarlini/hangar/compare/v0.5.11...v0.5.12
+[0.5.11]: https://github.com/JuniorCarlini/hangar/compare/v0.5.10...v0.5.11
+[0.5.10]: https://github.com/JuniorCarlini/hangar/compare/v0.5.9...v0.5.10
+[0.5.9]: https://github.com/JuniorCarlini/hangar/compare/v0.5.8...v0.5.9
+[0.5.8]: https://github.com/JuniorCarlini/hangar/compare/v0.5.7...v0.5.8
+[0.5.7]: https://github.com/JuniorCarlini/hangar/compare/v0.5.6...v0.5.7
+[0.5.6]: https://github.com/JuniorCarlini/hangar/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/JuniorCarlini/hangar/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/JuniorCarlini/hangar/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/JuniorCarlini/hangar/compare/v0.5.2...v0.5.3
