@@ -2832,8 +2832,8 @@ image = "Imagem inválida. Use nome:versão, por exemplo postgres:18 ou ghcr.io/
 changed = "A imagem do serviço mudou enquanto isso. Recarregue a página e tente de novo."
 
 [confirm.image]
-title = "Trocar a versão de {name}?"
-text = "O serviço passa a rodar a nova versão da imagem. Se ela não ficar saudável, a anterior continua (ou volta) e o serviço retorna à versão antiga."
+title = "Trocar a imagem de {name}?"
+text = "O serviço passa a rodar a imagem nova. Se ela não ficar saudável, a anterior continua (ou volta) e o serviço retorna à imagem antiga."
 ok = "Trocar e fazer deploy"
 
 [deps.bucket]

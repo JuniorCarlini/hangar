@@ -2831,8 +2831,8 @@ image = "Invalid image. Use name:version, for example postgres:18 or ghcr.io/own
 changed = "The service's image changed meanwhile. Reload the page and try again."
 
 [confirm.image]
-title = "Change the version of {name}?"
-text = "The service will run the new image version. If it does not become healthy, the previous one stays (or comes back) and the service returns to the old version."
+title = "Change the image of {name}?"
+text = "The service will run the new image. If it does not become healthy, the previous one stays (or comes back) and the service returns to the old image."
 ok = "Change and deploy"
 
 [deps.bucket]
