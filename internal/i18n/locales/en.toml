@@ -6,6 +6,7 @@ expand = "Open full screen"
 language = "Language"
 copied = "Copied"
 copy_name = "Copy {name}"
+delete = "Delete"
 
 [locale]
 pt-BR = "Português (Brasil)"
@@ -450,7 +451,7 @@ badge = "Under maintenance"
 [service.danger]
 title = "Danger zone"
 type_name = "To delete, type"
-hint = "Removes the container and its configuration; the disks stay."
+hint = "Removes the container, its configuration and its disks, with the data."
 delete = "Delete service"
 name_mismatch = "The typed name does not match."
 

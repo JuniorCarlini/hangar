@@ -1241,7 +1241,7 @@ templ tabSettings(d ServiceData) {
 		@dangerZone(t(ctx, "service.danger.title"), t(ctx, "service.danger.hint")) {
 			<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteServiceModal(d.SudoCritical) }>
 				@Icon("trash", "size-3.5")
-				{ t(ctx, "service.danger.delete") }…
+				{ t(ctx, "common.delete") }
 			</button>
 		}
 		if d.SudoCritical {
@@ -1745,23 +1745,20 @@ func deleteServiceModal(sudo bool) string {
 	return "#sudo-dialog"
 }
 
-// dangerZone is the red card at the bottom of a settings page: what the
-// action does on top, its button at the bottom right.
+// dangerZone is the red card at the bottom of a settings page, one row:
+// the icon on the left, what the action does in the middle, its button
+// alone on the right.
 templ dangerZone(title, hint string) {
-	<section class="@container rounded-md border border-danger/50 bg-surface px-4 py-3.5">
-		<div class="flex flex-col gap-3 @lg:flex-row @lg:items-center">
-			<div class="flex min-w-0 grow items-start gap-3">
-				<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-danger-soft text-danger">
-					@Icon("triangle-alert", "size-4")
-				</span>
-				<div class="flex min-w-0 flex-col gap-1">
-					<h2 class="m-0 text-sm font-semibold">{ title }</h2>
-					<p class="m-0 text-[13px] leading-5 text-muted">{ hint }</p>
-				</div>
-			</div>
-			<div class="flex shrink-0 justify-end">
-				{ children... }
-			</div>
+	<section class="flex items-center gap-3 rounded-md border border-danger/50 bg-surface px-4 py-3.5">
+		<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-danger-soft text-danger">
+			@Icon("triangle-alert", "size-4")
+		</span>
+		<div class="flex min-w-0 grow flex-col gap-1">
+			<h2 class="m-0 text-sm font-semibold">{ title }</h2>
+			<p class="m-0 text-[13px] leading-5 text-muted">{ hint }</p>
+		</div>
+		<div class="shrink-0">
+			{ children... }
 		</div>
 	</section>
 }

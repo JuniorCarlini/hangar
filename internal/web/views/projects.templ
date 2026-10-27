@@ -147,7 +147,7 @@ templ ProjectSettings(d ProjectData) {
 				@dangerZone(t(ctx, "project.danger.title"), t(ctx, "project.danger.hint")) {
 					<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteProjectModal(d.SudoCritical) } disabled?={ len(d.Services) > 0 }>
 						@Icon("trash", "size-3.5")
-						{ t(ctx, "project.danger.delete") }…
+						{ t(ctx, "common.delete") }
 					</button>
 				}
 				@sudoModal(d.CSRF, "/p/"+d.Slug+"/settings", d.SudoCritical)

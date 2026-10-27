@@ -701,12 +701,16 @@ func (m *Manager) DeleteService(ctx context.Context, a Actor, projectSlug, servi
 	if err != nil {
 		return err
 	}
-	// Its volumes stay on the server, but one another service mounts must
-	// keep its owner: delete the others first.
+	// Its disks go with it, so one another service mounts must keep its
+	// owner: delete the others first.
 	if err := m.sharedVolumeError(ctx, s); err != nil {
 		return err
 	}
 	if err := m.limitsMoving(ctx, s.ID); err != nil {
+		return err
+	}
+	vols, err := m.q.ListVolumes(ctx, s.ID)
+	if err != nil {
 		return err
 	}
 	if err := m.node.Remove(ctx, p.Slug, s.Slug); err != nil {
@@ -715,10 +719,25 @@ func (m *Manager) DeleteService(ctx context.Context, a Actor, projectSlug, servi
 	if err := m.q.DeleteService(ctx, s.ID); err != nil {
 		return err
 	}
-	// A size-limited disk is a file of its own: it goes with the service
-	// (plain volumes stay on the server).
+	// Its disks go with it: left behind they would hold its data with no
+	// service to show or delete them. A size-limited disk is a file of its
+	// own, removed with its limit; the others are plain Docker volumes.
+	// Mounts of another service's disk only drop the mount.
 	if err := m.forgetVolumeLimits(ctx, p, s, nil); err != nil {
 		m.log.Warn("remove the service's limited disks", "service", p.Slug+"/"+s.Slug, "error", err)
+	}
+	if vr, ok := m.node.(volumeRemover); ok {
+		for _, v := range vols {
+			if v.OwnerSlug != "" {
+				continue
+			}
+			if _, limited := m.limitOf(ctx, node.VolumeName(p.Slug, s.Slug, v.Name)); limited {
+				continue
+			}
+			if err := vr.RemoveVolume(context.WithoutCancel(ctx), p.Slug, s.Slug, v.Name); err != nil {
+				m.log.Warn("remove the service's disk", "service", p.Slug+"/"+s.Slug, "disk", v.Name, "error", err)
+			}
+		}
 	}
 	// Images built for it have no other use: free the disk.
 	if b, ok := m.node.(node.Builder); ok {

@@ -6,6 +6,7 @@ expand = "Abrir em tela grande"
 language = "Idioma"
 copied = "Copiado"
 copy_name = "Copiar {name}"
+delete = "Apagar"
 
 [locale]
 pt-BR = "Português (Brasil)"
@@ -450,7 +451,7 @@ badge = "Em manutenção"
 [service.danger]
 title = "Zona de perigo"
 type_name = "Para apagar, digite"
-hint = "Remove o container e a configuração; os discos ficam."
+hint = "Remove o container, a configuração e os discos, com os dados."
 delete = "Apagar serviço"
 name_mismatch = "O nome digitado não confere."
 

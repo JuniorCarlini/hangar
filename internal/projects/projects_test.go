@@ -399,3 +399,28 @@ func TestClaimKeepsOneActionPerService(t *testing.T) {
 		t.Fatal("released: the service takes a new action")
 	}
 }
+
+// Deleting a service deletes its disks: left behind they would keep its
+// data with no service to show or delete them.
+func TestDeleteServiceRemovesItsDisks(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.service(t)
+	svcs, err := f.m.CreateFromTemplate(ctx, f.who, "lab", "postgres", "db", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	vols, err := f.m.q.ListVolumes(ctx, svcs[0].ID)
+	if err != nil || len(vols) == 0 {
+		t.Fatalf("the database has no disk: %v %v", vols, err)
+	}
+	name := node.VolumeName("lab", "db", vols[0].Name)
+	f.n.volumes()[name] = ""
+	if err := f.m.DeleteService(ctx, f.who, "lab", "db"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.n.volumes()[name]; ok {
+		t.Error("the disk was left on the server")
+	}
+}
