@@ -2592,6 +2592,7 @@ too_long = "O texto ficou grande demais: título até 120 caracteres, texto até
 write = "A marca foi salva, mas as páginas não puderam ser gravadas para o proxy. Veja o log do painel."
 
 [volume]
+empty = "Nenhum disco. Tudo o que o app grava se perde no próximo deploy."
 disk = "Disco"
 usage = "Uso"
 usage_used = "{size} usados"

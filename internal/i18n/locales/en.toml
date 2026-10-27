@@ -2591,6 +2591,7 @@ too_long = "Too long: title up to 120 characters, text up to 600 and HTML up to 
 write = "The brand was saved, but the pages could not be written for the proxy. See the panel log."
 
 [volume]
+empty = "No disk. Everything the app writes is lost on the next deploy."
 disk = "Disk"
 usage = "Usage"
 usage_used = "{size} used"

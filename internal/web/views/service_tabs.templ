@@ -1464,8 +1464,10 @@ templ volumesCard(d ServiceData) {
 				</button>
 			}
 		}
-		if len(d.Volumes) > 0 {
-			<div class={ cardBodyClass }>
+		<div class={ cardBodyClass }>
+			if len(d.Volumes) == 0 {
+				@emptyState("hard-drive", t(ctx, "volume.empty"))
+			} else {
 				<div class="tuc-table-wrap">
 					<table class="tuc-table is-compact w-full">
 						<thead><tr><th>{ t(ctx, "volume.disk") }</th><th>{ t(ctx, "volume.usage") }</th><th class="tuc-table__actions"></th></tr></thead>
@@ -1546,8 +1548,8 @@ templ volumesCard(d ServiceData) {
 						</tbody>
 					</table>
 				</div>
-			</div>
-		}
+			}
+		</div>
 	</section>
 	if d.CanAdmin {
 		<dialog class="tuc-modal is-md" id="volume-new" aria-labelledby="volume-new-title">
