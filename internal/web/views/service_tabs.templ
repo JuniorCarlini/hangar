@@ -160,11 +160,12 @@ templ tabVariables(d ServiceData) {
 										<span class="tuc-badge is-danger ref-badge" title={ broken }>ref</span>
 										<span class="ref-text">{ v.Value }</span>
 									} else if svc, key := connection(v.Value); svc != "" {
-										<span class="inline-flex items-center gap-1.5" title={ v.Value }>
-											@Icon("cable", "size-3.5 text-accent-text")
-											<span class="text-muted">{ svc }</span>
-											<span class="text-subtle">·</span>
-											{ key }
+										<span class="flex items-center gap-3" title={ v.Value }>
+											<span class="min-w-0 grow truncate">{ key }</span>
+											<span class="inline-flex shrink-0 items-center gap-1 font-sans text-xs text-muted">
+												@Icon("cable", "size-3.5 text-accent-text")
+												{ svc }
+											</span>
 										</span>
 									} else if isRef(v.Value) {
 										<span class="tuc-badge is-info ref-badge">ref</span>
