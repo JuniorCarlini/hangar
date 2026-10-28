@@ -126,6 +126,7 @@ type memStore struct {
 	opts      map[string]s3.PutOptions
 	times     map[string]time.Time
 	canDelete bool
+	canHide   bool // B2: any key that writes may add a delete marker
 	noLock    bool
 }
 
@@ -154,7 +155,7 @@ func (s *memStore) Head(_ context.Context, key string) (s3.ObjectInfo, error) {
 	if !ok {
 		return s3.ObjectInfo{}, &s3.Error{Status: 404, Code: "NoSuchKey"}
 	}
-	return s3.ObjectInfo{Key: key, Size: int64(len(b)), Metadata: s.opts[key].Metadata, LockMode: s.opts[key].LockMode, LastModified: s.times[key]}, nil
+	return s3.ObjectInfo{Key: key, Size: int64(len(b)), Metadata: s.opts[key].Metadata, LockMode: s.opts[key].LockMode, LastModified: s.times[key], VersionID: "v1"}, nil
 }
 
 func (s *memStore) Get(ctx context.Context, key string) (io.ReadCloser, s3.ObjectInfo, error) {
@@ -188,8 +189,8 @@ func (s *memStore) List(_ context.Context, prefix string, fn func(s3.ObjectInfo)
 	return nil
 }
 
-func (s *memStore) Delete(context.Context, string, string) error {
-	if s.canDelete {
+func (s *memStore) Delete(_ context.Context, _, versionID string) error {
+	if s.canDelete || (s.canHide && versionID == "") {
 		return nil
 	}
 	return &s3.Error{Status: 403, Code: "AccessDenied"}

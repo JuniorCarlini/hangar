@@ -217,9 +217,23 @@ func checkStore(ctx context.Context, store ObjectStore, prefix, mode string, now
 	if !bytes.Equal(got, body) {
 		return i18n.E("backup.error.cannot_read", "error", "content differs")
 	}
-	// The credential must not be able to delete (or hide by a delete
-	// marker): that is the ransomware protection.
-	if err := store.Delete(ctx, key, ""); err == nil {
+	// The credential must not be able to delete: that is the ransomware
+	// protection. What counts is removing a version for good. A delete
+	// without a version only adds a delete marker, which leaves the locked
+	// version in place, and B2 lets any key that can write do it
+	// (b2_hide_file needs only writeFiles), so it cannot be the test. A
+	// locked version is no probe either: the lock refuses its deletion
+	// whatever the credential. So a second, unlocked file is deleted by its
+	// version id, and that has to be refused.
+	vkey := strings.TrimSuffix(key, ".txt") + "-version.txt"
+	if err := store.Put(ctx, vkey, bytes.NewReader(body), int64(len(body)), s3.PutOptions{}); err != nil {
+		return i18n.E("backup.error.unreachable", "error", err.Error())
+	}
+	vinfo, err := store.Head(ctx, vkey)
+	if err != nil {
+		return i18n.E("backup.error.cannot_read", "error", err.Error())
+	}
+	if err := store.Delete(ctx, vkey, vinfo.VersionID); err == nil {
 		return i18n.E("backup.error.can_delete")
 	} else if !s3.IsAccessDenied(err) {
 		return i18n.E("backup.error.unreachable", "error", err.Error())

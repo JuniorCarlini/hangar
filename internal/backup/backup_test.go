@@ -68,7 +68,17 @@ func TestAddTargetChecksLockAndDeletePermission(t *testing.T) {
 	if _, err := f.m.AddTarget(ctx, f.who, validTarget()); err == nil || !strings.Contains(err.Error(), "delete") {
 		t.Fatalf("a credential that can delete must be refused: %v", err)
 	}
-	f.store.canDelete, f.store.noLock = false, true
+	// A key that may only add delete markers (B2's writeFiles) is fine:
+	// the versions stay.
+	f.store.canDelete, f.store.canHide = false, true
+	hid, err := f.m.AddTarget(ctx, f.who, validTarget())
+	if err != nil {
+		t.Fatalf("a credential that can only hide must pass: %v", err)
+	}
+	if err := f.m.DeleteTarget(ctx, f.who, hid); err != nil {
+		t.Fatal(err)
+	}
+	f.store.canHide, f.store.noLock = false, true
 	if _, err := f.m.AddTarget(ctx, f.who, validTarget()); err == nil || !strings.Contains(strings.ToLower(err.Error()), "lock") {
 		t.Fatalf("a bucket without Object Lock must be refused: %v", err)
 	}
@@ -87,9 +97,14 @@ func TestAddTargetChecksLockAndDeletePermission(t *testing.T) {
 		t.Fatalf("targets: %+v", ts)
 	}
 	// The probe went in with the lock, under the prefix.
-	probes := f.store.keys("lab/hangar-check/")
-	if len(probes) == 0 || f.store.opts[probes[0]].LockMode != s3.Compliance {
-		t.Fatalf("probe: %v", probes)
+	locked := 0
+	for _, k := range f.store.keys("lab/hangar-check/") {
+		if f.store.opts[k].LockMode == s3.Compliance {
+			locked++
+		}
+	}
+	if locked == 0 {
+		t.Fatalf("probe: %v", f.store.keys("lab/hangar-check/"))
 	}
 	// The credential is encrypted in the database.
 	row, _ := f.m.q.GetBackupTarget(ctx, id)
