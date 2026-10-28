@@ -498,46 +498,72 @@ func installCopy(src, dst string) error {
 }
 
 func copyFile(src, dst string, perm os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return err
-	}
-	in, err := os.Open(src) //nolint:gosec // the applier's own paths
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm) //nolint:gosec // the applier's own paths
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		_ = out.Close()
-		return err
-	}
-	if err := out.Sync(); err != nil {
-		_ = out.Close()
-		return err
-	}
-	return out.Close()
+	return copyTo(src, dst, perm, -1, -1)
 }
 
 // copyPreserving copies keeping permissions and owner (the database belongs
 // to the hangar user; a root-owned copy would leave the panel unable to open
 // it).
 func copyPreserving(src, dst string) error {
-	info, err := os.Stat(src)
+	info, err := os.Lstat(src)
 	if err != nil {
 		return err
 	}
-	if err := copyFile(src, dst, info.Mode().Perm()); err != nil {
+	uid, gid := -1, -1
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		uid, gid = int(st.Uid), int(st.Gid)
+	}
+	return copyTo(src, dst, info.Mode().Perm(), uid, gid)
+}
+
+// copyTo copies src to dst as root without following a symlink at either
+// end: these paths live in directories the hangar user owns, and a link
+// planted there would otherwise make root read or overwrite (and chown) any
+// file on the host. The copy goes to a fresh temporary file, gets its mode
+// and owner through the open descriptor, and is renamed into place; rename
+// replaces a link itself, never what it points at. uid/gid -1 keep root's.
+func copyTo(src, dst string, perm os.FileMode, uid, gid int) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 		return err
 	}
-	if st, ok := info.Sys().(*syscall.Stat_t); ok {
-		if err := os.Chown(dst, int(st.Uid), int(st.Gid)); err != nil && !errors.Is(err, os.ErrPermission) {
+	in, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NOFOLLOW, 0) //nolint:gosec // the applier's own paths
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	if st, err := in.Stat(); err != nil {
+		return err
+	} else if !st.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", src)
+	}
+	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*")
+	if err != nil {
+		return err
+	}
+	tmp := out.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Chmod(perm); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if uid >= 0 {
+		if err := out.Chown(uid, gid); err != nil && !errors.Is(err, os.ErrPermission) {
+			_ = out.Close()
 			return err
 		}
 	}
-	return nil
+	if err := out.Sync(); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, dst)
 }
 
 // pruneOldest keeps the keep newest entries of dir whose name starts with

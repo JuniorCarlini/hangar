@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -132,5 +134,24 @@ func TestApplyIsIdempotent(t *testing.T) {
 	}
 	if in := f.chains["INPUT"]; len(in) != 2 || in[0] != "-j "+EdgeChain {
 		t.Errorf("INPUT = %q", in)
+	}
+}
+
+// Root writes applied.json into a directory the hangar user owns: a link
+// planted under that name is replaced, never written through.
+func TestApplyStatusDoesNotFollowSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(dir, "victim")
+	if err := os.WriteFile(victim, []byte("intact"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(victim, filepath.Join(dir, appliedFile)); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeStatus(filepath.Join(dir, appliedFile), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "intact" {
+		t.Errorf("the status went through the link: %q", b)
 	}
 }

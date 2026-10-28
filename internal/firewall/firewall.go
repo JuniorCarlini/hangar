@@ -254,10 +254,35 @@ func Apply(ctx context.Context, dir string) error {
 		res.Error = err.Error()
 	}
 	b, _ := json.Marshal(res)
-	if werr := os.WriteFile(filepath.Join(dir, appliedFile), b, 0o644); werr != nil && err == nil { //nolint:gosec // status, read by the panel
+	if werr := writeStatus(filepath.Join(dir, appliedFile), b); werr != nil && err == nil {
 		err = werr
 	}
 	return err
+}
+
+// writeStatus writes the result for the panel. Root runs this in a directory
+// the hangar user owns, so it never writes by that name directly (a planted
+// symlink would point root's write anywhere): a fresh temporary file is
+// renamed over it, which replaces a link instead of following it.
+func writeStatus(path string, b []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".applied-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if _, err := f.Write(b); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Chmod(0o644); err != nil { // status, read by the panel
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // runCmd runs one fixed iptables binary; a test seam.

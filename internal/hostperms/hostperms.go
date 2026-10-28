@@ -79,55 +79,70 @@ func Fix(plan []Want, lookup Lookup) ([]string, error) {
 		if w.Path == "" {
 			continue
 		}
-		st, err := os.Lstat(w.Path)
-		if errors.Is(err, fs.ErrNotExist) {
-			if !w.Optional {
-				errs = append(errs, fmt.Errorf("%s is missing", w.Path))
-			}
-			continue
-		}
+		c, err := fixOne(w, lookup)
+		changed = append(changed, c...)
 		if err != nil {
 			errs = append(errs, err)
-			continue
-		}
-		if st.Mode()&fs.ModeSymlink != 0 {
-			errs = append(errs, fmt.Errorf("%s is a symlink; not touched", w.Path))
-			continue
-		}
-		if st.IsDir() != w.Dir {
-			errs = append(errs, fmt.Errorf("%s is not a %s", w.Path, kind(w.Dir)))
-			continue
-		}
-		uid, _, err := lookup(w.Owner)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("user %q: %w", w.Owner, err))
-			continue
-		}
-		_, gid, err := lookup(w.Group)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("group %q: %w", w.Group, err))
-			continue
-		}
-		sys, ok := st.Sys().(*syscall.Stat_t)
-		if !ok {
-			continue
-		}
-		if int(sys.Uid) != uid || int(sys.Gid) != gid {
-			if err := os.Lchown(w.Path, uid, gid); err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			changed = append(changed, fmt.Sprintf("%s owner %d:%d -> %d:%d", w.Path, sys.Uid, sys.Gid, uid, gid))
-		}
-		if st.Mode().Perm() != w.Mode {
-			if err := os.Chmod(w.Path, w.Mode); err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			changed = append(changed, fmt.Sprintf("%s mode %o -> %o", w.Path, st.Mode().Perm(), w.Mode))
 		}
 	}
 	return changed, errors.Join(errs...)
+}
+
+// fixOne opens the path once, without following a symlink, and checks and
+// changes it through that descriptor. Root runs this inside directories the
+// hangar user owns: going by name twice (look, then chmod) would let that
+// user swap in a symlink between the two and point root's change at any
+// file on the host.
+func fixOne(w Want, lookup Lookup) ([]string, error) {
+	f, err := os.OpenFile(w.Path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		if !w.Optional {
+			return nil, fmt.Errorf("%s is missing", w.Path)
+		}
+		return nil, nil
+	case errors.Is(err, syscall.ELOOP):
+		return nil, fmt.Errorf("%s is a symlink; not touched", w.Path)
+	case err != nil:
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !st.Mode().IsRegular() && !st.IsDir() {
+		return nil, fmt.Errorf("%s is not a regular file or directory; not touched", w.Path)
+	}
+	if st.IsDir() != w.Dir {
+		return nil, fmt.Errorf("%s is not a %s", w.Path, kind(w.Dir))
+	}
+	uid, _, err := lookup(w.Owner)
+	if err != nil {
+		return nil, fmt.Errorf("user %q: %w", w.Owner, err)
+	}
+	_, gid, err := lookup(w.Group)
+	if err != nil {
+		return nil, fmt.Errorf("group %q: %w", w.Group, err)
+	}
+	sys, ok := st.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, nil
+	}
+	var changed []string
+	if int(sys.Uid) != uid || int(sys.Gid) != gid {
+		if err := f.Chown(uid, gid); err != nil {
+			return changed, err
+		}
+		changed = append(changed, fmt.Sprintf("%s owner %d:%d -> %d:%d", w.Path, sys.Uid, sys.Gid, uid, gid))
+	}
+	if st.Mode().Perm() != w.Mode {
+		if err := f.Chmod(w.Mode); err != nil {
+			return changed, err
+		}
+		changed = append(changed, fmt.Sprintf("%s mode %o -> %o", w.Path, st.Mode().Perm(), w.Mode))
+	}
+	return changed, nil
 }
 
 func kind(dir bool) string {

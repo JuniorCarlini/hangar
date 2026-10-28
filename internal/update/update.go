@@ -382,9 +382,26 @@ func (c *Checker) do(ctx context.Context, u, accept string) (*http.Response, err
 	return resp, nil
 }
 
+// writeFileAtomic writes through a fresh temporary file and a rename. The
+// root applier writes status here too, in a directory the hangar user owns:
+// a fixed temporary name could be a planted symlink, a CreateTemp name
+// cannot.
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, perm); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Chmod(perm); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)
