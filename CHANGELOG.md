@@ -12,6 +12,31 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Segurança
+
+Mais defesas da auditoria de segurança.
+
+- **Desligar a 2FA pede a senha**, como já acontecia ao ligar: um código de
+  recuperação vazado não basta mais.
+- **O painel nunca fica sem dono**: dois donos rebaixando um ao outro ao
+  mesmo tempo podiam deixar o painel sem nenhum.
+- **Segredo dos domínios dos clientes protegido**: uma variável com o mesmo
+  nome não substitui mais o segredo que o Hangar usa para assinar a
+  checagem.
+- **Backups mais robustos**: o arquivamento contínuo do PostgreSQL funciona
+  com caminhos de disco que tenham espaço ou símbolos, e backups com links
+  forjados são recusados.
+- **Ajustes de sistema mais seguros**: as tarefas que rodam como root
+  (atualização, firewall, permissões) não seguem mais atalhos (symlinks)
+  dentro da pasta do Hangar.
+- **Outras**: a checagem de versões de imagem só segue redirecionamentos
+  HTTPS; logos de templates com animações em links são recusados.
+
+### Interno
+
+- As actions do CI e do release ficam fixadas por commit, e o Dependabot
+  propõe as versões novas toda semana.
+
 ## [0.5.20] - 2026-10-27
 
 ### Novo
