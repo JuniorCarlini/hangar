@@ -19,6 +19,10 @@ servidor pelo botão **Atualização** do painel.
 - **Memória e CPU editáveis**: o card Recursos, em Configurações, muda os
   limites de um serviço depois de criado (antes só dava para escolher na
   criação). Vale no próximo deploy.
+- **Workers sem porta**: no mesmo card, a porta interna pode mudar ou ir a
+  0. Um serviço de repositório sem `EXPOSE` nascia na porta 8000, e o
+  deploy de um worker (que não abre porta) esperava até dar erro. Com 0, o
+  deploy só confere que o container segue rodando.
 - **Atualizar a lista de repositórios**: um botão na aba Meus repositórios
   busca de novo no GitHub, sem esperar o cache, depois de você mudar o
   acesso do token por lá.
