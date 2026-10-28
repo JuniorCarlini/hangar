@@ -120,7 +120,7 @@ UPDATE backup_restores SET created_roles = ? WHERE id = ?;
 UPDATE backup_restores SET cleanup = ? WHERE id = ?;
 
 -- name: ListServiceRestores :many
-SELECT * FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC LIMIT ?;
+SELECT * FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC, rowid DESC LIMIT ?;
 
 -- ListServiceRestoresBoth lists the restores of a service and the ones
 -- that created it: a restore into a new service with its name, running
@@ -130,10 +130,10 @@ SELECT * FROM backup_restores
 WHERE service_id = sqlc.arg(service_id)
    OR (destination = 'new' AND new_service = sqlc.arg(slug) AND label LIKE sqlc.arg(label_prefix)
        AND started_at <= sqlc.arg(created_at) AND (finished_at IS NULL OR finished_at >= sqlc.arg(created_at)))
-ORDER BY started_at DESC LIMIT sqlc.arg(lim);
+ORDER BY started_at DESC, rowid DESC LIMIT sqlc.arg(lim);
 
 -- name: ListRestores :many
-SELECT * FROM backup_restores ORDER BY started_at DESC LIMIT ?;
+SELECT * FROM backup_restores ORDER BY started_at DESC, rowid DESC LIMIT ?;
 
 -- name: FailRunningRestores :exec
 UPDATE backup_restores SET status = 'failed', error = ?, finished_at = ? WHERE status = 'running';

@@ -131,7 +131,7 @@ func TestFailedRestoreIntoNewServiceIsRemovedAndReported(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	s, key := f.dumpKey(t)
-	f.n.restoreErr = errors.New(`sh exited with 1: pg_restore: error: could not execute query: ERROR:  role "x" does not exist`)
+	f.n.setRestoreErr(errors.New(`sh exited with 1: pg_restore: error: could not execute query: ERROR:  role "x" does not exist`))
 
 	id, err := f.m.StartRestore(ctx, f.who, RestoreRequest{
 		Project: "lab", Service: "db", Mode: ModeDump, Key: key, Destination: DestNew, NewService: "db-copia",
@@ -163,7 +163,7 @@ func TestFailedRestoreIntoNewServiceIsRemovedAndReported(t *testing.T) {
 	}
 
 	// The name is free again, and a working retry clears the alert.
-	f.n.restoreErr = nil
+	f.n.setRestoreErr(nil)
 	id, err = f.m.StartRestore(ctx, f.who, RestoreRequest{
 		Project: "lab", Service: "db", Mode: ModeDump, Key: key, Destination: DestNew, NewService: "db-copia",
 		Identities: []age.Identity{f.id},
@@ -188,7 +188,7 @@ func TestFailedOverwriteKeepsTheService(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	s, key := f.dumpKey(t)
-	f.n.restoreErr = errors.New("boom")
+	f.n.setRestoreErr(errors.New("boom"))
 	id, err := f.m.StartRestore(ctx, f.who, RestoreRequest{
 		Project: "lab", Service: "db", Mode: ModeDump, Key: key, Destination: DestOverwrite, Confirm: "db",
 		Identities: []age.Identity{f.id},

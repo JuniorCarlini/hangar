@@ -677,7 +677,7 @@ func (q *Queries) ListBackupTargets(ctx context.Context) ([]BackupTarget, error)
 }
 
 const listRestores = `-- name: ListRestores :many
-SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores ORDER BY started_at DESC LIMIT ?
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores ORDER BY started_at DESC, rowid DESC LIMIT ?
 `
 
 func (q *Queries) ListRestores(ctx context.Context, limit int64) ([]BackupRestore, error) {
@@ -771,7 +771,7 @@ func (q *Queries) ListServiceBackupRuns(ctx context.Context, arg ListServiceBack
 }
 
 const listServiceRestores = `-- name: ListServiceRestores :many
-SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC LIMIT ?
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC, rowid DESC LIMIT ?
 `
 
 type ListServiceRestoresParams struct {
@@ -823,7 +823,7 @@ SELECT id, service_id, label, mode, point, destination, new_service, status, ste
 WHERE service_id = ?1
    OR (destination = 'new' AND new_service = ?2 AND label LIKE ?3
        AND started_at <= ?4 AND (finished_at IS NULL OR finished_at >= ?4))
-ORDER BY started_at DESC LIMIT ?5
+ORDER BY started_at DESC, rowid DESC LIMIT ?5
 `
 
 type ListServiceRestoresBothParams struct {

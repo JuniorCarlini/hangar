@@ -46,6 +46,14 @@ type fakeNode struct {
 	restoreIn  []byte
 }
 
+// setRestoreErr changes the pg_restore answer while a restore may still be
+// winding down in its goroutine.
+func (f *fakeNode) setRestoreErr(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.restoreErr = err
+}
+
 func (f *fakeNode) EnsureEdge(context.Context, node.EdgeSpec) error            { return nil }
 func (f *fakeNode) ConnectEdge(context.Context, string) error                  { return nil }
 func (f *fakeNode) EnsureProjectNetwork(context.Context, string, string) error { return nil }
