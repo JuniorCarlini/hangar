@@ -1,0 +1,13 @@
+# The workflows pin each action by commit (the release job holds the signing
+# key, and a tag can be moved); this keeps those pins on the newest release.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

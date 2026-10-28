@@ -19,16 +19,14 @@ jobs:
     outputs:
       digest: ${{ steps.resolve.outputs.digest }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: docker/setup-qemu-action@v4
-
-      - uses: docker/setup-buildx-action@v4
-
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -38,6 +36,9 @@ jobs:
         id: resolve
         env:
           IMAGE: ghcr.io/juniorcarlini/hangar-caddy
+          # Through the environment, never pasted into the script: the
+          # shell then sees the tag as data, whatever it contains.
+          VERSION: ${{ github.ref_name }}
           # Layers from xcaddy's Go compile are not byte-reproducible, so
           # rebuilding every release would change the digest and recreate the
           # edge container (a brief outage for every customer) on every update.
@@ -60,7 +61,7 @@ jobs:
           fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           # A version-tagged alias on the same manifest, for browsing the registry.
-          docker buildx imagetools create --tag "$IMAGE:${{ github.ref_name }}" "$IMAGE@$digest"
+          docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE@$digest"
 
   # Depends on edge-image on purpose: if the image push fails, no release is
   # cut, so a binary never ships pointing at an image that is not in the
@@ -69,11 +70,11 @@ jobs:
     needs: edge-image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
