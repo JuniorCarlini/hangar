@@ -877,6 +877,10 @@ connect_with = "Conectar com"
 copy = "Copiar {ref}"
 
 
+[backup]
+hint = "Gera um pg_dump na hora e baixa pelo navegador."
+download = "Baixar backup"
+
 [backup.error]
 mode = "Escolha Simples ou Com kit de recuperação."
 mode_kit = "Gere e confirme um kit de recuperação antes de usar este modo."
@@ -2249,6 +2253,7 @@ wal_title = "Recuperação até o minuto"
 window = "Dá para voltar a qualquer momento entre {from} e {to}."
 window_none = "Ainda não há base para voltar a um minuto. Ela é feita logo depois que o WAL começa a funcionar."
 last_base = "Última base: {when}"
+download_hint = "Gera um pg_dump na hora, cifrado com a sua chave. O link vale 5 minutos."
 download_preparing = "Preparando: dump, teste e cifra…"
 download_ready = "Baixar ({size})"
 download_expires = "O link vale até {when} e funciona uma vez."

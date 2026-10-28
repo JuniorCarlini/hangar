@@ -206,3 +206,46 @@ func TestOldKitConfirmationAsksAgain(t *testing.T) {
 		t.Fatal("the backups page should offer to confirm the key again")
 	}
 }
+
+// The download needs no destination, so the button must be on the tab even
+// before one is configured (it was once dropped along with the old header).
+func TestServiceBackupsTabOffersDownloadWithoutDestination(t *testing.T) {
+	const action = `action="/p/lab/s/db/backup"`
+	a := projects.Actor{UserID: "usr_x"}
+	setup := func(role auth.Role) (*env, *http.Cookie, *auth.Principal) {
+		e := newEnv(t)
+		if _, err := e.pm.CreateProject(context.Background(), a, "lab", "Lab"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.pm.CreateFromTemplate(context.Background(), a, "lab", "postgres", "db", nil); err != nil {
+			t.Fatal(err)
+		}
+		e.pm.Wait()
+		c, p := e.session(t, role)
+		return e, c, p
+	}
+	page := func(e *env, c *http.Cookie) string {
+		return e.do(req{method: "GET", target: "/p/lab/s/db?tab=backups", cookies: []*http.Cookie{c}}).Body.String()
+	}
+
+	e, c, p := setup(auth.RoleAdmin)
+	sc, _ := e.sudo(t, c, p)
+	body := page(e, sc)
+	if !strings.Contains(body, `href="/backups?tab=config"`) {
+		t.Fatal("expected the no-destination state")
+	}
+	if n := strings.Count(body, action); n != 1 {
+		t.Errorf("admin with sudo: download form appears %d times, want 1", n)
+	}
+	// Without sudo it is a button that asks for the identity check, not a form.
+	if strings.Contains(page(e, c), action) {
+		t.Error("download form shown without an active sudo session")
+	}
+
+	for _, role := range []auth.Role{auth.RoleOperator, auth.RoleViewer} {
+		e2, c2, _ := setup(role)
+		if strings.Contains(page(e2, c2), action) {
+			t.Errorf("role %v must not see the download form", role)
+		}
+	}
+}

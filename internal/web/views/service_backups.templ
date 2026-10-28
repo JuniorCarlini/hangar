@@ -303,6 +303,31 @@ templ svcBackupActions(d ServiceData) {
 			{ t(ctx, "svcbackup.restore") }
 		</button>
 	}
+	// The download needs no destination (pg_dump streams straight to the
+	// browser, encrypted when a kit exists), so it shows in the not-ready
+	// state too: it is the way out for a database nobody has set up yet.
+	if d.CanAdmin {
+		if d.SudoCritical {
+			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit) }>
+				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<button class="tuc-btn is-outline is-sm" type="submit">
+					@Icon("download", "size-3.5")
+					{ t(ctx, "backup.download") }
+				</button>
+			</form>
+		} else {
+			@sudoButton(t(ctx, "backup.download"))
+		}
+	}
+}
+
+// downloadHint says what the download does: an encrypted dump behind a
+// signed link once a kit exists, the plain dump before.
+func downloadHint(ctx context.Context, kit bool) string {
+	if kit {
+		return t(ctx, "svcbackup.download_hint")
+	}
+	return t(ctx, "backup.hint")
 }
 
 // restoreModal opens the restore dialog, or the identity check first.

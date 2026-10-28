@@ -877,6 +877,10 @@ connect_with = "Connect to"
 copy = "Copy {ref}"
 
 
+[backup]
+hint = "Makes a pg_dump now and downloads it in the browser."
+download = "Download backup"
+
 [backup.error]
 mode = "Choose Simple or With a recovery kit."
 mode_kit = "Generate and confirm a recovery kit before using this mode."
@@ -2248,6 +2252,7 @@ wal_title = "Point-in-time recovery"
 window = "You can go back to any moment between {from} and {to}."
 window_none = "There is no base to go back to a minute yet. One is taken right after WAL starts working."
 last_base = "Last base: {when}"
+download_hint = "Makes a pg_dump now, encrypted with your key. The link lasts 5 minutes."
 download_preparing = "Preparing: dump, test and encryption…"
 download_ready = "Download ({size})"
 download_expires = "The link is valid until {when} and works once."
