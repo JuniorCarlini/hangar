@@ -298,9 +298,9 @@ templ myReposTab(d NewServiceData) {
 						<input class="tuc-input w-full pl-8" type="search" placeholder={ t(ctx, "myrepos.search") } aria-label={ t(ctx, "myrepos.search") } autocomplete="off" data-myrepos-search/>
 					</div>
 					<span class="flex flex-wrap gap-2">
-						<button type="button" class="tuc-btn is-outline" data-tuc-modal="#new-git-cred">
-							@Icon("key-round", "size-3.5")
-							{ t(ctx, "myrepos.new_cred") }
+						<button type="button" class="tuc-btn is-outline" data-myrepos-refresh title={ t(ctx, "myrepos.refresh_hint") }>
+							@Icon("refresh-cw", "size-3.5")
+							{ t(ctx, "myrepos.refresh") }
 						</button>
 						<button type="button" class="tuc-btn is-outline" data-tuc-modal="#repo-url">
 							@Icon("link", "size-3.5")
@@ -308,13 +308,7 @@ templ myReposTab(d NewServiceData) {
 						</button>
 					</span>
 				</div>
-				<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-					<span class="text-xs text-muted" data-myrepos-status>{ t(ctx, "myrepos.scope_hint") }</span>
-					<button type="button" class="tuc-btn is-ghost is-sm" data-myrepos-refresh title={ t(ctx, "myrepos.refresh_hint") }>
-						@Icon("refresh-cw", "size-3.5")
-						{ t(ctx, "myrepos.refresh") }
-					</button>
-				</div>
+				<span class="text-xs text-muted" data-myrepos-status>{ t(ctx, "myrepos.scope_hint") }</span>
 				// The token reads no private repository: usually a token made
 				// without "Contents: Read-only" (assets/newservice.js shows it).
 				<div data-myrepos-public-only hidden>
