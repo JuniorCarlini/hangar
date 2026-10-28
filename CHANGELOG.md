@@ -12,6 +12,8 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.21] - 2026-10-27
+
 ### Segurança
 
 Mais defesas da auditoria de segurança.
@@ -678,7 +680,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.20...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.21...HEAD
+[0.5.21]: https://github.com/JuniorCarlini/hangar/compare/v0.5.20...v0.5.21
 [0.5.20]: https://github.com/JuniorCarlini/hangar/compare/v0.5.19...v0.5.20
 [0.5.19]: https://github.com/JuniorCarlini/hangar/compare/v0.5.18...v0.5.19
 [0.5.18]: https://github.com/JuniorCarlini/hangar/compare/v0.5.17...v0.5.18
