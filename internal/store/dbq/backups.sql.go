@@ -677,7 +677,7 @@ func (q *Queries) ListBackupTargets(ctx context.Context) ([]BackupTarget, error)
 }
 
 const listRestores = `-- name: ListRestores :many
-SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores ORDER BY started_at DESC, rowid DESC LIMIT ?
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup, saved_roles FROM backup_restores ORDER BY started_at DESC, rowid DESC LIMIT ?
 `
 
 func (q *Queries) ListRestores(ctx context.Context, limit int64) ([]BackupRestore, error) {
@@ -705,6 +705,7 @@ func (q *Queries) ListRestores(ctx context.Context, limit int64) ([]BackupRestor
 			&i.FinishedAt,
 			&i.CreatedRoles,
 			&i.Cleanup,
+			&i.SavedRoles,
 		); err != nil {
 			return nil, err
 		}
@@ -771,7 +772,7 @@ func (q *Queries) ListServiceBackupRuns(ctx context.Context, arg ListServiceBack
 }
 
 const listServiceRestores = `-- name: ListServiceRestores :many
-SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC, rowid DESC LIMIT ?
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup, saved_roles FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC, rowid DESC LIMIT ?
 `
 
 type ListServiceRestoresParams struct {
@@ -804,6 +805,7 @@ func (q *Queries) ListServiceRestores(ctx context.Context, arg ListServiceRestor
 			&i.FinishedAt,
 			&i.CreatedRoles,
 			&i.Cleanup,
+			&i.SavedRoles,
 		); err != nil {
 			return nil, err
 		}
@@ -819,7 +821,7 @@ func (q *Queries) ListServiceRestores(ctx context.Context, arg ListServiceRestor
 }
 
 const listServiceRestoresBoth = `-- name: ListServiceRestoresBoth :many
-SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup, saved_roles FROM backup_restores
 WHERE service_id = ?1
    OR (destination = 'new' AND new_service = ?2 AND label LIKE ?3
        AND started_at <= ?4 AND (finished_at IS NULL OR finished_at >= ?4))
@@ -868,6 +870,7 @@ func (q *Queries) ListServiceRestoresBoth(ctx context.Context, arg ListServiceRe
 			&i.FinishedAt,
 			&i.CreatedRoles,
 			&i.Cleanup,
+			&i.SavedRoles,
 		); err != nil {
 			return nil, err
 		}
@@ -941,6 +944,20 @@ type SetBackupRestoreRolesParams struct {
 
 func (q *Queries) SetBackupRestoreRoles(ctx context.Context, arg SetBackupRestoreRolesParams) error {
 	_, err := q.db.ExecContext(ctx, setBackupRestoreRoles, arg.CreatedRoles, arg.ID)
+	return err
+}
+
+const setBackupRestoreSavedRoles = `-- name: SetBackupRestoreSavedRoles :exec
+UPDATE backup_restores SET saved_roles = ? WHERE id = ?
+`
+
+type SetBackupRestoreSavedRolesParams struct {
+	SavedRoles string
+	ID         string
+}
+
+func (q *Queries) SetBackupRestoreSavedRoles(ctx context.Context, arg SetBackupRestoreSavedRolesParams) error {
+	_, err := q.db.ExecContext(ctx, setBackupRestoreSavedRoles, arg.SavedRoles, arg.ID)
 	return err
 }
 

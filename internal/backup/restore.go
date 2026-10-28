@@ -64,6 +64,9 @@ type Restore struct {
 	// CreatedRoles are the roles the restore created without a password:
 	// the app cannot log in with them until they get one.
 	CreatedRoles []string
+	// SavedRoles are the roles the restore recreated from the roles saved
+	// with the dump, as they were (same password).
+	SavedRoles []string
 	// Cleanup says what happened to the new service of a failed restore
 	// into a new service: CleanupRemoved or CleanupKept.
 	Cleanup string
@@ -85,6 +88,7 @@ func toRestore(r dbq.BackupRestore) Restore {
 		out.FinishedAt = time.Unix(r.FinishedAt.Int64, 0)
 	}
 	_ = json.Unmarshal([]byte(r.CreatedRoles), &out.CreatedRoles)
+	_ = json.Unmarshal([]byte(r.SavedRoles), &out.SavedRoles)
 	return out
 }
 
@@ -315,14 +319,22 @@ func (m *Manager) dropNewService(ctx context.Context, a Actor, id string, src sv
 	}
 }
 
-// recordRoles keeps the roles a restore created without a password. They
-// stay even when the restore then fails: they are in the server now.
-func (m *Manager) recordRoles(ctx context.Context, id string, roles []string) {
-	if id == "" || len(roles) == 0 {
+// recordRoles keeps the roles a restore recreated (as in the original) and
+// the ones it created without a password, by name. They stay even when
+// the restore then fails: they are in the server now.
+func (m *Manager) recordRoles(ctx context.Context, id string, roles RolesDone) {
+	if id == "" {
 		return
 	}
-	j, _ := json.Marshal(roles)
-	_ = m.q.SetBackupRestoreRoles(context.WithoutCancel(ctx), dbq.SetBackupRestoreRolesParams{CreatedRoles: string(j), ID: id})
+	ctx = context.WithoutCancel(ctx)
+	if len(roles.NoLogin) > 0 {
+		j, _ := json.Marshal(roles.NoLogin)
+		_ = m.q.SetBackupRestoreRoles(ctx, dbq.SetBackupRestoreRolesParams{CreatedRoles: string(j), ID: id})
+	}
+	if len(roles.Saved) > 0 {
+		j, _ := json.Marshal(roles.Saved)
+		_ = m.q.SetBackupRestoreSavedRoles(ctx, dbq.SetBackupRestoreSavedRolesParams{SavedRoles: string(j), ID: id})
+	}
 }
 
 // deployAndWait deploys and waits for the result.
@@ -386,109 +398,189 @@ func (m *Manager) waitReady(ctx context.Context, s svcRef, timeout time.Duration
 }
 
 // pgRestoreCmd restores a custom-format dump read from stdin into the
-// service's database, all or nothing. Permissions (GRANTs, policies,
-// default privileges) are restored too: the roles they name are created
-// first (prepareRoles).
-var pgRestoreCmd = []string{"sh", "-c", `exec pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --single-transaction --exit-on-error`}
+// service's database, all or nothing, with the owners and permissions of
+// the original: the roles they name were recreated first (applyRoles,
+// prepareRoles).
+var pgRestoreCmd = []string{"sh", "-c", `exec pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --single-transaction --exit-on-error`}
+
+// pgRestoreNoOwnerCmd is pgRestoreCmd for a dump saved without the roles
+// of its server (made before they were saved): objects belong to whoever
+// restores, as such a restore always did.
+var pgRestoreNoOwnerCmd = []string{"sh", "-c", `exec pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --single-transaction --exit-on-error`}
 
 // pgSchemaCmd prints, as SQL, the schema part of a custom-format dump read
 // from stdin (no data), then reads the rest of the input so the sender
 // never writes into a closed pipe.
 var pgSchemaCmd = []string{"sh", "-c", `pg_restore --schema-only -f - ; s=$?; cat >/dev/null; exit $s`}
 
-// pgScriptCmd runs a psql script read from stdin as the service's own
-// superuser.
-var pgScriptCmd = []string{"sh", "-c", `exec psql -qAtX -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f -`}
+// pgSchemaCreateCmd is pgSchemaCmd with the database-level entries too
+// (--create): the database's owner, settings, comment and GRANTs.
+var pgSchemaCreateCmd = []string{"sh", "-c", `pg_restore --create --schema-only -f - ; s=$?; cat >/dev/null; exit $s`}
 
-// restoreDump restores the dump key into t. It returns the roles it had to
-// create without a password (see prepareRoles), also when it fails after.
-func (m *Manager) restoreDump(ctx context.Context, id string, t svcRef, key string, ids []age.Identity) ([]string, error) {
+// pgScriptCmd runs a psql script read from stdin as the service's own
+// superuser. Errors are terse: PostgreSQL does not quote the statement
+// (a roles script holds password hashes).
+var pgScriptCmd = []string{"sh", "-c", `exec psql -qAtX -v ON_ERROR_STOP=1 -v VERBOSITY=terse -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f -`}
+
+// pgDatabaseCmd runs pgroles.DatabaseScript in the service's database,
+// named by its own environment.
+var pgDatabaseCmd = []string{"sh", "-c", `exec psql -qAtX -v ON_ERROR_STOP=1 -v VERBOSITY=terse -v ` + pgroles.DatabaseVar + `="$POSTGRES_DB" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f -`}
+
+// RolesDone is what a restore did about the roles of the original server.
+type RolesDone struct {
+	// Saved were recreated from the roles saved with the dump, as they
+	// were: attributes, password hash, memberships, settings.
+	Saved []string
+	// NoLogin were created without a password (NOLOGIN): the dump
+	// names them and no saved role (or the server) has them.
+	NoLogin []string
+}
+
+// restoreDump restores the dump key into t as a copy of the original: the
+// server's roles saved with it first (only the ones t lacks, as they were;
+// roles that exist are never touched), then the data with its owners and
+// permissions, then the database's own settings and GRANTs. A dump saved
+// before roles were kept restores as it always did: the roles it names are
+// created without a password and objects belong to whoever restores. It
+// returns what it did about roles, also when it fails after.
+func (m *Manager) restoreDump(ctx context.Context, id string, t svcRef, key string, ids []age.Identity) (RolesDone, error) {
+	var done RolesDone
 	_, tk, err := m.tasker()
 	if err != nil {
-		return nil, err
+		return done, err
 	}
 	m.step(ctx, id, "restore")
 	if err := m.waitReady(ctx, t, 5*time.Minute); err != nil {
-		return nil, err
+		return done, err
 	}
-	roles, err := m.prepareRoles(ctx, t, key, ids)
+	g, saved, err := m.loadRoles(ctx, key, ids)
 	if err != nil {
-		return roles, err
+		return done, err
+	}
+	if saved {
+		if done.Saved, err = m.applyRoles(ctx, t, g); err != nil {
+			return done, err
+		}
+	}
+	schema, err := m.prepareRoles(ctx, t, key, ids, saved)
+	done.NoLogin = schema.Roles
+	if err != nil {
+		return done, err
 	}
 	rc, _, err := m.fetch(ctx, key)
 	if err != nil {
-		return roles, err
+		return done, err
 	}
 	defer func() { _ = rc.Close() }()
 	plain, err := archive.Open(rc, ids, archive.DefaultLimits)
 	if err != nil {
-		return roles, err
+		return done, err
 	}
 	defer func() { _ = plain.Close() }()
-	if err := tk.ExecIO(ctx, t.Project, t.Service, pgRestoreCmd, plain, io.Discard); err != nil {
-		return roles, fmt.Errorf("pg_restore: %w", err)
+	cmd := pgRestoreNoOwnerCmd
+	if saved {
+		cmd = pgRestoreCmd
+	}
+	if err := tk.ExecIO(ctx, t.Project, t.Service, cmd, plain, io.Discard); err != nil {
+		return done, fmt.Errorf("pg_restore: %w", err)
+	}
+	if script := pgroles.DatabaseScript(schema.Database); saved && script != "" {
+		if err := tk.ExecIO(ctx, t.Project, t.Service, pgDatabaseCmd, strings.NewReader(script), io.Discard); err != nil {
+			return done, fmt.Errorf("apply the database settings: %w", err)
+		}
 	}
 	m.step(ctx, id, "done")
-	return roles, nil
+	return done, nil
 }
 
-// prepareRoles creates in t's server the roles the dump's permissions name
-// and the server does not have, so the restore can apply them as they were
-// in the original. Roles are not in a pg_dump (they belong to the server,
-// not the database): restoring into a new service, or on a new server,
-// would otherwise fail on the first GRANT to an app role. They are created
-// without a password and cannot log in (NOLOGIN) until the owner sets one;
-// existing roles are never touched. It reads the dump once more for this
-// (only its schema reaches the database container) and returns the roles
-// it created.
-func (m *Manager) prepareRoles(ctx context.Context, t svcRef, key string, ids []age.Identity) ([]string, error) {
+// applyRoles recreates in t's server the roles saved with the dump that it
+// lacks, exactly as they were (pgroles ApplyScript), and returns them.
+// Password hashes stay out of errors and logs.
+func (m *Manager) applyRoles(ctx context.Context, t svcRef, g pgroles.Globals) ([]string, error) {
 	_, tk, err := m.tasker()
 	if err != nil {
 		return nil, err
 	}
-	rc, _, err := m.fetch(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rc.Close() }()
-	plain, err := archive.Open(rc, ids, archive.DefaultLimits)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = plain.Close() }()
-	type found struct {
-		roles []string
-		err   error
-	}
-	pr, pw := io.Pipe()
-	done := make(chan found, 1)
-	go func() {
-		roles, err := pgroles.FromScript(pr)
-		_, _ = io.Copy(io.Discard, pr)
-		done <- found{roles, err}
-	}()
-	err = tk.ExecIO(ctx, t.Project, t.Service, pgSchemaCmd, plain, pw)
-	_ = pw.CloseWithError(err)
-	f := <-done
-	if err != nil {
-		return nil, fmt.Errorf("read the roles of the dump: %w", err)
-	}
-	if f.err != nil {
-		return nil, fmt.Errorf("read the roles of the dump: %w", f.err)
-	}
-	script, err := pgroles.CreateScript(f.roles)
+	script, err := g.ApplyScript()
 	if err != nil || script == "" {
 		return nil, err
 	}
 	var out bytes.Buffer
 	if err := tk.ExecIO(ctx, t.Project, t.Service, pgScriptCmd, strings.NewReader(script), &out); err != nil {
-		return nil, fmt.Errorf("create the roles of the dump: %w", err)
+		return nil, errors.New("recreate the roles of the backup: " + g.Redact(err.Error()))
 	}
-	created := pgroles.ParseCreated(out.String())
-	if len(created) > 0 {
-		m.log.Info("restore created roles without a password", "service", t.label(), "roles", created)
+	saved := pgroles.ParseSaved(out.String())
+	if len(saved) > 0 {
+		m.log.Info("restore recreated roles as in the original", "service", t.label(), "roles", saved)
 	}
-	return created, nil
+	return saved, nil
+}
+
+// prepareRoles creates in t's server the roles the dump names that it
+// still lacks, so the restore can apply the dump's permissions (and, with
+// owners, its ownership) as they were in the original. Roles are not in a
+// pg_dump (they belong to the server, not the database): with the roles
+// saved next to the dump (applyRoles) only the original's own superuser
+// can be missing here; for a dump saved without them, every app role is.
+// They are created without a password and cannot log in (NOLOGIN) until
+// the owner sets one; existing roles are never touched. It reads the dump
+// once more for this (only its schema reaches the database container) and
+// returns the roles it created in Schema.Roles, and the database-level
+// statements when owners is set.
+func (m *Manager) prepareRoles(ctx context.Context, t svcRef, key string, ids []age.Identity, owners bool) (pgroles.Schema, error) {
+	var none pgroles.Schema
+	_, tk, err := m.tasker()
+	if err != nil {
+		return none, err
+	}
+	rc, _, err := m.fetch(ctx, key)
+	if err != nil {
+		return none, err
+	}
+	defer func() { _ = rc.Close() }()
+	plain, err := archive.Open(rc, ids, archive.DefaultLimits)
+	if err != nil {
+		return none, err
+	}
+	defer func() { _ = plain.Close() }()
+	type found struct {
+		schema pgroles.Schema
+		err    error
+	}
+	pr, pw := io.Pipe()
+	done := make(chan found, 1)
+	go func() {
+		s, err := pgroles.ReadSchema(pr, owners)
+		_, _ = io.Copy(io.Discard, pr)
+		done <- found{s, err}
+	}()
+	cmd := pgSchemaCmd
+	if owners {
+		cmd = pgSchemaCreateCmd
+	}
+	err = tk.ExecIO(ctx, t.Project, t.Service, cmd, plain, pw)
+	_ = pw.CloseWithError(err)
+	f := <-done
+	if err != nil {
+		return none, fmt.Errorf("read the roles of the dump: %w", err)
+	}
+	if f.err != nil {
+		return none, fmt.Errorf("read the roles of the dump: %w", f.err)
+	}
+	out := pgroles.Schema{Database: f.schema.Database}
+	script, err := pgroles.CreateScript(f.schema.Roles)
+	if err != nil || script == "" {
+		return out, err
+	}
+	var res bytes.Buffer
+	if err := tk.ExecIO(ctx, t.Project, t.Service, pgScriptCmd, strings.NewReader(script), &res); err != nil {
+		return out, fmt.Errorf("create the roles of the dump: %w", err)
+	}
+	out.Roles = pgroles.ParseCreated(res.String())
+	if len(out.Roles) > 0 {
+		m.log.Info("restore created roles without a password", "service", t.label(), "roles", out.Roles)
+	}
+	return out, nil
 }
 
 const rollbackScript = `set -eu

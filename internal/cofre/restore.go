@@ -9,13 +9,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"filippo.io/age"
+
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/backup/pgroles"
+	"github.com/JuniorCarlini/hangar/internal/backup/s3"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 )
 
@@ -49,6 +53,9 @@ type Restored struct {
 	Key       string // base or dump used
 	Target    time.Time
 	ToEnd     bool
+	// Saved are the roles a dump restore recreated from the roles saved
+	// with it, as they were (same passwords).
+	Saved []string
 	// Roles are the roles a dump restore created without a password.
 	Roles []string
 }
@@ -207,7 +214,12 @@ func (v *Vault) restorePITR(ctx context.Context, o RestoreOptions, plan archive.
 	return r, nil
 }
 
-// startDump starts a fresh PostgreSQL and restores a pg_dump into it.
+// startDump starts a fresh PostgreSQL and restores a pg_dump into it, as
+// the panel restores into a new service: the roles saved with the dump
+// first (as they were, same passwords), then the data with its owners and
+// permissions, then the database's settings and GRANTs. A dump saved
+// without its roles restores as before (roles without a password, no
+// owners).
 func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Restored, error) {
 	rc, meta, err := v.Src.Open(ctx, key)
 	if err != nil {
@@ -215,6 +227,10 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 	}
 	defer func() { _ = rc.Close() }()
 	img, err := v.image(meta)
+	if err != nil {
+		return Restored{}, err
+	}
+	g, saved, err := v.loadRoles(ctx, key)
 	if err != nil {
 		return Restored{}, err
 	}
@@ -239,7 +255,14 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 	if err := v.waitSQL(ctx, r, "select 1", "1", 5*time.Minute); err != nil {
 		return r, err
 	}
-	if r.Roles, err = v.createRoles(ctx, key, r); err != nil {
+	if saved {
+		if r.Saved, err = v.applyRoles(ctx, r, g); err != nil {
+			return r, err
+		}
+	}
+	schema, err := v.createRoles(ctx, key, r, saved)
+	r.Roles = schema.Roles
+	if err != nil {
 		return r, err
 	}
 	plain, err := archive.Open(rc, v.ids, archive.DefaultLimits)
@@ -248,43 +271,120 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 	}
 	defer func() { _ = plain.Close() }()
 	v.tr("cofre.restoring_dump", "key", key)
-	if err := v.Docker(ctx, plain, nil, "exec", "-i", name, "pg_restore", "-U", r.User, "-d", r.DB, "--no-owner", "--exit-on-error"); err != nil {
+	restore := []string{"exec", "-i", name, "pg_restore", "-U", r.User, "-d", r.DB, "--exit-on-error"}
+	if !saved {
+		restore = append(restore, "--no-owner")
+	}
+	if err := v.Docker(ctx, plain, nil, restore...); err != nil {
 		return r, err
+	}
+	if script := pgroles.DatabaseScript(schema.Database); saved && script != "" {
+		if err := v.Docker(ctx, strings.NewReader(script), nil, "exec", "-i", name, "psql", "-qAtX", "-v", "ON_ERROR_STOP=1",
+			"-v", "VERBOSITY=terse", "-v", pgroles.DatabaseVar+"="+r.DB, "-U", r.User, "-d", r.DB, "-f", "-"); err != nil {
+			return r, fmt.Errorf("apply the database settings: %w", err)
+		}
 	}
 	return r, nil
 }
 
-// createRoles creates in the fresh PostgreSQL the roles the dump's
-// permissions name (a pg_dump has no roles), without a password, so the
-// GRANTs and policies restore as they were (as the panel does).
-func (v *Vault) createRoles(ctx context.Context, key string, r Restored) ([]string, error) {
-	rc, _, err := v.Src.Open(ctx, key)
+// isNotFound reports an object or file that does not exist.
+func isNotFound(err error) bool {
+	return s3.IsNotFound(err) || errors.Is(err, fs.ErrNotExist)
+}
+
+// loadRoles reads the roles saved with the dump key (archive.RolesKey).
+// ok is false when there are none (a dump made before they were saved).
+func (v *Vault) loadRoles(ctx context.Context, key string) (pgroles.Globals, bool, error) {
+	var g pgroles.Globals
+	rk := archive.RolesKey(key)
+	if rk == "" {
+		return g, false, nil
+	}
+	rc, _, err := v.Src.Open(ctx, rk)
+	if isNotFound(err) {
+		return g, false, nil
+	}
 	if err != nil {
-		return nil, err
+		return g, false, fmt.Errorf("read the roles of the backup: %w", err)
 	}
 	defer func() { _ = rc.Close() }()
-	plain, err := archive.Open(rc, v.ids, archive.DefaultLimits)
+	raw, err := readRoles(rc, v.ids)
+	if err != nil {
+		return g, false, err
+	}
+	g, err = pgroles.ParseGlobals(string(raw))
+	return g, err == nil, err
+}
+
+// readRoles decrypts a roles file.
+func readRoles(r io.Reader, ids []age.Identity) ([]byte, error) {
+	plain, err := archive.Open(r, ids, archive.DefaultLimits)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = plain.Close() }()
-	var schema bytes.Buffer
-	if err := v.Docker(ctx, plain, &schema, "exec", "-i", r.Container, "sh", "-c", `pg_restore --schema-only -f - ; s=$?; cat >/dev/null; exit $s`); err != nil {
-		return nil, fmt.Errorf("read the roles of the dump: %w", err)
+	raw, err := io.ReadAll(io.LimitReader(plain, pgroles.MaxGlobals+1))
+	if err == nil && len(raw) > pgroles.MaxGlobals {
+		err = errors.New("the roles of the backup are too large")
 	}
-	roles, err := pgroles.FromScript(&schema)
-	if err != nil {
-		return nil, err
-	}
-	script, err := pgroles.CreateScript(roles)
+	return raw, err
+}
+
+// applyRoles recreates the saved roles the fresh PostgreSQL lacks, as
+// they were (pgroles ApplyScript). Password hashes stay out of errors.
+func (v *Vault) applyRoles(ctx context.Context, r Restored, g pgroles.Globals) ([]string, error) {
+	script, err := g.ApplyScript()
 	if err != nil || script == "" {
 		return nil, err
 	}
 	var out bytes.Buffer
-	if err := v.Docker(ctx, strings.NewReader(script), &out, "exec", "-i", r.Container, "psql", "-qAtX", "-v", "ON_ERROR_STOP=1", "-U", r.User, "-d", r.DB, "-f", "-"); err != nil {
-		return nil, fmt.Errorf("create the roles of the dump: %w", err)
+	if err := v.Docker(ctx, strings.NewReader(script), &out, "exec", "-i", r.Container, "psql", "-qAtX", "-v", "ON_ERROR_STOP=1",
+		"-v", "VERBOSITY=terse", "-U", r.User, "-d", r.DB, "-f", "-"); err != nil {
+		return nil, errors.New("recreate the roles of the backup: " + g.Redact(err.Error()))
 	}
-	return pgroles.ParseCreated(out.String()), nil
+	return pgroles.ParseSaved(out.String()), nil
+}
+
+// createRoles creates in the fresh PostgreSQL the roles the dump's
+// permissions (and, with owners, its owners) name that it still lacks,
+// without a password, so the GRANTs, policies and ownership restore as
+// they were (as the panel does). It returns them in Schema.Roles, with the
+// database-level statements when owners is set.
+func (v *Vault) createRoles(ctx context.Context, key string, r Restored, owners bool) (pgroles.Schema, error) {
+	var none pgroles.Schema
+	rc, _, err := v.Src.Open(ctx, key)
+	if err != nil {
+		return none, err
+	}
+	defer func() { _ = rc.Close() }()
+	plain, err := archive.Open(rc, v.ids, archive.DefaultLimits)
+	if err != nil {
+		return none, err
+	}
+	defer func() { _ = plain.Close() }()
+	create := ""
+	if owners {
+		create = "--create "
+	}
+	var schemaSQL bytes.Buffer
+	if err := v.Docker(ctx, plain, &schemaSQL, "exec", "-i", r.Container, "sh", "-c", `pg_restore `+create+`--schema-only -f - ; s=$?; cat >/dev/null; exit $s`); err != nil {
+		return none, fmt.Errorf("read the roles of the dump: %w", err)
+	}
+	schema, err := pgroles.ReadSchema(&schemaSQL, owners)
+	if err != nil {
+		return none, err
+	}
+	out := pgroles.Schema{Database: schema.Database}
+	script, err := pgroles.CreateScript(schema.Roles)
+	if err != nil || script == "" {
+		return out, err
+	}
+	var res bytes.Buffer
+	if err := v.Docker(ctx, strings.NewReader(script), &res, "exec", "-i", r.Container, "psql", "-qAtX", "-v", "ON_ERROR_STOP=1", "-U", r.User, "-d", r.DB, "-f", "-"); err != nil {
+		return out, fmt.Errorf("create the roles of the dump: %w", err)
+	}
+	out.Roles = pgroles.ParseCreated(res.String())
+	return out, nil
 }
 
 // waitSQL waits until query answers want inside the container.

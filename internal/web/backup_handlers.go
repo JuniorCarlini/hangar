@@ -423,6 +423,9 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 			}
 			// The roles exist where the data went, unless that was a new
 			// service that a failure removed.
+			if len(x.SavedRoles) > 0 && x.Cleanup != backup.CleanupRemoved {
+				row.Saved = i18n.T(ctx, "svcbackup.restore_saved_roles", "roles", strings.Join(x.SavedRoles, ", "))
+			}
 			if len(x.CreatedRoles) > 0 && x.Cleanup != backup.CleanupRemoved {
 				row.Roles = i18n.T(ctx, "svcbackup.restore_roles", "roles", strings.Join(x.CreatedRoles, ", "))
 			}
@@ -592,19 +595,21 @@ func (h *handlers) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Time{}) // a big database takes a while
-	name := fmt.Sprintf("%s_%s-%s.dump", p.Slug, s.Slug, time.Now().UTC().Format("20060102-150405"))
-	w.Header().Set("Content-Type", "application/octet-stream")
+	// One .zip: the dump, the roles of its server and how to restore
+	// them (backup.DownloadPlain).
+	name := archive.BundleName(p.Slug, s.Slug, time.Now()) + archive.ExtBundle
+	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-	if err := h.projects.DownloadBackup(r.Context(), actor(r), p.Slug, s.Slug, w); err != nil {
+	if err := h.backups.DownloadPlain(r.Context(), actor(r), p.Slug, s.Slug, w); err != nil {
 		// Headers are gone: the download ends short and the browser shows it
 		// as failed. The cause is in the log and the audit.
 		loggerFrom(r.Context()).Error("backup download", "service", p.Slug+"/"+s.Slug, "error", err)
 	}
 }
 
-// takeDownload serves a prepared encrypted dump once.
+// takeDownload serves a prepared encrypted bundle (dump and roles) once.
 func (h *handlers) takeDownload(w http.ResponseWriter, r *http.Request) {
-	f, name, done, err := h.backups.TakeDownload(r.Context(), actor(r), r.PathValue("token"))
+	bundle, name, done, err := h.backups.TakeDownload(r.Context(), actor(r), r.PathValue("token"))
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -612,18 +617,36 @@ func (h *handlers) takeDownload(w http.ResponseWriter, r *http.Request) {
 	defer done()
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Time{})
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-	if _, err := io.Copy(w, f); err != nil {
+	if err := bundle(w); err != nil {
 		loggerFrom(r.Context()).Error("backup download", "error", err)
 	}
 }
 
-// runDownload sends the browser to a short-lived signed link in the
-// bucket.
+// runDownload sends an older backup. A dump with the roles of its server
+// goes as one .zip with both (opened by the server in the simple mode);
+// anything else goes as before: open in the simple mode, else through a
+// short-lived signed link in the bucket.
 func (h *handlers) runDownload(w http.ResponseWriter, r *http.Request) {
+	simple := h.backups.Mode(r.Context()) == backup.ModeSimple
+	if rc, name, ok, err := h.backups.OpenRunBundle(r.Context(), actor(r), r.PathValue("id"), simple); ok || err != nil {
+		if err != nil {
+			code, msg := userError(r, err)
+			h.renderBackups(w, r, code, msg, "")
+			return
+		}
+		defer func() { _ = rc.Close() }()
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Time{}) // a big backup takes a while
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+		if _, err := io.Copy(w, rc); err != nil {
+			loggerFrom(r.Context()).Error("backup download", "run", r.PathValue("id"), "error", err)
+		}
+		return
+	}
 	// The simple mode's server holds the key: the file arrives open.
-	if h.backups.Mode(r.Context()) == backup.ModeSimple {
+	if simple {
 		owner := PrincipalFrom(r.Context()).Role >= auth.RoleOwner
 		rc, name, err := h.backups.OpenRun(r.Context(), actor(r), r.PathValue("id"), owner)
 		if err != nil {

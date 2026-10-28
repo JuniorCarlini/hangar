@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"time"
 
@@ -20,14 +21,18 @@ const DownloadTTL = 5 * time.Minute
 
 var randRead = rand.Read
 
-// download is an encrypted dump waiting to be fetched once.
+// download is an encrypted dump, and the roles of its server, waiting to
+// be fetched once as one bundle (archive.WriteBundle).
 type download struct {
 	Token     string
 	UserID    string
 	ServiceID string
 	Label     string
 	FileName  string
+	Base      string // name of the files in the bundle, without extension
+	Readme    string
 	Path      string
+	RolesPath string
 	Size      int64
 	Ready     bool
 	Error     string
@@ -64,10 +69,11 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 	if _, err := randRead(b); err != nil {
 		return err
 	}
+	base := archive.BundleName(s.Project, s.Service, m.now())
 	d := &download{
 		Token: hex.EncodeToString(b), UserID: a.UserID, ServiceID: s.ID, Label: s.label(),
-		FileName: s.Project + "_" + s.Service + "-" + m.now().UTC().Format(archive.TimeFormat) + archive.ExtDump,
-		Started:  m.now(), Expires: m.now().Add(time.Hour),
+		FileName: base + archive.ExtBundle, Base: base, Readme: BundleReadme(ctx, base, s.DBName, true),
+		Started: m.now(), Expires: m.now().Add(time.Hour),
 	}
 	m.dlMu.Lock()
 	for _, old := range m.downloads {
@@ -91,14 +97,12 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 		bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), restoreTimeout)
 		defer cancel()
 		unlock := m.lock(s.label())
-		sf, check, err := m.dumpAndVerify(bg, s)
+		dd, err := m.dumpAndVerify(bg, s)
 		unlock()
 		m.dlMu.Lock()
 		defer m.dlMu.Unlock()
 		if _, ok := m.downloads[d.Token]; !ok {
-			if sf != nil {
-				removeFile(sf.f)
-			}
+			dd.remove()
 			return
 		}
 		if err != nil {
@@ -106,9 +110,11 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 			m.record(bg, a, "service.backup.download", "service", s.ID, outcomeOf(err), map[string]any{"service": s.label(), "error": d.Error})
 			return
 		}
-		_ = sf.f.Close()
-		d.Path, d.Size, d.Ready, d.Expires = sf.f.Name(), sf.size.n, true, m.now().Add(DownloadTTL)
-		m.record(bg, a, "service.backup.prepare", "service", s.ID, outcomeOf(nil), map[string]any{"service": s.label(), "rows": check.Rows, "tables": check.Tables})
+		_ = dd.dump.f.Close()
+		_ = dd.roles.f.Close()
+		d.Path, d.RolesPath = dd.dump.f.Name(), dd.roles.f.Name()
+		d.Size, d.Ready, d.Expires = dd.dump.size.n+dd.roles.size.n, true, m.now().Add(DownloadTTL)
+		m.record(bg, a, "service.backup.prepare", "service", s.ID, outcomeOf(nil), map[string]any{"service": s.label(), "rows": dd.check.Rows, "tables": dd.check.Tables})
 	}()
 	return nil
 }
@@ -127,9 +133,12 @@ func (m *Manager) PendingDownload(userID, serviceID string) (Download, bool) {
 	return Download{}, false
 }
 
-// TakeDownload hands the file over once: the token is gone afterwards.
-// The caller removes the file with the returned function after sending.
-func (m *Manager) TakeDownload(ctx context.Context, a Actor, token string) (*os.File, string, func(), error) {
+// Bundle writes a download (archive.WriteBundle) to w.
+type Bundle func(w io.Writer) error
+
+// TakeDownload hands the bundle over once: the token is gone afterwards.
+// The caller removes the files with the returned function after sending.
+func (m *Manager) TakeDownload(ctx context.Context, a Actor, token string) (Bundle, string, func(), error) {
 	m.dlMu.Lock()
 	defer m.dlMu.Unlock()
 	m.expireLocked()
@@ -143,13 +152,26 @@ func (m *Manager) TakeDownload(ctx context.Context, a Actor, token string) (*os.
 		return nil, "", nil, projects.ErrNotFound
 	}
 	delete(m.downloads, d.Token)
-	f, err := os.Open(d.Path)
+	drop := func() { _ = os.Remove(d.Path); _ = os.Remove(d.RolesPath) }
+	dump, err := os.Open(d.Path)
 	if err != nil {
-		_ = os.Remove(d.Path)
+		drop()
 		return nil, "", nil, err
 	}
-	m.record(ctx, a, "service.backup.download", "service", d.ServiceID, outcomeOf(nil), map[string]any{"service": d.Label, "size": d.Size, "encrypted": true})
-	return f, d.FileName, func() { _ = f.Close(); _ = os.Remove(d.Path) }, nil
+	roles, err := os.Open(d.RolesPath)
+	if err != nil {
+		_ = dump.Close()
+		drop()
+		return nil, "", nil, err
+	}
+	m.record(ctx, a, "service.backup.download", "service", d.ServiceID, outcomeOf(nil), map[string]any{"service": d.Label, "size": d.Size, "encrypted": true, "roles": true})
+	bundle := func(w io.Writer) error {
+		return archive.WriteBundle(w, m.now(),
+			archive.TextFile(ReadmeName, d.Readme),
+			archive.BundleFile{Name: d.Base + archive.ExtRoles, Body: roles},
+			archive.BundleFile{Name: d.Base + archive.ExtDump, Body: dump})
+	}
+	return bundle, d.FileName, func() { _ = dump.Close(); _ = roles.Close(); drop() }, nil
 }
 
 func (m *Manager) expireLocked() {
@@ -163,8 +185,10 @@ func (m *Manager) expireLocked() {
 
 func (m *Manager) dropLocked(token string) {
 	if d, ok := m.downloads[token]; ok {
-		if d.Path != "" {
-			_ = os.Remove(d.Path)
+		for _, p := range []string{d.Path, d.RolesPath} {
+			if p != "" {
+				_ = os.Remove(p)
+			}
 		}
 		delete(m.downloads, token)
 	}

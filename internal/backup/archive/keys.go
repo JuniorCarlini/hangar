@@ -12,6 +12,9 @@ const (
 	KindBase  = "pg_base"
 	KindWAL   = "wal"
 	KindPanel = "panel"
+	// KindRoles are the roles of the server a dump came from (pg_dumpall
+	// --roles-only), next to the dump: RolesKey.
+	KindRoles = "pg_roles"
 )
 
 // Retention classes. Each has its own folder so the bucket's lifecycle
@@ -47,10 +50,22 @@ const TimeFormat = "20060102T150405Z"
 
 // Extensions by content.
 const (
-	ExtDump = ".dump.age"
-	ExtTar  = ".tar.zst.age"
-	ExtWAL  = ".zst.age"
+	ExtDump  = ".dump.age"
+	ExtTar   = ".tar.zst.age"
+	ExtWAL   = ".zst.age"
+	ExtRoles = ".roles.sql.age"
 )
+
+// RolesKey names the roles saved with the dump dumpKey: the same folder
+// (so the same retention and lock) and time, another extension. The dump
+// itself stays a plain pg_dump, as every tool (and older Hangar) reads it.
+func RolesKey(dumpKey string) string {
+	base, ok := strings.CutSuffix(dumpKey, ExtDump)
+	if !ok {
+		return ""
+	}
+	return base + ExtRoles
+}
 
 // FolderOf returns the folder a retention class lives in.
 func FolderOf(class string) string { return classFolder[class] }
@@ -99,12 +114,13 @@ type Object struct {
 }
 
 var (
-	slugPart  = `[a-z][a-z0-9-]{0,30}[a-z0-9]`
-	tsPart    = `[0-9]{8}T[0-9]{6}Z`
-	dumpKeyRE = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.dump\.age$`)
-	baseKeyRE = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/base/(` + tsPart + `)_([0-9A-F]{24})\.tar\.zst\.age$`)
-	walKeyRE  = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/seg/(` + WALNamePattern + `)\.zst\.age$`)
-	panelRE   = regexp.MustCompile(`^painel/(` + tsPart + `)\.tar\.zst\.age$`)
+	slugPart   = `[a-z][a-z0-9-]{0,30}[a-z0-9]`
+	tsPart     = `[0-9]{8}T[0-9]{6}Z`
+	dumpKeyRE  = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.dump\.age$`)
+	rolesKeyRE = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.roles\.sql\.age$`)
+	baseKeyRE  = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/base/(` + tsPart + `)_([0-9A-F]{24})\.tar\.zst\.age$`)
+	walKeyRE   = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/seg/(` + WALNamePattern + `)\.zst\.age$`)
+	panelRE    = regexp.MustCompile(`^painel/(` + tsPart + `)\.tar\.zst\.age$`)
 )
 
 // WALNamePattern matches the files PostgreSQL archives: segments,
@@ -123,6 +139,10 @@ func ParseKey(key string) (Object, bool) {
 	if m := dumpKeyRE.FindStringSubmatch(key); m != nil {
 		t, err := time.Parse(TimeFormat, m[4])
 		return Object{Key: key, Kind: KindDump, Class: folderClass[m[1]], Project: m[2], Service: m[3], Time: t}, err == nil
+	}
+	if m := rolesKeyRE.FindStringSubmatch(key); m != nil {
+		t, err := time.Parse(TimeFormat, m[4])
+		return Object{Key: key, Kind: KindRoles, Class: folderClass[m[1]], Project: m[2], Service: m[3], Time: t}, err == nil
 	}
 	if m := baseKeyRE.FindStringSubmatch(key); m != nil {
 		t, err := time.Parse(TimeFormat, m[3])

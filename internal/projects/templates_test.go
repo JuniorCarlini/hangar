@@ -1,7 +1,6 @@
 package projects
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"net/netip"
@@ -207,15 +206,15 @@ func TestBackupDownloadOnlyForPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.m.Wait()
-	var b bytes.Buffer
-	if err := f.m.DownloadBackup(ctx, f.who, "lab", "db", &b); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(b.String(), "pg_dump -Fc") {
-		t.Errorf("command: %q", b.String())
-	}
-	if err := f.m.DownloadBackup(ctx, f.who, "lab", "web", &b); err == nil {
-		t.Error("nginx has no database to dump")
+	// The download itself is the backup package's (DownloadPlain).
+	for slug, want := range map[string]bool{"db": true, "web": false} {
+		_, s, err := f.m.GetService(ctx, "lab", slug)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := f.m.CanDownloadBackup(s.Template); got != want {
+			t.Errorf("%s: CanDownloadBackup = %v, want %v", slug, got, want)
+		}
 	}
 }
 

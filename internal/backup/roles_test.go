@@ -35,19 +35,19 @@ REVOKE ALL ON TABLE public.pedidos FROM PUBLIC;
 func TestCheckRolesMatchesTheRestore(t *testing.T) {
 	hexOf := func(s string) string { return hex.EncodeToString([]byte(s)) }
 	base := "HANGAR-CHECK tables=1 restored=1 rows=3\n"
-	c, err := parseCheck("HANGAR-ACL " + hexOf(aclScript) + "\nHANGAR-ROLE " + hexOf("lobot_app") + "\nHANGAR-ROLE " + hexOf(`Weird "Role"`) + "\n" + base)
+	c, err := parseCheck("HANGAR-ACL "+hexOf(aclScript)+"\nHANGAR-ROLE "+hexOf("lobot_app")+"\nHANGAR-ROLE "+hexOf(`Weird "Role"`)+"\n"+base, nil)
 	if err != nil || !slices.Equal(c.Roles, []string{"lobot_app", `Weird "Role"`}) {
 		t.Fatalf("matching roles: %+v %v", c, err)
 	}
-	if _, err := parseCheck("HANGAR-ACL " + hexOf(aclScript) + "\nHANGAR-ROLE " + hexOf("hidden_role") + "\n" + base); err == nil || !strings.Contains(err.Error(), "hidden_role") {
+	if _, err := parseCheck("HANGAR-ACL "+hexOf(aclScript)+"\nHANGAR-ROLE "+hexOf("hidden_role")+"\n"+base, nil); err == nil || !strings.Contains(err.Error(), "hidden_role") {
 		t.Fatalf("a role the restore would not create must fail the check: %v", err)
 	}
-	if c, err := parseCheck(base); err != nil || c.Roles != nil {
+	if c, err := parseCheck(base, nil); err != nil || c.Roles != nil {
 		t.Fatalf("no roles: %+v %v", c, err)
 	}
 	// Text from the database cannot fake the counts (they must be a line
 	// of their own).
-	if _, err := parseCheck("-- Name: HANGAR-CHECK tables=0 restored=0 rows=0; Type: ACL\n"); err == nil {
+	if _, err := parseCheck("-- Name: HANGAR-CHECK tables=0 restored=0 rows=0; Type: ACL\n", nil); err == nil {
 		t.Fatal("the counts must be on their own line")
 	}
 }

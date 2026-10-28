@@ -241,19 +241,16 @@ func decryptCmd(args []string, stdin io.Reader, stdout, stderr io.Writer) error 
 		return err
 	}
 	v := cofre.New(nil, archive.Identities(keys))
-	dest := *out
-	if dest == "" {
-		dest = cofre.DecryptedName(file)
+	// A dump comes out with the roles saved next to it; a .zip from the
+	// panel comes out whole.
+	written, err := v.DecryptBackup(file, *out)
+	for _, w := range written {
+		fmt.Fprintln(stdout, tr("cofre.decrypted", "path", w.Path, "size", humanBytes(w.Size)))
 	}
-	n, err := v.DecryptFile(file, dest)
 	if errors.Is(err, archive.ErrWrongKey) {
 		return i18n.E("cofre.error.wrong_key")
 	}
-	if err != nil {
-		return err
-	}
-	fmt.Fprintln(stdout, tr("cofre.decrypted", "path", dest, "size", humanBytes(n)))
-	return nil
+	return err
 }
 
 // splitFirst lets the file come before or after the flags.
@@ -374,6 +371,9 @@ func vaultCmd(ctx context.Context, cmd string, args []string, stdin io.Reader, s
 		fmt.Fprintln(stdout, tr("cofre.restored_connect", "container", r.Container, "user", r.User, "db", r.DB, "port", r.Port))
 		if r.Password != "" {
 			fmt.Fprintln(stdout, tr("cofre.restored_password", "password", r.Password))
+		}
+		if len(r.Saved) > 0 {
+			fmt.Fprintln(stdout, tr("cofre.restored_saved_roles", "roles", strings.Join(r.Saved, ", ")))
 		}
 		if len(r.Roles) > 0 {
 			fmt.Fprintln(stdout, tr("cofre.restored_roles", "roles", strings.Join(r.Roles, ", ")))

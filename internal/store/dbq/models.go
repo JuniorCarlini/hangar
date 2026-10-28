@@ -114,6 +114,7 @@ type BackupRestore struct {
 	FinishedAt   sql.NullInt64
 	CreatedRoles string
 	Cleanup      string
+	SavedRoles   string
 }
 
 type BackupRun struct {

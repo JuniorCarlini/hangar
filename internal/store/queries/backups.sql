@@ -116,6 +116,9 @@ UPDATE backup_restores SET status = ?, error = ?, finished_at = ? WHERE id = ?;
 -- name: SetBackupRestoreRoles :exec
 UPDATE backup_restores SET created_roles = ? WHERE id = ?;
 
+-- name: SetBackupRestoreSavedRoles :exec
+UPDATE backup_restores SET saved_roles = ? WHERE id = ?;
+
 -- name: SetBackupRestoreCleanup :exec
 UPDATE backup_restores SET cleanup = ? WHERE id = ?;
 

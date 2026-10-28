@@ -880,8 +880,63 @@ copy = "Copiar {ref}"
 
 
 [backup]
-hint = "Gera um pg_dump na hora e baixa pelo navegador."
+hint = "Gera um pg_dump na hora, com os usuários do banco, e baixa pelo navegador num .zip."
 download = "Baixar backup"
+
+[backup.bundle]
+readme_sealed = """
+Backup do Hangar: {base}
+
+Este .zip tem tudo para restaurar o banco "{db}" em outro lugar, como era:
+
+- {base}.dump.age: os dados e o esquema (pg_dump -Fc), cifrados com age.
+- {base}.roles.sql.age: os usuários do PostgreSQL (pg_dumpall --roles-only),
+  com atributos (LOGIN, BYPASSRLS...), senhas (só o hash), papéis e
+  configurações, cifrados com age.
+
+1. Decifrar, no seu computador, com o kit de recuperação:
+
+     hangar-cofre decrypt {base}.zip
+
+   Gera {base}.dump, {base}.roles.sql e {base}.roles-restore.sql.
+   Sem o hangar-cofre: age -d -i hangar-kit.txt -o {base}.dump {base}.dump.age
+   (e o mesmo para {base}.roles.sql.age).
+
+2. Restaurar num PostgreSQL da mesma versão (ou mais novo), como superusuário:
+
+     psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f {base}.roles-restore.sql
+     pg_restore -U postgres -d postgres --create {base}.dump
+
+   O primeiro cria só os usuários que faltam, exatamente como eram (a mesma
+   senha de antes); os que já existem não mudam. O segundo cria o banco "{db}"
+   com o dono, as permissões, as configurações e os dados.
+   Só com o age: psql -f {base}.roles.sql também serve (é a saída do
+   pg_dumpall), mas troca a senha de usuários que já existirem com o mesmo
+   nome; erros "already exists" são esperados.
+
+Guarde este arquivo como qualquer backup: sem o kit ninguém o abre.
+"""
+readme_plain = """
+Backup do Hangar: {base}
+
+Este .zip tem tudo para restaurar o banco "{db}" em outro lugar, como era:
+
+- {base}.dump: os dados e o esquema (pg_dump -Fc).
+- {base}.roles.sql: os usuários do PostgreSQL (pg_dumpall --roles-only), com
+  atributos (LOGIN, BYPASSRLS...), senhas (só o hash), papéis e configurações.
+- {base}.roles-restore.sql: cria, a partir do arquivo acima, só os usuários
+  que faltam, exatamente como eram; os que já existem não mudam.
+
+Restaurar num PostgreSQL da mesma versão (ou mais novo), como superusuário:
+
+  psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f {base}.roles-restore.sql
+  pg_restore -U postgres -d postgres --create {base}.dump
+
+O segundo comando cria o banco "{db}" com o dono, as permissões, as
+configurações e os dados.
+
+Este arquivo NÃO está cifrado e tem os hashes das senhas: guarde-o com cuidado.
+"""
 
 [backup.error]
 mode = "Escolha Simples ou Com kit de recuperação."
@@ -2258,7 +2313,7 @@ wal_title = "Recuperação até o minuto"
 window = "Dá para voltar a qualquer momento entre {from} e {to}."
 window_none = "Ainda não há base para voltar a um minuto. Ela é feita logo depois que o WAL começa a funcionar."
 last_base = "Última base: {when}"
-download_hint = "Gera um pg_dump na hora, cifrado com a sua chave. O link vale 5 minutos."
+download_hint = "Gera um pg_dump na hora, com os usuários do banco, cifrado com a sua chave (.zip). O link vale 5 minutos."
 download_preparing = "Preparando: dump, teste e cifra…"
 download_ready = "Baixar ({size})"
 download_expires = "O link vale até {when} e funciona uma vez."
@@ -2288,6 +2343,7 @@ restore_to = "até {when}"
 restore_from_dump = "de um pg_dump"
 restore_from_service = "de {service}"
 restore_failed = "A restauração iniciada em {when} para {service} falhou. Nada foi restaurado."
+restore_saved_roles = "Usuários do banco recriados como no original: {roles}."
 restore_roles = "Papéis criados sem senha: {roles}. Defina as senhas para o app conectar."
 restore_removed = "O serviço novo {service} foi removido. O original não foi alterado."
 restore_kept = "Não deu para remover o serviço novo {service}; apague-o nas configurações dele. O original não foi alterado."
@@ -2416,6 +2472,7 @@ restored_end = "{label} está no Docker local, até o último minuto disponível
 restored_dump = "{label} está no Docker local, a partir de {key}."
 restored_connect = "Conecte: docker exec -it {container} psql -U {user} -d {db}  (ou 127.0.0.1:{port})"
 restored_password = "Senha deste banco local: {password}"
+restored_saved_roles = "Usuários do banco recriados como no original: {roles}."
 restored_roles = "Papéis criados sem senha: {roles}. Defina as senhas para o app conectar."
 restored_cleanup = "Para apagar quando terminar: docker rm -f -v {container} && docker volume rm {volume}"
 test_ok = "✓ {label}: {tables} tabelas, {rows} linhas restauradas ({took})"

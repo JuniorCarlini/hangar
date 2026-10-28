@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"filippo.io/age"
+
+	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 )
 
 // waitRestore waits for a restore started on the fake to end.
@@ -63,13 +65,23 @@ func (f *fixture) execsWith(sub string) int {
 	return n
 }
 
-// A dump restored into a new service brings its permissions: the roles
-// they name are created first (no password), the restore keeps the ACLs,
-// and the roles created are recorded for the owner, on both services.
+// dropRoles removes the roles saved next to a dump: what a dump made
+// before roles were saved looks like.
+func (f *fixture) dropRoles(key string) {
+	f.store.mu.Lock()
+	defer f.store.mu.Unlock()
+	delete(f.store.objects, "lab/"+archive.RolesKey(key))
+}
+
+// A dump saved without the roles of its server (made before they were
+// saved), restored into a new service, still brings its permissions: the
+// roles they name are created first (no password), the restore keeps the
+// ACLs, and the roles created are recorded for the owner, on both services.
 func TestRestoreIntoNewServiceCreatesMissingRoles(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	s, key := f.dumpKey(t)
+	f.dropRoles(key)
 	f.n.schemaSQL = aclScript
 	f.n.created = []string{"lobot_app", `Weird "Role"`} // lobot already exists there
 
@@ -105,7 +117,7 @@ func TestRestoreIntoNewServiceCreatesMissingRoles(t *testing.T) {
 			order = append(order, "roles")
 		case strings.Contains(e, "pg_restore"):
 			order = append(order, "restore")
-			if strings.Contains(e, "--no-acl") || !strings.Contains(e, "--single-transaction") {
+			if strings.Contains(e, "--no-acl") || !strings.Contains(e, "--single-transaction") || !strings.Contains(e, "--no-owner") {
 				t.Errorf("restore command: %s", e)
 			}
 		}

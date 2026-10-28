@@ -15,17 +15,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 )
 
 // MaxScript bounds the SQL kept from a dump's ACL, POLICY and DEFAULT ACL
 // entries (the rest of the script is read and dropped).
 const MaxScript = 64 << 20
-
-// sectionRE reads the entry type from the comment pg_restore writes above
-// each entry: "-- Name: TABLE t; Type: ACL; Schema: public; Owner: x".
-var sectionRE = regexp.MustCompile(`; Type: ([A-Z ]+); Schema: `)
 
 // kept are the entry types that name roles once ownership is skipped
 // (--no-owner).
@@ -36,35 +31,156 @@ var kept = map[string]bool{"ACL": true, "POLICY": true, "DEFAULT ACL": true}
 // appearance, without PUBLIC, the CURRENT_USER-like forms and the
 // predefined pg_* roles.
 func FromScript(r io.Reader) ([]string, error) {
-	var sql strings.Builder
-	keep := false
+	s, err := ReadSchema(r, false)
+	return s.Roles, err
+}
+
+// Schema is what a restore needs from a dump's schema script.
+type Schema struct {
+	// Roles are the roles the permissions name and, when asked, the
+	// owners of the objects, in order of first appearance.
+	Roles []string
+	// Database are the database-level statements of a script printed
+	// with --create: its owner, settings (ALTER DATABASE ... SET, ALTER
+	// ROLE ... IN DATABASE ... SET), comment and GRANTs on the database.
+	// pg_restore only applies them when it creates the database itself.
+	Database []string
+}
+
+// section reads an entry's header comment: "-- Name: x; Type: T; Schema:
+// s; Owner: o". Names may hold anything, so the last "; Type: " and
+// "; Owner: " are the separators.
+func section(line string) (name, typ, owner string, ok bool) {
+	rest, ok := strings.CutPrefix(strings.TrimRight(line, "\r\n"), "-- Name: ")
+	if !ok {
+		return "", "", "", false
+	}
+	t := strings.LastIndex(rest, "; Type: ")
+	o := strings.LastIndex(rest, "; Owner: ")
+	if t < 0 || o < t {
+		return "", "", "", false
+	}
+	name, typ = rest[:t], rest[t+len("; Type: "):o]
+	if s := strings.Index(typ, "; Schema: "); s >= 0 {
+		typ = typ[:s]
+	}
+	return name, typ, rest[o+len("; Owner: "):], true
+}
+
+// ReadSchema reads a SQL script written by pg_restore (-f): the roles its
+// ACL, POLICY and DEFAULT ACL entries name, the owners of its entries when
+// owners is set (a restore that keeps ownership needs them too), and its
+// database-level statements (see Schema.Database).
+func ReadSchema(r io.Reader, owners bool) (Schema, error) {
+	var acl, dbOwner, dbProps strings.Builder
+	var out Schema
+	var targets []*strings.Builder
+	var ownerNames []string
 	br := bufio.NewReaderSize(r, 64<<10)
 	for {
 		line, err := br.ReadString('\n')
 		if line != "" {
 			switch {
 			case strings.HasPrefix(line, "-- Name: ") || strings.HasPrefix(line, "-- Data for Name: "):
-				keep = false
-				if m := sectionRE.FindAllStringSubmatch(line, -1); m != nil && strings.HasPrefix(line, "-- Name: ") {
-					keep = kept[m[len(m)-1][1]]
+				targets = targets[:0]
+				name, typ, owner, ok := section(line)
+				if !ok || strings.HasPrefix(line, "-- Data for Name: ") {
+					break
+				}
+				if owners && owner != "" && owner != "-" {
+					ownerNames = append(ownerNames, owner)
+				}
+				if kept[typ] {
+					targets = append(targets, &acl)
+				}
+				switch {
+				case typ == "DATABASE":
+					targets = append(targets, &dbOwner)
+				case typ == "DATABASE PROPERTIES",
+					(typ == "COMMENT" || typ == "ACL") && strings.HasPrefix(name, "DATABASE "):
+					targets = append(targets, &dbProps)
 				}
 			case strings.HasPrefix(line, `\`):
 				// psql meta-commands (\restrict, \connect) are not SQL.
-			case keep:
-				if sql.Len()+len(line) > MaxScript {
-					return nil, errors.New("the dump's permissions are too large to read")
+			case len(targets) > 0:
+				if acl.Len()+dbOwner.Len()+dbProps.Len()+len(line) > MaxScript {
+					return out, errors.New("the dump's permissions are too large to read")
 				}
-				sql.WriteString(line)
+				for _, t := range targets {
+					t.WriteString(line)
+				}
 			}
 		}
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return nil, err
+			return out, err
 		}
 	}
-	return FromSQL(sql.String()), nil
+	out.Roles = FromSQL(acl.String())
+	seen := map[string]bool{}
+	for _, r := range out.Roles {
+		seen[r] = true
+	}
+	for _, o := range ownerNames {
+		if !seen[o] && !skip(o) {
+			seen[o] = true
+			out.Roles = append(out.Roles, o)
+		}
+	}
+	src := dbOwner.String()
+	for _, st := range statements(tokenize(src)) {
+		// The DATABASE entry is CREATE DATABASE (the target exists) and
+		// its owner: only the owner applies.
+		if kw(st, 0, "alter", "database") && find(st, 3, "owner") >= 0 {
+			out.Database = append(out.Database, src[st[0].start:st[len(st)-1].end])
+		}
+	}
+	src = dbProps.String()
+	for _, st := range statements(tokenize(src)) {
+		// The session SETs pg_restore prints after \connect are not
+		// properties of the database.
+		if kw(st, 0, "alter") || kw(st, 0, "grant") || kw(st, 0, "revoke") || kw(st, 0, "comment") {
+			out.Database = append(out.Database, src[st[0].start:st[len(st)-1].end])
+		}
+	}
+	return out, nil
+}
+
+// DatabaseVar is the psql variable DatabaseScript names the target
+// database with: run it with -v hangar_db=<name>.
+const DatabaseVar = "hangar_db"
+
+// DatabaseScript applies the database-level statements of a dump
+// (Schema.Database) to the database the script runs in, whatever its name
+// was in the original: the name after each DATABASE keyword becomes the
+// psql variable DatabaseVar. It runs in one transaction.
+func DatabaseScript(stmts []string) string {
+	if len(stmts) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("SET standard_conforming_strings = on;\nBEGIN;\n")
+	for _, s := range stmts {
+		toks := tokenize(s)
+		last := 0
+		for i := 0; i+1 < len(toks); i++ {
+			if toks[i].kind != tWord || toks[i].text != "database" || toks[i].depth != 0 {
+				continue
+			}
+			if n := toks[i+1]; n.depth == 0 && (n.kind == tWord || n.kind == tQuoted) {
+				b.WriteString(s[last:n.start])
+				b.WriteString(`:"` + DatabaseVar + `"`)
+				last = n.end
+				i++
+			}
+		}
+		b.WriteString(s[last:])
+		b.WriteString(";\n")
+	}
+	b.WriteString("COMMIT;\n")
+	return b.String()
 }
 
 // FromSQL returns the roles named by the GRANT, REVOKE, ALTER DEFAULT
@@ -107,6 +223,7 @@ const (
 	tQuoted                // "quoted identifier", as written
 	tString                // 'string literal' (and E'', $$ $$)
 	tPunct                 // one character
+	tNumber                // digits (and decimal points)
 )
 
 type token struct {
@@ -114,6 +231,8 @@ type token struct {
 	text string
 	// depth is the parenthesis nesting the token sits in.
 	depth int
+	// start and end are the token's bytes in the source.
+	start, end int
 }
 
 func isIdentStart(c byte) bool {
@@ -130,9 +249,23 @@ func tokenize(s string) []token {
 	depth := 0
 	for i := 0; i < len(s); {
 		c := s[i]
+		n, from := len(out), i
 		switch {
 		case c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f':
 			i++
+		case c == '\\':
+			// A psql meta-command (\connect, \restrict) runs to the end of
+			// the line: outside a string, a backslash is not SQL.
+			for i < len(s) && s[i] != '\n' {
+				i++
+			}
+		case c >= '0' && c <= '9':
+			j := i + 1
+			for j < len(s) && (s[j] >= '0' && s[j] <= '9' || s[j] == '.') {
+				j++
+			}
+			out = append(out, token{kind: tNumber, text: s[i:j], depth: depth})
+			i = j
 		case c == '-' && i+1 < len(s) && s[i+1] == '-':
 			for i < len(s) && s[i] != '\n' {
 				i++
@@ -173,10 +306,10 @@ func tokenize(s string) []token {
 			if end < 0 {
 				out = append(out, token{kind: tString, text: body, depth: depth})
 				i = len(s)
-				continue
+			} else {
+				out = append(out, token{kind: tString, text: body[:end], depth: depth})
+				i += len(tag) + end + len(tag)
 			}
-			out = append(out, token{kind: tString, text: body[:end], depth: depth})
-			i += len(tag) + end + len(tag)
 		case isIdentStart(c):
 			j := i + 1
 			for j < len(s) && isIdentPart(s[j]) {
@@ -193,6 +326,9 @@ func tokenize(s string) []token {
 				depth++
 			}
 			i++
+		}
+		if len(out) > n {
+			out[n].start, out[n].end = from, i
 		}
 	}
 	return out

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"io"
 	"strings"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
@@ -20,33 +19,6 @@ import (
 func (m *Manager) CanDownloadBackup(template string) bool {
 	t, ok := m.catalog().Get(template)
 	return ok && t.Backup == "pg_dump"
-}
-
-// DownloadBackup streams a pg_dump (custom format) of the service's database
-// to w. No port is opened: the dump runs inside the container (docs/05).
-// Once a recovery kit exists the panel uses the encrypted download of the
-// backup package instead (docs/09); this is the plain one for before.
-func (m *Manager) DownloadBackup(ctx context.Context, a Actor, projectSlug, serviceSlug string, w io.Writer) error {
-	if err := m.requireNode(); err != nil {
-		return err
-	}
-	p, s, err := m.GetService(ctx, projectSlug, serviceSlug)
-	if err != nil {
-		return err
-	}
-	if !m.CanDownloadBackup(s.Template) {
-		return i18n.E("backup.error.unsupported")
-	}
-	// The variables are read inside the container: no credential passes
-	// through the command line here.
-	cmd := []string{"sh", "-c", `exec pg_dump -Fc -U "$POSTGRES_USER" "$POSTGRES_DB"`}
-	err = m.node.Exec(ctx, p.Slug, s.Slug, cmd, w)
-	outcome := audit.OK
-	if err != nil {
-		outcome = audit.Error
-	}
-	m.record(ctx, a, "service.backup.download", "service", s.ID, outcome, map[string]any{"service": p.Slug + "/" + s.Slug})
-	return err
 }
 
 // walEnabled reports whether the service's backup policy archives WAL.

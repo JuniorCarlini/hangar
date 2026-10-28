@@ -61,6 +61,8 @@ type RestoreRow struct {
 	Step   string
 	Error  string
 	From   string // the service restored from, on the copy's tab
+	// Saved says which roles the restore recreated as in the original.
+	Saved string
 	// Roles says which roles the restore created without a password.
 	Roles string
 	// Cleanup says what became of the new service of a failed restore.
@@ -151,6 +153,9 @@ templ tabBackups(d ServiceData) {
 										}
 										if r.Cleanup != "" {
 											<span class="block text-xs text-muted">{ r.Cleanup }</span>
+										}
+										if r.Saved != "" {
+											<span class="mt-1 block text-xs text-muted">{ r.Saved }</span>
 										}
 										if r.Roles != "" {
 											<span class="mt-1 block text-xs text-warning">{ r.Roles }</span>

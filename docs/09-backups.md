@@ -51,7 +51,7 @@ proteger.
 | Dado | Método | Frequência padrão | Perda máxima (RPO) |
 |---|---|---|---|
 | **PostgreSQL**: contínuo | Arquivamento de WAL com WAL-G (cifrado com chave pública) + base backup diário | contínuo (`archive_timeout=60s`) | **≤ 1 minuto** |
-| **PostgreSQL**: lógico | `pg_dump -Fc` → zstd → age | diário (+ antes de todo deploy com migração e antes de atualizar versão) | 24 h (é a cópia "portátil") |
+| **PostgreSQL**: lógico | `pg_dump -Fc` + `pg_dumpall --roles-only` (usuários do banco) → age | diário (+ antes de todo deploy com migração e antes de atualizar versão) | 24 h (é a cópia "portátil") |
 | Redis de **filas/sessões** *(em breve)* | `BGSAVE` → RDB → zstd → age | a cada 6 h | 6 h |
 | Redis de **cache** | **não faz backup** (é descartável) | — | — |
 | Volumes de apps *(em breve)* | `tar` do volume (montado só leitura) → zstd → age | diário | 24 h |
@@ -149,7 +149,7 @@ Binário pequeno (Mac, Windows, Linux), código aberto no mesmo repositório:
 |---|---|
 | `hangar-cofre sync ~/Backups/hangar` | Puxa os backups novos do bucket (credencial **só leitura**, guardada só no seu PC) para uma pasta ou HD. Pode rodar agendado |
 | `hangar-cofre list` | Lista backups disponíveis (local e nuvem) |
-| `hangar-cofre decrypt arquivo.age` | Decifra com a sua chave |
+| `hangar-cofre decrypt arquivo.age` | Decifra com a sua chave. Um `.dump.age` sai junto com os usuários do banco salvos ao lado (`.roles.sql` e `.roles-restore.sql`); um `.zip` baixado do painel sai inteiro numa pasta |
 | `hangar-cofre restore-local minhaloja_postgres --at "2026-10-15 14:32"` | Sobe um Postgres no Docker local e restaura até aquele minuto |
 | `hangar-cofre test` | O simulado mensal |
 
@@ -160,15 +160,55 @@ Funciona **sem o painel**: se a VPS sumir, você ainda tem tudo.
 ```
 [⬇ Baixar backup agora]  🔒 (2FA de novo)
    │
-   ├─► gera pg_dump na hora ──► testa ──► cifra com sua chave pública
-   └─► link de uso único, válido por 5 min ──► arquivo .age ──► audit log
+   ├─► gera pg_dump + usuários do banco na hora ──► testa ──► cifra com sua chave pública
+   └─► link de uso único, válido por 5 min ──► arquivo .zip ──► audit log
 ```
 
-- O arquivo baixado vem **cifrado**. Se o link ou o arquivo vazar, ninguém
-  abre sem a sua chave.
-- No seu computador: `hangar-cofre decrypt` (ou `age -d -i hangar-kit.txt`).
-- Também dá para baixar qualquer backup antigo da lista (do bucket direto,
-  por link assinado de curta duração).
+- O `.zip` tem tudo para restaurar em outro lugar, como era: `README.txt`
+  (os comandos), `<nome>.roles.sql.age` (os usuários do PostgreSQL) e
+  `<nome>.dump.age` (os dados). Os dois `.age` vêm **cifrados**: se o link ou
+  o arquivo vazar, ninguém abre sem a sua chave.
+- No seu computador: `hangar-cofre decrypt <nome>.zip` gera `<nome>.dump`,
+  `<nome>.roles.sql` (a saída do `pg_dumpall --roles-only`) e
+  `<nome>.roles-restore.sql` (cria só os usuários que faltam, como eram).
+  Depois: `psql -f <nome>.roles-restore.sql` e
+  `pg_restore --create -d postgres <nome>.dump`. Também dá com
+  `age -d -i hangar-kit.txt`, arquivo por arquivo.
+- No modo simples (e antes de ter destino), o `.zip` vem aberto: o dump, os
+  usuários e o script, sem `.age`. Ele tem os hashes das senhas: guarde com
+  cuidado.
+- Também dá para baixar qualquer backup antigo da lista. Um dump com os
+  usuários salvos vem no mesmo `.zip` (passando pelo painel, sem decifrar no
+  modo com kit); um dump antigo, sem eles, vem como antes (link assinado de
+  curta duração).
+
+## Usuários do banco (roles) vão junto com cada dump
+
+Um `pg_dump` de um banco não leva os usuários (roles): eles são do servidor,
+não do banco. Sem eles, um restore num servidor novo não tem como o app
+entrar. Por isso, a cada dump o Hangar também salva
+`pg_dumpall --roles-only` daquele PostgreSQL (atributos como `LOGIN`,
+`BYPASSRLS`, `CREATEDB`, o hash da senha, os papéis de cada um e o
+`ALTER ROLE ... SET`), cifrado do mesmo jeito, ao lado do dump no bucket
+(`<data>.roles.sql.age` na mesma pasta: mesma retenção e mesma trava). O dump
+continua sendo um `pg_dump -Fc` puro, que qualquer ferramenta lê.
+
+- **Restaurar em serviço novo, em servidor novo ou no `hangar-cofre`**: antes
+  dos dados, cria cada usuário que falta **exatamente como era** (a mesma
+  senha: o app conecta com as mesmas credenciais de produção); depois os
+  dados com os **donos** originais dos objetos e as permissões; por fim o que
+  é do banco (dono, `GRANT CONNECT`, `ALTER DATABASE ... SET`,
+  `ALTER ROLE ... IN DATABASE ... SET`, comentário). O superusuário do
+  servidor (o `POSTGRES_USER`) nunca é recriado: cada servidor tem o seu.
+- **Sobrescrever**: usuários que existem ficam como estão (senha incluída);
+  só os que sumiram depois do backup voltam, com seus membros.
+- **Teste do backup**: o restore descartável aplica os usuários primeiro,
+  restaura com donos e permissões e confere que cada usuário voltou com os
+  mesmos atributos, a mesma senha e os mesmos papéis. Só então é "testado".
+- **Dumps antigos**, de antes disso, restauram como antes: os usuários que as
+  permissões citam são criados sem senha (`NOLOGIN`) e o painel avisa quais.
+- Os hashes das senhas só existem cifrados (no bucket e no download com kit)
+  e nunca aparecem em log, auditoria ou tela.
 
 ## Restaurar
 

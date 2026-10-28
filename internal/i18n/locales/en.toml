@@ -880,8 +880,66 @@ copy = "Copy {ref}"
 
 
 [backup]
-hint = "Makes a pg_dump now and downloads it in the browser."
+hint = "Makes a pg_dump now, with the database users, and downloads it in the browser as a .zip."
 download = "Download backup"
+
+[backup.bundle]
+readme_sealed = """
+Hangar backup: {base}
+
+This .zip holds everything needed to restore the database "{db}" elsewhere,
+as it was:
+
+- {base}.dump.age: the data and schema (pg_dump -Fc), encrypted with age.
+- {base}.roles.sql.age: the PostgreSQL users (pg_dumpall --roles-only), with
+  their attributes (LOGIN, BYPASSRLS...), passwords (hashes only), memberships
+  and settings, encrypted with age.
+
+1. Decrypt, on your computer, with the recovery kit:
+
+     hangar-cofre decrypt {base}.zip
+
+   It writes {base}.dump, {base}.roles.sql and {base}.roles-restore.sql.
+   Without hangar-cofre: age -d -i hangar-kit.txt -o {base}.dump {base}.dump.age
+   (and the same for {base}.roles.sql.age).
+
+2. Restore into a PostgreSQL of the same version (or newer), as a superuser:
+
+     psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f {base}.roles-restore.sql
+     pg_restore -U postgres -d postgres --create {base}.dump
+
+   The first creates only the missing users, exactly as they were (the same
+   password as before); existing ones are left alone. The second creates the
+   database "{db}" with its owner, permissions, settings and data.
+   With age only: psql -f {base}.roles.sql works too (it is pg_dumpall's
+   output), but it resets the password of users that already exist with the
+   same name; "already exists" errors are expected.
+
+Keep this file like any backup: without the kit nobody can open it.
+"""
+readme_plain = """
+Hangar backup: {base}
+
+This .zip holds everything needed to restore the database "{db}" elsewhere,
+as it was:
+
+- {base}.dump: the data and schema (pg_dump -Fc).
+- {base}.roles.sql: the PostgreSQL users (pg_dumpall --roles-only), with their
+  attributes (LOGIN, BYPASSRLS...), passwords (hashes only), memberships and
+  settings.
+- {base}.roles-restore.sql: creates, from the file above, only the missing
+  users, exactly as they were; existing ones are left alone.
+
+Restore into a PostgreSQL of the same version (or newer), as a superuser:
+
+  psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f {base}.roles-restore.sql
+  pg_restore -U postgres -d postgres --create {base}.dump
+
+The second command creates the database "{db}" with its owner, permissions,
+settings and data.
+
+This file is NOT encrypted and holds the password hashes: keep it safe.
+"""
 
 [backup.error]
 mode = "Choose Simple or With a recovery kit."
@@ -2257,7 +2315,7 @@ wal_title = "Point-in-time recovery"
 window = "You can go back to any moment between {from} and {to}."
 window_none = "There is no base to go back to a minute yet. One is taken right after WAL starts working."
 last_base = "Last base: {when}"
-download_hint = "Makes a pg_dump now, encrypted with your key. The link lasts 5 minutes."
+download_hint = "Makes a pg_dump now, with the database users, encrypted with your key (.zip). The link lasts 5 minutes."
 download_preparing = "Preparing: dump, test and encryption…"
 download_ready = "Download ({size})"
 download_expires = "The link is valid until {when} and works once."
@@ -2287,6 +2345,7 @@ restore_to = "to {when}"
 restore_from_dump = "from a pg_dump"
 restore_from_service = "from {service}"
 restore_failed = "The restore started at {when} into {service} failed. Nothing was restored."
+restore_saved_roles = "Database users recreated as in the original: {roles}."
 restore_roles = "Roles created without a password: {roles}. Set their passwords so the app can connect."
 restore_removed = "The new service {service} was removed. The original was not changed."
 restore_kept = "The new service {service} could not be removed; delete it in its settings. The original was not changed."
@@ -2415,6 +2474,7 @@ restored_end = "{label} is in the local Docker, up to the last minute available.
 restored_dump = "{label} is in the local Docker, from {key}."
 restored_connect = "Connect: docker exec -it {container} psql -U {user} -d {db}  (or 127.0.0.1:{port})"
 restored_password = "Password of this local database: {password}"
+restored_saved_roles = "Database users recreated as in the original: {roles}."
 restored_roles = "Roles created without a password: {roles}. Set their passwords so the app can connect."
 restored_cleanup = "To remove it when done: docker rm -f -v {container} && docker volume rm {volume}"
 test_ok = "✓ {label}: {tables} tables, {rows} rows restored ({took})"

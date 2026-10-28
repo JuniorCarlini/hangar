@@ -18,6 +18,7 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/backup/pgroles"
 	"github.com/JuniorCarlini/hangar/internal/backup/s3"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/projects"
@@ -44,7 +45,20 @@ type fakeNode struct {
 	created    []string
 	restoreErr error
 	restoreIn  []byte
+	restoreCmd string
+	// The roles of the server: what pg_dumpall prints, the script that
+	// recreates them and the roles it says it recreated, and the
+	// database-level script.
+	rolesSQL    string
+	rolesScript string
+	saved       []string
+	dbScript    string
 }
+
+// bootstrapOnly is pg_dumpall --roles-only of a server with only its
+// bootstrap superuser (postgres), under Hangar's header line.
+const bootstrapOnly = pgroles.BootstrapHeader + "706f737467726573\nCREATE ROLE postgres;\n" +
+	"ALTER ROLE postgres WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN REPLICATION BYPASSRLS PASSWORD 'SCRAM-SHA-256$4096:c2FsdA==$c3RvcmVk:c2VydmVy';\n"
 
 // setRestoreErr changes the pg_restore answer while a restore may still be
 // winding down in its goroutine.
@@ -94,9 +108,23 @@ func (f *fakeNode) ExecIO(_ context.Context, _, _ string, cmd []string, stdin io
 	full := strings.Join(cmd, " ")
 	f.execs = append(f.execs, full)
 	switch {
-	case strings.Contains(full, "pg_restore --schema-only"):
+	case strings.Contains(full, "pg_dumpall"):
+		_, err := io.WriteString(w, f.rolesSQL)
+		return err
+	case strings.Contains(full, "--schema-only"):
 		_, err := io.WriteString(w, f.schemaSQL)
 		return err
+	case strings.Contains(full, "hangar_db="):
+		f.dbScript = string(in)
+		return nil
+	case strings.Contains(full, "psql -qAtX") && strings.Contains(full, "-f -") && strings.Contains(string(in), "HANGAR-SAVED"):
+		f.rolesScript = string(in)
+		for _, r := range f.saved {
+			if _, err := io.WriteString(w, "HANGAR-SAVED "+hex.EncodeToString([]byte(r))+"\n"); err != nil {
+				return err
+			}
+		}
+		return nil
 	case strings.Contains(full, "psql -qAtX") && strings.Contains(full, "-f -"):
 		f.script = string(in)
 		for _, r := range f.created {
@@ -107,6 +135,7 @@ func (f *fakeNode) ExecIO(_ context.Context, _, _ string, cmd []string, stdin io
 		return nil
 	case strings.Contains(full, "pg_restore"):
 		f.restoreIn = in
+		f.restoreCmd = full
 		return f.restoreErr
 	case strings.Contains(full, "pg_dump"):
 		_, err := w.Write(f.dumpData)
@@ -260,7 +289,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	box, _ := secrets.NewBox(bytes.Repeat([]byte{7}, 32))
-	n := &fakeNode{outbox: map[string][]byte{}, archive: "on|0|0|0", dumpData: []byte("PGDMP" + strings.Repeat(" pedido", 500)), checkOut: "HANGAR-CHECK tables=3 restored=3 rows=42\n"}
+	n := &fakeNode{outbox: map[string][]byte{}, archive: "on|0|0|0", dumpData: []byte("PGDMP" + strings.Repeat(" pedido", 500)), checkOut: "HANGAR-CHECK tables=3 restored=3 rows=42\n", rolesSQL: bootstrapOnly}
 	al := audit.New(st.DB)
 	pm := projects.New(st.DB, box, n, al, log)
 	m, err := New(st.DB, box, pm, al, log, Options{

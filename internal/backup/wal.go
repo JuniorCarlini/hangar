@@ -172,7 +172,7 @@ type limitWriter struct {
 
 func (l *limitWriter) Write(p []byte) (int, error) {
 	if int64(len(p)) > l.n {
-		return 0, errors.New("WAL file larger than expected")
+		return 0, errors.New("larger than expected")
 	}
 	l.n -= int64(len(p))
 	return l.w.Write(p)

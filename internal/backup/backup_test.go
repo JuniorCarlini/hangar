@@ -2,6 +2,7 @@ package backup
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"context"
 	"database/sql"
@@ -133,8 +134,10 @@ func TestDumpIsTestedEncryptedAndLocked(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(f.n.taskIn, f.n.dumpData) {
-		t.Fatal("the test restore must receive the whole dump")
+	// The test restore gets the roles script (none to recreate here: only
+	// the bootstrap superuser) and then the whole dump.
+	if !bytes.Equal(f.n.taskIn, append([]byte("0\n"), f.n.dumpData...)) {
+		t.Fatalf("the test restore must receive the roles script and the whole dump: %.40q", f.n.taskIn)
 	}
 	run, _ := f.m.q.GetBackupRun(ctx, runID)
 	if run.Status != "ok" || run.Verified != 1 || run.Class != archive.ClassMonthly || !strings.HasPrefix(run.ObjectKey, "mensal/lab/db/") {
@@ -391,20 +394,60 @@ func TestDownloadIsEncryptedAndSingleUse(t *testing.T) {
 	f.m.Wait()
 	s, _ := f.m.ref(ctx, "lab", "db")
 	d, ok := f.m.PendingDownload(f.who.UserID, s.ID)
-	if !ok || !d.Ready || !strings.HasSuffix(d.FileName, ".dump.age") {
+	if !ok || !d.Ready || !strings.HasSuffix(d.FileName, ".zip") {
 		t.Fatalf("pending: %+v %v", d, ok)
 	}
 	if _, _, _, err := f.m.TakeDownload(ctx, Actor{UserID: "usr_outro"}, d.Token); err == nil {
 		t.Fatal("another user must not take the download")
 	}
-	file, _, done, err := f.m.TakeDownload(ctx, f.who, d.Token)
+	bundle, _, done, err := f.m.TakeDownload(ctx, f.who, d.Token)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, _ := io.ReadAll(file)
+	var zipped bytes.Buffer
+	if err := bundle(&zipped); err != nil {
+		t.Fatal(err)
+	}
 	done()
-	if bytes.Contains(b, []byte("pedido")) || !bytes.HasPrefix(b, []byte("age-encryption.org/v1")) {
-		t.Fatal("the download must be encrypted")
+	// One .zip: a README, the roles and the dump, both encrypted.
+	zr, err := zip.NewReader(bytes.NewReader(zipped.Bytes()), int64(zipped.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, zf := range zr.File {
+		names = append(names, zf.Name)
+		rc, _ := zf.Open()
+		b, _ := io.ReadAll(rc)
+		_ = rc.Close()
+		switch {
+		case strings.HasSuffix(zf.Name, ".age"):
+			if bytes.Contains(b, []byte("pedido")) || bytes.Contains(b, []byte("SCRAM")) || !bytes.HasPrefix(b, []byte("age-encryption.org/v1")) {
+				t.Fatalf("%s must be encrypted", zf.Name)
+			}
+			plain, err := archive.Open(bytes.NewReader(b), []age.Identity{f.id}, archive.DefaultLimits)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, _ := io.ReadAll(plain)
+			want := f.n.dumpData
+			if strings.HasSuffix(zf.Name, archive.ExtRoles) {
+				want = []byte(f.n.rolesSQL)
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("%s opens to something else", zf.Name)
+			}
+		case zf.Name == ReadmeName:
+			if !bytes.Contains(b, []byte("pg_restore")) || !bytes.Contains(b, []byte("hangar-cofre decrypt")) {
+				t.Errorf("README: %s", b)
+			}
+		}
+	}
+	if len(names) != 3 || names[0] != ReadmeName || !strings.HasSuffix(names[1], archive.ExtRoles) || !strings.HasSuffix(names[2], archive.ExtDump) {
+		t.Fatalf("bundle: %v", names)
+	}
+	if staged, _ := os.ReadDir(f.m.opt.StagingDir); len(staged) != 0 {
+		t.Fatalf("staging not cleaned: %v", staged)
 	}
 	if _, _, _, err := f.m.TakeDownload(ctx, f.who, d.Token); err == nil {
 		t.Fatal("the link must work only once")
