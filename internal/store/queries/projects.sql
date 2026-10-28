@@ -118,3 +118,7 @@ DELETE FROM pinned_projects WHERE user_id = ? AND project_id = ?;
 
 -- name: ListPinnedProjects :many
 SELECT project_id FROM pinned_projects WHERE user_id = ? ORDER BY pinned_at, project_id;
+
+-- name: SetServiceResources :exec
+-- Memory and CPU the next deploy gives the container.
+UPDATE services SET memory_bytes = ?, nano_cpus = ?, updated_at = ? WHERE id = ?;

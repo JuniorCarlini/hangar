@@ -329,6 +329,7 @@ rollback = "rollback"
 ports = "ports"
 
 [flash]
+resources = "Resources saved. They apply on the next deploy."
 connected = "Connected. It applies from this service's next deploy."
 offered = "Variable offered: the project's other services can connect to it now."
 unoffered = "The variable is no longer offered. Services already connected keep it until disconnected."
@@ -3093,3 +3094,11 @@ failed = "failed"
 [alerts.tab]
 list = "Alerts"
 config = "Settings"
+
+[resources]
+title = "Resources"
+memory = "Memory (MB)"
+cpus = "CPU"
+save = "Save"
+hint = "Limits of the container: it never goes past them. They apply on the next deploy."
+summary = "{memory} MB of memory · {cpus} CPU"

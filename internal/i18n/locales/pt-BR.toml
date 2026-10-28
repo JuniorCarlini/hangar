@@ -329,6 +329,7 @@ ports = "portas"
 rebuild = "do zero (sem cache)"
 
 [flash]
+resources = "Recursos salvos. Valem no próximo deploy."
 connected = "Conectado. Vale a partir do próximo deploy deste serviço."
 offered = "Variável oferecida: os outros serviços do projeto já podem se conectar a ela."
 unoffered = "A variável não é mais oferecida. Quem já estava conectado continua até ser desconectado."
@@ -3094,3 +3095,11 @@ failed = "falhou"
 [alerts.tab]
 list = "Alertas"
 config = "Configuração"
+
+[resources]
+title = "Recursos"
+memory = "Memória (MB)"
+cpus = "CPU"
+save = "Salvar"
+hint = "Limites do container: ele nunca passa disso. Valem no próximo deploy."
+summary = "{memory} MB de memória · {cpus} CPU"

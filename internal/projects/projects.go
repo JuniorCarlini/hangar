@@ -250,6 +250,30 @@ func (m *Manager) CreateProjectNamed(ctx context.Context, a Actor, name string) 
 	return m.CreateProject(ctx, a, UniqueName(name, taken), name)
 }
 
+// SetServiceResources changes the memory and CPU limits a service runs
+// with, with the same bounds as when it is created. They are part of the
+// container, so they take effect on the next deploy.
+func (m *Manager) SetServiceResources(ctx context.Context, a Actor, projectSlug, serviceSlug string, memoryMB int, cpus float64) error {
+	_, s, err := m.GetService(ctx, projectSlug, serviceSlug)
+	if err != nil {
+		return err
+	}
+	switch {
+	case memoryMB < 16 || memoryMB > 64*1024:
+		return i18n.E("service.error.memory")
+	case cpus < 0.05 || cpus > 64:
+		return i18n.E("service.error.cpus")
+	}
+	from := map[string]any{"memory_mb": s.MemoryBytes >> 20, "cpus": float64(s.NanoCpus) / 1e9}
+	if err := m.q.SetServiceResources(ctx, dbq.SetServiceResourcesParams{
+		MemoryBytes: int64(memoryMB) << 20, NanoCpus: int64(cpus * 1e9), UpdatedAt: m.now().Unix(), ID: s.ID,
+	}); err != nil {
+		return err
+	}
+	m.record(ctx, a, "service.resources", "service", s.ID, audit.OK, map[string]any{"from": from, "memory_mb": memoryMB, "cpus": cpus})
+	return nil
+}
+
 // DeleteProject deletes an empty project and its network.
 func (m *Manager) DeleteProject(ctx context.Context, a Actor, slug string) error {
 	p, err := m.GetProject(ctx, slug)

@@ -860,6 +860,28 @@ func (q *Queries) SetServiceMaintenance(ctx context.Context, arg SetServiceMaint
 	return err
 }
 
+const setServiceResources = `-- name: SetServiceResources :exec
+UPDATE services SET memory_bytes = ?, nano_cpus = ?, updated_at = ? WHERE id = ?
+`
+
+type SetServiceResourcesParams struct {
+	MemoryBytes int64
+	NanoCpus    int64
+	UpdatedAt   int64
+	ID          string
+}
+
+// Memory and CPU the next deploy gives the container.
+func (q *Queries) SetServiceResources(ctx context.Context, arg SetServiceResourcesParams) error {
+	_, err := q.db.ExecContext(ctx, setServiceResources,
+		arg.MemoryBytes,
+		arg.NanoCpus,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
 const supersedeLive = `-- name: SupersedeLive :exec
 UPDATE deployments SET status = 'superseded' WHERE service_id = ? AND status = 'live' AND id != ?
 `

@@ -141,7 +141,7 @@ var dynamicPrefixes = map[string][]string{
 	"flash.": {
 		"deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings",
 		"git", "git-token", "webhook-off", "auto-on", "auto-off", "maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-edit", "volume-limit", "volume-unlimit",
-		"connected", "offered", "unoffered", "txt-on", "txt-off",
+		"connected", "offered", "unoffered", "txt-on", "txt-off", "resources",
 	},
 	"flash.backups.":            {"key-added", "key-confirmed", "key-deleted", "target-added", "target-checked", "target-deleted", "panel-queued", "mode"},
 	"backups.kind.":             {"pg_dump", "pg_base", "panel"},

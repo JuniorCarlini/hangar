@@ -1440,6 +1440,36 @@ func sudoOr(d ServiceData, modal string) string {
 // volumesCard lists the service's disks. Clicking one opens the same
 // dialog that adds a disk, filled in, to change its path and size or
 // remove it.
+// resourcesCard sets the memory and CPU limits of the container. Admin, like
+// disks; the values reach the container on the next deploy.
+templ resourcesCard(d ServiceData) {
+	<section class={ cardClass } id="resources">
+		@cardHead(t(ctx, "resources.title"))
+		<div class={ cardBodyClass }>
+			if d.CanAdmin {
+				<form method="post" action={ templ.SafeURL(d.base() + "/resources") } class="flex flex-wrap items-end gap-3">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for="res-memory">{ t(ctx, "resources.memory") }</label>
+						<input class="tuc-input w-32 font-mono" id="res-memory" name="memory_mb" type="number" min="16" max="65536" step="1" required value={ strconv.FormatInt(d.MemoryMB, 10) }/>
+					</div>
+					<div class="flex flex-col gap-1.5">
+						<label class="tuc-label" for="res-cpus">{ t(ctx, "resources.cpus") }</label>
+						<input class="tuc-input w-24 font-mono" id="res-cpus" name="cpus" type="number" min="0.05" max="64" step="0.05" required value={ d.CPUs }/>
+					</div>
+					<button class="tuc-btn is-outline" type="submit">
+						@Icon("save", "size-3.5")
+						{ t(ctx, "resources.save") }
+					</button>
+					<span class="tuc-hint w-full">{ t(ctx, "resources.hint") }</span>
+				</form>
+			} else {
+				<p class="m-0 text-[13px] text-muted">{ t(ctx, "resources.summary", "memory", d.MemoryMB, "cpus", d.CPUs) }</p>
+			}
+		</div>
+	</section>
+}
+
 templ volumesCard(d ServiceData) {
 	<section class={ cardClass } id="volumes">
 		@cardHead(t(ctx, "volume.title")) {

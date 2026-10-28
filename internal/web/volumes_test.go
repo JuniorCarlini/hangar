@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -186,4 +187,45 @@ func TestTemplateFormOffersTheSuggestedLimit(t *testing.T) {
 		return vols[0].Limit
 	})
 	e.pm.Wait()
+}
+
+// The Resources card: admins change memory and CPU from Settings; an
+// operator sees the values but cannot change them.
+func TestServiceResourcesRoute(t *testing.T) {
+	e := newEnv(t)
+	e.labService(t)
+	ctx := context.Background()
+
+	c, p := e.session(t, auth.RoleAdmin)
+	page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{c}}).Body.String()
+	if !strings.Contains(page, `action="/p/lab/s/web/resources"`) || !strings.Contains(page, `name="memory_mb"`) {
+		t.Fatal("the Resources card is missing for an admin")
+	}
+	post := func(e *env, c *http.Cookie, csrf, mem, cpus string) *httptest.ResponseRecorder {
+		return e.do(req{
+			method: "POST", target: "/p/lab/s/web/resources", cookies: []*http.Cookie{c},
+			form: url.Values{"csrf": {csrf}, "memory_mb": {mem}, "cpus": {cpus}},
+		})
+	}
+	rec := post(e, c, p.CSRFToken, "1024", "0,5")
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "ok=resources") {
+		t.Fatalf("save: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	_, s, _ := e.pm.GetService(ctx, "lab", "web")
+	if s.MemoryBytes != 1024<<20 || s.NanoCpus != 5e8 {
+		t.Errorf("stored %d bytes, %d nano CPUs", s.MemoryBytes, s.NanoCpus)
+	}
+	if rec = post(e, c, p.CSRFToken, "4", "1"); rec.Code == http.StatusSeeOther {
+		t.Error("4 MB accepted")
+	}
+
+	e2 := newEnv(t)
+	e2.labService(t)
+	oc, op := e2.session(t, auth.RoleOperator)
+	if !strings.Contains(e2.do(req{method: "GET", target: "/p/lab/s/web?tab=settings", cookies: []*http.Cookie{oc}}).Body.String(), "MB de memória") {
+		t.Error("an operator should still see the limits")
+	}
+	if rec = post(e2, oc, op.CSRFToken, "2048", "2"); rec.Code != http.StatusForbidden {
+		t.Errorf("operator changing resources: %d", rec.Code)
+	}
 }

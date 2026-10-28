@@ -280,7 +280,7 @@ func flashFrom(r *http.Request) string {
 	switch ok := r.URL.Query().Get("ok"); ok {
 	case "deploy", "image", "env", "env-deleted", "action", "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed", "rollback", "deploy-settings", "git", "git-token", "webhook-off", "auto-on", "auto-off",
 		"maintenance-on", "maintenance-off", "backup-policy", "backup-queued", "backup-preparing", "restore-started", "volume", "volume-removed", "volume-edit",
-		"volume-limit", "volume-unlimit", "connected", "offered", "unoffered":
+		"volume-limit", "volume-unlimit", "connected", "offered", "unoffered", "resources":
 		return i18n.T(r.Context(), "flash."+ok)
 	}
 	return ""
@@ -589,7 +589,7 @@ func inferTab(r *http.Request) string {
 	case strings.HasSuffix(path, "/backup"), strings.Contains(path, "/backups"):
 		return "backups"
 	case strings.HasSuffix(path, "/deploy-settings"), strings.HasSuffix(path, "/delete"), strings.Contains(path, "/git"), strings.Contains(path, "/volumes"),
-		strings.HasSuffix(path, "/maintenance"), strings.HasSuffix(path, "/image"):
+		strings.HasSuffix(path, "/maintenance"), strings.HasSuffix(path, "/image"), strings.HasSuffix(path, "/resources"):
 		return "settings"
 	}
 	switch r.URL.Query().Get("ok") {
@@ -597,7 +597,7 @@ func inferTab(r *http.Request) string {
 		return "variables"
 	case "domain", "domain-deleted", "dynamic-on", "dynamic-off", "txt-on", "txt-off", "dns-token", "port", "port-closed":
 		return "network"
-	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "volume-edit", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off":
+	case "deploy-settings", "git", "git-token", "webhook-off", "volume", "volume-removed", "volume-edit", "volume-limit", "volume-unlimit", "maintenance-on", "maintenance-off", "resources":
 		return "settings"
 	case "backup-policy", "backup-queued", "backup-preparing", "restore-started":
 		return "backups"

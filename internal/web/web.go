@@ -233,6 +233,7 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET "+svc+"/terminal", h.terminalPage, Policy{Role: auth.RoleAdmin})
 	rt.HandleFunc("POST "+svc+"/terminal/commands", h.saveCommand, Policy{Role: auth.RoleAdmin, Audit: "service.command.save", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/terminal/commands/delete", h.deleteCommand, Policy{Role: auth.RoleAdmin, Audit: "service.command.delete", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/resources", h.setResources, Policy{Role: auth.RoleAdmin, Audit: "service.resources", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/volumes", h.addVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.add", AuditByHandler: true})
 	// Changing a disk's size asks for sudo inside (volumeSize).
 	rt.HandleFunc("POST "+svc+"/volumes/edit", h.editVolume, Policy{Role: auth.RoleAdmin, Audit: "service.volume.edit", AuditByHandler: true})

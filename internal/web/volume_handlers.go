@@ -36,6 +36,26 @@ func (h *handlers) addVolume(w http.ResponseWriter, r *http.Request) {
 	redirectLocal(w, r, h.serviceBase(r)+"?tab=settings&ok=volume")
 }
 
+// setResources changes the memory and CPU limits; they apply on the next
+// deploy, like a new disk.
+func (h *handlers) setResources(w http.ResponseWriter, r *http.Request) {
+	mem, err := optInt(r.PostFormValue("memory_mb"))
+	var cpus float64
+	if err == nil {
+		cpus, err = optFloat(strings.Replace(r.PostFormValue("cpus"), ",", ".", 1))
+	}
+	if err != nil {
+		h.renderService(w, r, serviceView{status: http.StatusUnprocessableEntity, errMsg: i18n.T(r.Context(), "project.form.number_invalid")})
+		return
+	}
+	if err := h.projects.SetServiceResources(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), mem, cpus); err != nil {
+		code, msg := userError(r, err)
+		h.renderService(w, r, serviceView{status: code, errMsg: msg})
+		return
+	}
+	redirectLocal(w, r, h.serviceBase(r)+"?tab=settings&ok=resources")
+}
+
 // editVolume changes a disk's path and size from the same dialog that adds
 // one. The size only changes when it differs from what the dialog showed:
 // an empty size takes the limit away.

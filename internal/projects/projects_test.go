@@ -485,3 +485,30 @@ func TestEditDiskPath(t *testing.T) {
 		t.Errorf("volumes = %+v", vols)
 	}
 }
+
+// Memory and CPU can change after the service exists, within the same
+// bounds as at creation, and the next deploy gives them to the container.
+func TestServiceResourcesChangeOnNextDeploy(t *testing.T) {
+	f := newFixture(t)
+	f.service(t)
+	ctx := context.Background()
+	for _, bad := range []struct {
+		mem  int
+		cpus float64
+	}{{8, 1}, {70000, 1}, {256, 0.01}, {256, 65}} {
+		if err := f.m.SetServiceResources(ctx, f.who, "lab", "web", bad.mem, bad.cpus); err == nil {
+			t.Errorf("%d MB / %v CPU accepted", bad.mem, bad.cpus)
+		}
+	}
+	if err := f.m.SetServiceResources(ctx, f.who, "lab", "web", 1536, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.m.Deploy(ctx, f.who, "lab", "web", "manual"); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	spec, _ := f.n.spec("lab_web")
+	if spec.MemoryBytes != 1536<<20 || spec.NanoCPUs != 5e8 {
+		t.Errorf("deploy got %d bytes, %d nano CPUs", spec.MemoryBytes, spec.NanoCPUs)
+	}
+}
