@@ -329,6 +329,9 @@ func (s *Service) UpdateMember(ctx context.Context, p *Principal, id string, a A
 	if err := setAccess(ctx, q, id, a, now); err != nil {
 		return err
 	}
+	if err := keepAnOwner(ctx, q); err != nil {
+		return err
+	}
 	if err := q.DeleteUserSessions(ctx, id); err != nil {
 		return err
 	}
@@ -364,13 +367,41 @@ func (s *Service) RemoveMember(ctx context.Context, p *Principal, id string, c C
 			return ErrLastOwner
 		}
 	}
-	if err := s.q.DeleteUser(ctx, id); err != nil {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := s.q.WithTx(tx)
+	if err := q.DeleteUser(ctx, id); err != nil {
+		return err
+	}
+	if err := keepAnOwner(ctx, q); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	s.record(ctx, audit.Entry{
 		ActorID: p.UserID, IP: c.IP, UserAgent: c.UserAgent, Action: "user.remove", Outcome: audit.OK,
 		TargetType: "user", TargetID: id, Summary: map[string]any{"email": u.Email, "role": u.Role},
 	})
+	return nil
+}
+
+// keepAnOwner refuses a change that left the panel without an owner. It runs
+// after the write, inside the same transaction: SQLite serializes writers, so
+// two owners demoting each other at once cannot both pass a count taken
+// before either wrote (the check above the transaction only gives the early,
+// friendly error).
+func keepAnOwner(ctx context.Context, q *dbq.Queries) error {
+	n, err := q.CountOwners(ctx)
+	if err != nil {
+		return err
+	}
+	if n < 1 {
+		return ErrLastOwner
+	}
 	return nil
 }
 

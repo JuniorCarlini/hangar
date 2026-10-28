@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -227,6 +229,36 @@ func TestLastSeenOutlivesSessions(t *testing.T) {
 	for _, m := range members {
 		if m.Email == "maria@hangar.dev" && m.LastSeen.IsZero() {
 			t.Fatal("shows as never logged in after the sessions ended")
+		}
+	}
+}
+
+// Two owners demoting each other at the same moment: both pass the early
+// count, but only one change may land, or the panel is left with no owner.
+func TestOwnersDemotingEachOtherKeepOne(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	c := Client{IP: "189.10.20.30"}
+	for i := range 20 {
+		a, _ := f.svc.CreateUser(ctx, fmt.Sprintf("a%d@hangar.dev", i), goodPassword, RoleOwner)
+		b, _ := f.svc.CreateUser(ctx, fmt.Sprintf("b%d@hangar.dev", i), goodPassword, RoleOwner)
+		// Only these two are owners in this round.
+		if _, err := f.st.DB.ExecContext(ctx, `UPDATE users SET role = 'admin' WHERE role = 'owner' AND id NOT IN (?, ?)`, a, b); err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		for _, pair := range [][2]string{{a, b}, {b, a}} {
+			wg.Go(func() {
+				_ = f.svc.UpdateMember(ctx, &Principal{UserID: pair[0], Role: RoleOwner, AllProjects: true}, pair[1], Access{Role: RoleAdmin, AllProjects: true}, c)
+			})
+		}
+		wg.Wait()
+		var n int
+		if err := f.st.DB.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE role = 'owner'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n < 1 {
+			t.Fatalf("round %d: no owner left", i)
 		}
 	}
 }
