@@ -29,7 +29,12 @@ const (
 	AlertWALLag      = "wal_lag"
 	AlertWALRestart  = "wal_restart"
 	AlertWALFailing  = "wal_failing"
+	AlertRestore     = "restore_failed"
 )
+
+// RestoreAlertFor is how long a failed restore stays on the backups page
+// (unless a later restore of the same service works).
+const RestoreAlertFor = 72 * time.Hour
 
 // Alert is a problem the backups page shows until it is solved.
 type Alert struct {
@@ -130,6 +135,7 @@ type Overview struct {
 	Services   []Row
 	Panel      Row
 	Runs       []Run
+	Restores   []Restore // the newest restores of every service
 	Alerts     []Alert
 }
 
@@ -215,6 +221,13 @@ func (m *Manager) Overview(ctx context.Context) (Overview, error) {
 	for _, r := range runs {
 		o.Runs = append(o.Runs, toRun(r))
 	}
+	restores, err := m.q.ListRestores(ctx, 50)
+	if err != nil {
+		return o, err
+	}
+	for _, r := range restores {
+		o.Restores = append(o.Restores, toRestore(r))
+	}
 	o.Alerts = m.alerts(o)
 	return o, nil
 }
@@ -266,6 +279,18 @@ func (m *Manager) alerts(o Overview) []Alert {
 		check(r, r.Policy.NextRun.Add(-time.Duration(r.Policy.EveryHours)*time.Hour))
 	}
 	check(o.Panel, o.Panel.Policy.NextRun.Add(-24*time.Hour))
+	// A failed restore is said where the backups are, not only in the
+	// service's tab: the owner must not think it worked.
+	seen := map[string]bool{}
+	for _, r := range o.Restores { // newest first
+		if seen[r.Source] {
+			continue
+		}
+		seen[r.Source] = true
+		if r.Status == "failed" && now.Sub(r.FinishedAt) < RestoreAlertFor {
+			out = append(out, Alert{Kind: AlertRestore, Label: r.Source, Info: r.Error})
+		}
+	}
 	return out
 }
 

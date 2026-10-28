@@ -30,7 +30,9 @@ type ServiceBackups struct {
 	MaxAt        string // ISO, the newest moment that can be chosen
 	Runs         []BackupRunRow
 	Restores     []RestoreRow
-	Busy         bool // something running: the tab refreshes itself
+	// RestoreFailed is the newest restore when it failed: shown on top.
+	RestoreFailed *RestoreRow
+	Busy          bool // something running: the tab refreshes itself
 }
 
 // DownloadView is a prepared encrypted download.
@@ -58,6 +60,11 @@ type RestoreRow struct {
 	Tone   string
 	Step   string
 	Error  string
+	From   string // the service restored from, on the copy's tab
+	// Roles says which roles the restore created without a password.
+	Roles string
+	// Cleanup says what became of the new service of a failed restore.
+	Cleanup string
 }
 
 var everyHours = []int{24, 12, 6, 1}
@@ -71,6 +78,20 @@ templ tabBackups(d ServiceData) {
 		if d.Backups.Busy {
 			// ui.js reloads once the backup is over (data-busy-poll).
 			<span hidden data-busy-poll></span>
+		}
+		if r := d.Backups.RestoreFailed; r != nil {
+			<div class="tuc-alert is-danger" role="alert">
+				@Icon("circle-x", "size-4")
+				<div class="tuc-alert__body flex min-w-0 flex-col gap-1">
+					<p class="font-semibold">{ t(ctx, "svcbackup.restore_failed", "when", r.When, "service", r.Dest) }</p>
+					if r.Error != "" {
+						<p class="font-mono text-xs break-words">{ r.Error }</p>
+					}
+					if r.Cleanup != "" {
+						<p class="text-xs">{ r.Cleanup }</p>
+					}
+				</div>
+			</div>
 		}
 		if d.Backups.WAL {
 			@svcBackupWAL(d)
@@ -114,11 +135,25 @@ templ tabBackups(d ServiceData) {
 							for _, r := range d.Backups.Restores {
 								<tr title={ r.What }>
 									<td class="whitespace-nowrap text-muted">{ r.When }</td>
-									<td class="font-mono text-[13px] whitespace-nowrap">{ r.Dest }</td>
+									<td class="font-mono text-[13px] whitespace-nowrap">
+										{ r.Dest }
+										if r.From != "" {
+											<span class="block font-sans text-xs text-subtle">{ t(ctx, "svcbackup.restore_from_service", "service", r.From) }</span>
+										}
+									</td>
 									<td>
-										<span class={ badgeTone(r.Tone) } title={ r.Error }>{ r.Status }</span>
+										<span class={ badgeTone(r.Tone) }>{ r.Status }</span>
 										if r.Step != "" {
 											<span class="block text-xs text-subtle">{ r.Step }</span>
+										}
+										if r.Error != "" {
+											<span class="mt-1 block line-clamp-3 font-mono text-xs break-words text-danger" title={ r.Error }>{ r.Error }</span>
+										}
+										if r.Cleanup != "" {
+											<span class="block text-xs text-muted">{ r.Cleanup }</span>
+										}
+										if r.Roles != "" {
+											<span class="mt-1 block text-xs text-warning">{ r.Roles }</span>
 										}
 									</td>
 								</tr>

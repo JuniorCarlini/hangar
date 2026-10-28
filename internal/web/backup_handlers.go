@@ -118,7 +118,7 @@ func (h *handlers) renderBackupsWith(w http.ResponseWriter, r *http.Request, sta
 			continue
 		}
 		tone := "warning"
-		if a.Kind == backup.AlertStale || a.Kind == backup.AlertFailed || a.Kind == backup.AlertWALLag || a.Kind == backup.AlertWALFailing || a.Kind == backup.AlertTargetError {
+		if a.Kind == backup.AlertStale || a.Kind == backup.AlertFailed || a.Kind == backup.AlertWALLag || a.Kind == backup.AlertWALFailing || a.Kind == backup.AlertTargetError || a.Kind == backup.AlertRestore {
 			tone = "danger"
 		}
 		d.Alerts = append(d.Alerts, views.BackupAlert{Tone: tone, Text: alertText(ctx, a)})
@@ -141,7 +141,7 @@ func alertText(ctx context.Context, a backup.Alert) string {
 	switch a.Kind {
 	case backup.AlertSize:
 		return i18n.T(ctx, "backups.alert.size", "label", label, "change", i18n.T(ctx, "backups.warning."+a.Info))
-	case backup.AlertTargetError, backup.AlertFailed, backup.AlertWALLag:
+	case backup.AlertTargetError, backup.AlertFailed, backup.AlertWALLag, backup.AlertRestore:
 		return i18n.T(ctx, "backups.alert."+a.Kind, "label", label, "error", a.Info)
 	}
 	return i18n.T(ctx, "backups.alert."+a.Kind, "label", label)
@@ -396,8 +396,8 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 			b.Busy = b.Busy || run.Status == "running"
 		}
 	}
-	if rs, err := h.backups.Restores(ctx, s.ID, 10); err == nil {
-		for _, x := range rs {
+	if rs, err := h.backups.ServiceRestores(ctx, p.Slug, s, 10); err == nil {
+		for i, x := range rs {
 			row := views.RestoreRow{
 				When: x.StartedAt.Format(backupTime), Status: i18n.T(ctx, "svcbackup.restore_status."+x.Status), Error: x.Error,
 				Tone: map[string]string{"ok": "success", "failed": "danger", "running": "info"}[x.Status],
@@ -413,9 +413,29 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 			if x.Destination == backup.DestNew {
 				row.Dest = x.NewService
 			}
+			if x.Source != p.Slug+"/"+s.Slug {
+				// This service is the copy: say where it came from.
+				row.From = x.Source
+			}
 			if x.Status == "running" && x.Step != "" {
 				row.Step = i18n.T(ctx, "svcbackup.step."+x.Step)
 				b.Busy = true
+			}
+			// The roles exist where the data went, unless that was a new
+			// service that a failure removed.
+			if len(x.CreatedRoles) > 0 && x.Cleanup != backup.CleanupRemoved {
+				row.Roles = i18n.T(ctx, "svcbackup.restore_roles", "roles", strings.Join(x.CreatedRoles, ", "))
+			}
+			switch x.Cleanup {
+			case backup.CleanupRemoved:
+				row.Cleanup = i18n.T(ctx, "svcbackup.restore_removed", "service", x.NewService)
+			case backup.CleanupKept:
+				row.Cleanup = i18n.T(ctx, "svcbackup.restore_kept", "service", x.NewService)
+			}
+			// The newest restore failed lately: said on top of the tab,
+			// with the reason, not only as a badge in the history.
+			if i == 0 && x.Status == "failed" && now.Sub(x.FinishedAt) < backup.RestoreAlertFor {
+				b.RestoreFailed = &row
 			}
 			b.Restores = append(b.Restores, row)
 		}

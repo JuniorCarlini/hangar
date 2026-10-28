@@ -95,7 +95,10 @@ func (m *Manager) RecoverService(ctx context.Context, a Actor, projectSlug, serv
 	}
 	for _, d := range dumps { // newest first
 		if !d.LastModified.After(at) {
-			return m.restoreDump(ctx, "", s, d.Key, ids)
+			// The roles it had to create (no password) are logged by
+			// prepareRoles.
+			_, err := m.restoreDump(ctx, "", s, d.Key, ids)
+			return err
 		}
 	}
 	return errors.New("no backup of this database in the destinations")

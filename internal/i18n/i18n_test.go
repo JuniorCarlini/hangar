@@ -150,7 +150,7 @@ var dynamicPrefixes = map[string][]string{
 	"backups.run_status.":       {"running", "ok", "failed"},
 	"svcbackup.restore_status.": {"running", "ok", "failed"},
 	"backups.warning.":          {"shrank", "grew", "rows_dropped"},
-	"backups.alert.":            {"stale", "failed", "wal_lag", "wal_restart", "wal_failing", "target_error"},
+	"backups.alert.":            {"stale", "failed", "wal_lag", "wal_restart", "wal_failing", "target_error", "restore_failed"},
 	"backups.rules.folders.":    {"diario", "semanal", "mensal", "wal", "painel"},
 	"svcbackup.step.":           {"queued", "pre_backup", "create", "deploy", "plan", "stop", "stage", "recover", "restore", "done"},
 	"target.providers.":         {"b2", "wasabi", "aws", "r2", "custom"},

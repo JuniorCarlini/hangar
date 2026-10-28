@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"filippo.io/age"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/backup/pgroles"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/ids"
 	"github.com/JuniorCarlini/hangar/internal/node"
@@ -57,22 +59,55 @@ type Restore struct {
 	Error       string
 	StartedAt   time.Time
 	FinishedAt  time.Time
+	// Source is the service restored from ("project/service").
+	Source string
+	// CreatedRoles are the roles the restore created without a password:
+	// the app cannot log in with them until they get one.
+	CreatedRoles []string
+	// Cleanup says what happened to the new service of a failed restore
+	// into a new service: CleanupRemoved or CleanupKept.
+	Cleanup string
 }
+
+// Cleanup outcomes of a failed restore into a new service.
+const (
+	CleanupRemoved = "removed"
+	CleanupKept    = "kept"
+)
 
 func toRestore(r dbq.BackupRestore) Restore {
 	out := Restore{
 		ID: r.ID, Mode: r.Mode, Point: r.Point, Destination: r.Destination, NewService: r.NewService,
 		Status: r.Status, Step: r.Step, Error: r.Error.String, StartedAt: time.Unix(r.StartedAt, 0),
+		Source: r.Label, Cleanup: r.Cleanup,
 	}
 	if r.FinishedAt.Valid {
 		out.FinishedAt = time.Unix(r.FinishedAt.Int64, 0)
 	}
+	_ = json.Unmarshal([]byte(r.CreatedRoles), &out.CreatedRoles)
 	return out
 }
 
 // Restores lists a service's restores, newest first.
 func (m *Manager) Restores(ctx context.Context, serviceID string, limit int64) ([]Restore, error) {
 	rows, err := m.q.ListServiceRestores(ctx, dbq.ListServiceRestoresParams{ServiceID: nullStr(serviceID), Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Restore, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, toRestore(r))
+	}
+	return out, nil
+}
+
+// ServiceRestores lists, newest first, the restores of a service and the
+// ones that created it as a new service: the copy shows where it came
+// from and what is left to do (passwords of the roles a restore created).
+func (m *Manager) ServiceRestores(ctx context.Context, projectSlug string, s dbq.Service, limit int64) ([]Restore, error) {
+	rows, err := m.q.ListServiceRestoresBoth(ctx, dbq.ListServiceRestoresBothParams{
+		ServiceID: nullStr(s.ID), Slug: s.Slug, LabelPrefix: projectSlug + "/%", CreatedAt: s.CreatedAt, Lim: limit,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +257,7 @@ func (m *Manager) step(ctx context.Context, id, step string) {
 }
 
 // runRestore runs with the service's restore lock held (StartRestore).
-func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, req RestoreRequest) error {
+func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, req RestoreRequest) (err error) {
 	if req.Destination == DestOverwrite {
 		// docs/09: overwriting first backs up the current state.
 		m.step(ctx, id, "pre_backup")
@@ -233,10 +268,18 @@ func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, 
 	t := s
 	if req.Destination == DestNew {
 		m.step(ctx, id, "create")
-		c, err := m.projects.CloneService(ctx, a, s.Project, s.Service, req.NewService)
-		if err != nil {
-			return err
+		c, cerr := m.projects.CloneService(ctx, a, s.Project, s.Service, req.NewService)
+		if cerr != nil {
+			return cerr
 		}
+		// From here on the new service exists: if the restore fails, it
+		// goes away with its container and disks, instead of staying up
+		// with an empty (or half restored) database that looks restored.
+		defer func() {
+			if err != nil {
+				m.dropNewService(ctx, a, id, s, c.Slug)
+			}
+		}()
 		if t, err = m.ref(ctx, s.Project, c.Slug); err != nil {
 			return err
 		}
@@ -247,10 +290,39 @@ func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, 
 	}
 	switch req.Mode {
 	case ModeDump:
-		return m.restoreDump(ctx, id, t, req.Key, req.Identities)
+		roles, rerr := m.restoreDump(ctx, id, t, req.Key, req.Identities)
+		m.recordRoles(ctx, id, roles)
+		return rerr
 	default:
 		return m.restorePITR(ctx, a, id, t, s, req.At, req.Identities)
 	}
+}
+
+// dropNewService removes the service a failed restore created. It is only
+// ever the new one: never the service restored from.
+func (m *Manager) dropNewService(ctx context.Context, a Actor, id string, src svcRef, slug string) {
+	if slug == "" || slug == src.Service {
+		return
+	}
+	ctx = context.WithoutCancel(ctx)
+	outcome := CleanupRemoved
+	if err := m.projects.DeleteService(ctx, a, src.Project, slug); err != nil {
+		outcome = CleanupKept
+		m.log.Warn("remove the service of a failed restore", "service", src.Project+"/"+slug, "restore", id, "error", err)
+	}
+	if id != "" {
+		_ = m.q.SetBackupRestoreCleanup(ctx, dbq.SetBackupRestoreCleanupParams{Cleanup: outcome, ID: id})
+	}
+}
+
+// recordRoles keeps the roles a restore created without a password. They
+// stay even when the restore then fails: they are in the server now.
+func (m *Manager) recordRoles(ctx context.Context, id string, roles []string) {
+	if id == "" || len(roles) == 0 {
+		return
+	}
+	j, _ := json.Marshal(roles)
+	_ = m.q.SetBackupRestoreRoles(context.WithoutCancel(ctx), dbq.SetBackupRestoreRolesParams{CreatedRoles: string(j), ID: id})
 }
 
 // deployAndWait deploys and waits for the result.
@@ -314,33 +386,109 @@ func (m *Manager) waitReady(ctx context.Context, s svcRef, timeout time.Duration
 }
 
 // pgRestoreCmd restores a custom-format dump read from stdin into the
-// service's database, all or nothing.
+// service's database, all or nothing. Permissions (GRANTs, policies,
+// default privileges) are restored too: the roles they name are created
+// first (prepareRoles).
 var pgRestoreCmd = []string{"sh", "-c", `exec pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner --single-transaction --exit-on-error`}
 
-func (m *Manager) restoreDump(ctx context.Context, id string, t svcRef, key string, ids []age.Identity) error {
+// pgSchemaCmd prints, as SQL, the schema part of a custom-format dump read
+// from stdin (no data), then reads the rest of the input so the sender
+// never writes into a closed pipe.
+var pgSchemaCmd = []string{"sh", "-c", `pg_restore --schema-only -f - ; s=$?; cat >/dev/null; exit $s`}
+
+// pgScriptCmd runs a psql script read from stdin as the service's own
+// superuser.
+var pgScriptCmd = []string{"sh", "-c", `exec psql -qAtX -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f -`}
+
+// restoreDump restores the dump key into t. It returns the roles it had to
+// create without a password (see prepareRoles), also when it fails after.
+func (m *Manager) restoreDump(ctx context.Context, id string, t svcRef, key string, ids []age.Identity) ([]string, error) {
 	_, tk, err := m.tasker()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	m.step(ctx, id, "restore")
 	if err := m.waitReady(ctx, t, 5*time.Minute); err != nil {
-		return err
+		return nil, err
+	}
+	roles, err := m.prepareRoles(ctx, t, key, ids)
+	if err != nil {
+		return roles, err
 	}
 	rc, _, err := m.fetch(ctx, key)
 	if err != nil {
-		return err
+		return roles, err
 	}
 	defer func() { _ = rc.Close() }()
 	plain, err := archive.Open(rc, ids, archive.DefaultLimits)
 	if err != nil {
-		return err
+		return roles, err
 	}
 	defer func() { _ = plain.Close() }()
 	if err := tk.ExecIO(ctx, t.Project, t.Service, pgRestoreCmd, plain, io.Discard); err != nil {
-		return fmt.Errorf("pg_restore: %w", err)
+		return roles, fmt.Errorf("pg_restore: %w", err)
 	}
 	m.step(ctx, id, "done")
-	return nil
+	return roles, nil
+}
+
+// prepareRoles creates in t's server the roles the dump's permissions name
+// and the server does not have, so the restore can apply them as they were
+// in the original. Roles are not in a pg_dump (they belong to the server,
+// not the database): restoring into a new service, or on a new server,
+// would otherwise fail on the first GRANT to an app role. They are created
+// without a password and cannot log in (NOLOGIN) until the owner sets one;
+// existing roles are never touched. It reads the dump once more for this
+// (only its schema reaches the database container) and returns the roles
+// it created.
+func (m *Manager) prepareRoles(ctx context.Context, t svcRef, key string, ids []age.Identity) ([]string, error) {
+	_, tk, err := m.tasker()
+	if err != nil {
+		return nil, err
+	}
+	rc, _, err := m.fetch(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rc.Close() }()
+	plain, err := archive.Open(rc, ids, archive.DefaultLimits)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = plain.Close() }()
+	type found struct {
+		roles []string
+		err   error
+	}
+	pr, pw := io.Pipe()
+	done := make(chan found, 1)
+	go func() {
+		roles, err := pgroles.FromScript(pr)
+		_, _ = io.Copy(io.Discard, pr)
+		done <- found{roles, err}
+	}()
+	err = tk.ExecIO(ctx, t.Project, t.Service, pgSchemaCmd, plain, pw)
+	_ = pw.CloseWithError(err)
+	f := <-done
+	if err != nil {
+		return nil, fmt.Errorf("read the roles of the dump: %w", err)
+	}
+	if f.err != nil {
+		return nil, fmt.Errorf("read the roles of the dump: %w", f.err)
+	}
+	script, err := pgroles.CreateScript(f.roles)
+	if err != nil || script == "" {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err := tk.ExecIO(ctx, t.Project, t.Service, pgScriptCmd, strings.NewReader(script), &out); err != nil {
+		return nil, fmt.Errorf("create the roles of the dump: %w", err)
+	}
+	created := pgroles.ParseCreated(out.String())
+	if len(created) > 0 {
+		m.log.Info("restore created roles without a password", "service", t.label(), "roles", created)
+	}
+	return created, nil
 }
 
 const rollbackScript = `set -eu

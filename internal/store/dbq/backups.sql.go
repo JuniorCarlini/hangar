@@ -677,7 +677,7 @@ func (q *Queries) ListBackupTargets(ctx context.Context) ([]BackupTarget, error)
 }
 
 const listRestores = `-- name: ListRestores :many
-SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at FROM backup_restores ORDER BY started_at DESC LIMIT ?
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores ORDER BY started_at DESC LIMIT ?
 `
 
 func (q *Queries) ListRestores(ctx context.Context, limit int64) ([]BackupRestore, error) {
@@ -703,6 +703,8 @@ func (q *Queries) ListRestores(ctx context.Context, limit int64) ([]BackupRestor
 			&i.CreatedBy,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.CreatedRoles,
+			&i.Cleanup,
 		); err != nil {
 			return nil, err
 		}
@@ -769,7 +771,7 @@ func (q *Queries) ListServiceBackupRuns(ctx context.Context, arg ListServiceBack
 }
 
 const listServiceRestores = `-- name: ListServiceRestores :many
-SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC LIMIT ?
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores WHERE service_id = ? ORDER BY started_at DESC LIMIT ?
 `
 
 type ListServiceRestoresParams struct {
@@ -800,6 +802,72 @@ func (q *Queries) ListServiceRestores(ctx context.Context, arg ListServiceRestor
 			&i.CreatedBy,
 			&i.StartedAt,
 			&i.FinishedAt,
+			&i.CreatedRoles,
+			&i.Cleanup,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listServiceRestoresBoth = `-- name: ListServiceRestoresBoth :many
+SELECT id, service_id, label, mode, point, destination, new_service, status, step, error, created_by, started_at, finished_at, created_roles, cleanup FROM backup_restores
+WHERE service_id = ?1
+   OR (destination = 'new' AND new_service = ?2 AND label LIKE ?3
+       AND started_at <= ?4 AND (finished_at IS NULL OR finished_at >= ?4))
+ORDER BY started_at DESC LIMIT ?5
+`
+
+type ListServiceRestoresBothParams struct {
+	ServiceID   sql.NullString
+	Slug        string
+	LabelPrefix string
+	CreatedAt   int64
+	Lim         int64
+}
+
+// ListServiceRestoresBoth lists the restores of a service and the ones
+// that created it: a restore into a new service with its name, running
+// when it was created (not an older service of the same name).
+func (q *Queries) ListServiceRestoresBoth(ctx context.Context, arg ListServiceRestoresBothParams) ([]BackupRestore, error) {
+	rows, err := q.db.QueryContext(ctx, listServiceRestoresBoth,
+		arg.ServiceID,
+		arg.Slug,
+		arg.LabelPrefix,
+		arg.CreatedAt,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BackupRestore{}
+	for rows.Next() {
+		var i BackupRestore
+		if err := rows.Scan(
+			&i.ID,
+			&i.ServiceID,
+			&i.Label,
+			&i.Mode,
+			&i.Point,
+			&i.Destination,
+			&i.NewService,
+			&i.Status,
+			&i.Step,
+			&i.Error,
+			&i.CreatedBy,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.CreatedRoles,
+			&i.Cleanup,
 		); err != nil {
 			return nil, err
 		}
@@ -845,6 +913,34 @@ type SetBackupPolicyNextRunParams struct {
 
 func (q *Queries) SetBackupPolicyNextRun(ctx context.Context, arg SetBackupPolicyNextRunParams) error {
 	_, err := q.db.ExecContext(ctx, setBackupPolicyNextRun, arg.NextRunAt, arg.ID)
+	return err
+}
+
+const setBackupRestoreCleanup = `-- name: SetBackupRestoreCleanup :exec
+UPDATE backup_restores SET cleanup = ? WHERE id = ?
+`
+
+type SetBackupRestoreCleanupParams struct {
+	Cleanup string
+	ID      string
+}
+
+func (q *Queries) SetBackupRestoreCleanup(ctx context.Context, arg SetBackupRestoreCleanupParams) error {
+	_, err := q.db.ExecContext(ctx, setBackupRestoreCleanup, arg.Cleanup, arg.ID)
+	return err
+}
+
+const setBackupRestoreRoles = `-- name: SetBackupRestoreRoles :exec
+UPDATE backup_restores SET created_roles = ? WHERE id = ?
+`
+
+type SetBackupRestoreRolesParams struct {
+	CreatedRoles string
+	ID           string
+}
+
+func (q *Queries) SetBackupRestoreRoles(ctx context.Context, arg SetBackupRestoreRolesParams) error {
+	_, err := q.db.ExecContext(ctx, setBackupRestoreRoles, arg.CreatedRoles, arg.ID)
 	return err
 }
 

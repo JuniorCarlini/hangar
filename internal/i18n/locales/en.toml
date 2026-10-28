@@ -2099,6 +2099,7 @@ wal_lag = "{label}: WAL is more than 5 min behind. {error}"
 wal_restart = "{label}: continuous WAL was turned on, but the database was not restarted yet (deploy it)."
 wal_failing = "{label}: PostgreSQL cannot archive its WAL (disk full?)."
 target_error = "Destination {label}: the last test failed ({error})."
+restore_failed = "{label}: the last restore failed ({error})."
 
 [backups.rules]
 title = "Automatic cleanup in the bucket"
@@ -2282,6 +2283,11 @@ restore = "Restore"
 restores = "Restores"
 restore_to = "to {when}"
 restore_from_dump = "from a pg_dump"
+restore_from_service = "from {service}"
+restore_failed = "The restore started at {when} into {service} failed. Nothing was restored."
+restore_roles = "Roles created without a password: {roles}. Set their passwords so the app can connect."
+restore_removed = "The new service {service} was removed. The original was not changed."
+restore_kept = "The new service {service} could not be removed; delete it in its settings. The original was not changed."
 
 [svcbackup.step]
 queued = "queued"
@@ -2407,6 +2413,7 @@ restored_end = "{label} is in the local Docker, up to the last minute available.
 restored_dump = "{label} is in the local Docker, from {key}."
 restored_connect = "Connect: docker exec -it {container} psql -U {user} -d {db}  (or 127.0.0.1:{port})"
 restored_password = "Password of this local database: {password}"
+restored_roles = "Roles created without a password: {roles}. Set their passwords so the app can connect."
 restored_cleanup = "To remove it when done: docker rm -f -v {container} && docker volume rm {volume}"
 test_ok = "✓ {label}: {tables} tables, {rows} rows restored ({took})"
 test_panel_ok = "✓ panel: database, master key and manifest checked in {key} ({took})"

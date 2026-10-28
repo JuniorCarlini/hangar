@@ -457,6 +457,16 @@
       var doc = new DOMParser().parseFromString(html, 'text/html');
       var fresh = doc.getElementById('canvas');
       if (!fresh) return;
+      // A service appeared or went away (a restore into a new service,
+      // another tab): the cards and lines are laid out again, so the
+      // page reloads instead of patching cards.
+      var keys = function (root) {
+        return Array.prototype.map.call(root.querySelectorAll('.node-fo'), function (n) { return n.dataset.key; }).sort().join('\n');
+      };
+      if (keys(fresh) !== keys(svg)) {
+        location.reload();
+        return;
+      }
       fresh.querySelectorAll('.node-fo').forEach(function (nfo) {
         var fo = svg.querySelector('.node-fo[data-key="' + CSS.escape(nfo.dataset.key) + '"]');
         var cur = fo && fo.querySelector('.node'), next = nfo.querySelector('.node');

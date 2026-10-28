@@ -99,19 +99,21 @@ type BackupRecipient struct {
 }
 
 type BackupRestore struct {
-	ID          string
-	ServiceID   sql.NullString
-	Label       string
-	Mode        string
-	Point       string
-	Destination string
-	NewService  string
-	Status      string
-	Step        string
-	Error       sql.NullString
-	CreatedBy   sql.NullString
-	StartedAt   int64
-	FinishedAt  sql.NullInt64
+	ID           string
+	ServiceID    sql.NullString
+	Label        string
+	Mode         string
+	Point        string
+	Destination  string
+	NewService   string
+	Status       string
+	Step         string
+	Error        sql.NullString
+	CreatedBy    sql.NullString
+	StartedAt    int64
+	FinishedAt   sql.NullInt64
+	CreatedRoles string
+	Cleanup      string
 }
 
 type BackupRun struct {

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/backup/pgroles"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 )
 
@@ -48,6 +49,8 @@ type Restored struct {
 	Key       string // base or dump used
 	Target    time.Time
 	ToEnd     bool
+	// Roles are the roles a dump restore created without a password.
+	Roles []string
 }
 
 func randSuffix() string {
@@ -236,6 +239,9 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 	if err := v.waitSQL(ctx, r, "select 1", "1", 5*time.Minute); err != nil {
 		return r, err
 	}
+	if r.Roles, err = v.createRoles(ctx, key, r); err != nil {
+		return r, err
+	}
 	plain, err := archive.Open(rc, v.ids, archive.DefaultLimits)
 	if err != nil {
 		return r, err
@@ -246,6 +252,39 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 		return r, err
 	}
 	return r, nil
+}
+
+// createRoles creates in the fresh PostgreSQL the roles the dump's
+// permissions name (a pg_dump has no roles), without a password, so the
+// GRANTs and policies restore as they were (as the panel does).
+func (v *Vault) createRoles(ctx context.Context, key string, r Restored) ([]string, error) {
+	rc, _, err := v.Src.Open(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rc.Close() }()
+	plain, err := archive.Open(rc, v.ids, archive.DefaultLimits)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = plain.Close() }()
+	var schema bytes.Buffer
+	if err := v.Docker(ctx, plain, &schema, "exec", "-i", r.Container, "sh", "-c", `pg_restore --schema-only -f - ; s=$?; cat >/dev/null; exit $s`); err != nil {
+		return nil, fmt.Errorf("read the roles of the dump: %w", err)
+	}
+	roles, err := pgroles.FromScript(&schema)
+	if err != nil {
+		return nil, err
+	}
+	script, err := pgroles.CreateScript(roles)
+	if err != nil || script == "" {
+		return nil, err
+	}
+	var out bytes.Buffer
+	if err := v.Docker(ctx, strings.NewReader(script), &out, "exec", "-i", r.Container, "psql", "-qAtX", "-v", "ON_ERROR_STOP=1", "-U", r.User, "-d", r.DB, "-f", "-"); err != nil {
+		return nil, fmt.Errorf("create the roles of the dump: %w", err)
+	}
+	return pgroles.ParseCreated(out.String()), nil
 }
 
 // waitSQL waits until query answers want inside the container.

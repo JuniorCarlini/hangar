@@ -2099,6 +2099,7 @@ wal_lag = "{label}: o WAL está atrasado mais de 5 min. {error}"
 wal_restart = "{label}: o WAL contínuo foi ligado, mas o banco ainda não foi reiniciado (faça deploy)."
 wal_failing = "{label}: o Postgres não está conseguindo arquivar o WAL (disco cheio?)."
 target_error = "Destino {label}: o último teste falhou ({error})."
+restore_failed = "{label}: a última restauração falhou ({error})."
 
 [backups.rules]
 title = "Limpeza automática no bucket"
@@ -2283,6 +2284,11 @@ restore = "Restaurar"
 restores = "Restaurações"
 restore_to = "até {when}"
 restore_from_dump = "de um pg_dump"
+restore_from_service = "de {service}"
+restore_failed = "A restauração iniciada em {when} para {service} falhou. Nada foi restaurado."
+restore_roles = "Papéis criados sem senha: {roles}. Defina as senhas para o app conectar."
+restore_removed = "O serviço novo {service} foi removido. O original não foi alterado."
+restore_kept = "Não deu para remover o serviço novo {service}; apague-o nas configurações dele. O original não foi alterado."
 
 [svcbackup.step]
 queued = "na fila"
@@ -2408,6 +2414,7 @@ restored_end = "{label} está no Docker local, até o último minuto disponível
 restored_dump = "{label} está no Docker local, a partir de {key}."
 restored_connect = "Conecte: docker exec -it {container} psql -U {user} -d {db}  (ou 127.0.0.1:{port})"
 restored_password = "Senha deste banco local: {password}"
+restored_roles = "Papéis criados sem senha: {roles}. Defina as senhas para o app conectar."
 restored_cleanup = "Para apagar quando terminar: docker rm -f -v {container} && docker volume rm {volume}"
 test_ok = "✓ {label}: {tables} tabelas, {rows} linhas restauradas ({took})"
 test_panel_ok = "✓ painel: banco, chave mestra e manifesto conferidos em {key} ({took})"

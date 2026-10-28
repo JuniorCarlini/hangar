@@ -3,6 +3,7 @@ package backup
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
@@ -36,6 +37,13 @@ type fakeNode struct {
 	removed  []string
 	archive  string // what pg_stat_archiver answers
 	execs    []string
+	// The restore: what pg_restore --schema-only prints, the psql script
+	// it got and what it answered, and the error of the real pg_restore.
+	schemaSQL  string
+	script     string
+	created    []string
+	restoreErr error
+	restoreIn  []byte
 }
 
 func (f *fakeNode) EnsureEdge(context.Context, node.EdgeSpec) error            { return nil }
@@ -68,12 +76,30 @@ func (f *fakeNode) Exec(ctx context.Context, p, s string, cmd []string, w io.Wri
 	return f.ExecIO(ctx, p, s, cmd, nil, w)
 }
 
-func (f *fakeNode) ExecIO(_ context.Context, _, _ string, cmd []string, _ io.Reader, w io.Writer) error {
+func (f *fakeNode) ExecIO(_ context.Context, _, _ string, cmd []string, stdin io.Reader, w io.Writer) error {
+	var in []byte
+	if stdin != nil {
+		in, _ = io.ReadAll(stdin)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	full := strings.Join(cmd, " ")
 	f.execs = append(f.execs, full)
 	switch {
+	case strings.Contains(full, "pg_restore --schema-only"):
+		_, err := io.WriteString(w, f.schemaSQL)
+		return err
+	case strings.Contains(full, "psql -qAtX") && strings.Contains(full, "-f -"):
+		f.script = string(in)
+		for _, r := range f.created {
+			if _, err := io.WriteString(w, "HANGAR-NEW "+hex.EncodeToString([]byte(r))+"\n"); err != nil {
+				return err
+			}
+		}
+		return nil
+	case strings.Contains(full, "pg_restore"):
+		f.restoreIn = in
+		return f.restoreErr
 	case strings.Contains(full, "pg_dump"):
 		_, err := w.Write(f.dumpData)
 		return err

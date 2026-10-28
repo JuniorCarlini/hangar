@@ -375,6 +375,9 @@ func vaultCmd(ctx context.Context, cmd string, args []string, stdin io.Reader, s
 		if r.Password != "" {
 			fmt.Fprintln(stdout, tr("cofre.restored_password", "password", r.Password))
 		}
+		if len(r.Roles) > 0 {
+			fmt.Fprintln(stdout, tr("cofre.restored_roles", "roles", strings.Join(r.Roles, ", ")))
+		}
 		fmt.Fprintln(stdout, tr("cofre.restored_cleanup", "container", r.Container, "volume", r.Volume))
 		return nil
 	case "test":
