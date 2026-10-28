@@ -66,7 +66,7 @@ func (m *Manager) shipWAL(ctx context.Context, s svcRef) error {
 		status.LastError = WALArchiveFails
 	}
 
-	dir := pgwal.Outbox(s.DataPath)
+	dir := pgwal.Quote(pgwal.Outbox(s.DataPath))
 	var ls bytes.Buffer
 	if err := n.Exec(ctx, s.Project, s.Service, []string{"sh", "-c", "[ -d " + dir + " ] || exit 0; cd " + dir + " && ls -1"}, &ls); err != nil {
 		status.LastError = "ls: " + truncate(err.Error(), 300)

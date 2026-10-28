@@ -5,7 +5,11 @@
 // extra is installed in the database image and no key is ever inside it.
 package pgwal
 
-import "path"
+import (
+	"path"
+	"regexp"
+	"strings"
+)
 
 // OutboxName is the outbox directory, next to PGDATA in the data volume.
 const OutboxName = "hangar-wal"
@@ -16,13 +20,26 @@ const DataVolume = "data"
 // Outbox returns the outbox path for a data volume mounted at volumePath.
 func Outbox(volumePath string) string { return path.Join(volumePath, OutboxName) }
 
+var shellSafe = regexp.MustCompile(`^[A-Za-z0-9._/@%+=:,-]+$`)
+
+// Quote makes a path safe inside a shell command. Mount paths are chosen in
+// the panel and may hold spaces or ";": quoted, they stay one word and never
+// run as commands. An ordinary path comes back unchanged, so the database's
+// command (and its deploy hash) does not change for it.
+func Quote(p string) string {
+	if shellSafe.MatchString(p) {
+		return p
+	}
+	return "'" + strings.ReplaceAll(p, "'", `'\''`) + "'"
+}
+
 // Args are the server options appended to the "postgres" command while
 // archiving is on. archive_timeout=60 bounds the data at risk to about a
 // minute even when the database is quiet. A file already in the outbox
 // with the same content counts as archived (PostgreSQL may retry after a
 // crash); a different one fails loudly, as the PostgreSQL docs require.
 func Args(volumePath string) []string {
-	dir := Outbox(volumePath)
+	dir := Quote(Outbox(volumePath))
 	cmd := "mkdir -p " + dir + " && if [ -f " + dir + "/%f ]; then cmp -s %p " + dir + "/%f; " +
 		"else cp %p " + dir + "/%f.tmp && mv " + dir + "/%f.tmp " + dir + "/%f; fi"
 	return []string{
