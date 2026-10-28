@@ -41,8 +41,10 @@ func (m *Manager) githubToken(ctx context.Context, projectSlug, credID string) (
 }
 
 // GitHubRepos lists what the credential can read, most recently pushed
-// first.
-func (m *Manager) GitHubRepos(ctx context.Context, projectSlug, credID string) ([]gitsrc.GitHubRepo, error) {
+// first. fresh skips the cache: the token stays the same when its access is
+// widened on GitHub, so only the person knows the list changed (the dialog's
+// refresh button).
+func (m *Manager) GitHubRepos(ctx context.Context, projectSlug, credID string, fresh bool) ([]gitsrc.GitHubRepo, error) {
 	token, updated, err := m.githubToken(ctx, projectSlug, credID)
 	if err != nil {
 		return nil, err
@@ -50,7 +52,7 @@ func (m *Manager) GitHubRepos(ctx context.Context, projectSlug, credID string) (
 	m.reposMu.Lock()
 	c, ok := m.repos[credID]
 	m.reposMu.Unlock()
-	if ok && c.updated == updated && m.now().Sub(c.at) < reposTTL {
+	if !fresh && ok && c.updated == updated && m.now().Sub(c.at) < reposTTL {
 		return c.repos, nil
 	}
 	repos, err := gitsrc.GitHubRepos(ctx, token)

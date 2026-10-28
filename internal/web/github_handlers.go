@@ -19,14 +19,21 @@ type githubRepoJSON struct {
 	PushedAt      string `json:"pushed_at"`
 }
 
+// githubRepos answers the list; refresh=1 asks GitHub again. public_only
+// tells the dialog the token reads no private repository, the usual sign of
+// a token created without "Contents: Read-only" (or a classic one without
+// "repo"), so it can say how to fix it.
 func (h *handlers) githubRepos(w http.ResponseWriter, r *http.Request) {
-	repos, err := h.projects.GitHubRepos(r.Context(), r.PathValue("project"), r.URL.Query().Get("credential"))
+	q := r.URL.Query()
+	repos, err := h.projects.GitHubRepos(r.Context(), r.PathValue("project"), q.Get("credential"), q.Get("refresh") == "1")
 	if err != nil {
 		jsonError(w, r, err)
 		return
 	}
+	publicOnly := true
 	out := make([]githubRepoJSON, 0, len(repos))
 	for _, g := range repos {
+		publicOnly = publicOnly && !g.Private
 		pushed := ""
 		if !g.PushedAt.IsZero() {
 			pushed = g.PushedAt.UTC().Format(time.RFC3339)
@@ -36,7 +43,7 @@ func (h *handlers) githubRepos(w http.ResponseWriter, r *http.Request) {
 			DefaultBranch: g.DefaultBranch, URL: g.CloneURL, Language: g.Language, PushedAt: pushed,
 		})
 	}
-	writeJSON(w, r, map[string]any{"repos": out})
+	writeJSON(w, r, map[string]any{"repos": out, "public_only": publicOnly})
 }
 
 func (h *handlers) githubBranches(w http.ResponseWriter, r *http.Request) {

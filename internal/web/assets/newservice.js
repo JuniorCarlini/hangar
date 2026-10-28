@@ -148,17 +148,21 @@
       else if (!shown.length) setStatus(mine.dataset.none);
       else setStatus(mine.dataset.count.replace('{n}', String(repos.length)));
     };
-    var load = function () {
+    var publicOnly = mine.querySelector('[data-myrepos-public-only]');
+    // fresh asks GitHub again: widening a token's access on GitHub keeps the
+    // same token, so the panel's few-minute cache would still show the old list.
+    var load = function (fresh) {
       var cred = credSel.value;
-      if (loadedFor === cred) return;
+      if (fresh !== true && loadedFor === cred) return;
       loadedFor = cred;
       repos = [];
       list.textContent = '';
       setError('');
+      publicOnly.hidden = true;
       setStatus(mine.dataset.loading);
-      fetch(mine.dataset.url + '?credential=' + encodeURIComponent(cred), { credentials: 'same-origin' })
+      fetch(mine.dataset.url + '?credential=' + encodeURIComponent(cred) + (fresh === true ? '&refresh=1' : ''), { credentials: 'same-origin' })
         .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || mine.dataset.failed); return j; }); })
-        .then(function (j) { if (loadedFor !== cred) return; repos = j.repos || []; render(); })
+        .then(function (j) { if (loadedFor !== cred) return; repos = j.repos || []; publicOnly.hidden = !j.public_only; render(); })
         .catch(function (err) { if (loadedFor !== cred) return; loadedFor = null; setError(err.message || mine.dataset.failed); });
     };
     var out = function (k, v) { repoDlg.querySelectorAll('[data-repo-out="' + k + '"]').forEach(function (n) { n.textContent = v || '—'; }); };
@@ -193,6 +197,7 @@
       openDialog(repoDlg);
     };
     ['change', 'tucano:change'].forEach(function (ev) { credSel.addEventListener(ev, load); });
+    mine.querySelector('[data-myrepos-refresh]').addEventListener('click', function () { load(true); });
     search.addEventListener('input', render);
     var tab = dlg.querySelector('[data-gh-tab]');
     if (tab) tab.addEventListener('click', load);

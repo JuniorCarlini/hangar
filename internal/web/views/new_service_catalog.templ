@@ -308,7 +308,18 @@ templ myReposTab(d NewServiceData) {
 						</button>
 					</span>
 				</div>
-				<span class="text-xs text-muted" data-myrepos-status>{ t(ctx, "myrepos.scope_hint") }</span>
+				<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+					<span class="text-xs text-muted" data-myrepos-status>{ t(ctx, "myrepos.scope_hint") }</span>
+					<button type="button" class="tuc-btn is-ghost is-sm" data-myrepos-refresh title={ t(ctx, "myrepos.refresh_hint") }>
+						@Icon("refresh-cw", "size-3.5")
+						{ t(ctx, "myrepos.refresh") }
+					</button>
+				</div>
+				// The token reads no private repository: usually a token made
+				// without "Contents: Read-only" (assets/newservice.js shows it).
+				<div data-myrepos-public-only hidden>
+					@notice("info", "key-round", t(ctx, "myrepos.public_only"))
+				</div>
 				// When GitHub refuses the credential (expired, revoked) or cannot
 				// be reached: the same block as having no credential, with the
 				// reason (assets/newservice.js fills and shows it).

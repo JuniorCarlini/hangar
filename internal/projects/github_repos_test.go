@@ -36,14 +36,14 @@ func TestGitHubReposScopeAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := g.m.GitHubRepos(ctx, "lab", other.ID); errKey(err) != "gitcred.error.gone" {
+	if _, err := g.m.GitHubRepos(ctx, "lab", other.ID, false); errKey(err) != "gitcred.error.gone" {
 		t.Errorf("other project's credential listed: %v", err)
 	}
 	gl, err := g.m.CreateGitCredential(ctx, g.who, GitCredentialInput{Name: "GitLab", Host: "gitlab.com", Token: "glpat-xxxxxxxxxxxx"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := g.m.GitHubRepos(ctx, "lab", gl.ID); errKey(err) != "gitcred.error.host_mismatch" {
+	if _, err := g.m.GitHubRepos(ctx, "lab", gl.ID, false); errKey(err) != "gitcred.error.host_mismatch" {
 		t.Errorf("a GitLab token was sent to GitHub: %v", err)
 	}
 	if calls.Load() != 0 {
@@ -55,7 +55,7 @@ func TestGitHubReposScopeAndCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 3 {
-		repos, err := g.m.GitHubRepos(ctx, "lab", srvCred.ID)
+		repos, err := g.m.GitHubRepos(ctx, "lab", srvCred.ID, false)
 		if err != nil || len(repos) != 1 || repos[0].FullName != "dono/loja" {
 			t.Fatalf("repos = %+v, %v", repos, err)
 		}
@@ -63,12 +63,16 @@ func TestGitHubReposScopeAndCache(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Errorf("cache: GitHub called %d times", calls.Load())
 	}
+	// Refresh asks GitHub again (the token's access may have grown there).
+	if _, err := g.m.GitHubRepos(ctx, "lab", srvCred.ID, true); err != nil || calls.Load() != 2 {
+		t.Errorf("refresh: %v, GitHub called %d times", err, calls.Load())
+	}
 	// A new token drops the cache, and a refused one says so.
 	g.m.now = func() time.Time { return time.Now().Add(time.Second) }
 	if err := g.m.ReplaceGitCredentialToken(ctx, g.who, srvCred.ID, "github_pat_revoked000"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := g.m.GitHubRepos(ctx, "lab", srvCred.ID); errKey(err) != "github.error.token" {
+	if _, err := g.m.GitHubRepos(ctx, "lab", srvCred.ID, false); errKey(err) != "github.error.token" {
 		t.Errorf("revoked token: %v", err)
 	}
 }

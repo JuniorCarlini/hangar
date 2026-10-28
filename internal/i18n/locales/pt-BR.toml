@@ -2800,6 +2800,9 @@ admin = "Admin"
 other = "Outros"
 
 [myrepos]
+refresh = "Atualizar lista"
+refresh_hint = "Buscar de novo no GitHub (depois de mudar o acesso do token)"
+public_only = "Este token só enxerga repositórios públicos. Para ver os privados, no GitHub dê a ele a permissão Contents: Read-only (token fine-grained) ou o escopo repo (token clássico) e clique em Atualizar lista."
 new_cred = "Nova credencial"
 no_cred = "Adicione uma credencial do GitHub para ver aqui os seus repositórios. Token da conta inteira lista todos; token de um repositório lista só ele."
 add_cred = "Adicionar credencial"
