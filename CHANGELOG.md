@@ -12,14 +12,26 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.25] - 2026-10-28
+
 ### Adicionado
 
 - **Valor de cada ponto nos gráficos**: ao passar o mouse (ou o dedo) pelos
   gráficos de CPU, memória e rede, da visão geral e da aba Visão do
   serviço, aparece um cartãozinho com a hora daquela barra e o valor dela;
   na barra mais alta, o cartão avisa que ali foi o pico do período. Com o
-  gráfico focado, as setas
-  andam de barra em barra.
+  gráfico focado, as setas andam de barra em barra.
+
+### Corrigido
+
+- **Backblaze B2 aceito como destino**: o teste do destino recusava toda
+  chave do B2 dizendo que ela "consegue apagar", porque no B2 qualquer chave
+  que grava pode esconder um arquivo (marcador de exclusão), o que não apaga
+  nada da versão travada. O teste agora tenta apagar uma versão de verdade,
+  e só isso reprova a chave.
+- **Novo serviço → Meus repositórios**: o botão "Nova credencial" saiu
+  (credencial se cria na tela de credenciais) e "Atualizar lista" foi para
+  o lugar dele.
 
 ## [0.5.24] - 2026-10-28
 
@@ -724,7 +736,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.24...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.25...HEAD
+[0.5.25]: https://github.com/JuniorCarlini/hangar/compare/v0.5.24...v0.5.25
 [0.5.24]: https://github.com/JuniorCarlini/hangar/compare/v0.5.23...v0.5.24
 [0.5.23]: https://github.com/JuniorCarlini/hangar/compare/v0.5.22...v0.5.23
 [0.5.22]: https://github.com/JuniorCarlini/hangar/compare/v0.5.21...v0.5.22
