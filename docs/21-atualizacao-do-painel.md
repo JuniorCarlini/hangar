@@ -31,7 +31,9 @@ madrugada". Vem desligado.
 ```
  hangard (usuário hangar, sem privilégio)          hangar-updater (root, só isto)
  ─────────────────────────────────────────          ─────────────────────────────
- 1. a cada 6 h consulta as releases do GitHub
+ 1. a cada ~10 min vê a última release (um redirect
+    sem corpo, fora da API) e confere a assinatura
+    do release.json de cada versão nova uma vez
  2. clique + sudo → baixa binário + release.json + release.json.sig
     + assinatura para /var/lib/hangar/update/
  3. confere assinatura e checksum

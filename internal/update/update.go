@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
@@ -43,6 +44,9 @@ const (
 type Config struct {
 	Repo    string // "JuniorCarlini/hangar"
 	APIBase string // "https://api.github.com"
+	// WebBase serves the release downloads ("https://github.com"); empty =
+	// derived from APIBase (the same server outside GitHub, as in tests).
+	WebBase string
 	Token   string // needed while the repository is private
 	Dir     string // data_dir/update
 	// Applier: the root applier (hangar-updater.path) watches Dir. Without
@@ -85,10 +89,32 @@ type Checker struct {
 	cfg     Config
 	current string
 	http    *http.Client
+	// probe does not follow redirects: the background lookup only reads
+	// where GitHub's "latest download" link points (see latestTag).
+	probe *http.Client
 
 	mu     sync.Mutex
 	latest *Available
 	err    error
+	// What the background schedule needs (schedule.go): when the last
+	// lookup ran, how many failed in a row, and until when GitHub asked us
+	// to wait (rate limit).
+	lastAttempt time.Time
+	failures    int
+	retryAt     time.Time
+	// The last good answer of releases/latest and its validators: the next
+	// lookup is a conditional request, and a 304 reuses this.
+	cached       *ghRelease
+	etag         string
+	lastModified string
+	// verified is the newer version whose signed manifest was checked, so
+	// the background lookup verifies each release once.
+	verified *Available
+
+	// fetch is held while a lookup runs: a click and the schedule never
+	// query at the same time, and a page visit does not start a second one.
+	fetch    sync.Mutex
+	checking atomic.Bool
 
 	// staging is held while a version downloads, so a second click on the
 	// button cannot download into the same directory meanwhile.
@@ -97,9 +123,19 @@ type Checker struct {
 
 // NewChecker creates the checker for the running version.
 func NewChecker(cfg Config, current string) *Checker {
+	if cfg.WebBase == "" {
+		cfg.WebBase = cfg.APIBase
+		if strings.TrimRight(cfg.APIBase, "/") == "https://api.github.com" {
+			cfg.WebBase = "https://github.com"
+		}
+	}
 	return &Checker{
 		cfg: cfg, current: current,
 		http: &http.Client{Timeout: 2 * time.Minute},
+		probe: &http.Client{
+			Timeout:       30 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 	}
 }
 
@@ -149,53 +185,224 @@ type ghAsset struct {
 	Size int64  `json:"size"`
 }
 
-// Check looks up the latest stable release.
+// Check looks up the latest stable release now (the "check now" button and
+// the schedule in Run).
 func (c *Checker) Check(ctx context.Context) (*Available, error) {
-	rel, err := c.latestRelease(ctx)
+	c.fetch.Lock()
+	defer c.fetch.Unlock()
+	return c.check(ctx)
+}
+
+// check runs one lookup; the caller holds c.fetch.
+func (c *Checker) check(ctx context.Context) (*Available, error) {
+	c.checking.Store(true)
+	defer c.checking.Store(false)
+	av, err := c.lookup(ctx)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// On failure the newer version found before stays known: a flaky
+	// network must not make the sidebar badge blink.
 	if err == nil {
-		var newer bool
-		newer, err = release.IsUpgrade(c.current, rel.TagName)
-		c.mu.Lock()
-		c.latest = nil
-		if err == nil && newer {
-			c.latest = &Available{Version: rel.TagName, Notes: truncate(rel.Body, 4000), URL: rel.HTMLURL, CheckedAt: time.Now()}
+		c.latest = av
+	}
+	c.err = err
+	c.attempted(err)
+	return av, err
+}
+
+// lookup finds the newer stable version, if any.
+//
+// Without a token (a public repository) it costs one small request outside
+// the API and its rate limit: where the "latest download" link redirects to
+// names the tag. Only a tag newer than the running version is looked at
+// further, once: its signed manifest is downloaded and verified (the badge
+// never announces an unsigned release) and the API gives the notes.
+//
+// With a token (a private repository, whose download links need the API)
+// it asks the API, conditionally: an unchanged answer is a 304 that an
+// authenticated request does not count.
+func (c *Checker) lookup(ctx context.Context) (*Available, error) {
+	if c.cfg.Token != "" {
+		rel, err := c.latestRelease(ctx)
+		if err != nil {
+			return nil, err
 		}
-		c.err = err
-		latest := c.latest
-		c.mu.Unlock()
-		return latest, err
+		if newer, err := release.IsUpgrade(c.current, rel.TagName); err != nil || !newer {
+			return nil, err
+		}
+		return &Available{Version: rel.TagName, Notes: truncate(rel.Body, 4000), URL: rel.HTMLURL, CheckedAt: time.Now()}, nil
+	}
+	tag, err := c.latestTag(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if newer, err := release.IsUpgrade(c.current, tag); err != nil || !newer {
+		return nil, err
 	}
 	c.mu.Lock()
-	c.err = err
+	known := c.verified
 	c.mu.Unlock()
-	return nil, err
-}
-
-// Run checks every interval until ctx ends.
-func (c *Checker) Run(ctx context.Context, every time.Duration, onErr func(error)) {
-	t := time.NewTicker(every)
-	defer t.Stop()
-	for {
-		if _, err := c.Check(ctx); err != nil && onErr != nil {
-			onErr(err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
+	if known != nil && known.Version == tag {
+		av := *known
+		av.CheckedAt = time.Now()
+		return &av, nil
+	}
+	if err := c.verifyTag(ctx, tag); err != nil {
+		return nil, err
+	}
+	av := &Available{Version: tag, URL: c.webURL("releases/tag/" + url.PathEscape(tag)), CheckedAt: time.Now()}
+	// The notes are a nicety: without them (API rate limit) the version is
+	// still shown.
+	if rel, err := c.latestRelease(ctx); err == nil && rel.TagName == tag {
+		av.Notes = truncate(rel.Body, 4000)
+		if rel.HTMLURL != "" {
+			av.URL = rel.HTMLURL
 		}
 	}
+	c.mu.Lock()
+	c.verified = av
+	c.mu.Unlock()
+	return av, nil
 }
 
+// webURL is a page or download of the repository on GitHub's web side.
+func (c *Checker) webURL(path string) string {
+	return strings.TrimRight(c.cfg.WebBase, "/") + "/" + c.cfg.Repo + "/" + path
+}
+
+// latestTag reads the tag of the latest stable release from where
+// "releases/latest/download/release.json" redirects to
+// (".../releases/download/<tag>/release.json"), without following it: a
+// bodyless 302 from github.com. GitHub sends no validator for it (no ETag,
+// Cache-Control: no-cache), so it cannot be made conditional; it is already
+// the smallest answer there is.
+func (c *Checker) latestTag(ctx context.Context) (string, error) {
+	req, err := c.newRequest(ctx, c.webURL("releases/latest/download/release.json"), "*/*")
+	if err != nil {
+		return "", err
+	}
+	req.Header.Del("X-GitHub-Api-Version")
+	resp, err := c.probe.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("query releases: %w", err)
+	}
+	_ = resp.Body.Close()
+	switch resp.StatusCode {
+	case http.StatusFound, http.StatusMovedPermanently, http.StatusSeeOther, http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+	default:
+		if until := rateLimitedUntil(resp.StatusCode, resp.Header, time.Now()); !until.IsZero() {
+			c.mu.Lock()
+			c.retryAt = until
+			c.mu.Unlock()
+		}
+		return "", i18n.E("update.error.http", "host", req.URL.Host, "status", resp.StatusCode)
+	}
+	loc, err := resp.Location()
+	if err != nil {
+		return "", fmt.Errorf("latest release redirect: %w", err)
+	}
+	tag, ok := tagFromDownload(loc.EscapedPath())
+	if !ok {
+		return "", fmt.Errorf("latest release redirect: unexpected location %q", loc.Path)
+	}
+	return tag, nil
+}
+
+// tagFromDownload takes the tag out of a ".../releases/download/<tag>/<file>"
+// path.
+func tagFromDownload(p string) (string, bool) {
+	_, rest, ok := strings.Cut(p, "/releases/download/")
+	if !ok {
+		return "", false
+	}
+	tag, _, ok := strings.Cut(rest, "/")
+	if !ok || tag == "" {
+		return "", false
+	}
+	tag, err := url.PathUnescape(tag)
+	if err != nil {
+		return "", false
+	}
+	if _, err := release.ParseVersion(tag); err != nil {
+		return "", false
+	}
+	return tag, true
+}
+
+// verifyTag downloads the signed manifest of tag and checks it: the
+// signature and that it names that version. Stage verifies everything again
+// before anything is applied.
+func (c *Checker) verifyTag(ctx context.Context, tag string) error {
+	base := "releases/download/" + url.PathEscape(tag) + "/"
+	manifest, err := c.get(ctx, c.webURL(base+"release.json"), "application/octet-stream", maxManifestBytes)
+	if err != nil {
+		return err
+	}
+	sig, err := c.get(ctx, c.webURL(base+"release.json.sig"), "application/octet-stream", maxManifestBytes)
+	if err != nil {
+		return err
+	}
+	m, err := release.VerifyManifest(manifest, string(sig))
+	if err != nil {
+		return err
+	}
+	if m.Version != tag {
+		return i18n.E("update.error.manifest_version", "manifest", m.Version, "requested", tag)
+	}
+	return nil
+}
+
+// latestRelease asks GitHub for the latest release. It is a conditional
+// request (ETag / Last-Modified of the previous answer): while nothing was
+// released GitHub answers 304 with no body, which an authenticated request
+// does not even count against the rate limit.
 func (c *Checker) latestRelease(ctx context.Context) (ghRelease, error) {
 	u := strings.TrimRight(c.cfg.APIBase, "/") + "/repos/" + c.cfg.Repo + "/releases/latest"
 	var rel ghRelease
-	body, err := c.get(ctx, u, "application/vnd.github+json", maxManifestBytes)
+	req, err := c.newRequest(ctx, u, "application/vnd.github+json")
 	if err != nil {
 		return rel, err
 	}
-	if err := json.Unmarshal(body, &rel); err != nil {
-		return rel, fmt.Errorf("GitHub response: %w", err)
+	c.mu.Lock()
+	cached := c.cached
+	if cached != nil {
+		if c.etag != "" {
+			req.Header.Set("If-None-Match", c.etag)
+		}
+		if c.lastModified != "" {
+			req.Header.Set("If-Modified-Since", c.lastModified)
+		}
+	}
+	c.mu.Unlock()
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return rel, fmt.Errorf("query releases: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch {
+	case resp.StatusCode == http.StatusNotModified && cached != nil:
+		rel = *cached
+	case resp.StatusCode == http.StatusOK:
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxManifestBytes+1))
+		if err != nil {
+			return rel, err
+		}
+		if int64(len(body)) > maxManifestBytes {
+			return rel, fmt.Errorf("response from %s exceeds the limit", u)
+		}
+		if err := json.Unmarshal(body, &rel); err != nil {
+			return rel, fmt.Errorf("GitHub response: %w", err)
+		}
+		c.mu.Lock()
+		c.cached, c.etag, c.lastModified = &rel, resp.Header.Get("ETag"), resp.Header.Get("Last-Modified")
+		c.mu.Unlock()
+	default:
+		if until := rateLimitedUntil(resp.StatusCode, resp.Header, time.Now()); !until.IsZero() {
+			c.mu.Lock()
+			c.retryAt = until
+			c.mu.Unlock()
+		}
+		return rel, i18n.E("update.error.http", "host", req.URL.Host, "status", resp.StatusCode)
 	}
 	if rel.Draft || rel.Prerelease {
 		return rel, i18n.E("update.error.not_stable")
@@ -356,6 +563,23 @@ func (c *Checker) download(ctx context.Context, u, dest string) error {
 }
 
 func (c *Checker) do(ctx context.Context, u, accept string) (*http.Response, error) {
+	req, err := c.newRequest(ctx, u, accept)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("query releases: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		_ = resp.Body.Close()
+		return nil, i18n.E("update.error.http", "host", req.URL.Host, "status", resp.StatusCode)
+	}
+	return resp, nil
+}
+
+// newRequest is a GET to GitHub with the headers every call sends.
+func (c *Checker) newRequest(ctx context.Context, u, accept string) (*http.Request, error) {
 	if _, err := url.Parse(u); err != nil {
 		return nil, err
 	}
@@ -371,15 +595,7 @@ func (c *Checker) do(ctx context.Context, u, accept string) (*http.Response, err
 		// real download comes from objects.githubusercontent.com).
 		req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
 	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("query releases: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		return nil, i18n.E("update.error.http", "host", req.URL.Host, "status", resp.StatusCode)
-	}
-	return resp, nil
+	return req, nil
 }
 
 // writeFileAtomic writes through a fresh temporary file and a rename. The

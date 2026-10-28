@@ -539,6 +539,7 @@ type fakeUpdates struct {
 	available *update.Available
 	staged    string
 	noApplier bool
+	checking  bool
 }
 
 func (f *fakeUpdates) CanApply() bool { return !f.noApplier }
@@ -546,6 +547,9 @@ func (f *fakeUpdates) CanApply() bool { return !f.noApplier }
 func (f *fakeUpdates) Current() string                                  { return f.current }
 func (f *fakeUpdates) Latest() (*update.Available, error)               { return f.available, nil }
 func (f *fakeUpdates) Check(context.Context) (*update.Available, error) { return f.available, nil }
+func (f *fakeUpdates) CheckSoon(time.Duration) bool                     { return false }
+func (f *fakeUpdates) Checking() bool                                   { return f.checking }
+func (f *fakeUpdates) LastCheck() time.Time                             { return time.Time{} }
 func (f *fakeUpdates) Stage(_ context.Context, version, _ string) error {
 	f.staged = version
 	return nil
@@ -569,6 +573,63 @@ func TestUpdatePageRequiresOwnerAndSudo(t *testing.T) {
 	})
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("update without sudo: status %d, want 403", rec.Code)
+	}
+}
+
+// navUpdateBadge reports whether the sidebar's "Update Hangar" item carries
+// the count badge.
+func navUpdateBadge(html string) bool {
+	for _, part := range strings.Split(html, `href="/update"`)[1:] {
+		item, _, _ := strings.Cut(part, "</a>")
+		if strings.Contains(item, `<span class="tuc-badge is-danger is-plain">1</span>`) {
+			return true
+		}
+	}
+	return false
+}
+
+// A newer version puts the same red badge as "Updates" on "Update Hangar",
+// on every page, for the owner only (the only one who reaches /update).
+func TestNavUpdateBadge(t *testing.T) {
+	for _, tc := range []struct {
+		role      auth.Role
+		available bool
+		want      bool
+	}{
+		{auth.RoleOwner, true, true},
+		{auth.RoleOwner, false, false},
+		{auth.RoleAdmin, true, false},
+	} {
+		e := newEnv(t)
+		if tc.available {
+			e.upd.available = &update.Available{Version: "v1.1.0"}
+		}
+		e.createUser(t, tc.role)
+		session := e.login(t)
+		rec := e.do(req{method: "GET", target: "/domains", cookies: []*http.Cookie{session}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%v: status %d", tc.role, rec.Code)
+		}
+		if got := navUpdateBadge(rec.Body.String()); got != tc.want {
+			t.Errorf("%v, available=%v: badge = %v, want %v", tc.role, tc.available, got, tc.want)
+		}
+	}
+}
+
+// While a lookup runs the status card says so and refreshes itself.
+func TestUpdatePageRefreshesWhileChecking(t *testing.T) {
+	e := newEnv(t)
+	e.createUser(t, auth.RoleOwner)
+	session := e.login(t)
+	e.upd.checking = true
+	body := e.do(req{method: "GET", target: "/update", cookies: []*http.Cookie{session}}).Body.String()
+	if !strings.Contains(body, `id="update-status"`) || !strings.Contains(body, `data-refresh="5"`) || !strings.Contains(body, "Consultando o GitHub") {
+		t.Fatal("checking: the status card does not refresh itself")
+	}
+	e.upd.checking = false
+	body = e.do(req{method: "GET", target: "/update", cookies: []*http.Cookie{session}}).Body.String()
+	if strings.Contains(body, "data-refresh") {
+		t.Fatal("idle: the page still refreshes itself")
 	}
 }
 

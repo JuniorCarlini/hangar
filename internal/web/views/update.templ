@@ -22,6 +22,21 @@ type UpdateData struct {
 	History []UpdateStatus
 	Flash      string
 	FlashError bool
+	// Checking: a lookup runs in the background (opening the page starts
+	// one when the last is old); the status card refreshes itself until it
+	// is done.
+	Checking bool
+	// LastCheck is when the panel last looked ("15:04"; empty = never).
+	LastCheck string
+}
+
+// updateRefresh makes the status card refresh itself (ui.js,
+// data-refresh/data-live) while a lookup runs.
+func updateRefresh(d UpdateData) templ.Attributes {
+	if d.Checking {
+		return templ.Attributes{"data-refresh": "5"}
+	}
+	return templ.Attributes{}
 }
 
 // UpdateStatus is the result of one update.
@@ -68,7 +83,7 @@ templ Update(d UpdateData) {
 					</div>
 				</section>
 			} else if d.Available != "" {
-				<section class={ cardClass }>
+				<section class={ cardClass } id="update-status" data-live { updateRefresh(d)... }>
 					@cardHead(t(ctx, "update.available", "version", d.Available)) {
 						if d.ReleaseURL != "" {
 							<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(d.ReleaseURL) } rel="noopener noreferrer" target="_blank">
@@ -118,7 +133,7 @@ templ Update(d UpdateData) {
 					</div>
 				</section>
 			} else {
-				<section class={ cardClass }>
+				<section class={ cardClass } id="update-status" data-live { updateRefresh(d)... }>
 					@cardHead(t(ctx, "update.up_to_date")) {
 						<form method="post" action="/update/check">
 							<input type="hidden" name="csrf" value={ d.CSRF }/>
@@ -134,8 +149,13 @@ templ Update(d UpdateData) {
 								@Icon("check", "size-3")
 								{ d.Current }
 							</span>
-							if d.CheckError != "" {
+							if d.Checking {
+								<span class="tuc-spinner" aria-hidden="true"></span>
+								<span class="text-[13px] text-muted" aria-live="polite">{ t(ctx, "update.checking") }</span>
+							} else if d.CheckError != "" {
 								<span class="text-[13px] text-muted">{ t(ctx, "update.check_failed", "error", d.CheckError) }</span>
+							} else if d.LastCheck != "" {
+								<span class="text-[13px] text-muted">{ t(ctx, "update.check_interval") } { t(ctx, "update.last_check", "time", d.LastCheck) }</span>
 							} else {
 								<span class="text-[13px] text-muted">{ t(ctx, "update.check_interval") }</span>
 							}

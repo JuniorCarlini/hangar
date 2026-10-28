@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +38,25 @@ type fakeRelease struct {
 	binary   []byte
 	manifest []byte
 	sig      string
+	hits     *fakeHits // set by fakeGitHub
+}
+
+// fakeHits counts what fakeGitHub served, by route.
+type fakeHits struct {
+	mu sync.Mutex
+	n  map[string]int
+}
+
+func (h *fakeHits) add(k string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.n[k]++
+}
+
+func (h *fakeHits) get(k string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.n[k]
 }
 
 func signedRelease(t *testing.T, priv ed25519.PrivateKey, version string, binary []byte) fakeRelease {
@@ -48,34 +68,51 @@ func signedRelease(t *testing.T, priv ed25519.PrivateKey, version string, binary
 	return fakeRelease{version: version, binary: binary, manifest: m, sig: release.Sign(m, priv)}
 }
 
-// fakeGitHub mimics the releases API.
+// fakeGitHub mimics the releases API (with ETag) and the web side's
+// download links (the "latest" one redirects to the tag's).
 func fakeGitHub(t *testing.T, rel *fakeRelease) *httptest.Server {
 	t.Helper()
+	rel.hits = &fakeHits{n: map[string]int{}}
 	var srv *httptest.Server
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /repos/JuniorCarlini/hangar/releases/latest", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("GET /repos/JuniorCarlini/hangar/releases/latest", func(w http.ResponseWriter, r *http.Request) {
+		etag := `W/"` + rel.version + `"`
+		if r.Header.Get("If-None-Match") == etag {
+			rel.hits.add("api304")
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		rel.hits.add("api")
 		asset := func(name string) map[string]any {
 			return map[string]any{"name": name, "url": srv.URL + "/assets/" + name}
 		}
+		w.Header().Set("ETag", etag)
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"tag_name": rel.version, "body": "novidades", "html_url": "https://github.com/x",
 			"assets": []any{asset("release.json"), asset("release.json.sig"), asset(release.AssetName(runtime.GOARCH))},
 		})
 	})
-	mux.HandleFunc("GET /assets/{name}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /JuniorCarlini/hangar/releases/latest/download/{name}", func(w http.ResponseWriter, r *http.Request) {
+		rel.hits.add("probe")
+		http.Redirect(w, r, "/JuniorCarlini/hangar/releases/download/"+rel.version+"/"+r.PathValue("name"), http.StatusFound)
+	})
+	serve := func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "application/octet-stream" {
 			http.Error(w, "accept", http.StatusBadRequest)
 			return
 		}
 		switch r.PathValue("name") {
 		case "release.json":
+			rel.hits.add("manifest")
 			_, _ = w.Write(rel.manifest)
 		case "release.json.sig":
 			_, _ = w.Write([]byte(rel.sig))
 		default:
 			_, _ = w.Write(rel.binary)
 		}
-	})
+	}
+	mux.HandleFunc("GET /assets/{name}", serve)
+	mux.HandleFunc("GET /JuniorCarlini/hangar/releases/download/{tag}/{name}", serve)
 	srv = httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv

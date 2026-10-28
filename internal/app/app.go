@@ -336,7 +336,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 	sp.SetAlerts(am)
 	go am.Run(ctx, 10*time.Second)
 	go alerts.WatchListeners(ctx, time.Minute, "/proc", expectedPorts(cfg, pm), al, log)
-	go checker.Run(ctx, 6*time.Hour, func(err error) { log.Warn("check for new version", "error", err) })
+	go checker.Run(ctx, update.DefaultSchedule, func(err error) { log.Warn("check for new version", "error", err) })
 	go bm.Run(ctx)
 	if cfg.Templates.Sync {
 		go tplSync.Run(ctx)

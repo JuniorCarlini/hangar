@@ -20,11 +20,21 @@ type updates interface {
 	Current() string
 	Latest() (*update.Available, error)
 	Check(ctx context.Context) (*update.Available, error)
+	CheckSoon(maxAge time.Duration) bool
+	Checking() bool
+	LastCheck() time.Time
 	Stage(ctx context.Context, version, requestedBy string) error
 	CanApply() bool
 }
 
+// updateStale: opening the update page looks again (in the background)
+// when the last lookup is older than this.
+const updateStale = 3 * time.Minute
+
 func (h *handlers) updatePage(w http.ResponseWriter, r *http.Request) {
+	// The page shows "checking" and refreshes itself until the answer is in
+	// (data-refresh), so nobody has to click "check now".
+	h.updates.CheckSoon(updateStale)
 	h.renderUpdate(w, r, http.StatusOK, "", false)
 }
 
@@ -45,6 +55,10 @@ func (h *handlers) renderUpdate(w http.ResponseWriter, r *http.Request, status i
 		SudoActive: p.SudoFor(auth.SudoStrict, time.Now()),
 		Flash:      flash,
 		FlashError: flashErr,
+		Checking:   h.updates.Checking(),
+	}
+	if at := h.updates.LastCheck(); !at.IsZero() {
+		d.LastCheck = at.Local().Format("15:04")
 	}
 	if av, err := h.updates.Latest(); av != nil {
 		d.Available, d.Notes, d.ReleaseURL = av.Version, av.Notes, av.URL

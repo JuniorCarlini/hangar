@@ -502,7 +502,9 @@ apply = "Update to {version}"
 sudo_label = "Confirm with your authenticator code to update"
 up_to_date = "All up to date"
 check_failed = "Could not check for versions right now: {error}"
-check_interval = "The panel checks for new versions every 6 hours."
+check_interval = "The panel checks for new versions on its own every 10 minutes."
+checking = "Checking GitHub for new versions…"
+last_check = "Last checked at {time}."
 check_now = "Check now"
 
 [update.state]
