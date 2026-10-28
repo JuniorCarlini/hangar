@@ -1082,6 +1082,8 @@ disk_other = "System and other"
 disk_used = "In use"
 disk_free = "Free"
 net_peak = "peak ↓{down} ↑{up} {unit} in the period"
+chart_label = "{name}: history over the period. Use the arrow keys to see each point."
+chart_peak = "peak of the period"
 uptime_days = { one = "up 1 day", other = "up {n} days" }
 uptime_hours = { one = "up 1 h", other = "up {n} h" }
 no_services = "No Hangar container is running right now."

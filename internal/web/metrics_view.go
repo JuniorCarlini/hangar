@@ -120,6 +120,45 @@ func netHist(points []metrics.Point) (h []int, peakRx, peakTx float64) {
 	return hist(points, func(p metrics.Point) float64 { return p.Rx + p.Tx }, top), peakRx, peakTx
 }
 
+// memTip is a memory bar's reading: "5% · 1,2 GB".
+func memTip(ctx context.Context, used, total uint64) string {
+	return strconv.Itoa(pct(used, total)) + "% · " + fmtBytes(ctx, used)
+}
+
+// netTip is a network bar's reading: "↓1,3 ↑20,6 KB/s".
+func netTip(ctx context.Context, p metrics.Point) string {
+	down, up, unit := ratePair(ctx, p.Rx, p.Tx)
+	return "↓" + down + " ↑" + up + " " + unit
+}
+
+// sparkTips is what a history chart's hover card says about each bar
+// (ui.js): when its window starts and its reading, formatted by text. It
+// lines up with what hist returns (the same leading gaps moved to the end),
+// and the peak is the bar where weight is highest.
+func sparkTips(points []metrics.Point, step time.Duration, text func(metrics.Point) string, weight func(metrics.Point) float64) views.SparkTips {
+	t := views.SparkTips{At: make([]int64, len(points)), Text: make([]string, len(points)), Step: int64(step / time.Second), Peak: -1}
+	top := math.Inf(-1)
+	for i, p := range points {
+		if p.At.IsZero() {
+			continue
+		}
+		t.At[i], t.Text[i] = p.At.Unix(), text(p)
+		if w := weight(p); w > top {
+			top, t.Peak = w, i
+		}
+	}
+	n := 0
+	for n < len(points) && points[n].At.IsZero() {
+		n++
+	}
+	if n == 0 || n == len(points) {
+		return t
+	}
+	t.At, t.Text = slices.Concat(t.At[n:], t.At[:n]), slices.Concat(t.Text[n:], t.Text[:n])
+	t.Peak -= n
+	return t
+}
+
 func pct(used, total uint64) int {
 	if total == 0 {
 		return 0
@@ -356,5 +395,16 @@ func (h *handlers) serviceMetrics(r *http.Request, s dbq.Service, hasDisk bool) 
 	m.NetHist, rx, tx = netHist(pts)
 	down, up, unit := ratePair(ctx, rx, tx)
 	m.NetNote = i18n.T(ctx, "overview.net_peak", "down", down, "up", up, "unit", unit)
+	// CPU reads against the service's limit, like its bars, with the cores
+	// it used next to it.
+	step := period.Step()
+	m.CPUTips = sparkTips(pts, step, func(p metrics.Point) string {
+		used := p.CPU / 100
+		return decimal(ctx, used*100/cores, 1) + "% · " + i18n.T(ctx, "service.metrics.cores", "n", decimal(ctx, used, 2))
+	}, func(p metrics.Point) float64 { return p.CPU })
+	m.MemTips = sparkTips(pts, step, func(p metrics.Point) string { return memTip(ctx, p.Mem, max(p.MemLimit, limit)) },
+		func(p metrics.Point) float64 { return float64(p.Mem) })
+	m.NetTips = sparkTips(pts, step, func(p metrics.Point) string { return netTip(ctx, p) },
+		func(p metrics.Point) float64 { return p.Rx + p.Tx })
 	return m
 }

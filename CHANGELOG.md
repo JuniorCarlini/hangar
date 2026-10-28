@@ -12,6 +12,15 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Adicionado
+
+- **Valor de cada ponto nos gráficos**: ao passar o mouse (ou o dedo) pelos
+  gráficos de CPU, memória e rede, da visão geral e da aba Visão do
+  serviço, aparece um cartãozinho com a hora daquela barra e o valor dela;
+  na barra mais alta, o cartão avisa que ali foi o pico do período. Com o
+  gráfico focado, as setas
+  andam de barra em barra.
+
 ## [0.5.24] - 2026-10-28
 
 ### Corrigido

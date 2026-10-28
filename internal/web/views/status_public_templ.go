@@ -491,7 +491,7 @@ func PublicStatus(d PublicStatusData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = spark(d.CPUHist, "").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = spark("CPU", d.CPUHist, SparkTips{}, "").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -513,7 +513,7 @@ func PublicStatus(d PublicStatusData) templ.Component {
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = spark(d.MemHist, "").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = spark(t(ctx, "overview.memory"), d.MemHist, SparkTips{}, "").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

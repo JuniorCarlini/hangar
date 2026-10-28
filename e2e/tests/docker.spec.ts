@@ -64,6 +64,25 @@ test.describe('com Docker', () => {
     await expect(page).toHaveURL(new RegExp(`/p/${slug}$`));
   });
 
+  test('gráfico do serviço mostra a barra apontada por cima da gaveta', async ({ page }) => {
+    // The panel reads the container every 10 s: wait for the first bar.
+    const drawer = page.locator('dialog#svc-panel');
+    const cpu = drawer.locator('svg[data-spark]').first();
+    await expect(async () => {
+      await page.goto(`/p/${slug}/s/cache`);
+      await expect(cpu.locator('rect[data-at]').first()).toBeAttached({ timeout: 1_000 });
+    }).toPass({ timeout: 60_000 });
+    await cpu.scrollIntoViewIfNeeded();
+    const box = await cpu.boundingBox();
+    if (!box) throw new Error('chart without a box');
+    await page.mouse.move(box.x + 2, box.y + box.height / 2);
+    // The card is in the top layer, so it shows over the drawer.
+    const tip = page.locator('#spark-tip');
+    await expect(tip).toBeVisible();
+    await expect(tip).toContainText('CPU');
+    expect(await tip.evaluate((el) => el.matches(':popover-open'))).toBeTruthy();
+  });
+
   test('repositório por URL recusa endereço sem HTTPS e não devolve o token', async ({ page }) => {
     await page.goto(`/p/${slug}/new`);
     // Without a GitHub credential, "Meus repositórios" offers the address

@@ -138,10 +138,10 @@ templ PublicStatus(d PublicStatusData) {
 			}
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(150px,100%),1fr))] gap-3">
 				@publicCard("CPU", d.CPU+"%", "", d.TV) {
-					@spark(d.CPUHist, "")
+					@spark("CPU", d.CPUHist, SparkTips{}, "")
 				}
 				@publicCard(t(ctx, "overview.memory"), d.Mem+"%", "", d.TV) {
-					@spark(d.MemHist, "")
+					@spark(t(ctx, "overview.memory"), d.MemHist, SparkTips{}, "")
 				}
 				@publicCard(t(ctx, "overview.disk"), d.Disk+"%", "", d.TV)
 				@publicCard(t(ctx, "overview.network"), "↓"+d.NetDown+" ↑"+d.NetUp, d.NetUnit, d.TV)

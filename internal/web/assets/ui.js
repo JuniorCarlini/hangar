@@ -386,6 +386,7 @@
         // The swapped region can hold Tucano parts (a sortable table).
         if (window.Tucano && Tucano.init) Tucano.init(next);
         markSorted(next);
+        document.dispatchEvent(new CustomEvent('hangar:swap'));
         try { history.replaceState(null, '', url); } catch (e2) {}
       })
       .catch(function () { form.requestSubmit(); });
@@ -433,6 +434,8 @@
           if (window.Tucano && Tucano.init) Tucano.init(next);
           markSorted(next);
         }
+        // The chart hover card moves onto the new charts (below).
+        document.dispatchEvent(new CustomEvent('hangar:swap'));
       })
       .catch(function () {});
   }
@@ -446,6 +449,205 @@
   } else {
     markSortedSoon();
   }
+})();
+
+// Hover cards on the history charts (svg[data-spark], views.spark): the bar
+// under the pointer, or the one picked with the arrow keys once the chart
+// has focus, is highlighted and a Tucano tooltip shows its time (in the
+// browser's own time zone) and its reading. One card for the whole page,
+// in the top layer (a manual popover) so it also shows over the service
+// drawer. A live refresh swaps the charts: the card moves onto the new ones
+// in the same frame, so it does not blink.
+(function () {
+  var SEL = 'svg[data-spark]';
+  var tip = null, body = null, arrow = null;
+  var chart = null, bar = null;
+  var pos = -1;      // the chart's place among the page's charts
+  var byKey = false; // shown from the keyboard (not the pointer)
+  var last = null;   // the mouse's last spot over a chart
+  var lang = document.documentElement.lang || undefined;
+  var HM = { hour: '2-digit', minute: '2-digit' };
+  var DM = { day: '2-digit', month: '2-digit' };
+
+  function card() {
+    if (tip) return tip;
+    tip = document.createElement('div');
+    tip.className = 'tuc-tip spark-tip';
+    tip.id = 'spark-tip';
+    tip.setAttribute('role', 'tooltip');
+    if (tip.showPopover) tip.setAttribute('popover', 'manual');
+    body = document.createElement('span');
+    body.className = 'tuc-tip__text spark-tip__text';
+    arrow = document.createElement('span');
+    arrow.className = 'tuc-tip__arrow';
+    arrow.setAttribute('aria-hidden', 'true');
+    tip.append(body, arrow);
+    document.body.appendChild(tip);
+    return tip;
+  }
+  function bars(svg) { return svg.querySelectorAll('rect[data-at]'); }
+  // The bar with data nearest to slot i (a gap has no rect).
+  function nearest(svg, i) {
+    var best = null, dist = Infinity, rs = bars(svg);
+    for (var k = 0; k < rs.length; k++) {
+      var d = Math.abs(parseInt(rs[k].getAttribute('data-i'), 10) - i);
+      if (d < dist) { dist = d; best = rs[k]; }
+    }
+    return best;
+  }
+  // "14:32", "14:30 – 14:45" for a bar longer than a minute, with the date
+  // in front when the chart crosses midnight, and only the date for a
+  // bar of a whole day.
+  function when(svg, rect) {
+    var step = parseInt(svg.getAttribute('data-step'), 10) || 0;
+    var at = parseInt(rect.getAttribute('data-at'), 10) * 1000;
+    var d = new Date(at);
+    if (step >= 86400) return d.toLocaleDateString(lang, DM);
+    var s = d.toLocaleTimeString(lang, HM);
+    if (step > 60) s += ' – ' + new Date(at + step * 1000).toLocaleTimeString(lang, HM);
+    var rs = bars(svg);
+    var first = new Date(parseInt(rs[0].getAttribute('data-at'), 10) * 1000);
+    var end = new Date(parseInt(rs[rs.length - 1].getAttribute('data-at'), 10) * 1000);
+    if (first.toDateString() !== end.toDateString()) s = d.toLocaleDateString(lang, DM) + ' ' + s;
+    return s;
+  }
+  function line(cls, text) {
+    var s = document.createElement('span');
+    s.className = cls;
+    s.textContent = text;
+    return s;
+  }
+  function show(svg, rect) {
+    if (!rect) { hide(); return; }
+    card();
+    if (chart && chart !== svg) chart.classList.remove('is-pointing');
+    if (bar && bar !== rect) bar.classList.remove('is-on');
+    chart = svg; bar = rect;
+    pos = Array.prototype.indexOf.call(document.querySelectorAll(SEL), svg);
+    svg.classList.add('is-pointing');
+    rect.classList.add('is-on');
+    var parts = [line('spark-tip__time', when(svg, rect)), line('spark-tip__value', rect.getAttribute('data-tip'))];
+    if (rect.hasAttribute('data-peak')) parts.push(line('spark-tip__peak', svg.getAttribute('data-peak-text')));
+    body.replaceChildren.apply(body, parts);
+    svg.setAttribute('aria-describedby', tip.id);
+    if (!tip.classList.contains('is-open')) {
+      try { if (tip.showPopover && !tip.matches(':popover-open')) tip.showPopover(); } catch (_) {}
+      tip.classList.add('is-open');
+    }
+    place();
+  }
+  // Above the bar, or below the chart when there is no room above; slid
+  // sideways to stay on screen, the arrow still pointing at the bar.
+  function place() {
+    var r = bar.getBoundingClientRect(), c = chart.getBoundingClientRect();
+    var w = tip.offsetWidth, h = tip.offsetHeight, gap = 8, pad = 6;
+    var vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    var x = r.left + r.width / 2;
+    var side = 'top', top = c.top - h - gap;
+    if (top < pad && c.bottom + gap + h <= vh - pad) { side = 'bottom'; top = c.bottom + gap; }
+    var left = Math.min(Math.max(x - w / 2, pad), Math.max(pad, vw - w - pad));
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+    tip.setAttribute('data-side', side);
+    arrow.style.left = Math.min(Math.max(x - left, 8), w - 8) + 'px';
+    arrow.style.top = side === 'top' ? '100%' : '0';
+  }
+  function hide() {
+    if (chart) { chart.classList.remove('is-pointing'); chart.removeAttribute('aria-describedby'); }
+    if (bar) bar.classList.remove('is-on');
+    chart = bar = null;
+    if (!tip) return;
+    tip.classList.remove('is-open');
+    try { if (tip.hidePopover && tip.matches(':popover-open')) tip.hidePopover(); } catch (_) {}
+  }
+  function pick(svg, clientX) {
+    var c = svg.getBoundingClientRect();
+    var n = parseInt(svg.getAttribute('data-bars'), 10) || 1;
+    var i = Math.min(n - 1, Math.max(0, Math.floor((clientX - c.left) / c.width * n)));
+    byKey = false;
+    show(svg, nearest(svg, i));
+  }
+
+  document.addEventListener('pointermove', function (e) {
+    var svg = e.target.closest && e.target.closest(SEL);
+    if (svg) {
+      if (e.pointerType === 'mouse') last = { x: e.clientX, y: e.clientY };
+      pick(svg, e.clientX);
+    } else if (chart && !byKey && e.pointerType !== 'touch') {
+      last = null;
+      hide();
+    }
+  });
+  // A tap shows the bar under the finger; a tap elsewhere puts it away.
+  document.addEventListener('pointerdown', function (e) {
+    var svg = e.target.closest && e.target.closest(SEL);
+    if (svg) pick(svg, e.clientX);
+    else if (chart) hide();
+  });
+  document.addEventListener('pointerout', function (e) {
+    if (!e.relatedTarget && e.pointerType === 'mouse' && chart && !byKey) { last = null; hide(); }
+  });
+  window.addEventListener('scroll', function () { if (chart && !byKey) hide(); else if (chart) place(); }, true);
+  window.addEventListener('resize', function () { if (chart) place(); });
+
+  document.addEventListener('keydown', function (e) {
+    var svg = e.target.closest && e.target.closest(SEL);
+    if (!svg) return;
+    if (e.key === 'Escape') { if (chart) { hide(); e.preventDefault(); } return; }
+    var rs = Array.prototype.slice.call(bars(svg));
+    if (!rs.length) return;
+    var at = chart === svg && bar ? rs.indexOf(bar) : rs.length;
+    var to;
+    switch (e.key) {
+      case 'ArrowLeft': to = at - 1; break;
+      case 'ArrowRight': to = at + 1; break;
+      case 'Home': to = 0; break;
+      case 'End': to = rs.length - 1; break;
+      default: return;
+    }
+    e.preventDefault();
+    byKey = true;
+    show(svg, rs[Math.min(rs.length - 1, Math.max(0, to))]);
+  });
+  // Tabbing onto a chart starts on its newest bar.
+  document.addEventListener('focusin', function (e) {
+    var svg = e.target.closest && e.target.closest(SEL);
+    if (!svg || chart === svg || !svg.matches(':focus-visible')) return;
+    var rs = bars(svg);
+    if (!rs.length) return;
+    byKey = true;
+    show(svg, rs[rs.length - 1]);
+  });
+  document.addEventListener('focusout', function (e) {
+    if (!byKey || !e.target.closest || e.target.closest(SEL) !== chart) return;
+    // Wait: a live refresh takes the focused chart out and focuses its
+    // replacement right after.
+    var was = chart;
+    setTimeout(function () { if (chart === was && document.activeElement !== was) hide(); }, 0);
+  });
+
+  // After a live refresh (or a period change) the old chart is gone: find
+  // the same chart again, at the same bar — the one under the mouse, or the
+  // same moment for the keyboard and touch.
+  document.addEventListener('hangar:swap', function () {
+    if (!chart || chart.isConnected) return;
+    var oldAt = bar && bar.getAttribute('data-at');
+    if (last) {
+      var el = document.elementFromPoint(last.x, last.y);
+      var svg = el && el.closest && el.closest(SEL);
+      chart = bar = null;
+      if (svg) pick(svg, last.x); else hide();
+      return;
+    }
+    // The chart in the same place on the page.
+    var next = pos >= 0 ? document.querySelectorAll(SEL)[pos] : null;
+    chart = bar = null;
+    if (!next) { hide(); return; }
+    var hit = oldAt && next.querySelector('rect[data-at="' + oldAt + '"]');
+    var rs = bars(next);
+    if (byKey) next.focus({ preventScroll: true });
+    show(next, hit || rs[rs.length - 1]);
+  });
 })();
 
 // While an update is applied the panel restarts: the page asks for itself

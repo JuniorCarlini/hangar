@@ -239,6 +239,21 @@ html.is-busy, html.is-busy .node { cursor: progress; }
 @media (prefers-reduced-motion: reduce) { .spark, .spark rect, .bar-fill { animation: none !important; } }
 /* A live refresh swaps the numbers in place: no entry animation again. */
 .no-anim .spark, .no-anim .spark rect, .no-anim .bar-fill, .no-anim.spark, .no-anim.bar-fill { animation: none !important; }
+/* Reading a chart (ui.js): the bar under the pointer stands out, the rest
+   step back. A sideways drag on a phone reads the bars instead of
+   scrolling; an up-and-down one still scrolls the page. */
+.spark[data-spark] { touch-action: pan-y; }
+.spark[data-spark]:focus-visible { outline: 2px solid var(--p-accent); outline-offset: 3px; border-radius: 2px; }
+.spark.is-pointing rect { opacity: .4; transition: opacity .12s; }
+.spark.is-pointing rect.is-on { opacity: 1; }
+/* Its card is a Tucano tooltip in the top layer: drop the browser's
+   popover box, keep Tucano's look; ui.js places it. */
+.spark-tip { position: fixed; white-space: nowrap; }
+.spark-tip[popover] { inset: auto; margin: 0; border: 0; overflow: visible; }
+.spark-tip__text { display: flex; flex-direction: column; gap: 1px; }
+.spark-tip__time { font-size: .75rem; font-weight: 400; opacity: .7; }
+.spark-tip__value { font-variant-numeric: tabular-nums; }
+.spark-tip__peak { font-size: .75rem; font-weight: 400; opacity: .7; }
 
 /* ---------------------------------------------------------------- Command palette (⌘K) */
 /* Near the top rather than centered: the field stays put while the list

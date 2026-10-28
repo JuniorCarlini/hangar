@@ -33,6 +33,34 @@ test('visão geral abre com o menu lateral', async ({ page }) => {
   await expect(nav.getByRole('link', { name: 'Portas abertas' })).toBeVisible();
 });
 
+test('gráfico da visão geral mostra a hora e o valor da barra', async ({ page }) => {
+  // The panel takes a reading every 10 s: wait for the first bar.
+  const cpu = page.locator('svg[data-spark]').first();
+  await expect(async () => {
+    await page.goto('/');
+    await expect(cpu.locator('rect[data-at]').first()).toBeAttached({ timeout: 1_000 });
+  }).toPass({ timeout: 30_000 });
+  const tip = page.locator('#spark-tip');
+  const box = await cpu.boundingBox();
+  if (!box) throw new Error('chart without a box');
+  await page.mouse.move(box.x + 2, box.y + box.height / 2);
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText(/\d{2}:\d{2}/);
+  await expect(tip).toContainText('%');
+  await expect(cpu.locator('rect.is-on')).toHaveCount(1);
+  // The card stays on screen.
+  const tb = await tip.boundingBox();
+  expect(tb && tb.x >= 0 && tb.x + tb.width <= page.viewportSize()!.width).toBeTruthy();
+  // Leaving the chart puts it away; the keyboard brings it back.
+  await page.mouse.move(1, 1);
+  await expect(tip).toBeHidden();
+  await cpu.focus();
+  await page.keyboard.press('End');
+  await expect(tip).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tip).toBeHidden();
+});
+
 test('navegação pelo menu lateral', async ({ page }) => {
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Navegação' });

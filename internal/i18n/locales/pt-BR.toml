@@ -1082,6 +1082,8 @@ disk_other = "Sistema e outros"
 disk_used = "Em uso"
 disk_free = "Livre"
 net_peak = "pico ↓{down} ↑{up} {unit} no período"
+chart_label = "{name}: histórico do período. Use as setas para ver cada ponto."
+chart_peak = "pico do período"
 uptime_days = { one = "ativo há 1 dia", other = "ativo há {n} dias" }
 uptime_hours = { one = "ativo há 1 h", other = "ativo há {n} h" }
 no_services = "Nenhum container do Hangar rodando agora."

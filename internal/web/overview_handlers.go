@@ -62,6 +62,13 @@ func (h *handlers) renderOverview(w http.ResponseWriter, r *http.Request, status
 		d.NetHist, rx, tx = netHist(pts)
 		down, up, unit := ratePair(ctx, rx, tx)
 		d.NetNote = i18n.T(ctx, "overview.net_peak", "down", down, "up", up, "unit", unit)
+		step := period.Step()
+		d.CPUTips = sparkTips(pts, step, func(p metrics.Point) string { return decimal(ctx, p.CPU, 1) + "%" },
+			func(p metrics.Point) float64 { return p.CPU })
+		d.MemTips = sparkTips(pts, step, func(p metrics.Point) string { return memTip(ctx, p.Mem, p.MemLimit) },
+			func(p metrics.Point) float64 { return float64(p.Mem) })
+		d.NetTips = sparkTips(pts, step, func(p metrics.Point) string { return netTip(ctx, p) },
+			func(p metrics.Point) float64 { return p.Rx + p.Tx })
 	}
 
 	if snap.Host.DiskTotal > 0 {

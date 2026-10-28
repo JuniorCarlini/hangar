@@ -21,6 +21,8 @@ type ServiceMetrics struct {
 	NetUnit  string
 	NetHist  []int
 	NetNote  string
+	// What each bar's hover card says (time and reading).
+	CPUTips, MemTips, NetTips SparkTips
 }
 
 templ tabMetrics(d ServiceData) {
@@ -40,14 +42,14 @@ templ tabMetrics(d ServiceData) {
 			}
 			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(200px,100%),1fr))] gap-3">
 				@metricCard("CPU", d.Metrics.CPUNote, d.Metrics.CPU, lastLevel(d.Metrics.CPUHist)) {
-					@spark(d.Metrics.CPUHist, "")
+					@spark("CPU", d.Metrics.CPUHist, d.Metrics.CPUTips, "")
 				}
 				@metricCard(t(ctx, "overview.memory"), d.Metrics.MemNote, d.Metrics.Mem, lastLevel(d.Metrics.MemHist)) {
-					@spark(d.Metrics.MemHist, "")
+					@spark(t(ctx, "overview.memory"), d.Metrics.MemHist, d.Metrics.MemTips, "")
 				}
 				@metricCard(t(ctx, "overview.disk"), d.Metrics.DiskNote, d.Metrics.Disk, "") {
 				}
-				@netCard(t(ctx, "overview.network"), t(ctx, "overview.now"), d.Metrics.NetDown, d.Metrics.NetUp, d.Metrics.NetUnit, d.Metrics.NetHist, d.Metrics.NetNote)
+				@netCard(t(ctx, "overview.network"), t(ctx, "overview.now"), d.Metrics.NetDown, d.Metrics.NetUp, d.Metrics.NetUnit, d.Metrics.NetHist, d.Metrics.NetTips, d.Metrics.NetNote)
 			</div>
 			<p class="m-0 text-xs text-muted">{ t(ctx, "service.metrics.hint") }</p>
 		</div>

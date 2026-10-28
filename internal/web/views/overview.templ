@@ -27,6 +27,8 @@ type OverviewData struct {
 	NetUnit  string
 	NetHist  []int // received + sent, relative to the busiest bar
 	NetNote  string
+	// What each bar's hover card says (time and reading).
+	CPUTips, MemTips, NetTips SparkTips
 	Services []OverviewService
 	// UpdateAvailable is a newer Hangar version ("" = none or not owner).
 	UpdateAvailable string
@@ -136,17 +138,56 @@ func sparkFill(fill string, v int) string {
 // moment still shows).
 func barH(v int) int { return max(1, v*32/100) }
 
+// SparkTips feeds a spark's hover card (ui.js), bar by bar: when the bar's
+// window starts (Unix seconds; the browser shows it in local time) and its
+// reading, already formatted. Peak is the bar with the highest reading
+// (-1 = none). Without tips the chart is a plain picture.
+type SparkTips struct {
+	At   []int64
+	Text []string
+	Step int64 // seconds each bar covers
+	Peak int
+}
+
+// on says the tips match the bars, so the chart can show them.
+func (s SparkTips) on(bars int) bool {
+	return bars > 0 && len(s.At) == bars && len(s.Text) == bars
+}
+
 // spark draws a history as bars in an SVG (attributes, not inline styles:
 // the CSP forbids those). A negative value is a gap: no data for that bar.
 // An empty fill colors each bar by its level (for percentages of a limit).
-templ spark(hist []int, fill string) {
-	<svg class="spark h-8 w-full" viewBox={ fmt.Sprintf("0 0 %d 32", max(1, len(hist)*4)) } preserveAspectRatio="none" aria-hidden="true">
-		for i, v := range hist {
-			if v >= 0 {
-				<rect class={ sparkFill(fill, v) } x={ fmt.Sprint(i*4) } y={ fmt.Sprint(32 - barH(v)) } width="3" height={ fmt.Sprint(barH(v)) } opacity=".85"></rect>
+// With tips, pointing at (or arrowing through, once focused) the chart
+// shows each bar's time and reading in a floating card (ui.js).
+templ spark(label string, hist []int, tips SparkTips, fill string) {
+	if tips.on(len(hist)) {
+		<svg
+			class="spark h-8 w-full"
+			viewBox={ fmt.Sprintf("0 0 %d 32", max(1, len(hist)*4)) }
+			preserveAspectRatio="none"
+			role="img"
+			tabindex="0"
+			aria-label={ t(ctx, "overview.chart_label", "name", label) }
+			data-spark
+			data-bars={ fmt.Sprint(len(hist)) }
+			data-step={ fmt.Sprint(tips.Step) }
+			data-peak-text={ t(ctx, "overview.chart_peak") }
+		>
+			for i, v := range hist {
+				if v >= 0 {
+					<rect class={ sparkFill(fill, v) } x={ fmt.Sprint(i*4) } y={ fmt.Sprint(32 - barH(v)) } width="3" height={ fmt.Sprint(barH(v)) } opacity=".85" data-i={ fmt.Sprint(i) } data-at={ fmt.Sprint(tips.At[i]) } data-tip={ tips.Text[i] } data-peak?={ i == tips.Peak }></rect>
+				}
 			}
-		}
-	</svg>
+		</svg>
+	} else {
+		<svg class="spark h-8 w-full" viewBox={ fmt.Sprintf("0 0 %d 32", max(1, len(hist)*4)) } preserveAspectRatio="none" aria-hidden="true">
+			for i, v := range hist {
+				if v >= 0 {
+					<rect class={ sparkFill(fill, v) } x={ fmt.Sprint(i*4) } y={ fmt.Sprint(32 - barH(v)) } width="3" height={ fmt.Sprint(barH(v)) } opacity=".85"></rect>
+				}
+			}
+		</svg>
+	}
 }
 
 // DiskSeg is one kind of data in the disk bar; X and Width are in
@@ -211,14 +252,14 @@ templ metricCard(label, note, value, lvl string) {
 }
 
 // netCard is the network card: received and sent now, the history and a note.
-templ netCard(label, note, down, up, unit string, hist []int, foot string) {
+templ netCard(label, note, down, up, unit string, hist []int, tips SparkTips, foot string) {
 	<div class="flex flex-col gap-2.5 rounded-sm border border-border bg-surface p-3.5">
 		<div class="flex justify-between gap-2 text-xs text-muted">
 			<span class="text-[11px] font-medium tracking-[.04em] text-subtle uppercase">{ label }</span>
 			<span class="truncate">{ note }</span>
 		</div>
 		<span class="text-[26px] leading-8 font-medium tabular-nums">↓{ down } <span class="text-muted">↑{ up }</span> <span class="text-[13px] text-muted">{ unit }</span></span>
-		@spark(hist, "fill-success")
+		@spark(label, hist, tips, "fill-success")
 		<span class="text-xs text-muted">{ foot }</span>
 	</div>
 }
@@ -273,15 +314,15 @@ templ Overview(d OverviewData) {
 			<div id="metrics-live" class="flex flex-col gap-3" data-refresh="10">
 			<div id="metrics-cards" class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3" data-live>
 				@metricCard("CPU", d.CPUNote, fmt.Sprint(d.CPU)+"%", level(d.CPU)) {
-					@spark(d.CPUHist, "")
+					@spark("CPU", d.CPUHist, d.CPUTips, "")
 				}
 				@metricCard(t(ctx, "overview.memory"), d.MemNote, fmt.Sprint(d.Mem)+"%", level(d.Mem)) {
-					@spark(d.MemHist, "")
+					@spark(t(ctx, "overview.memory"), d.MemHist, d.MemTips, "")
 				}
 				@metricCard(t(ctx, "overview.disk"), d.DiskNote, fmt.Sprint(d.Disk)+"%", level(d.Disk)) {
 					@diskBar(d.DiskSegs, d.DiskFree)
 				}
-				@netCard(t(ctx, "overview.network"), t(ctx, "overview.now"), d.NetDown, d.NetUp, d.NetUnit, d.NetHist, d.NetNote)
+				@netCard(t(ctx, "overview.network"), t(ctx, "overview.now"), d.NetDown, d.NetUp, d.NetUnit, d.NetHist, d.NetTips, d.NetNote)
 			</div>
 			<div class="flex flex-wrap items-start gap-3">
 				<section id="metrics-top" class="min-w-0 flex-[999_1_560px] overflow-x-auto rounded-sm border border-border bg-surface" aria-label={ t(ctx, "overview.top") } data-live>
