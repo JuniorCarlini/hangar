@@ -12,6 +12,15 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Novo
+
+- **Atualizar a lista de repositórios**: um botão na aba Meus repositórios
+  busca de novo no GitHub, sem esperar o cache, depois de você mudar o
+  acesso do token por lá.
+- **Aviso de token só com públicos**: quando a credencial não enxerga
+  nenhum repositório privado, o painel diz qual permissão falta
+  (Contents: Read-only, ou o escopo repo num token clássico).
+
 ## [0.5.21] - 2026-10-27
 
 ### Segurança
