@@ -16,10 +16,14 @@ func (f *fixture) waitRestore(t *testing.T, serviceID, id string) Restore {
 	t.Helper()
 	deadline := time.Now().Add(time.Minute)
 	for time.Now().Before(deadline) {
-		f.pm.Wait()
+		// No f.pm.Wait() while polling: the restore may start a deploy
+		// (WaitGroup.Add) at any moment, and Add racing a Wait at zero is
+		// the race detector's complaint. Its deploys are over once the
+		// restore is no longer running, so the wait goes there.
 		rs, _ := f.m.Restores(context.Background(), serviceID, 10)
 		for _, r := range rs {
 			if r.ID == id && r.Status != "running" {
+				f.pm.Wait()
 				return r
 			}
 		}
