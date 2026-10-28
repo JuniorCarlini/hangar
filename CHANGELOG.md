@@ -12,6 +12,8 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.23] - 2026-10-28
+
 ### Corrigido
 
 - **Baixar backup de volta**: o botão da aba Backups do serviço tinha sumido
@@ -704,7 +706,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.22...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.23...HEAD
+[0.5.23]: https://github.com/JuniorCarlini/hangar/compare/v0.5.22...v0.5.23
 [0.5.22]: https://github.com/JuniorCarlini/hangar/compare/v0.5.21...v0.5.22
 [0.5.21]: https://github.com/JuniorCarlini/hangar/compare/v0.5.20...v0.5.21
 [0.5.20]: https://github.com/JuniorCarlini/hangar/compare/v0.5.19...v0.5.20
