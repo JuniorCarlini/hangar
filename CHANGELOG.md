@@ -12,6 +12,25 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.28] - 2026-10-28
+
+### Corrigido
+
+- **Backup do Postgres é um clone completo**: cada backup guarda também os
+  usuários do banco (com senha, permissões como BYPASSRLS, grupos e
+  configurações), cifrados e travados junto do dump. A restauração recria
+  os usuários que faltam exatamente como eram, devolve o dono de cada
+  objeto e as configurações do próprio banco (dono, permissões de conexão,
+  `ALTER DATABASE … SET`). Uma cópia restaurada conecta com as mesmas
+  senhas da produção. Usuários que já existem nunca são alterados.
+- **"Testado" confere os usuários**: o teste do backup recria os usuários,
+  restaura com donos e permissões e confere cada usuário com o original; se
+  algo não bater, o backup não sobe.
+- **Baixar backup**: vem um .zip com o dump, os usuários e um README com os
+  comandos para restaurar fora do Hangar (hangar-cofre ou `psql` +
+  `pg_restore`).
+- Backups antigos, sem os usuários, continuam restaurando como antes.
+
 ## [0.5.27] - 2026-10-28
 
 ### Adicionado
@@ -771,7 +790,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.27...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.28...HEAD
+[0.5.28]: https://github.com/JuniorCarlini/hangar/compare/v0.5.27...v0.5.28
 [0.5.27]: https://github.com/JuniorCarlini/hangar/compare/v0.5.26...v0.5.27
 [0.5.26]: https://github.com/JuniorCarlini/hangar/compare/v0.5.25...v0.5.26
 [0.5.25]: https://github.com/JuniorCarlini/hangar/compare/v0.5.24...v0.5.25
