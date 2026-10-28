@@ -88,12 +88,26 @@ type Registry struct {
 	digests map[string]cached[string]
 }
 
-// NewRegistry returns a registry client.
+// NewRegistry returns a registry client. The registry's host comes from the
+// image name an admin typed, so by default it follows only https redirects:
+// a registry answering "go to http://169.254.169.254/" (the cloud metadata,
+// or the panel itself on loopback) is refused. A private registry served
+// over https keeps working.
 func NewRegistry(hc *http.Client) *Registry {
 	if hc == nil {
-		hc = &http.Client{Timeout: 30 * time.Second}
+		hc = &http.Client{Timeout: 30 * time.Second, CheckRedirect: httpsRedirectsOnly}
 	}
 	return &Registry{http: hc, Endpoint: defaultEndpoint, now: time.Now, cache: map[string]cached[[]string]{}, digests: map[string]cached[string]{}}
+}
+
+func httpsRedirectsOnly(req *http.Request, via []*http.Request) error {
+	if len(via) >= 5 {
+		return errors.New("too many redirects")
+	}
+	if req.URL.Scheme != "https" {
+		return fmt.Errorf("redirect to %s refused: https only", req.URL.Scheme)
+	}
+	return nil
 }
 
 func defaultEndpoint(host string) string {

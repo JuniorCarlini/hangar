@@ -559,3 +559,19 @@ func TestFixedVersionPerRelease(t *testing.T) {
 		}
 	}
 }
+
+// The registry host comes from an image name: a registry may not bounce the
+// panel to a plain-HTTP address (the cloud metadata, the panel on loopback).
+func TestRegistryFollowsOnlyHTTPSRedirects(t *testing.T) {
+	c := NewRegistry(nil).http
+	to := func(u string) error {
+		req, _ := http.NewRequest(http.MethodGet, u, nil)
+		return c.CheckRedirect(req, []*http.Request{{}})
+	}
+	if err := to("http://169.254.169.254/latest/meta-data/"); err == nil {
+		t.Error("redirect to http accepted")
+	}
+	if err := to("https://registry.example/v2/"); err != nil {
+		t.Errorf("redirect to https refused: %v", err)
+	}
+}
