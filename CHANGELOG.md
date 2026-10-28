@@ -12,6 +12,12 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Corrigido
+
+- **Baixar backup de volta**: o botão da aba Backups do serviço tinha sumido
+  num redesenho; ele volta, e funciona mesmo sem destino de backup
+  cadastrado.
+
 ## [0.5.22] - 2026-10-28
 
 ### Novo
