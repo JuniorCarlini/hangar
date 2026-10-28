@@ -141,6 +141,15 @@ func bucketTone(b string) string {
 	return ""
 }
 
+// exportHref is where a "Copy" button fetches its Markdown: one section, or
+// every one when b is "".
+func exportHref(b string) string {
+	if b == "" {
+		return "/updates/export"
+	}
+	return "/updates/export?bucket=" + url.QueryEscape(b)
+}
+
 func bucketHref(b string) string {
 	if b == "" {
 		return "/updates"
@@ -161,6 +170,12 @@ templ Updates(d UpdatesData) {
 					@Icon("x", "size-3.5")
 					{ t(ctx, "deps.show_all") }
 				</a>
+			}
+			if !d.Empty {
+				<button type="button" class="tuc-btn is-outline" data-copy-url={ exportHref("") } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } title={ t(ctx, "deps.export.copy_all_hint") }>
+					@Icon("copy", "size-3.5")
+					{ t(ctx, "deps.export.copy_all") }
+				</button>
 			}
 			if d.CanOperate {
 				<form method="post" action="/updates/scan">
@@ -284,6 +299,12 @@ templ updatesSection(d UpdatesData, s UpdatesSection) {
 	<section class={ cardClass } id={ "bucket-" + s.Bucket }>
 		@cardHead(t(ctx, "deps.bucket."+s.Bucket)) {
 			<span class="text-xs text-muted tabular-nums">{ t(ctx, "deps.rows", "n", s.Total) }</span>
+			if s.Total > 0 {
+				<button type="button" class="tuc-btn is-ghost is-sm" data-copy-url={ exportHref(s.Bucket) } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } aria-label={ t(ctx, "deps.export.copy_section", "section", t(ctx, "deps.bucket."+s.Bucket)) } title={ t(ctx, "deps.export.copy_section", "section", t(ctx, "deps.bucket."+s.Bucket)) }>
+					@Icon("copy", "size-3.5")
+					{ t(ctx, "deps.copy") }
+				</button>
+			}
 		}
 		<div class={ cardBodyClass }>
 			<p class="m-0 text-[13px] text-muted">{ t(ctx, "deps.bucket_hint." + s.Bucket) }</p>

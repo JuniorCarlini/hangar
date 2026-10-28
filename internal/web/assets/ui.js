@@ -11,6 +11,58 @@
       }
     });
   });
+  // Copy buttons whose text is too long for an attribute fetch it from
+  // data-copy-url (the updates page's Markdown). The ClipboardItem path hands
+  // the clipboard a promise so Safari keeps the click's permission while the
+  // text loads; the others copy once it has arrived, the last one through a
+  // hidden textarea for browsers without the Clipboard API.
+  function copyToast(b, ok) {
+    var text = ok ? b.dataset.copied : b.dataset.copyFailed;
+    if (window.Tucano && text) {
+      window.Tucano.toast({ type: ok ? 'success' : 'danger', text: text, position: 'bottom-center' });
+    }
+  }
+  function copyByTextarea(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) {}
+    ta.remove();
+    return ok ? Promise.resolve() : Promise.reject(new Error('copy'));
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-copy-url]');
+    if (!b || b.disabled) return;
+    b.disabled = true;
+    var text = fetch(b.dataset.copyUrl, { credentials: 'same-origin', headers: { Accept: 'text/markdown' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('status ' + r.status);
+        return r.text();
+      });
+    var done;
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+      done = navigator.clipboard.write([new ClipboardItem({
+        'text/plain': text.then(function (t) { return new Blob([t], { type: 'text/plain' }); })
+      })]).catch(function () {
+        return text.then(function (t) {
+          return navigator.clipboard.writeText(t).catch(function () { return copyByTextarea(t); });
+        });
+      });
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      done = text.then(function (t) {
+        return navigator.clipboard.writeText(t).catch(function () { return copyByTextarea(t); });
+      });
+    } else {
+      done = text.then(copyByTextarea);
+    }
+    done.then(function () { copyToast(b, true); }, function () { copyToast(b, false); })
+      .then(function () { b.disabled = false; });
+  });
   // Names become identifiers the way the server derives them
   // (projects.Slugify — keep both in step): lowercase, no accents, anything
   // else a hyphen, at most 32 characters, "s-" before a leading digit.

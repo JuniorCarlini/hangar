@@ -256,6 +256,8 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST /domains/limit", h.setHourCap, Policy{Role: auth.RoleAdmin, Audit: "domain.hour_cap", AuditByHandler: true})
 
 	rt.HandleFunc("GET /updates", h.updatesPage, viewer)
+	// The page's "Copy" buttons: what it shows, as Markdown.
+	rt.HandleFunc("GET /updates/export", h.updatesExport, viewer)
 	rt.HandleFunc("POST /updates/scan", h.updatesScan, Policy{Role: auth.RoleOperator, Audit: "deps.scan"})
 	rt.HandleFunc("POST /updates/ignore", h.updatesIgnore, Policy{Role: auth.RoleOperator, Audit: "deps.ignore", AuditByHandler: true})
 	rt.HandleFunc("POST /updates/unignore", h.updatesUnignore, Policy{Role: auth.RoleOperator, Audit: "deps.unignore", AuditByHandler: true})
