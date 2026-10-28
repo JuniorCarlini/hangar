@@ -44,6 +44,25 @@ func BundleReadme(ctx context.Context, base, db string, sealed bool) string {
 	return strings.TrimLeft(text, "\n")
 }
 
+// VolumesReadme is the README of a bundle with a copy of the volumes of
+// service (volumes says which, and where they were mounted).
+func VolumesReadme(ctx context.Context, base, service, volumes string, sealed bool) string {
+	text := i18n.T(ctx, "backup.bundle.readme_volumes_plain", "base", base, "service", service, "volumes", volumes, "image", VolumeHelperImage)
+	if sealed {
+		text = i18n.T(ctx, "backup.bundle.readme_volumes_sealed", "base", base, "service", service, "volumes", volumes, "image", VolumeHelperImage)
+	}
+	return strings.TrimLeft(text, "\n")
+}
+
+// volumeList says which volumes a copy of s holds: "data (/data), ...".
+func volumeList(s svcRef) string {
+	parts := make([]string, 0, len(s.Vols))
+	for _, v := range s.Vols {
+		parts = append(parts, v.Name+" ("+v.Path+")")
+	}
+	return strings.Join(parts, ", ")
+}
+
 // RestoreScript is pgroles.RestoreScript.
 func RestoreScript(rolesSQL []byte) ([]byte, error) { return pgroles.RestoreScript(rolesSQL) }
 
@@ -55,6 +74,10 @@ func (m *Manager) DownloadPlain(ctx context.Context, a Actor, projectSlug, servi
 	s, err := m.ref(ctx, projectSlug, serviceSlug)
 	if err != nil {
 		return err
+	}
+	if s.Method != projects.BackupPGDump {
+		// A copy of volumes is made first, then sent (PrepareDownload).
+		return ErrUnsupported
 	}
 	n, _, err := m.tasker()
 	if err != nil {
@@ -115,6 +138,9 @@ func (m *Manager) runBundle(ctx context.Context, runID string) (dbq.BackupRun, t
 // files go as they are. ok is false when the run has no saved roles: the
 // caller sends the backup the way it did before.
 func (m *Manager) OpenRunBundle(ctx context.Context, a Actor, runID string, open bool) (io.ReadCloser, string, bool, error) {
+	if r, err := m.q.GetBackupRun(ctx, runID); err == nil && r.Kind == archive.KindVolume {
+		return m.volumeRunBundle(ctx, a, r, open)
+	}
 	r, t, ok, err := m.runBundle(ctx, runID)
 	if err != nil || !ok {
 		return nil, "", ok, err
@@ -196,6 +222,53 @@ func (m *Manager) OpenRunBundle(ctx context.Context, a Actor, runID string, open
 	go func() {
 		err := archive.WriteBundle(pw, m.now(), files...)
 		closeAll()
+		_ = pw.CloseWithError(err)
+	}()
+	return pr, base + archive.ExtBundle, true, nil
+}
+
+// volumeRunBundle streams an older copy of volumes as one bundle with its
+// README: the plain tar in the simple mode (open), else the .age file as
+// it is.
+func (m *Manager) volumeRunBundle(ctx context.Context, a Actor, r dbq.BackupRun, open bool) (io.ReadCloser, string, bool, error) {
+	if r.ObjectKey == "" || r.Status != "ok" {
+		return nil, "", true, projects.ErrNotFound
+	}
+	o, ok := archive.ParseKey(r.ObjectKey)
+	if !ok {
+		return nil, "", true, projects.ErrNotFound
+	}
+	var ids []age.Identity
+	if open {
+		if ids = m.withServerIdentity(ctx, nil); len(ids) == 0 {
+			return nil, "", true, i18n.E("backup.error.kit")
+		}
+	}
+	rc, info, err := m.fetch(ctx, r.ObjectKey)
+	if err != nil {
+		return nil, "", true, err
+	}
+	base := archive.BundleName(o.Project, o.Service, o.Time)
+	man, _ := archive.ParseVolumeMeta(info.Metadata["hangar-volumes"])
+	readme := VolumesReadme(ctx, base, r.Label, strings.Join(man.Names(), ", "), !open)
+	file := archive.BundleFile{Name: base + archive.ExtVolumes, Body: rc}
+	closers := []io.Closer{rc}
+	if open {
+		plain, err := archive.Open(rc, ids, archive.VolumeLimits)
+		if err != nil {
+			_ = rc.Close()
+			return nil, "", true, err
+		}
+		closers = append(closers, plain)
+		file = archive.BundleFile{Name: base + archive.ExtVolumesTar, Body: plain}
+	}
+	m.record(ctx, a, "backup.download", "backup_run", r.ID, audit.OK, map[string]any{"label": r.Label, "kind": r.Kind, "encrypted": !open})
+	pr, pw := io.Pipe()
+	go func() {
+		err := archive.WriteBundle(pw, m.now(), archive.TextFile(ReadmeName, readme), file)
+		for _, c := range closers {
+			_ = c.Close()
+		}
 		_ = pw.CloseWithError(err)
 	}()
 	return pr, base + archive.ExtBundle, true, nil

@@ -299,7 +299,7 @@ func (q *Queries) FinishBackupRun(ctx context.Context, arg FinishBackupRunParams
 }
 
 const getBackupPolicy = `-- name: GetBackupPolicy :one
-SELECT id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at FROM backup_policies WHERE id = ?
+SELECT id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at, consistency FROM backup_policies WHERE id = ?
 `
 
 func (q *Queries) GetBackupPolicy(ctx context.Context, id string) (BackupPolicy, error) {
@@ -316,12 +316,13 @@ func (q *Queries) GetBackupPolicy(ctx context.Context, id string) (BackupPolicy,
 		&i.NextRunAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Consistency,
 	)
 	return i, err
 }
 
 const getBackupPolicyByService = `-- name: GetBackupPolicyByService :one
-SELECT id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at FROM backup_policies WHERE service_id = ?
+SELECT id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at, consistency FROM backup_policies WHERE service_id = ?
 `
 
 func (q *Queries) GetBackupPolicyByService(ctx context.Context, serviceID sql.NullString) (BackupPolicy, error) {
@@ -338,6 +339,7 @@ func (q *Queries) GetBackupPolicyByService(ctx context.Context, serviceID sql.Nu
 		&i.NextRunAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Consistency,
 	)
 	return i, err
 }
@@ -517,7 +519,7 @@ func (q *Queries) LastOKBackupRun(ctx context.Context, arg LastOKBackupRunParams
 }
 
 const listBackupPolicies = `-- name: ListBackupPolicies :many
-SELECT id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at FROM backup_policies ORDER BY created_at
+SELECT id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at, consistency FROM backup_policies ORDER BY created_at
 `
 
 func (q *Queries) ListBackupPolicies(ctx context.Context) ([]BackupPolicy, error) {
@@ -540,6 +542,7 @@ func (q *Queries) ListBackupPolicies(ctx context.Context) ([]BackupPolicy, error
 			&i.NextRunAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Consistency,
 		); err != nil {
 			return nil, err
 		}
@@ -991,25 +994,26 @@ func (q *Queries) SetBackupTargetCheck(ctx context.Context, arg SetBackupTargetC
 }
 
 const upsertBackupPolicy = `-- name: UpsertBackupPolicy :exec
-INSERT INTO backup_policies (id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO backup_policies (id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, consistency, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     enabled = excluded.enabled, every_hours = excluded.every_hours, at_minute = excluded.at_minute,
-    wal = excluded.wal, wal_since = excluded.wal_since, next_run_at = excluded.next_run_at,
+    wal = excluded.wal, wal_since = excluded.wal_since, next_run_at = excluded.next_run_at, consistency = excluded.consistency,
     updated_at = excluded.updated_at
 `
 
 type UpsertBackupPolicyParams struct {
-	ID         string
-	ServiceID  sql.NullString
-	Enabled    int64
-	EveryHours int64
-	AtMinute   int64
-	Wal        int64
-	WalSince   sql.NullInt64
-	NextRunAt  int64
-	CreatedAt  int64
-	UpdatedAt  int64
+	ID          string
+	ServiceID   sql.NullString
+	Enabled     int64
+	EveryHours  int64
+	AtMinute    int64
+	Wal         int64
+	WalSince    sql.NullInt64
+	NextRunAt   int64
+	Consistency string
+	CreatedAt   int64
+	UpdatedAt   int64
 }
 
 func (q *Queries) UpsertBackupPolicy(ctx context.Context, arg UpsertBackupPolicyParams) error {
@@ -1022,6 +1026,7 @@ func (q *Queries) UpsertBackupPolicy(ctx context.Context, arg UpsertBackupPolicy
 		arg.Wal,
 		arg.WalSince,
 		arg.NextRunAt,
+		arg.Consistency,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)

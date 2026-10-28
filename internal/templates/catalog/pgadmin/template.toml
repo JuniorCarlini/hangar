@@ -1,8 +1,9 @@
 id = "pgadmin"
-version = 2
+version = 3
 category = "admin"
 tags = ["postgresql", "sql", "gui"]
 docs = "https://www.pgadmin.org/docs/pgadmin4/latest/container_deployment.html"
+backup = "volume"
 main = "pgadmin"
 name = { en = "pgAdmin", "pt-BR" = "pgAdmin" }
 description = { en = "Web interface for PostgreSQL. Generated password; prefer a domain with access restricted to you, or a tunnel.", "pt-BR" = "Interface web para o PostgreSQL. Senha gerada; prefira um domínio com acesso só seu, ou um túnel." }

@@ -24,6 +24,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/backup/pgroles"
 	"github.com/JuniorCarlini/hangar/internal/ids"
 	"github.com/JuniorCarlini/hangar/internal/node"
+	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -48,10 +49,26 @@ type svcRef struct {
 	Volume   string // full Docker name of the data volume
 	DBUser   string
 	DBName   string
+	// Method is how it is backed up: projects.BackupPGDump or
+	// projects.BackupVolume.
+	Method string
+	// Vols are the volumes it owns (BackupVolume).
+	Vols []projects.OwnedVolume
+}
+
+// kind is the kind of its full backups: a dump or a copy of its volumes.
+func (s svcRef) kind() string {
+	if s.Method == projects.BackupVolume {
+		return archive.KindVolume
+	}
+	return archive.KindDump
 }
 
 // meta is the object metadata of a service backup.
 func (s svcRef) meta(kind string) map[string]string {
+	if kind == archive.KindVolume {
+		return map[string]string{"hangar-kind": kind, "hangar-service": s.label(), "hangar-image": s.Image}
+	}
 	return map[string]string{
 		"hangar-kind": kind, "hangar-service": s.label(), "hangar-image": s.Image,
 		"hangar-db-user": s.DBUser, "hangar-db-name": s.DBName,

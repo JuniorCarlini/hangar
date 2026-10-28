@@ -485,6 +485,28 @@ func (l *Local) stopTimeout(ctx context.Context, id string) *int {
 	return &secs
 }
 
+var _ node.Pauser = (*Local)(nil)
+
+// Pause freezes the container's processes (node.Pauser).
+func (l *Local) Pause(ctx context.Context, project, service string) error {
+	id, err := l.managedID(ctx, project, service)
+	if err != nil {
+		return err
+	}
+	_, err = l.c.ContainerPause(ctx, id, client.ContainerPauseOptions{})
+	return err
+}
+
+// Unpause lets a paused container's processes run again.
+func (l *Local) Unpause(ctx context.Context, project, service string) error {
+	id, err := l.managedID(ctx, project, service)
+	if err != nil {
+		return err
+	}
+	_, err = l.c.ContainerUnpause(ctx, id, client.ContainerUnpauseOptions{})
+	return err
+}
+
 // Restart restarts the container.
 func (l *Local) Restart(ctx context.Context, project, service string) error {
 	if err := l.Stop(ctx, project, service); err != nil {

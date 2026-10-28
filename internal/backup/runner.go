@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/node"
+	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -68,10 +70,12 @@ func (m *Manager) Enqueue(ctx context.Context, a Actor, projectSlug, serviceSlug
 	if err != nil {
 		return err
 	}
-	if !m.running(ctx, s) {
+	// A stopped service's volumes are copied as they are; a database
+	// must run for pg_dump.
+	if s.Method == projects.BackupPGDump && !m.running(ctx, s) {
 		return ErrNotRunning
 	}
-	jobs := []job{{actor: a, trigger: TriggerManual, kind: archive.KindDump, service: s.ID}}
+	jobs := []job{{actor: a, trigger: TriggerManual, kind: s.kind(), service: s.ID}}
 	if p, ok := m.ServicePolicy(ctx, s.ID); ok && p.WAL && m.archivingActive(ctx, s) {
 		jobs = append(jobs, job{actor: a, trigger: TriggerManual, kind: archive.KindBase, service: s.ID})
 	}
@@ -93,6 +97,7 @@ func (m *Manager) Run(ctx context.Context) {
 	_ = m.q.FailRunningBackupRuns(ctx, dbq.FailRunningBackupRunsParams{Error: nullStr("interrupted: the panel stopped"), FinishedAt: nullInt(m.now().Unix())})
 	_ = m.q.FailRunningRestores(ctx, dbq.FailRunningRestoresParams{Error: nullStr("interrupted: the panel stopped"), FinishedAt: nullInt(m.now().Unix())})
 	m.cleanStaging()
+	m.unpauseLeftovers(ctx)
 
 	go m.runWAL(ctx)
 	tick := time.NewTicker(30 * time.Second)
@@ -106,6 +111,28 @@ func (m *Manager) Run(ctx context.Context) {
 		case <-tick.C:
 			m.schedule(ctx)
 		}
+	}
+}
+
+// unpauseLeftovers lets go the services a copy of volumes paused when the
+// panel stopped in the middle of it. Nothing else in Hangar pauses a
+// container, so every paused one it manages is such a leftover.
+func (m *Manager) unpauseLeftovers(ctx context.Context) {
+	n := m.projects.Node()
+	p, ok := n.(node.Pauser)
+	if !ok {
+		return
+	}
+	cs, err := n.ListManaged(ctx)
+	if err != nil {
+		return
+	}
+	for _, c := range cs {
+		if c.State != "paused" || c.Project == "" || c.Service == "" {
+			continue
+		}
+		err := p.Unpause(ctx, c.Project, c.Service)
+		m.log.Warn("unpaused a service left paused by an interrupted backup", "service", c.Project+"/"+c.Service, "error", err)
 	}
 }
 
@@ -130,7 +157,7 @@ func (m *Manager) runJob(ctx context.Context, j job) {
 		_, _ = m.backupBase(jctx, j.actor, s, j.trigger)
 		return
 	}
-	_, _ = m.backupDump(jctx, j.actor, s, j.trigger)
+	_, _ = m.backupService(jctx, j.actor, s, j.trigger)
 }
 
 // schedule queues what is due.
@@ -160,11 +187,11 @@ func (m *Manager) schedule(ctx context.Context) {
 			continue
 		}
 		s, err := m.refByID(ctx, p.ServiceID.String)
-		if err != nil || !m.running(ctx, s) {
+		if err != nil || (s.Method == projects.BackupPGDump && !m.running(ctx, s)) {
 			continue
 		}
 		if due {
-			_ = m.push(job{actor: System, trigger: TriggerSchedule, kind: archive.KindDump, service: s.ID})
+			_ = m.push(job{actor: System, trigger: TriggerSchedule, kind: s.kind(), service: s.ID})
 		}
 		if p.Wal == 1 && m.needsBase(ctx, s, p, due) {
 			trigger := TriggerSchedule

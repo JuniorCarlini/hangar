@@ -18,6 +18,10 @@ type ServiceBackups struct {
 	AtTime       string // "03:00"
 	WAL          bool
 	WALSupported bool
+	// Volumes: the service is backed up as a copy of its volumes (not
+	// pg_dump); Consistency is how the copy is taken.
+	Volumes      bool
+	Consistency  string
 	NextRun      string
 	WALState     string
 	WALTone      string
@@ -71,6 +75,10 @@ type RestoreRow struct {
 
 var everyHours = []int{24, 12, 6, 1}
 
+// consistencies are the ways a copy of volumes is kept consistent
+// (backup.Consistencies), the default first.
+var consistencies = []string{"pause", "stop", "live"}
+
 templ tabBackups(d ServiceData) {
 	if !d.Backups.Supported {
 		<section class={ cardClass }>
@@ -119,6 +127,13 @@ templ tabBackups(d ServiceData) {
 		<section class={ cardClass }>
 			@cardHead(t(ctx, "svcbackup.title")) {
 				@svcBackupActions(d)
+			}
+			// A download made first and fetched once (encrypted with the
+			// kit; a copy of volumes in every mode).
+			if d.CanAdmin && d.Backups.Download != nil {
+				<div class="flex flex-wrap items-center justify-end gap-3 border-b border-border px-4 py-3">
+					@svcDownloadState(*d.Backups.Download, d.SudoCritical, d.Backups.Volumes)
+				</div>
 			}
 			if d.Backups.Ready && len(d.Backups.Runs) == 0 && len(d.Backups.Restores) == 0 {
 				@emptyState("history", t(ctx, "backups.history.empty"))
@@ -199,6 +214,9 @@ templ svcBackupRoutines(d ServiceData) {
 					if d.Backups.NextRun != "" {
 						<span class="text-xs text-muted">{ t(ctx, "svcbackup.next", "when", d.Backups.NextRun) }</span>
 					}
+					if d.Backups.Volumes {
+						<span class="text-xs text-muted">{ t(ctx, "svcbackup.consistency."+d.Backups.Consistency) }</span>
+					}
 				</div>
 				if d.CanAdmin {
 					<span class="inline-flex items-center gap-1 [&_form]:inline-flex">
@@ -211,6 +229,9 @@ templ svcBackupRoutines(d ServiceData) {
 							<input type="hidden" name="at" value={ d.Backups.AtTime }/>
 							if d.Backups.WAL {
 								<input type="hidden" name="wal" value="1"/>
+							}
+							if d.Backups.Volumes {
+								<input type="hidden" name="consistency" value={ d.Backups.Consistency }/>
 							}
 							<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "svcbackup.routine_remove") } aria-label={ t(ctx, "svcbackup.routine_remove") }>
 								@Icon("trash", "size-3.5")
@@ -289,6 +310,19 @@ templ svcRoutineDialog(d ServiceData) {
 						<span>{ t(ctx, "svcbackup.wal") }</span>
 					</label>
 				}
+				if d.Backups.Volumes {
+					// How the copy of the volumes stays consistent: pause
+					// (the default), stop or live.
+					<fieldset class="tuc-choices">
+						<legend class="tuc-label">{ t(ctx, "svcbackup.consistency.label") }</legend>
+						for _, c := range consistencies {
+							<label class="tuc-choice">
+								<input type="radio" class="tuc-radio" name="consistency" value={ c } checked?={ c == d.Backups.Consistency }/>
+								<span>{ t(ctx, "svcbackup.consistency."+c) } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.consistency_hint."+c) }</span></span>
+							</label>
+						}
+					</fieldset>
+				}
 				<div class="flex justify-end gap-2">
 					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
 					<button class="tuc-btn is-primary" type="submit">
@@ -348,7 +382,7 @@ templ svcBackupActions(d ServiceData) {
 	// state too: it is the way out for a database nobody has set up yet.
 	if d.CanAdmin {
 		if d.SudoCritical {
-			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit) }>
+			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit, d.Backups.Volumes) }>
 				<input type="hidden" name="csrf" value={ d.CSRF }/>
 				<button class="tuc-btn is-outline is-sm" type="submit">
 					@Icon("download", "size-3.5")
@@ -362,12 +396,26 @@ templ svcBackupActions(d ServiceData) {
 }
 
 // downloadHint says what the download does: an encrypted dump behind a
-// signed link once a kit exists, the plain dump before.
-func downloadHint(ctx context.Context, kit bool) string {
-	if kit {
+// signed link once a kit exists, the plain dump before. A copy of volumes
+// is always made first and offered as a link.
+func downloadHint(ctx context.Context, kit, volumes bool) string {
+	switch {
+	case volumes && kit:
+		return t(ctx, "svcbackup.download_hint_volumes")
+	case volumes:
+		return t(ctx, "backup.hint_volumes")
+	case kit:
 		return t(ctx, "svcbackup.download_hint")
 	}
 	return t(ctx, "backup.hint")
+}
+
+// restoreConfirm is the restore's confirmation text.
+func restoreConfirm(ctx context.Context, volumes bool) string {
+	if volumes {
+		return t(ctx, "confirm.restore.text_volumes")
+	}
+	return t(ctx, "confirm.restore.text")
 }
 
 // restoreModal opens the restore dialog, or the identity check first.
@@ -386,13 +434,17 @@ func svcNextRun(ctx context.Context, next string) string {
 	return t(ctx, "svcbackup.next", "when", next)
 }
 
-templ svcDownloadState(dl DownloadView, sudo bool) {
+templ svcDownloadState(dl DownloadView, sudo, volumes bool) {
 	if dl.Error != "" {
 		@errorAlert(t(ctx, "svcbackup.download_failed", "error", dl.Error))
 	} else if !dl.Ready {
 		<span class="flex items-center gap-2 text-[13px] text-muted">
 			<span class="tuc-spinner" aria-hidden="true"></span>
-			{ t(ctx, "svcbackup.download_preparing") }
+			if volumes {
+				{ t(ctx, "svcbackup.download_preparing_volumes") }
+			} else {
+				{ t(ctx, "svcbackup.download_preparing") }
+			}
 		</span>
 	} else if sudo {
 		<div class="flex flex-col gap-1">
@@ -417,7 +469,7 @@ templ svcBackupRestore(d ServiceData) {
 					@Icon("x", "size-4")
 				</button>
 			</div>
-			<form class="tuc-modal__body" method="post" action={ templ.SafeURL(d.base() + "/backups/restore") } enctype="multipart/form-data" data-confirm={ t(ctx, "confirm.restore.title") } data-confirm-text={ t(ctx, "confirm.restore.text") } data-confirm-ok={ t(ctx, "confirm.restore.ok") } data-tone="danger">
+			<form class="tuc-modal__body" method="post" action={ templ.SafeURL(d.base() + "/backups/restore") } enctype="multipart/form-data" data-confirm={ t(ctx, "confirm.restore.title") } data-confirm-text={ restoreConfirm(ctx, d.Backups.Volumes) } data-confirm-ok={ t(ctx, "confirm.restore.ok") } data-tone="danger">
 				<input type="hidden" name="csrf" value={ d.CSRF }/>
 				<input type="hidden" name="tz_offset" value="" data-tz-offset/>
 				if d.Backups.WindowOK {

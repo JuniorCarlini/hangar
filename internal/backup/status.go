@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -57,11 +58,15 @@ type Run struct {
 	Verified  bool
 	Tables    int64
 	Rows      int64
-	Warning   string
-	Error     string
-	Uploads   []upload
-	Started   time.Time
-	Finished  time.Time
+	// Files and PauseMS describe a copy of volumes: the entries it holds
+	// and how long the services were paused (or stopped) for it.
+	Files    int64
+	PauseMS  int64
+	Warning  string
+	Error    string
+	Uploads  []upload
+	Started  time.Time
+	Finished time.Time
 }
 
 func toRun(r dbq.BackupRun) Run {
@@ -73,9 +78,16 @@ func toRun(r dbq.BackupRun) Run {
 	if r.FinishedAt.Valid {
 		out.Finished = time.Unix(r.FinishedAt.Int64, 0)
 	}
-	var c Check
-	if json.Unmarshal([]byte(r.CheckJson), &c) == nil {
-		out.Tables, out.Rows = c.Tables, c.Rows
+	if r.Kind == archive.KindVolume {
+		var c VolumeCheck
+		if json.Unmarshal([]byte(r.CheckJson), &c) == nil {
+			out.Files, out.PauseMS = c.Files, c.PauseMS
+		}
+	} else {
+		var c Check
+		if json.Unmarshal([]byte(r.CheckJson), &c) == nil {
+			out.Tables, out.Rows = c.Tables, c.Rows
+		}
 	}
 	_ = json.Unmarshal([]byte(r.UploadsJson), &out.Uploads)
 	return out
@@ -120,10 +132,12 @@ type Row struct {
 	Running   bool
 	Policy    Policy
 	HasPolicy bool
-	Last      *Run // newest dump (or panel) run
-	LastOK    *Run
-	LastBase  *Run
-	WAL       *WALState
+	// Kind is the kind of its full backups: a dump or a copy of volumes.
+	Kind     string
+	Last     *Run // newest full backup (or panel) run
+	LastOK   *Run
+	LastBase *Run
+	WAL      *WALState
 }
 
 // Overview is the backups page.
@@ -192,13 +206,18 @@ func (m *Manager) Overview(ctx context.Context) (Overview, error) {
 		return all[i].Slug < all[j].Slug
 	})
 	for _, s := range all {
-		if !m.projects.CanDownloadBackup(s.Template) {
+		kind := archive.KindDump
+		switch m.projects.BackupMethod(ctx, dbq.Service{ID: s.ID, Template: s.Template}) {
+		case projects.BackupPGDump:
+		case projects.BackupVolume:
+			kind = archive.KindVolume
+		default:
 			continue
 		}
-		row := Row{Project: s.ProjectSlug, Service: s.Slug, ServiceID: s.ID, Label: s.ProjectSlug + "/" + s.Slug}
+		row := Row{Project: s.ProjectSlug, Service: s.Slug, ServiceID: s.ID, Label: s.ProjectSlug + "/" + s.Slug, Kind: kind}
 		row.Policy, row.HasPolicy = m.ServicePolicy(ctx, s.ID)
-		row.Last = m.lastRun(ctx, row.Label, archive.KindDump, false)
-		row.LastOK = m.lastRun(ctx, row.Label, archive.KindDump, true)
+		row.Last = m.lastRun(ctx, row.Label, kind, false)
+		row.LastOK = m.lastRun(ctx, row.Label, kind, true)
 		row.LastBase = m.lastRun(ctx, row.Label, archive.KindBase, true)
 		if row.Policy.WAL {
 			row.WAL = m.walState(ctx, s.ID)

@@ -17,6 +17,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/backup/s3"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
@@ -219,6 +220,12 @@ func runRow(ctx context.Context, r backup.Run) views.BackupRunRow {
 	if r.Kind == archive.KindDump && r.Verified {
 		row.Checked = i18n.T(ctx, "backups.history.counts", "tables", r.Tables, "rows", r.Rows)
 	}
+	if r.Kind == archive.KindVolume && r.Verified {
+		row.Checked = i18n.T(ctx, "backups.history.files", "n", r.Files)
+		if r.PauseMS > 0 {
+			row.Checked += " · " + i18n.T(ctx, "backups.history.paused", "seconds", fmt.Sprintf("%.1f", float64(r.PauseMS)/1000))
+		}
+	}
 	row.Status, row.Tone = i18n.T(ctx, "backups.run_status."+r.Status), map[string]string{"ok": "success", "failed": "danger", "running": "info"}[r.Status]
 	if r.Warning != "" {
 		row.Warning = i18n.T(ctx, "backups.warning."+r.Warning)
@@ -338,7 +345,8 @@ func (h *handlers) deleteTarget(w http.ResponseWriter, r *http.Request) {
 // serviceBackups fills the service's Backups tab.
 func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service) views.ServiceBackups {
 	ctx := r.Context()
-	b := views.ServiceBackups{Supported: h.projects.CanDownloadBackup(s.Template)}
+	method := h.projects.BackupMethod(ctx, s)
+	b := views.ServiceBackups{Supported: method != "", Volumes: method == projects.BackupVolume}
 	if !b.Supported {
 		return b
 	}
@@ -356,12 +364,13 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 	if b.Enabled {
 		b.NextRun = pol.NextRun.Format(backupTime)
 	}
-	b.WALSupported = true
+	b.WALSupported = !b.Volumes
+	b.Consistency = pol.Consistency
 	if b.WAL {
 		b.WALState, b.WALTone = walText(ctx, h.backups.ServiceWAL(ctx, s.ID), now)
 	}
 	if b.Ready {
-		if win := h.backups.Window(ctx, p.Slug, s.Slug); win.OK {
+		if win := h.backups.Window(ctx, p.Slug, s.Slug); b.WALSupported && win.OK {
 			b.WindowOK = true
 			b.Window = i18n.T(ctx, "svcbackup.window", "from", win.From.Format(backupTime), "to", win.To.Format(backupTime))
 		}
@@ -406,6 +415,8 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 				if at, err := time.Parse(time.RFC3339, x.Point); err == nil {
 					row.What = i18n.T(ctx, "svcbackup.restore_to", "when", at.Local().Format("02/01/2006 15:04:05"))
 				}
+			} else if o, ok := archive.ParseKey(x.Point); ok && o.Kind == archive.KindVolume {
+				row.What = i18n.T(ctx, "svcbackup.restore_from_volumes")
 			} else {
 				row.What = i18n.T(ctx, "svcbackup.restore_from_dump")
 			}
@@ -457,7 +468,7 @@ func defaultRestoreName(slug string) string {
 }
 
 func (h *handlers) setBackupPolicy(w http.ResponseWriter, r *http.Request) {
-	in := backup.PolicyInput{Enabled: r.PostFormValue("enabled") == "1", WAL: r.PostFormValue("wal") == "1"}
+	in := backup.PolicyInput{Enabled: r.PostFormValue("enabled") == "1", WAL: r.PostFormValue("wal") == "1", Consistency: r.PostFormValue("consistency")}
 	var err error
 	if in.EveryHours, err = strconv.Atoi(r.PostFormValue("every_hours")); err == nil {
 		var at time.Time
@@ -575,7 +586,20 @@ func (h *handlers) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.projects.CanDownloadBackup(s.Template) {
+	switch h.projects.BackupMethod(r.Context(), s) {
+	case projects.BackupPGDump:
+	case projects.BackupVolume:
+		// A copy of volumes is made first (the services pause only for
+		// the copy), then fetched once: decrypted in the simple mode,
+		// as it is with the kit.
+		if err := h.backups.PrepareDownload(r.Context(), actor(r), p.Slug, s.Slug); err != nil {
+			code, msg := userError(r, err)
+			h.renderService(w, r, serviceView{status: code, errMsg: msg})
+			return
+		}
+		redirectLocal(w, r, h.serviceBase(r)+"?ok=backup-preparing")
+		return
+	default:
 		h.renderService(w, r, serviceView{status: http.StatusUnprocessableEntity, errMsg: i18n.T(r.Context(), "backup.error.unsupported")})
 		return
 	}

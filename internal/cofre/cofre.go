@@ -362,7 +362,7 @@ func (v *Vault) List(ctx context.Context) ([]Entry, error) {
 			continue
 		}
 		switch o.Kind {
-		case archive.KindDump:
+		case archive.KindDump, archive.KindVolume: // a backup of the whole service
 			e := get(o.Project + "/" + o.Service)
 			e.Dumps++
 			if l.LastModified.After(e.Latest) {
@@ -404,7 +404,7 @@ func (v *Vault) DecryptFile(in, out string) (int64, error) {
 		return 0, err
 	}
 	defer func() { _ = f.Close() }()
-	plain, err := archive.Open(f, v.ids, archive.DefaultLimits)
+	plain, err := archive.Open(f, v.ids, archive.LimitsFor(in))
 	if err != nil {
 		return 0, err
 	}

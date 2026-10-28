@@ -165,7 +165,7 @@ func (m *Manager) OpenRun(ctx context.Context, a Actor, runID string, ownerOK bo
 		if err != nil {
 			continue
 		}
-		plain, err := archive.Open(src, ids, archive.DefaultLimits)
+		plain, err := archive.Open(src, ids, archive.LimitsFor(r.ObjectKey))
 		if err != nil {
 			_ = src.Close()
 			return nil, "", err

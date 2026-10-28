@@ -882,8 +882,58 @@ copy = "Copy {ref}"
 [backup]
 hint = "Makes a pg_dump now, with the database users, and downloads it in the browser as a .zip."
 download = "Download backup"
+hint_volumes = "Copies the service's volumes (paused for the copy), tests the copy and offers a .zip to download once."
 
 [backup.bundle]
+readme_volumes_sealed = """
+Hangar backup: {base}
+
+A copy of the volumes of {service}: {volumes}.
+
+- {base}.volumes.tar.zst.age: the files of each volume (a folder per volume,
+  named after it), with owners, permissions, links, ACLs and attributes,
+  compressed (zstd) and encrypted with age.
+
+1. Decrypt, on your computer, with the recovery kit:
+
+     hangar-cofre decrypt {base}.zip
+
+   It writes {base}.volumes.tar. Without hangar-cofre:
+     age -d -i hangar-kit.txt {base}.volumes.tar.zst.age | zstd -d -o {base}.volumes.tar
+
+2. Unpack into a folder, as root (to keep the files' owners):
+
+     mkdir volumes
+     sudo tar -xpf {base}.volumes.tar --numeric-owner --acls --xattrs -C volumes
+
+   Or straight into a Docker volume (replace "data" with the volume and NAME
+   with the Docker volume that receives it, with the service stopped):
+
+     docker run --rm -i -v NAME:/v/data {image} tar -xpf - --numeric-owner --acls --xattrs --xattrs-include='user.*' -C /v data < {base}.volumes.tar
+
+Keep this file like any backup: without the kit nobody can open it.
+"""
+readme_volumes_plain = """
+Hangar backup: {base}
+
+A copy of the volumes of {service}: {volumes}.
+
+- {base}.volumes.tar: the files of each volume (a folder per volume, named
+  after it), with owners, permissions, links, ACLs and attributes.
+
+Unpack into a folder, as root (to keep the files' owners):
+
+  mkdir volumes
+  sudo tar -xpf {base}.volumes.tar --numeric-owner --acls --xattrs -C volumes
+
+Or straight into a Docker volume (replace "data" with the volume and NAME with
+the Docker volume that receives it, with the service stopped):
+
+  docker run --rm -i -v NAME:/v/data {image} tar -xpf - --numeric-owner --acls --xattrs --xattrs-include='user.*' -C /v data < {base}.volumes.tar
+
+This file is NOT encrypted and holds everything the service keeps (in a RustFS,
+the objects and the users' keys): keep it safe.
+"""
 readme_sealed = """
 Hangar backup: {base}
 
@@ -974,6 +1024,12 @@ no_base = "There is no base before that moment. Choose a later moment or a pg_du
 point = "Choose the restore point and destination."
 unsupported = "This service has no backup to download."
 not_running = "The service must be running to make the backup."
+consistency = "Choose how to copy the volumes: pausing, stopping or with the service running."
+no_room = "There is no room on the server to prepare the copy: it needs {need}, {free} is free."
+disk_full = "The copy stopped so as not to fill the server's disk ({free} free)."
+pause_long = "The copy went past {minutes} minutes with the service paused and was stopped (the service is back). Copy with the service running, or at a quieter time."
+volume_missing = "The backup has the volume {volume}, which {service} does not have. Add the volume (same name) and try again."
+volume_too_big = "The volume {volume} needs {need} and its disk has {limit}. Increase the disk before restoring."
 
 [port]
 internal_hint = "Services in the project already reach each other on the internal network, with no port."
@@ -2121,12 +2177,15 @@ when = "When"
 what = "What"
 result = "Result"
 counts = "{tables} tables, {rows} rows"
+files = { one = "1 file", other = "{n} files" }
+paused = "paused {seconds} s"
 download = "Download"
 
 [backups.kind]
 pg_dump = "pg_dump"
 pg_base = "WAL base"
 panel = "panel"
+volume = "volumes"
 
 [backups.trigger]
 schedule = "scheduled"
@@ -2150,6 +2209,7 @@ failed = "failed"
 shrank = "shrank more than 50%"
 grew = "grew more than 3x"
 rows_dropped = "lost more than half its rows"
+files_dropped = "lost more than half its files"
 
 [backups.alert]
 stale = "{label}: no successful backup in the last 26 h."
@@ -2299,7 +2359,7 @@ routine_title = "Backup routine"
 routine_hint = "The day's first backup runs at this time; the others follow the interval."
 title = "Backups"
 not_ready_simple = "To turn it on, add a destination in Backups."
-unsupported = "Automatic backups exist for PostgreSQL. App volumes come in a later stage."
+unsupported = "This service has no backups: it owns no volumes, or it is a database whose template has no safe way to copy it yet."
 every_hint = "Time of the day's first backup."
 not_ready = "To turn it on, confirm the recovery kit and pick a destination in Backups."
 open_backups = "Open Backups"
@@ -2317,6 +2377,8 @@ window_none = "There is no base to go back to a minute yet. One is taken right a
 last_base = "Last base: {when}"
 download_hint = "Makes a pg_dump now, with the database users, encrypted with your key (.zip). The link lasts 5 minutes."
 download_preparing = "Preparing: dump, test and encryption…"
+download_hint_volumes = "Copies the service's volumes (paused for the copy), tests and encrypts the copy with your key (.zip). The link is valid for 5 minutes."
+download_preparing_volumes = "Preparing: copy of the volumes, test and encryption…"
 download_ready = "Download ({size})"
 download_expires = "The link is valid until {when} and works once."
 download_failed = "The download backup failed: {error}"
@@ -2343,6 +2405,7 @@ restore = "Restore"
 restores = "Restores"
 restore_to = "to {when}"
 restore_from_dump = "from a pg_dump"
+restore_from_volumes = "from a copy of the volumes"
 restore_from_service = "from {service}"
 restore_failed = "The restore started at {when} into {service} failed. Nothing was restored."
 restore_saved_roles = "Database users recreated as in the original: {roles}."
@@ -2360,7 +2423,22 @@ stop = "stopping the database"
 stage = "downloading, checking and copying the data"
 recover = "replaying WAL up to the chosen moment"
 restore = "restoring the dump"
+stop_service = "stopping the service"
+copy = "emptying the volumes and copying the files"
+start = "starting the service again"
+rollback = "the restore failed: putting the volumes back as they were"
 done = "done"
+
+[svcbackup.consistency]
+label = "During the copy"
+pause = "Pause the service during the copy"
+stop = "Stop the service and start it again"
+live = "Copy with the service running"
+
+[svcbackup.consistency_hint]
+pause = "Recommended. Freezes the service only while copying (seconds for 1 GB); no file comes out half written."
+stop = "The app shuts down cleanly before the copy. It is down during the copy."
+live = "No pause, but a file written during the copy may come out incomplete."
 
 [flash.backups]
 mode = "Backup security saved."
@@ -2385,6 +2463,7 @@ ok = "Remove"
 [confirm.restore]
 title = "Restore now?"
 text = "Overwriting replaces the database's data (after a backup of the current state). Into a new service, nothing changes in the original."
+text_volumes = "Overwriting stops the service and replaces every file in its volumes (after a backup of the current state). Into a new service, nothing changes in the original."
 ok = "Restore"
 
 [cli.restore]
@@ -2421,6 +2500,8 @@ databases_failed = "Some services did not come back: {error}"
 [recover]
 database = "Restoring {service}…"
 deploy = "Starting {service}…"
+volumes = "Restoring the volumes of {service}…"
+no_copy = "{service} is back with empty volumes: the destinations have no copy of them."
 failed = "{service} failed: {error}"
 
 [cofre]

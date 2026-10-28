@@ -8,7 +8,10 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"time"
+
+	"filippo.io/age"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
@@ -21,8 +24,9 @@ const DownloadTTL = 5 * time.Minute
 
 var randRead = rand.Read
 
-// download is an encrypted dump, and the roles of its server, waiting to
-// be fetched once as one bundle (archive.WriteBundle).
+// download is an encrypted backup (a dump and the roles of its server, or
+// a copy of volumes) waiting to be fetched once as one bundle
+// (archive.WriteBundle).
 type download struct {
 	Token     string
 	UserID    string
@@ -31,13 +35,21 @@ type download struct {
 	FileName  string
 	Base      string // name of the files in the bundle, without extension
 	Readme    string
-	Path      string
-	RolesPath string
+	Files     []dlFile // in the bundle's order, after the README
 	Size      int64
 	Ready     bool
 	Error     string
 	Expires   time.Time
 	Started   time.Time
+	// Open: the simple mode's server holds the key, so the files go out
+	// decrypted (a copy of volumes: encrypted only while it waits here).
+	Open bool
+}
+
+// dlFile is a staged file of a download and its name in the bundle.
+type dlFile struct {
+	Name string
+	Path string
 }
 
 // Download is what the UI shows about a prepared download.
@@ -62,7 +74,7 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 	if _, err := m.recipients(ctx); err != nil {
 		return err
 	}
-	if !m.running(ctx, s) {
+	if s.Method == projects.BackupPGDump && !m.running(ctx, s) {
 		return ErrNotRunning
 	}
 	b := make([]byte, 32)
@@ -70,9 +82,17 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 		return err
 	}
 	base := archive.BundleName(s.Project, s.Service, m.now())
+	readme := BundleReadme(ctx, base, s.DBName, true)
+	open := false
+	if s.Method == projects.BackupVolume {
+		// The copy is made here, then sent: the services are paused only
+		// for the copy, not for as long as the browser takes.
+		open = m.Mode(ctx) == ModeSimple
+		readme = VolumesReadme(ctx, base, s.label(), volumeList(s), !open)
+	}
 	d := &download{
 		Token: hex.EncodeToString(b), UserID: a.UserID, ServiceID: s.ID, Label: s.label(),
-		FileName: base + archive.ExtBundle, Base: base, Readme: BundleReadme(ctx, base, s.DBName, true),
+		FileName: base + archive.ExtBundle, Base: base, Readme: readme, Open: open,
 		Started: m.now(), Expires: m.now().Add(time.Hour),
 	}
 	m.dlMu.Lock()
@@ -97,12 +117,14 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 		bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), restoreTimeout)
 		defer cancel()
 		unlock := m.lock(s.label())
-		dd, err := m.dumpAndVerify(bg, s)
+		files, summary, err := m.prepareFiles(bg, s, base)
 		unlock()
 		m.dlMu.Lock()
 		defer m.dlMu.Unlock()
 		if _, ok := m.downloads[d.Token]; !ok {
-			dd.remove()
+			for _, f := range files {
+				_ = os.Remove(f.Path)
+			}
 			return
 		}
 		if err != nil {
@@ -110,13 +132,40 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 			m.record(bg, a, "service.backup.download", "service", s.ID, outcomeOf(err), map[string]any{"service": s.label(), "error": d.Error})
 			return
 		}
-		_ = dd.dump.f.Close()
-		_ = dd.roles.f.Close()
-		d.Path, d.RolesPath = dd.dump.f.Name(), dd.roles.f.Name()
-		d.Size, d.Ready, d.Expires = dd.dump.size.n+dd.roles.size.n, true, m.now().Add(DownloadTTL)
-		m.record(bg, a, "service.backup.prepare", "service", s.ID, outcomeOf(nil), map[string]any{"service": s.label(), "rows": dd.check.Rows, "tables": dd.check.Tables})
+		d.Files = files
+		for _, f := range files {
+			if st, err := os.Stat(f.Path); err == nil {
+				d.Size += st.Size()
+			}
+		}
+		d.Ready, d.Expires = true, m.now().Add(DownloadTTL)
+		summary["service"] = s.label()
+		m.record(bg, a, "service.backup.prepare", "service", s.ID, outcomeOf(nil), summary)
 	}()
 	return nil
+}
+
+// prepareFiles makes the tested, encrypted files of a download in the
+// staging dir: the roles and the dump of a database, or a copy of the
+// volumes (kept consistent as the policy says).
+func (m *Manager) prepareFiles(ctx context.Context, s svcRef, base string) ([]dlFile, map[string]any, error) {
+	if s.Method == projects.BackupVolume {
+		v, err := m.archiveVolumes(ctx, s, m.consistency(ctx, s))
+		if err != nil {
+			return nil, nil, err
+		}
+		_ = v.file.f.Close()
+		return []dlFile{{Name: base + archive.ExtVolumes, Path: v.file.f.Name()}},
+			map[string]any{"files": v.check.Files, "bytes": v.check.Bytes, "pause_ms": v.check.PauseMS}, nil
+	}
+	dd, err := m.dumpAndVerify(ctx, s)
+	if err != nil {
+		return nil, nil, err
+	}
+	_ = dd.dump.f.Close()
+	_ = dd.roles.f.Close()
+	return []dlFile{{Name: base + archive.ExtRoles, Path: dd.roles.f.Name()}, {Name: base + archive.ExtDump, Path: dd.dump.f.Name()}},
+		map[string]any{"rows": dd.check.Rows, "tables": dd.check.Tables}, nil
 }
 
 // PendingDownload is the user's prepared (or preparing) download of a
@@ -152,26 +201,45 @@ func (m *Manager) TakeDownload(ctx context.Context, a Actor, token string) (Bund
 		return nil, "", nil, projects.ErrNotFound
 	}
 	delete(m.downloads, d.Token)
-	drop := func() { _ = os.Remove(d.Path); _ = os.Remove(d.RolesPath) }
-	dump, err := os.Open(d.Path)
-	if err != nil {
-		drop()
-		return nil, "", nil, err
+	var opened []io.Closer
+	done := func() {
+		for _, f := range opened {
+			_ = f.Close()
+		}
+		for _, f := range d.Files {
+			_ = os.Remove(f.Path)
+		}
 	}
-	roles, err := os.Open(d.RolesPath)
-	if err != nil {
-		_ = dump.Close()
-		drop()
-		return nil, "", nil, err
+	files := []archive.BundleFile{archive.TextFile(ReadmeName, d.Readme)}
+	var ids []age.Identity
+	if d.Open {
+		if ids = m.withServerIdentity(ctx, nil); len(ids) == 0 {
+			done()
+			return nil, "", nil, i18n.E("backup.error.kit")
+		}
 	}
-	m.record(ctx, a, "service.backup.download", "service", d.ServiceID, outcomeOf(nil), map[string]any{"service": d.Label, "size": d.Size, "encrypted": true, "roles": true})
-	bundle := func(w io.Writer) error {
-		return archive.WriteBundle(w, m.now(),
-			archive.TextFile(ReadmeName, d.Readme),
-			archive.BundleFile{Name: d.Base + archive.ExtRoles, Body: roles},
-			archive.BundleFile{Name: d.Base + archive.ExtDump, Body: dump})
+	for _, df := range d.Files {
+		f, err := os.Open(df.Path)
+		if err != nil {
+			done()
+			return nil, "", nil, err
+		}
+		opened = append(opened, f)
+		bf := archive.BundleFile{Name: df.Name, Body: f}
+		if d.Open {
+			plain, err := archive.Open(f, ids, archive.LimitsFor(df.Name))
+			if err != nil {
+				done()
+				return nil, "", nil, err
+			}
+			opened = append(opened, plain)
+			bf = archive.BundleFile{Name: strings.TrimSuffix(strings.TrimSuffix(df.Name, ".age"), ".zst"), Body: plain}
+		}
+		files = append(files, bf)
 	}
-	return bundle, d.FileName, func() { _ = dump.Close(); _ = roles.Close(); drop() }, nil
+	m.record(ctx, a, "service.backup.download", "service", d.ServiceID, outcomeOf(nil), map[string]any{"service": d.Label, "size": d.Size, "encrypted": !d.Open, "files": len(d.Files)})
+	bundle := func(w io.Writer) error { return archive.WriteBundle(w, m.now(), files...) }
+	return bundle, d.FileName, done, nil
 }
 
 func (m *Manager) expireLocked() {
@@ -185,10 +253,8 @@ func (m *Manager) expireLocked() {
 
 func (m *Manager) dropLocked(token string) {
 	if d, ok := m.downloads[token]; ok {
-		for _, p := range []string{d.Path, d.RolesPath} {
-			if p != "" {
-				_ = os.Remove(p)
-			}
+		for _, f := range d.Files {
+			_ = os.Remove(f.Path)
 		}
 		delete(m.downloads, token)
 	}

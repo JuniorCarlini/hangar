@@ -1,8 +1,11 @@
 id = "rustfs"
-version = 3
+version = 4
 category = "storage"
 tags = ["s3", "object-storage", "minio"]
 docs = "https://docs.rustfs.com/"
+# Buckets, objects, users and policies all live in /data (.rustfs.sys):
+# a copy of the disk, paused for it, is a full clone.
+backup = "volume"
 main = "rustfs"
 name = { en = "RustFS (S3 storage)", "pt-BR" = "RustFS (armazenamento S3)" }
 description = { en = "S3-compatible object storage, a drop-in for MinIO (which no longer publishes images). Generated keys; the console is on port 9001.", "pt-BR" = "Armazenamento de objetos compatível com S3, no lugar do MinIO (que parou de publicar imagens). Chaves geradas; o console fica na porta 9001." }

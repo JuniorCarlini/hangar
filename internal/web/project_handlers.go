@@ -459,7 +459,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		d.Domains.Base = views.EdgeBase{Domain: info.BaseDomain, Provider: info.Provider, Scaled: info.HasToken, FromConfig: info.FromConfig}
 	}
 	d.Domains.DNSProviders = edge.DNSProviders
-	d.CanBackup, d.Stateful = h.projects.CanDownloadBackup(s.Template), s.Stateful == 1
+	d.CanBackup, d.Stateful = h.projects.BackupMethod(r.Context(), s) != "", s.Stateful == 1
 	d.FixedPort = s.Template != ""
 	d.Maintenance = s.Maintenance == 1
 	d.ServerHint = i18n.T(r.Context(), "port.ssh_target")

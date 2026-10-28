@@ -128,7 +128,7 @@ func (h *handlers) paletteFor(ctx context.Context, p *auth.Principal) paletteDat
 				continue
 			}
 			add(paletteItem{Group: "services", Label: s.Slug, Hint: pr.Slug, Icon: "box", Href: base})
-			for _, tab := range views.ServiceTabsFor(h.projects.CanDownloadBackup(s.Template)) {
+			for _, tab := range views.ServiceTabsFor(h.projects.BackupMethod(ctx, s) != "") {
 				add(paletteItem{
 					Group: "services", Label: tr("palette.service_tab", "service", s.Slug, "tab", tr("service.tab."+tab)),
 					Hint: pr.Slug, Icon: tabIcons[tab], Deep: true, Href: base + "?tab=" + tab,

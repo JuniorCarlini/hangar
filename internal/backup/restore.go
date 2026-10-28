@@ -140,6 +140,9 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 	var probe string
 	switch req.Mode {
 	case ModePITR:
+		if s.Method != projects.BackupPGDump {
+			return "", i18n.E("backup.error.point")
+		}
 		if req.At.IsZero() || req.At.After(m.now().Add(time.Minute)) {
 			return "", i18n.E("backup.error.when")
 		}
@@ -157,7 +160,9 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 		probe = plan.Base.Key
 	case ModeDump:
 		o, ok := archive.ParseKey(req.Key)
-		if !ok || o.Kind != archive.KindDump || o.Project != s.Project || o.Service != s.Service {
+		// The mode is "a backup file": a dump or, for a service backed
+		// up as volumes, a copy of them (the key says which).
+		if !ok || o.Kind != s.kind() || o.Project != s.Project || o.Service != s.Service {
 			return "", i18n.E("backup.error.point")
 		}
 		probe = req.Key
@@ -262,6 +267,9 @@ func (m *Manager) step(ctx context.Context, id, step string) {
 
 // runRestore runs with the service's restore lock held (StartRestore).
 func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, req RestoreRequest) (err error) {
+	if s.Method == projects.BackupVolume {
+		return m.runVolumeRestore(ctx, a, id, s, req)
+	}
 	if req.Destination == DestOverwrite {
 		// docs/09: overwriting first backs up the current state.
 		m.step(ctx, id, "pre_backup")
@@ -678,8 +686,9 @@ func (m *Manager) opener(ctx context.Context) archive.Opener {
 	}
 }
 
-// Dumps lists the logical backups of a service in the bucket, newest
-// first (the restore form's choices).
+// Dumps lists the backups a whole service restores from (its dumps, or
+// its copies of volumes) in the bucket, newest first (the restore form's
+// choices).
 func (m *Manager) Dumps(ctx context.Context, projectSlug, serviceSlug string) ([]archive.Listed, error) {
 	var out []archive.Listed
 	for _, folder := range []string{"diario", "semanal", "mensal"} {
@@ -688,7 +697,7 @@ func (m *Manager) Dumps(ctx context.Context, projectSlug, serviceSlug string) ([
 			return nil, err
 		}
 		for _, o := range objs {
-			if p, ok := archive.ParseKey(o.Key); ok && p.Kind == archive.KindDump {
+			if p, ok := archive.ParseKey(o.Key); ok && archive.IsPoint(p.Kind) {
 				out = append(out, o)
 			}
 		}

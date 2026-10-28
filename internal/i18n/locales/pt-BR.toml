@@ -882,8 +882,58 @@ copy = "Copiar {ref}"
 [backup]
 hint = "Gera um pg_dump na hora, com os usuários do banco, e baixa pelo navegador num .zip."
 download = "Baixar backup"
+hint_volumes = "Copia os volumes do serviço (pausado durante a cópia), testa e oferece um .zip para baixar uma vez."
 
 [backup.bundle]
+readme_volumes_sealed = """
+Backup do Hangar: {base}
+
+Cópia dos volumes de {service}: {volumes}.
+
+- {base}.volumes.tar.zst.age: os arquivos de cada volume (uma pasta por
+  volume, com o nome dele), com donos, permissões, links, ACLs e atributos,
+  comprimidos (zstd) e cifrados com age.
+
+1. Decifrar, no seu computador, com o kit de recuperação:
+
+     hangar-cofre decrypt {base}.zip
+
+   Gera {base}.volumes.tar. Sem o hangar-cofre:
+     age -d -i hangar-kit.txt {base}.volumes.tar.zst.age | zstd -d -o {base}.volumes.tar
+
+2. Abrir numa pasta, como root (para manter os donos dos arquivos):
+
+     mkdir volumes
+     sudo tar -xpf {base}.volumes.tar --numeric-owner --acls --xattrs -C volumes
+
+   Ou direto num volume do Docker (troque "data" pelo volume e NOME pelo
+   volume do Docker que vai recebê-lo, com o serviço parado):
+
+     docker run --rm -i -v NOME:/v/data {image} tar -xpf - --numeric-owner --acls --xattrs --xattrs-include='user.*' -C /v data < {base}.volumes.tar
+
+Guarde este arquivo como qualquer backup: sem o kit ninguém o abre.
+"""
+readme_volumes_plain = """
+Backup do Hangar: {base}
+
+Cópia dos volumes de {service}: {volumes}.
+
+- {base}.volumes.tar: os arquivos de cada volume (uma pasta por volume, com
+  o nome dele), com donos, permissões, links, ACLs e atributos.
+
+Abrir numa pasta, como root (para manter os donos dos arquivos):
+
+  mkdir volumes
+  sudo tar -xpf {base}.volumes.tar --numeric-owner --acls --xattrs -C volumes
+
+Ou direto num volume do Docker (troque "data" pelo volume e NOME pelo volume
+do Docker que vai recebê-lo, com o serviço parado):
+
+  docker run --rm -i -v NOME:/v/data {image} tar -xpf - --numeric-owner --acls --xattrs --xattrs-include='user.*' -C /v data < {base}.volumes.tar
+
+Este arquivo NÃO está cifrado e tem tudo o que o serviço guarda (num RustFS,
+os objetos e as chaves dos usuários): guarde-o com cuidado.
+"""
 readme_sealed = """
 Backup do Hangar: {base}
 
@@ -971,6 +1021,12 @@ no_base = "Não há base anterior a esse momento. Escolha um momento mais recent
 point = "Escolha o ponto e o destino da restauração."
 unsupported = "Este serviço não tem backup para baixar."
 not_running = "O serviço precisa estar rodando para gerar o backup."
+consistency = "Escolha como copiar os volumes: pausando, parando ou com o serviço rodando."
+no_room = "Não há espaço no servidor para preparar a cópia: precisa de {need}, há {free} livres."
+disk_full = "A cópia parou para não encher o disco do servidor ({free} livres)."
+pause_long = "A cópia passou de {minutes} minutos com o serviço pausado e foi interrompida (o serviço voltou). Use a cópia com o serviço rodando ou um horário mais calmo."
+volume_missing = "O backup tem o volume {volume}, que {service} não tem. Adicione o volume (mesmo nome) e tente de novo."
+volume_too_big = "O volume {volume} precisa de {need} e o disco dele tem {limit}. Aumente o disco antes de restaurar."
 
 [port]
 internal_hint = "Serviços do projeto já se enxergam pela rede interna, sem porta."
@@ -2118,12 +2174,15 @@ when = "Quando"
 what = "O quê"
 result = "Resultado"
 counts = "{tables} tabelas, {rows} linhas"
+files = { one = "1 arquivo", other = "{n} arquivos" }
+paused = "pausa de {seconds} s"
 download = "Baixar"
 
 [backups.kind]
 pg_dump = "pg_dump"
 pg_base = "base do WAL"
 panel = "painel"
+volume = "volumes"
 
 [backups.trigger]
 schedule = "agendado"
@@ -2147,6 +2206,7 @@ failed = "falhou"
 shrank = "encolheu mais de 50%"
 grew = "cresceu mais de 3x"
 rows_dropped = "perdeu mais da metade das linhas"
+files_dropped = "perdeu mais da metade dos arquivos"
 
 [backups.alert]
 stale = "{label}: nenhum backup com sucesso nas últimas 26 h."
@@ -2297,7 +2357,7 @@ routine_title = "Rotina de backup"
 routine_hint = "O primeiro backup do dia sai nesse horário; os outros seguem o intervalo."
 title = "Backups"
 not_ready_simple = "Para ligar, cadastre um destino em Backups."
-unsupported = "Backup automático existe para PostgreSQL. Volumes de apps entram numa próxima etapa."
+unsupported = "Este serviço não tem backup: ele não tem volumes próprios, ou é um banco cujo template ainda não tem um jeito seguro de copiá-lo."
 every_hint = "Horário do primeiro backup do dia."
 not_ready = "Para ligar, confirme o kit de recuperação e escolha um destino em Backups."
 open_backups = "Abrir Backups"
@@ -2315,6 +2375,8 @@ window_none = "Ainda não há base para voltar a um minuto. Ela é feita logo de
 last_base = "Última base: {when}"
 download_hint = "Gera um pg_dump na hora, com os usuários do banco, cifrado com a sua chave (.zip). O link vale 5 minutos."
 download_preparing = "Preparando: dump, teste e cifra…"
+download_hint_volumes = "Copia os volumes do serviço (pausado durante a cópia), testa e cifra com a sua chave (.zip). O link vale 5 minutos."
+download_preparing_volumes = "Preparando: cópia dos volumes, teste e cifra…"
 download_ready = "Baixar ({size})"
 download_expires = "O link vale até {when} e funciona uma vez."
 download_failed = "O backup para baixar falhou: {error}"
@@ -2341,6 +2403,7 @@ restore = "Restaurar"
 restores = "Restaurações"
 restore_to = "até {when}"
 restore_from_dump = "de um pg_dump"
+restore_from_volumes = "de uma cópia dos volumes"
 restore_from_service = "de {service}"
 restore_failed = "A restauração iniciada em {when} para {service} falhou. Nada foi restaurado."
 restore_saved_roles = "Usuários do banco recriados como no original: {roles}."
@@ -2358,7 +2421,22 @@ stop = "parando o banco"
 stage = "baixando, conferindo e copiando os dados"
 recover = "aplicando o WAL até o momento escolhido"
 restore = "restaurando o dump"
+stop_service = "parando o serviço"
+copy = "esvaziando os volumes e copiando os arquivos"
+start = "subindo o serviço de novo"
+rollback = "a restauração falhou: voltando os volumes como estavam"
 done = "concluído"
+
+[svcbackup.consistency]
+label = "Durante a cópia"
+pause = "Pausar o serviço durante a cópia"
+stop = "Parar o serviço e subir de novo"
+live = "Copiar com o serviço rodando"
+
+[svcbackup.consistency_hint]
+pause = "Recomendado. Congela o serviço só enquanto copia (segundos para 1 GB); nenhum arquivo sai pela metade."
+stop = "O app desliga com calma antes de copiar. Fica fora do ar durante a cópia."
+live = "Sem pausa, mas um arquivo gravado durante a cópia pode sair incompleto."
 
 [flash.backups]
 mode = "Segurança dos backups salva."
@@ -2383,6 +2461,7 @@ ok = "Remover"
 [confirm.restore]
 title = "Restaurar agora?"
 text = "Sobrescrever troca os dados do banco (depois de um backup do estado atual). Num serviço novo, nada muda no original."
+text_volumes = "Sobrescrever para o serviço e troca todos os arquivos dos volumes (depois de um backup do estado atual). Num serviço novo, nada muda no original."
 ok = "Restaurar"
 
 [cli.restore]
@@ -2419,6 +2498,8 @@ databases_failed = "Alguns serviços não voltaram: {error}"
 [recover]
 database = "Restaurando {service}…"
 deploy = "Subindo {service}…"
+volumes = "Restaurando os volumes de {service}…"
+no_copy = "{service} voltou com os volumes vazios: não há cópia deles nos destinos."
 failed = "{service} falhou: {error}"
 
 [cofre]

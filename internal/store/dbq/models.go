@@ -76,16 +76,17 @@ type AuditLog struct {
 }
 
 type BackupPolicy struct {
-	ID         string
-	ServiceID  sql.NullString
-	Enabled    int64
-	EveryHours int64
-	AtMinute   int64
-	Wal        int64
-	WalSince   sql.NullInt64
-	NextRunAt  int64
-	CreatedAt  int64
-	UpdatedAt  int64
+	ID          string
+	ServiceID   sql.NullString
+	Enabled     int64
+	EveryHours  int64
+	AtMinute    int64
+	Wal         int64
+	WalSince    sql.NullInt64
+	NextRunAt   int64
+	CreatedAt   int64
+	UpdatedAt   int64
+	Consistency string
 }
 
 type BackupRecipient struct {

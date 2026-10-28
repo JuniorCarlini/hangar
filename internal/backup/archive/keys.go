@@ -15,6 +15,10 @@ const (
 	// KindRoles are the roles of the server a dump came from (pg_dumpall
 	// --roles-only), next to the dump: RolesKey.
 	KindRoles = "pg_roles"
+	// KindVolume is a copy of the files of a service's own volumes (one
+	// tar holding a folder per volume), for services that are not
+	// PostgreSQL: VolumesKey.
+	KindVolume = "volume"
 )
 
 // Retention classes. Each has its own folder so the bucket's lifecycle
@@ -54,6 +58,11 @@ const (
 	ExtTar   = ".tar.zst.age"
 	ExtWAL   = ".zst.age"
 	ExtRoles = ".roles.sql.age"
+	// ExtVolumes is a tar of a service's volumes, zstd-compressed.
+	ExtVolumes = ".volumes.tar.zst.age"
+	// ExtVolumesTar is that tar once decrypted (zstd comes off with the
+	// encryption: Open decompresses).
+	ExtVolumesTar = ".volumes.tar"
 )
 
 // RolesKey names the roles saved with the dump dumpKey: the same folder
@@ -74,6 +83,30 @@ func FolderOf(class string) string { return classFolder[class] }
 func DumpKey(class, project, service string, t time.Time) string {
 	return classFolder[class] + "/" + project + "/" + service + "/" + t.UTC().Format(TimeFormat) + ExtDump
 }
+
+// VolumesKey names a copy of a service's volumes. It lives next to the
+// dumps (the same folders, so the same retention and lock).
+func VolumesKey(class, project, service string, t time.Time) string {
+	return classFolder[class] + "/" + project + "/" + service + "/" + t.UTC().Format(TimeFormat) + ExtVolumes
+}
+
+// IsPoint reports whether kind is a backup a whole service is restored
+// from (the restore form's choices).
+func IsPoint(kind string) bool { return kind == KindDump || kind == KindVolume }
+
+// LimitsFor are the Open limits for the object key (or local file name).
+// Volumes hold files of any kind, such as preallocated, mostly-zero
+// files that compress far beyond what a dump does, so only the size is
+// bounded (by the largest disk Hangar makes).
+func LimitsFor(key string) Limits {
+	if strings.HasSuffix(key, ExtVolumes) {
+		return VolumeLimits
+	}
+	return DefaultLimits
+}
+
+// VolumeLimits bound a decrypted copy of volumes.
+var VolumeLimits = Limits{MaxBytes: 8 << 40}
 
 // BaseKey names a base backup (physical copy for point-in-time recovery).
 // startSegment is the first WAL segment it needs.
@@ -103,7 +136,7 @@ const PanelPrefix = folderPanel + "/"
 type Object struct {
 	Key     string
 	Kind    string
-	Class   string // dumps only
+	Class   string // dumps and volumes only
 	Project string
 	Service string
 	Time    time.Time
@@ -118,6 +151,7 @@ var (
 	tsPart     = `[0-9]{8}T[0-9]{6}Z`
 	dumpKeyRE  = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.dump\.age$`)
 	rolesKeyRE = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.roles\.sql\.age$`)
+	volKeyRE   = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.volumes\.tar\.zst\.age$`)
 	baseKeyRE  = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/base/(` + tsPart + `)_([0-9A-F]{24})\.tar\.zst\.age$`)
 	walKeyRE   = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/seg/(` + WALNamePattern + `)\.zst\.age$`)
 	panelRE    = regexp.MustCompile(`^painel/(` + tsPart + `)\.tar\.zst\.age$`)
@@ -143,6 +177,10 @@ func ParseKey(key string) (Object, bool) {
 	if m := rolesKeyRE.FindStringSubmatch(key); m != nil {
 		t, err := time.Parse(TimeFormat, m[4])
 		return Object{Key: key, Kind: KindRoles, Class: folderClass[m[1]], Project: m[2], Service: m[3], Time: t}, err == nil
+	}
+	if m := volKeyRE.FindStringSubmatch(key); m != nil {
+		t, err := time.Parse(TimeFormat, m[4])
+		return Object{Key: key, Kind: KindVolume, Class: folderClass[m[1]], Project: m[2], Service: m[3], Time: t}, err == nil
 	}
 	if m := baseKeyRE.FindStringSubmatch(key); m != nil {
 		t, err := time.Parse(TimeFormat, m[3])

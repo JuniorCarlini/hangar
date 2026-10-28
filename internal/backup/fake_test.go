@@ -53,6 +53,15 @@ type fakeNode struct {
 	rolesScript string
 	saved       []string
 	dbScript    string
+	// Volumes: the tar the copy helper writes, what the restore helper
+	// received, the order of pauses, stops and helpers (events), and
+	// faults to inject.
+	volTar      []byte
+	volIn       []byte
+	volMounts   []node.TaskMount
+	events      []string
+	verifyLies  bool  // the test of the copy reports another count
+	sourceExtra int64 // the volumes held this many more entries
 }
 
 // bootstrapOnly is pg_dumpall --roles-only of a server with only its
@@ -72,12 +81,30 @@ func (f *fakeNode) EnsureEdge(context.Context, node.EdgeSpec) error            {
 func (f *fakeNode) ConnectEdge(context.Context, string) error                  { return nil }
 func (f *fakeNode) EnsureProjectNetwork(context.Context, string, string) error { return nil }
 func (f *fakeNode) RemoveProjectNetwork(context.Context, string) error         { return nil }
-func (f *fakeNode) Start(context.Context, string, string) error                { return nil }
-func (f *fakeNode) Stop(context.Context, string, string) error                 { return nil }
-func (f *fakeNode) Restart(context.Context, string, string) error              { return nil }
-func (f *fakeNode) Remove(context.Context, string, string) error               { return nil }
-func (f *fakeNode) SetLinked(context.Context, string, string, []string) error  { return nil }
-func (f *fakeNode) ListManaged(context.Context) ([]node.Managed, error)        { return nil, nil }
+
+func (f *fakeNode) event(e string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.events = append(f.events, e)
+}
+
+func (f *fakeNode) eventList() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.events...)
+}
+
+func (f *fakeNode) Start(_ context.Context, _, s string) error { f.event("start " + s); return nil }
+
+func (f *fakeNode) Stop(_ context.Context, _, s string) error { f.event("stop " + s); return nil }
+
+func (f *fakeNode) Pause(_ context.Context, _, s string) error { f.event("pause " + s); return nil }
+
+func (f *fakeNode) Unpause(_ context.Context, _, s string) error              { f.event("unpause " + s); return nil }
+func (f *fakeNode) Restart(context.Context, string, string) error             { return nil }
+func (f *fakeNode) Remove(context.Context, string, string) error              { return nil }
+func (f *fakeNode) SetLinked(context.Context, string, string, []string) error { return nil }
+func (f *fakeNode) ListManaged(context.Context) ([]node.Managed, error)       { return nil, nil }
 func (f *fakeNode) ServiceAddress(context.Context, string, string, int) (string, error) {
 	return "", nil
 }
@@ -165,6 +192,9 @@ func (f *fakeNode) ExecIO(_ context.Context, _, _ string, cmd []string, stdin io
 func (f *fakeNode) RunTask(_ context.Context, spec node.TaskSpec, stdin io.Reader, stdout io.Writer) error {
 	if err := spec.Validate(); err != nil {
 		return err
+	}
+	if spec.Image == VolumeHelperImage {
+		return f.volumeTask(spec, stdin, stdout)
 	}
 	var in []byte
 	if stdin != nil {

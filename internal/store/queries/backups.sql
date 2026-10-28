@@ -42,11 +42,11 @@ SELECT * FROM backup_policies WHERE service_id = ?;
 SELECT * FROM backup_policies ORDER BY created_at;
 
 -- name: UpsertBackupPolicy :exec
-INSERT INTO backup_policies (id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO backup_policies (id, service_id, enabled, every_hours, at_minute, wal, wal_since, next_run_at, consistency, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (id) DO UPDATE SET
     enabled = excluded.enabled, every_hours = excluded.every_hours, at_minute = excluded.at_minute,
-    wal = excluded.wal, wal_since = excluded.wal_since, next_run_at = excluded.next_run_at,
+    wal = excluded.wal, wal_since = excluded.wal_since, next_run_at = excluded.next_run_at, consistency = excluded.consistency,
     updated_at = excluded.updated_at;
 
 -- name: SetBackupPolicyNextRun :exec

@@ -120,7 +120,7 @@ func (v *Vault) decryptBundle(in, dir string) ([]Written, error) {
 		dest := filepath.Join(dir, name) //nolint:gosec // name is a bare file name, checked above
 		if strings.HasSuffix(name, ".age") {
 			dest = filepath.Join(dir, DecryptedName(name))
-			plain, err := archive.Open(rc, v.ids, archive.DefaultLimits)
+			plain, err := archive.Open(rc, v.ids, archive.LimitsFor(name))
 			if err != nil {
 				_ = rc.Close()
 				return done, err

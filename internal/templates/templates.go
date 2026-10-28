@@ -43,6 +43,15 @@ func (t Text) In(locale string) string {
 // Categories a template may declare.
 var Categories = []string{"database", "cache", "queue", "search", "storage", "automation", "monitoring", "admin", "other"}
 
+// Backup methods a template may declare (backup = "..."). pg_dump dumps
+// the PostgreSQL of its services; volume copies the files of the volumes
+// they own (paused for the copy), so only templates whose services are
+// not databases with a dump method of their own declare it.
+const (
+	BackupPGDump = "pg_dump"
+	BackupVolume = "volume"
+)
+
 // maxEndpoints caps the HTTP endpoints a template may declare.
 const maxEndpoints = 6
 
@@ -65,7 +74,8 @@ type Template struct {
 	// exports) always comes first.
 	Services []Service
 	Exports  []Export
-	// Backup says how "Download backup" works: "pg_dump" or "" (none).
+	// Backup says how the template's services are backed up:
+	// BackupPGDump, BackupVolume or "" (none).
 	Backup string
 	// Endpoints are the container ports the service exposes over HTTP and
 	// can get an external link (docs/28). Empty = no web page.
@@ -214,7 +224,7 @@ func (t *Template) Validate() error {
 		return errors.New("description: en and pt-BR are required")
 	case len(t.Services) == 0:
 		return errors.New("compose.yaml: no services")
-	case t.Backup != "" && t.Backup != "pg_dump":
+	case t.Backup != "" && t.Backup != BackupPGDump && t.Backup != BackupVolume:
 		return fmt.Errorf("backup: unknown kind %q", t.Backup)
 	case len(t.Tags) > 8:
 		return errors.New("tags: at most 8")

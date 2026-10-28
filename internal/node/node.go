@@ -473,6 +473,15 @@ type VolumeEnsurer interface {
 	EnsureVolumes(ctx context.Context, spec ServiceSpec) error
 }
 
+// Pauser is implemented by nodes that can freeze a service's processes
+// (docker pause, the cgroup freezer) and let them go on: a copy of its
+// volumes taken meanwhile sees no file half written. Optional: backups of
+// volumes say so when it is missing.
+type Pauser interface {
+	Pause(ctx context.Context, project, service string) error
+	Unpause(ctx context.Context, project, service string) error
+}
+
 // Shell is an interactive terminal inside a service container: what is
 // written goes to the shell's input, what is read is its screen.
 type Shell interface {

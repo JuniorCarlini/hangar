@@ -17,7 +17,7 @@ func setWAL(t *testing.T, f *fixture, serviceID string, on bool) {
 	}
 	if err := f.m.q.UpsertBackupPolicy(context.Background(), dbq.UpsertBackupPolicyParams{
 		ID: "bp_" + serviceID, ServiceID: sql.NullString{String: serviceID, Valid: true}, Enabled: 1,
-		EveryHours: 24, AtMinute: 180, Wal: wal, NextRunAt: 1, CreatedAt: 1, UpdatedAt: 1,
+		EveryHours: 24, AtMinute: 180, Wal: wal, NextRunAt: 1, Consistency: "pause", CreatedAt: 1, UpdatedAt: 1,
 	}); err != nil {
 		t.Fatal(err)
 	}
