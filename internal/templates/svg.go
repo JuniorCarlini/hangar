@@ -19,6 +19,15 @@ var forbiddenElements = map[string]bool{
 	"audio": true, "video": true, "image": true, "feimage": true,
 }
 
+// animations change an attribute over time.
+var animations = map[string]bool{"animate": true, "set": true, "animatemotion": true, "animatetransform": true}
+
+// isHref reports whether an attribute name is a link (href, xlink:href).
+func isHref(attr string) bool {
+	attr = strings.ToLower(strings.TrimSpace(attr))
+	return attr == "href" || strings.HasSuffix(attr, ":href")
+}
+
 // urlRE finds url(...) references in styles and presentation attributes;
 // only local ones (url(#gradient)) are allowed.
 var urlRE = regexp.MustCompile(`(?i)url\s*\(\s*['"]?\s*([^)'"\s]*)`)
@@ -66,6 +75,11 @@ func CheckSVG(data []byte) error {
 				if err := checkSVGAttr(a); err != nil {
 					return fmt.Errorf("<%s %s>: %w", x.Name.Local, a.Name.Local, err)
 				}
+				// An animation can set href after the checks above ran on
+				// its static value (<set attributeName="href" to="javascript:…">).
+				if animations[name] && strings.EqualFold(a.Name.Local, "attributeName") && isHref(a.Value) {
+					return fmt.Errorf("<%s> may not animate links", x.Name.Local)
+				}
 			}
 			inStyle = name == "style"
 			depth++
@@ -112,6 +126,11 @@ func checkSVGAttr(a xml.Attr) error {
 }
 
 func checkCSS(css string) error {
+	// CSS escapes (u\72l(…)) would hide a url() from the check below; a
+	// logo has no use for them.
+	if strings.Contains(css, "\\") {
+		return errors.New("CSS escapes are not allowed")
+	}
 	if strings.Contains(strings.ToLower(css), "@import") {
 		return errors.New("@import is not allowed")
 	}
