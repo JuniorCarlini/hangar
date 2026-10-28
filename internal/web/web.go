@@ -128,8 +128,9 @@ func routes(rt *Router, h *handlers) {
 	// GitHub's webhook: no session, authenticated by the HMAC signature.
 	rt.HandleFunc("POST "+projects.HookPath+"{token}", h.gitHook, Policy{Public: true, Audit: "service.webhook", AuditByHandler: true})
 
-	// First-run setup: only while there is no user, and only with the
-	// one-time code from the server.
+	// First-run setup: only while there is no user, and only during the
+	// window that opens when the panel starts with none (auth.PrepareSetup;
+	// the one-time code of v0.2.0 is gone).
 	rt.HandleFunc("GET /setup", h.setupPage, public)
 	rt.HandleFunc("POST /setup", h.setupSubmit, Policy{Public: true, Audit: "user.create", AuditByHandler: true})
 	// Invitations: a one-time link where the invited person sets a password.
