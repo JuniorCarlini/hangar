@@ -121,7 +121,10 @@
   var project = svg.dataset.project;
   var csrf = svg.dataset.csrf;
   var baseW = +svg.getAttribute('width'), baseH = +svg.getAttribute('height');
-  var zoom = 1;
+  // The first view (pan and zoom) was already painted by canvasview.js,
+  // before the first frame; it also has the geometry the buttons use.
+  var cv = window.HangarCanvasView;
+  var zoom = cv.initial ? cv.initial.zoom : 1;
   // Room around each card inside its foreignObject (cardPad in canvas.templ).
   var PAD = 16;
 
@@ -181,7 +184,7 @@
   // trackpad) to pan in any direction; ctrl/⌘ + wheel or pinch zooms at the
   // pointer.
   var stage = document.getElementById('canvas-stage');
-  var view = { x: 0, y: 0 };
+  var view = cv.initial ? { x: cv.initial.x, y: cv.initial.y } : { x: 0, y: 0 };
   var area = scroll.closest('.canvas-area');
   // will-change keeps panning smooth, but the browser then keeps the stage
   // as the bitmap it painted at the old zoom and only stretches it: text gets
@@ -192,10 +195,7 @@
     stage.classList.add('is-moving');
     clearTimeout(settle);
     settle = setTimeout(function () { stage.classList.remove('is-moving'); }, 150);
-    stage.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + zoom + ')';
-    // The dot grid moves and scales with the drawing.
-    area.style.backgroundPosition = view.x + 'px ' + view.y + 'px';
-    area.style.backgroundSize = (16 * zoom) + 'px ' + (16 * zoom) + 'px';
+    cv.paint(stage, area, { x: view.x, y: view.y, zoom: zoom });
   }
   var pan = null;
   scroll.addEventListener('pointerdown', function (e) {
@@ -271,7 +271,7 @@
   // is remembered per browser.
   var label = document.getElementById('zoom-label');
   function zoomAt(z, cx, cy) {
-    var nz = Math.min(2, Math.max(0.3, Math.round(z * 100) / 100));
+    var nz = cv.clamp(Math.round(z * 100) / 100);
     // Keep the point under (cx, cy) still while scaling.
     view.x = cx - (cx - view.x) * nz / zoom;
     view.y = cy - (cy - view.y) * nz / zoom;
@@ -281,31 +281,15 @@
     try { localStorage.setItem('hangar.zoom.' + project, zoom); } catch (_) {}
   }
   function applyZoom(z) { zoomAt(z, scroll.clientWidth / 2, scroll.clientHeight / 2); }
-  // bounds is the box around the cards (not the whole drawing), so the
-  // services land in the middle of the screen.
-  function bounds() {
-    var b = null;
-    svg.querySelectorAll('.node-fo').forEach(function (fo) {
-      var x = +fo.getAttribute('x'), y = +fo.getAttribute('y');
-      var r = x + +fo.getAttribute('width'), btm = y + +fo.getAttribute('height');
-      b = b ? { x: Math.min(b.x, x), y: Math.min(b.y, y), r: Math.max(b.r, r), b: Math.max(b.b, btm) } : { x: x, y: y, r: r, b: btm };
-    });
-    return b || { x: 0, y: 0, r: baseW, b: baseH };
-  }
+  // Keep the cards in the middle of the screen.
   function center() {
-    var b = bounds();
-    view.x = scroll.clientWidth / 2 - (b.x + b.r) / 2 * zoom;
-    view.y = scroll.clientHeight / 2 - (b.y + b.b) / 2 * zoom;
+    var c = cv.center(svg, scroll, zoom);
+    view.x = c.x;
+    view.y = c.y;
     applyView();
   }
-  // A phone shows the whole drawing on arrival: the desktop zoom would leave
-  // the cards outside the screen.
-  var narrow = function () { return scroll.clientWidth < 640; };
   function fit() {
-    var bb = bounds();
-    var pad = narrow() ? 32 : 96;
-    var z = Math.min(1.2, (scroll.clientWidth - pad) / (bb.r - bb.x), (scroll.clientHeight - pad) / (bb.b - bb.y));
-    zoom = Math.max(0.3, Math.round(z * 100) / 100);
+    zoom = cv.fitZoom(svg, scroll);
     if (label) label.textContent = Math.round(zoom * 100) + '%';
     center();
   }
@@ -329,12 +313,7 @@
       applyView();
     }
   }, { passive: false });
-  try {
-    var saved = parseFloat(localStorage.getItem('hangar.zoom.' + project));
-    if (saved) zoom = Math.min(2, Math.max(0.3, saved));
-  } catch (_) {}
   if (label) label.textContent = Math.round(zoom * 100) + '%';
-  if (narrow()) fit(); else center();
   window.addEventListener('resize', function () { if (!pan) center(); });
 
   // Open a service in the side drawer without reloading: fetch the page and

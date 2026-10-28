@@ -264,6 +264,9 @@ templ ProjectCanvas(d CanvasData, s *ServiceData) {
 						}
 					</svg>
 					</div>
+					// Not deferred: it sets the starting pan and zoom before
+					// the first frame, so the cards do not jump into place.
+					<script src={ asset("canvasview.js") }></script>
 				}
 			</div>
 			<div class="canvas-zoom" role="group" aria-label={ t(ctx, "canvas.zoom") }>
