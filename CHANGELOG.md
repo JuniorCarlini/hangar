@@ -12,6 +12,29 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.29] - 2026-10-28
+
+### Adicionado
+
+- **Backup de discos e volumes**: serviços com volume (RustFS, MinIO,
+  Uptime Kuma, Meilisearch, pgAdmin, apps de imagem ou Git com disco) ganham
+  rotina de backup, "Fazer backup", "Baixar backup" e "Restaurar", como o
+  Postgres. A cópia é exata (donos, permissões, links, ACLs, atributos,
+  arquivos esparsos), cifrada, travada no destino e conferida arquivo a
+  arquivo antes de valer como "testado". No RustFS/MinIO os usuários e
+  permissões do S3 vêm junto.
+- **Durante a cópia**: pausar o serviço por alguns segundos (padrão), parar e
+  religar, ou copiar com ele rodando. Postgres continua com pg_dump e nunca é
+  pausado.
+- **Restaurar disco**: num serviço novo (clone) ou por cima do mesmo, com
+  cópia de segurança antes e volta automática se algo falhar. A recuperação
+  de desastre agora devolve os volumes também.
+
+### Corrigido
+
+- O estado "preparando / download pronto" do "Baixar backup" voltou à aba
+  Backups (sumira num redesenho e deixava o download cifrado sem link).
+
 ## [0.5.28] - 2026-10-28
 
 ### Corrigido
@@ -790,7 +813,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.28...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.29...HEAD
+[0.5.29]: https://github.com/JuniorCarlini/hangar/compare/v0.5.28...v0.5.29
 [0.5.28]: https://github.com/JuniorCarlini/hangar/compare/v0.5.27...v0.5.28
 [0.5.27]: https://github.com/JuniorCarlini/hangar/compare/v0.5.26...v0.5.27
 [0.5.26]: https://github.com/JuniorCarlini/hangar/compare/v0.5.25...v0.5.26
