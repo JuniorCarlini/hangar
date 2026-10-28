@@ -55,6 +55,23 @@ func safeLinkTarget(entry, target string) bool {
 	return joined != ".." && !strings.HasPrefix(joined, "../")
 }
 
+// links remembers the symlinks a tar has carried so far. A later entry
+// placed beneath one ("d" -> "..", then "d/x") is refused: the target check
+// above is lexical, and a tar program that follows existing links while
+// extracting (busybox does) would put that entry outside the tree. Tars
+// Hangar or GNU tar write never have one, since they never descend into a
+// link.
+type links map[string]bool
+
+func (l links) check(name string) error {
+	for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
+		if l[dir] {
+			return fmt.Errorf("%w: %s is beneath the symlink %s", ErrUnsafePath, name, dir)
+		}
+	}
+	return nil
+}
+
 // Edit is called for every regular file while copying a tar. It returns
 // the content to write instead (replace=true) or leaves it as is.
 type Edit func(name string, body io.Reader) (content []byte, replace bool, err error)
@@ -65,6 +82,7 @@ type Edit func(name string, body io.Reader) (content []byte, replace bool, err e
 func CopyTar(tw *tar.Writer, tr *tar.Reader, lim TarLimits, edit Edit) error {
 	var total int64
 	entries := 0
+	seen := links{}
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -81,6 +99,9 @@ func CopyTar(tw *tar.Writer, tr *tar.Reader, lim TarLimits, edit Edit) error {
 		if err != nil {
 			return err
 		}
+		if err := seen.check(name); err != nil {
+			return err
+		}
 		out := &tar.Header{
 			Name: name, Mode: h.Mode & 0o7777, Uid: h.Uid, Gid: h.Gid,
 			ModTime: h.ModTime, Typeflag: h.Typeflag, Format: tar.FormatPAX,
@@ -95,6 +116,7 @@ func CopyTar(tw *tar.Writer, tr *tar.Reader, lim TarLimits, edit Edit) error {
 			if !safeLinkTarget(name, h.Linkname) {
 				return ErrUnsafePath
 			}
+			seen[name] = true
 			out.Linkname = h.Linkname
 			if err := tw.WriteHeader(out); err != nil {
 				return err
@@ -150,6 +172,7 @@ func Extract(r io.Reader, dir string, lim TarLimits) error {
 	tr := tar.NewReader(r)
 	var total int64
 	entries := 0
+	seen := links{}
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -166,6 +189,9 @@ func Extract(r io.Reader, dir string, lim TarLimits) error {
 		if err != nil {
 			return err
 		}
+		if err := seen.check(name); err != nil {
+			return err
+		}
 		local := filepath.FromSlash(name)
 		switch h.Typeflag {
 		case tar.TypeDir:
@@ -176,6 +202,7 @@ func Extract(r io.Reader, dir string, lim TarLimits) error {
 			if !safeLinkTarget(name, h.Linkname) {
 				return ErrUnsafePath
 			}
+			seen[name] = true
 			if err := root.MkdirAll(filepath.Dir(local), 0o700); err != nil {
 				return err
 			}

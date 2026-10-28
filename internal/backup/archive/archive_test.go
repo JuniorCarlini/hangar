@@ -299,3 +299,29 @@ func TestExtract(t *testing.T) {
 		t.Fatalf("limit: %v", err)
 	}
 }
+
+// Chained links pass the lexical target check one by one ("d" -> "x" is
+// inside, "d/e" -> "../.." looks inside too) but a tar program that follows
+// existing links on extraction would land "d/e" outside. An entry beneath an
+// earlier symlink is refused; ordinary relative links still pass.
+func TestTarRefusesEntriesBeneathALink(t *testing.T) {
+	chained := tarOf(t,
+		reg("PG_VERSION", 3),
+		&tar.Header{Name: "d", Typeflag: tar.TypeSymlink, Linkname: "base"},
+		&tar.Header{Name: "d/e", Typeflag: tar.TypeSymlink, Linkname: ".."},
+	)
+	if _, err := CheckBase(bytes.NewReader(chained), io.Discard); !errors.Is(err, ErrUnsafePath) {
+		t.Errorf("copy: %v", err)
+	}
+	if err := Extract(bytes.NewReader(chained), t.TempDir(), DefaultTarLimits); !errors.Is(err, ErrUnsafePath) {
+		t.Errorf("extract: %v", err)
+	}
+	ok := tarOf(t,
+		reg("PG_VERSION", 3), reg("backup_label", 3),
+		&tar.Header{Name: "node_modules/.bin/", Typeflag: tar.TypeDir, Mode: 0o755},
+		&tar.Header{Name: "node_modules/.bin/tool", Typeflag: tar.TypeSymlink, Linkname: "../pkg/bin/tool"},
+	)
+	if _, err := CheckBase(bytes.NewReader(ok), io.Discard); err != nil {
+		t.Errorf("an ordinary relative link was refused: %v", err)
+	}
+}
