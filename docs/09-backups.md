@@ -54,7 +54,7 @@ proteger.
 | **PostgreSQL**: lógico | `pg_dump -Fc` + `pg_dumpall --roles-only` (usuários do banco) → age | diário (+ antes de todo deploy com migração e antes de atualizar versão) | 24 h (é a cópia "portátil") |
 | Redis de **filas/sessões** *(em breve)* | `BGSAVE` → RDB → zstd → age | a cada 6 h | 6 h |
 | Redis de **cache** | **não faz backup** (é descartável) | — | — |
-| Volumes de apps *(em breve)* | `tar` do volume (montado só leitura) → zstd → age | diário | 24 h |
+| Volumes de apps (e discos com limite) | serviço **pausado** durante a cópia → GNU `tar` do volume (montado só leitura num container descartável) → testado → zstd → age | na rotina do serviço | intervalo da rotina |
 | **Painel Hangar** | `VACUUM INTO` do SQLite + `hangar.toml` + **chave mestra** + certificados | diário + a cada mudança de configuração | — |
 | Mídia no R2/S3 (fotos dos produtos) | Replicação do bucket para **outro provedor** (rclone, só cópia, nunca apaga do destino) | diário | 24 h |
 | Código | Já está no GitHub; imagens são reconstruídas. Opcional: espelhar o repositório | — | — |
@@ -149,7 +149,7 @@ Binário pequeno (Mac, Windows, Linux), código aberto no mesmo repositório:
 |---|---|
 | `hangar-cofre sync ~/Backups/hangar` | Puxa os backups novos do bucket (credencial **só leitura**, guardada só no seu PC) para uma pasta ou HD. Pode rodar agendado |
 | `hangar-cofre list` | Lista backups disponíveis (local e nuvem) |
-| `hangar-cofre decrypt arquivo.age` | Decifra com a sua chave. Um `.dump.age` sai junto com os usuários do banco salvos ao lado (`.roles.sql` e `.roles-restore.sql`); um `.zip` baixado do painel sai inteiro numa pasta |
+| `hangar-cofre decrypt arquivo.age` | Decifra com a sua chave. Um `.dump.age` sai junto com os usuários do banco salvos ao lado (`.roles.sql` e `.roles-restore.sql`); um `.volumes.tar.zst.age` sai como `.volumes.tar` (uma pasta por volume); um `.zip` baixado do painel sai inteiro numa pasta |
 | `hangar-cofre restore-local minhaloja_postgres --at "2026-10-15 14:32"` | Sobe um Postgres no Docker local e restaura até aquele minuto |
 | `hangar-cofre test` | O simulado mensal |
 
@@ -181,6 +181,102 @@ Funciona **sem o painel**: se a VPS sumir, você ainda tem tudo.
   usuários salvos vem no mesmo `.zip` (passando pelo painel, sem decifrar no
   modo com kit); um dump antigo, sem eles, vem como antes (link assinado de
   curta duração).
+
+## Volumes de apps
+
+Serviços que não são PostgreSQL e guardam dados num volume (RustFS, Uptime
+Kuma, Meilisearch, pgAdmin, e qualquer app de imagem ou Git com disco)
+têm backup da **cópia dos arquivos dos volumes deles** (Docker volume ou
+disco com limite, que é um volume ligado à imagem ext4). Os botões são os
+mesmos da aba Backups: rotina, "Fazer backup", "Baixar backup", "Restaurar"
+e o histórico.
+
+**Quem tem:** o template diz (`backup = "pg_dump"` ou `backup = "volume"` no
+`template.toml`); um template sem isso não tem backup (um banco não pode ser
+copiado arquivo por arquivo enquanto roda: MariaDB, MongoDB e Redis esperam
+um método próprio). Serviço de imagem ou de Git tem assim que tiver um
+volume próprio. Um volume de outro serviço que ele monta é copiado pelo
+dono. O PostgreSQL continua só com `pg_dump` + WAL: nunca é pausado.
+
+**Consistência (por rotina):**
+
+| Opção | O que faz | Quando |
+|---|---|---|
+| **Pausar** (padrão) | `docker pause` (congela os processos) de todo serviço que usa os volumes, só do fim da preparação ao fim do `tar`; depois segue de onde parou, com conexões e memória | Quase sempre: nenhum arquivo sai pela metade |
+| **Parar e subir** | para (o app desliga com calma, grava o que tem na memória) e sobe de novo | Apps que só gravam tudo ao desligar |
+| **Com o serviço rodando** | sem pausa | Volumes enormes; aceita que um arquivo gravado durante a cópia saia incompleto |
+
+A pausa tem teto de 30 min: passou disso, o serviço volta e o backup falha
+dizendo para copiar com o serviço rodando ou num horário mais calmo. Se o
+painel cair no meio, ao voltar ele despausa o que ficou pausado.
+
+**Como a cópia é feita, sem texto puro em disco:**
+
+```
+container descartável (debian, sem rede, volumes só leitura)
+  "pronto" ─► painel pausa ─► conta (find) ─► GNU tar ──┐
+                                                         ▼
+hangard: confere cada entrada (nomes, tipos, limites) ─► zstd ─► age ─► arquivo cifrado no staging
+         └─► ao mesmo tempo, 2º container descartável lê o tar com GNU tar
+             (cada arquivo inteiro) e devolve entradas, bytes e SHA-256
+fim do tar ─► despausa ─► confere: volumes = tar = teste ─► "testado" ─► envia a todos os destinos ─► confere tamanho e SHA-256 de cada cópia
+```
+
+- O tar guarda donos (números), permissões (setuid, sticky), links
+  simbólicos (inclusive absolutos), hard links, FIFOs, pastas vazias, ACLs,
+  atributos `user.*` e arquivos esparsos (continuam esparsos). Não guarda
+  atributos `security.*` (rótulos SELinux, capabilities de arquivo): restaurar
+  exige privilégio que nenhum container auxiliar tem. Sockets são pulados.
+- O arquivo cifrado espera no disco do servidor (staging) até subir para os
+  destinos: antes de começar, o painel confere se cabe (tamanho do volume +
+  1 GB livre) e para no meio se o disco chegar a 1 GB livre. Foi escolhido
+  em vez de mandar direto ao S3: o mesmo arquivo vai para **todos** os
+  destinos, com trava e conferência de SHA-256 em cada um, e o upload em
+  partes precisa do tamanho e de reler o arquivo.
+- No bucket: `diario|semanal|mensal/<projeto>/<serviço>/<data>.volumes.tar.zst.age`,
+  ao lado dos dumps: mesmas classes, mesma retenção, mesma trava. O metadado
+  `hangar-volumes` diz quais volumes e quanto ocupam (para recusar um
+  restore que não cabe antes de mexer em algo).
+- Alertas: "sem backup em 26 h", "falhou" e "tamanho estranho" valem igual;
+  além de encolher/crescer, avisa se a cópia perdeu mais da metade dos
+  arquivos.
+
+**Restaurar** (o mesmo diálogo, o backup escolhido é uma cópia dos volumes):
+
+- **Serviço novo** (padrão): cria a cópia do serviço com volumes próprios (e
+  os mesmos tamanhos de disco, quando há limite), sobe, para, enche cada
+  volume a partir do backup e sobe de novo. Para o RustFS isso é um clone
+  completo: buckets, objetos, usuários IAM e políticas (tudo em
+  `/data/.rustfs.sys`).
+- **Sobrescrever**: faz uma cópia do estado atual antes; para os serviços que
+  usam os volumes, esvazia cada volume que está no backup, extrai (como
+  root, com donos, ACLs e atributos), confere que os volumes têm exatamente
+  as entradas e os bytes do backup e sobe de novo. Se falhar depois de
+  mexer, a cópia feita antes volta sozinha.
+- Recusado antes de mexer em algo: volume do backup que o serviço não tem,
+  ou disco com limite menor que o necessário (cada arquivo arredondado a
+  blocos de 4 KiB + 64 MB).
+- O tar é conferido entrada a entrada enquanto chega (sem `..`, sem caminho
+  absoluto, nada debaixo de um link, só os volumes do backup, sem
+  dispositivos); o container que extrai só tem os volumes do destino.
+- **Recuperação de desastre**: `hangard restore databases` também traz os
+  volumes de cada serviço com backup, da cópia mais nova (um serviço sem
+  cópia sobe com os volumes vazios e o comando avisa).
+
+**Baixar:** "Baixar backup" faz a cópia (pausada só durante a cópia, não
+durante o download) e oferece um `.zip` de uso único com `README.txt` e
+`<nome>.volumes.tar.zst.age` (com kit) ou `<nome>.volumes.tar` aberto (modo
+simples). `hangar-cofre decrypt <nome>.zip` gera o `.tar`; para abrir:
+`sudo tar -xpf <nome>.volumes.tar --numeric-owner --acls --xattrs -C pasta`
+(uma pasta por volume), ou direto num volume do Docker com o comando do
+README. `hangar-cofre restore-local` ainda é só para PostgreSQL.
+
+**Tempo de pausa medido** (`TestVolumePauseTime`, Mac M-series com OrbStack):
+1 GiB de log (comprime ~9000×) pausou 11,6 s; 1 GiB aleatório, 18,7 s; um
+volume de app com ~70 MB lógicos (esparso), 0,1 s; o RustFS do teste, 0,1 s. Ali o
+gargalo é o fluxo do container para o host através da VM do OrbStack
+(`cat` de 1 GiB pelo `docker run` leva 13–15 s sozinho); num Linux, onde o
+Docker é local, deve ser bem menor (falta medir na VPS).
 
 ## Usuários do banco (roles) vão junto com cada dump
 
@@ -288,7 +384,9 @@ O que mudou em relação ao plano acima, e por quê:
 | `backup_policies.target_id`, `retention_json` | Todo backup vai para **todos** os destinos; agenda é `every_hours` + `at_minute`; retenção pelas pastas do bucket | O doc recomenda dois destinos; a limpeza já é do bucket, não do servidor |
 | Trava de 30 dias para tudo | Trava = menor entre os dias do destino e o tempo da pasta (`diario/` 7, `semanal/` 35, `mensal/` 400, `wal/` 9, `painel/` 35) | Um backup diário não precisa de trava maior que o tempo em que ele existe |
 
-Ficou para depois: Redis (`BGSAVE`), volumes de apps (`tar`), réplica do
+Volumes de apps entraram depois (seção "Volumes de apps" acima).
+
+Ficou para depois: Redis (`BGSAVE`), réplica do
 bucket de mídia (`bucket_sync`), backup automático antes de deploy com
 migração, lembrete mensal do simulado no Telegram (depende da Etapa 8) e
 a linha "último simulado no seu computador" (o cofre não tem como avisar o

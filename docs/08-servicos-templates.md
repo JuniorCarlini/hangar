@@ -49,7 +49,7 @@ version = 1                # versão do template (não da imagem); sobe a cada m
 category = "database"      # database | cache | queue | search | storage | automation | monitoring | admin | other
 tags = ["sql", "relational"]   # até 8, minúsculas, para a busca
 docs = "https://www.postgresql.org/docs/18/"
-backup = "pg_dump"         # opcional: liga o "Baixar backup"
+backup = "pg_dump"         # opcional: "pg_dump" (PostgreSQL) ou "volume" (cópia dos volumes, com o serviço pausado; docs/09). Sem ele, sem backup
 main = "postgres"          # o serviço do compose que recebe o nome escolhido
 min_hangar = "v0.1.0"      # opcional: versão mínima do Hangar
 name = { en = "PostgreSQL", "pt-BR" = "PostgreSQL" }
