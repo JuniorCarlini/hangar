@@ -12,8 +12,13 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.22] - 2026-10-28
+
 ### Novo
 
+- **Memória e CPU editáveis**: o card Recursos, em Configurações, muda os
+  limites de um serviço depois de criado (antes só dava para escolher na
+  criação). Vale no próximo deploy.
 - **Atualizar a lista de repositórios**: um botão na aba Meus repositórios
   busca de novo no GitHub, sem esperar o cache, depois de você mudar o
   acesso do token por lá.
@@ -689,7 +694,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.21...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.22...HEAD
+[0.5.22]: https://github.com/JuniorCarlini/hangar/compare/v0.5.21...v0.5.22
 [0.5.21]: https://github.com/JuniorCarlini/hangar/compare/v0.5.20...v0.5.21
 [0.5.20]: https://github.com/JuniorCarlini/hangar/compare/v0.5.19...v0.5.20
 [0.5.19]: https://github.com/JuniorCarlini/hangar/compare/v0.5.18...v0.5.19
