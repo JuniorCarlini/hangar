@@ -1029,9 +1029,11 @@ func (m *Manager) PendingChanges(ctx context.Context, serviceID string) (bool, e
 // when a variable changes but does not let anyone brute-force a secret from
 // the stored hash.
 //
-// A dynamic-domain service also gets HANGAR_DOMAIN_CHECK_SECRET (unless the
-// user set it), and the secret counts toward the hash, so turning dynamic
-// domains on shows the "redeploy to apply" notice.
+// A dynamic-domain service also gets HANGAR_DOMAIN_CHECK_SECRET, and the
+// secret counts toward the hash, so turning dynamic domains on shows the
+// "redeploy to apply" notice. The panel's value always wins over a variable
+// of the same name: the edge signs with it, rotating it takes an admin with
+// sudo, and an operator's own value would only break the check.
 func (m *Manager) envFor(ctx context.Context, s dbq.Service) (map[string]string, string, error) {
 	serviceID := s.ID
 	rows, err := m.q.ListEnv(ctx, serviceID)
@@ -1056,15 +1058,13 @@ func (m *Manager) envFor(ctx context.Context, s dbq.Service) (map[string]string,
 		h.Write([]byte("\x00wal\x00"))
 	}
 	if s.DynamicDomains == 1 && len(s.DomainCheckSecretEnc) > 0 {
-		if _, set := env[CheckSecretEnv]; !set {
-			plain, err := m.box.Open(s.DomainCheckSecretEnc, edge.CheckSecretAD(s.ID))
-			if err != nil {
-				return nil, "", fmt.Errorf("domain check secret: %w", err)
-			}
-			env[CheckSecretEnv] = string(plain)
-			h.Write([]byte("\x00dynamic\x00"))
-			h.Write(s.DomainCheckSecretEnc)
+		plain, err := m.box.Open(s.DomainCheckSecretEnc, edge.CheckSecretAD(s.ID))
+		if err != nil {
+			return nil, "", fmt.Errorf("domain check secret: %w", err)
 		}
+		env[CheckSecretEnv] = string(plain)
+		h.Write([]byte("\x00dynamic\x00"))
+		h.Write(s.DomainCheckSecretEnc)
 	}
 	return env, hex.EncodeToString(h.Sum(nil)), nil
 }

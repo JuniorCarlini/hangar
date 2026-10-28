@@ -90,6 +90,11 @@ func TestDynamicDomainsInjectSecretAndAreExclusive(t *testing.T) {
 	_, svcID := f.service(t)
 	ctx := context.Background()
 
+	// A variable of the same name (an operator may set one) never replaces
+	// the secret the edge signs with.
+	if err := f.m.SetEnv(ctx, f.who, svcID, CheckSecretEnv, "valor-do-operador", false); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.m.EnableDynamicDomains(ctx, f.who, "lab", "web"); err != nil {
 		t.Fatal(err)
 	}
