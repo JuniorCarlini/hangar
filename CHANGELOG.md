@@ -12,6 +12,15 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.24] - 2026-10-28
+
+### Corrigido
+
+- **Canvas sem pulo ao abrir**: ao trocar de projeto, atualizar a página ou
+  abrir um serviço pelo endereço, os cards apareciam num canto por um
+  instante e depois pulavam para o meio da tela. O canvas agora já nasce
+  centralizado e no zoom salvo.
+
 ## [0.5.23] - 2026-10-28
 
 ### Corrigido
@@ -706,7 +715,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.23...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.24...HEAD
+[0.5.24]: https://github.com/JuniorCarlini/hangar/compare/v0.5.23...v0.5.24
 [0.5.23]: https://github.com/JuniorCarlini/hangar/compare/v0.5.22...v0.5.23
 [0.5.22]: https://github.com/JuniorCarlini/hangar/compare/v0.5.21...v0.5.22
 [0.5.21]: https://github.com/JuniorCarlini/hangar/compare/v0.5.20...v0.5.21
