@@ -12,6 +12,16 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.27] - 2026-10-28
+
+### Adicionado
+
+- **Copiar as falhas**: na tela de atualizações e vulnerabilidades, "Copiar
+  tudo" no topo e "Copiar" em cada seção. O texto vem em Markdown, por
+  serviço, com o repositório, cada pacote (versão atual → corrigida, onde foi
+  achado, o comando para atualizar) e cada falha com o link do aviso, pronto
+  para colar e pedir a correção. Senhas e variáveis nunca entram.
+
 ## [0.5.26] - 2026-10-28
 
 ### Adicionado
@@ -761,7 +771,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.26...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.27...HEAD
+[0.5.27]: https://github.com/JuniorCarlini/hangar/compare/v0.5.26...v0.5.27
 [0.5.26]: https://github.com/JuniorCarlini/hangar/compare/v0.5.25...v0.5.26
 [0.5.25]: https://github.com/JuniorCarlini/hangar/compare/v0.5.24...v0.5.25
 [0.5.24]: https://github.com/JuniorCarlini/hangar/compare/v0.5.23...v0.5.24
