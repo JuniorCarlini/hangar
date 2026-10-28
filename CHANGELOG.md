@@ -12,6 +12,31 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.26] - 2026-10-28
+
+### Adicionado
+
+- **Aviso de versão nova sozinho**: o painel procura versões novas em
+  segundo plano a cada ~10 minutos (e ao abrir a tela de atualização), sem
+  precisar clicar em "Verificar agora". Com versão nova, aparece um "1"
+  vermelho em "Atualizar Hangar". A consulta é um pedido mínimo ao GitHub,
+  fora do limite da API; nada é instalado sem você.
+
+### Corrigido
+
+- **Restaurar num serviço novo**: um banco que dá permissões a usuários
+  próprios (como `lobot_app`) não restaurava num Postgres novo, porque esses
+  usuários não vão no pg_dump; o banco novo ficava vazio. Agora os usuários
+  que faltam são criados sem senha antes de restaurar, e a tela avisa quais
+  são. Vale também para o `hangar-cofre`.
+- **Backup "testado" de verdade**: o teste do backup passa a restaurar com
+  as permissões, como a restauração de verdade, e pega esse tipo de problema
+  na hora.
+- **Restauração que falha aparece**: alerta vermelho com o motivo na aba
+  Backups e na tela de Backups; o serviço novo de uma restauração que falhou
+  é removido (o original nunca é tocado), e o canvas mostra serviços que
+  aparecem ou somem.
+
 ## [0.5.25] - 2026-10-28
 
 ### Adicionado
@@ -736,7 +761,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.25...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.26...HEAD
+[0.5.26]: https://github.com/JuniorCarlini/hangar/compare/v0.5.25...v0.5.26
 [0.5.25]: https://github.com/JuniorCarlini/hangar/compare/v0.5.24...v0.5.25
 [0.5.24]: https://github.com/JuniorCarlini/hangar/compare/v0.5.23...v0.5.24
 [0.5.23]: https://github.com/JuniorCarlini/hangar/compare/v0.5.22...v0.5.23
