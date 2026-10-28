@@ -613,8 +613,24 @@ func (s *Service) confirm(ctx context.Context, userID, secret string) error {
 		_, err := s.checkSecondFactor(ctx, userID, secret)
 		return err
 	}
+	return s.verifyPassword(ctx, u.PasswordHash, secret)
+}
+
+// checkPassword checks the account's password whatever its 2FA state.
+func (s *Service) checkPassword(ctx context.Context, userID, password string) error {
+	u, err := s.q.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.verifyPassword(ctx, u.PasswordHash, password)
+}
+
+// verifyPassword runs the hash on the bounded pool; a mismatch is
+// ErrInvalidCode, like a wrong code.
+func (s *Service) verifyPassword(ctx context.Context, hash, password string) error {
 	var ok bool
-	if perr := s.argon2.do(ctx, func() { ok, err = VerifyPassword(secret, u.PasswordHash) }); perr != nil {
+	var err error
+	if perr := s.argon2.do(ctx, func() { ok, err = VerifyPassword(password, hash) }); perr != nil {
 		return perr
 	}
 	if err != nil {
@@ -660,8 +676,10 @@ func (s *Service) EnableTOTP(ctx context.Context, p *Principal, password, secret
 	return codes, nil
 }
 
-// DisableTOTP turns 2FA off; it needs a current code (or a recovery code).
-func (s *Service) DisableTOTP(ctx context.Context, p *Principal, code string, c Client) error {
+// DisableTOTP turns 2FA off; it needs the password and a current code (or
+// a recovery code). The password too: a leaked recovery code plus an open
+// session would otherwise be enough to drop the second factor.
+func (s *Service) DisableTOTP(ctx context.Context, p *Principal, password, code string, c Client) error {
 	key := "sudo:" + p.UserID
 	if err := s.checkLimits(key); err != nil {
 		return err
@@ -669,6 +687,13 @@ func (s *Service) DisableTOTP(ctx context.Context, p *Principal, code string, c 
 	defer s.limits.end(key)
 	if s.require2FA {
 		return ErrTOTPRequired
+	}
+	if err := s.checkPassword(ctx, p.UserID, password); err != nil {
+		if errors.Is(err, ErrInvalidCode) {
+			s.fail(ctx, c, p.UserID, "wrong_password_totp_disable", key)
+			return ErrWrongPassword
+		}
+		return err
 	}
 	if _, err := s.checkSecondFactor(ctx, p.UserID, code); err != nil {
 		if errors.Is(err, ErrInvalidCode) {

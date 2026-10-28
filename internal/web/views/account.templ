@@ -165,6 +165,10 @@ templ totpCard(d AccountData) {
 							<label class="tuc-label" for="totp-off-code">{ t(ctx, "account.totp.disable_label") }</label>
 							<input class="tuc-input w-[220px] font-mono" id="totp-off-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="17" required/>
 						</div>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="totp-off-password">{ t(ctx, "account.totp.disable_password") }</label>
+							<input class="tuc-input w-[220px]" id="totp-off-password" name="password" type="password" autocomplete="current-password" required/>
+						</div>
 						<button class="tuc-btn is-outline" type="submit">
 							@Icon("shield-off", "size-3.5")
 							{ t(ctx, "account.totp.disable") }

@@ -517,11 +517,16 @@ func TestOptionalTOTP(t *testing.T) {
 
 	// Turning it off needs a valid code; then the password works again.
 	f.clock.advance(time.Minute)
-	if err := f.svc.DisableTOTP(ctx, p, "000000", cli); !errors.Is(err, ErrInvalidCode) {
+	if err := f.svc.DisableTOTP(ctx, p, goodPassword, "000000", cli); !errors.Is(err, ErrInvalidCode) {
 		t.Errorf("disable with a wrong code: %v", err)
 	}
 	code, _ = totpCode(secret, f.clock.now().Unix()/totpStep)
-	if err := f.svc.DisableTOTP(ctx, p, code, cli); err != nil {
+	// A valid code alone is not enough: a leaked recovery code must not drop
+	// the second factor without the password.
+	if err := f.svc.DisableTOTP(ctx, p, "not-the-password", code, cli); !errors.Is(err, ErrWrongPassword) {
+		t.Errorf("disable without the password: %v", err)
+	}
+	if err := f.svc.DisableTOTP(ctx, p, goodPassword, code, cli); err != nil {
 		t.Fatal(err)
 	}
 	if _, complete, err := f.svc.Login(ctx, "sem2fa@hangar.dev", goodPassword, cli); err != nil || !complete {
@@ -529,7 +534,7 @@ func TestOptionalTOTP(t *testing.T) {
 	}
 
 	f.svc.require2FA = true
-	if err := f.svc.DisableTOTP(ctx, p, code, cli); !errors.Is(err, ErrTOTPRequired) {
+	if err := f.svc.DisableTOTP(ctx, p, goodPassword, code, cli); !errors.Is(err, ErrTOTPRequired) {
 		t.Errorf("require_2fa forbids turning it off: %v", err)
 	}
 }

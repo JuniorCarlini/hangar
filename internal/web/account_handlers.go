@@ -80,7 +80,7 @@ func (h *handlers) enableTOTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *handlers) disableTOTP(w http.ResponseWriter, r *http.Request) {
 	p := PrincipalFrom(r.Context())
-	if err := h.auth.DisableTOTP(r.Context(), p, r.PostFormValue("code"), client(r)); err != nil {
+	if err := h.auth.DisableTOTP(r.Context(), p, r.PostFormValue("password"), r.PostFormValue("code"), client(r)); err != nil {
 		var rl *auth.RateLimitedError
 		msg := i18n.T(r.Context(), "account.totp.error.code")
 		switch {
