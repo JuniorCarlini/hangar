@@ -358,3 +358,74 @@ func (m *Manager) bindOldDomain(ctx context.Context, u dbq.ListUnboundDomainEndp
 	}
 	return tx.Commit()
 }
+
+// SetServicePort changes the port a service listens on, or takes it away
+// (0) for a worker that serves nothing: with a port, a deploy waits for it
+// to answer, and a worker never would. The service's own endpoint follows
+// the port, with its domains; going to no port is refused while that
+// endpoint is public or has domains, so nothing on the internet loses its
+// route silently. A template's ports are part of the template.
+func (m *Manager) SetServicePort(ctx context.Context, a Actor, projectSlug, serviceSlug string, port int) error {
+	_, s, err := m.GetService(ctx, projectSlug, serviceSlug)
+	if err != nil {
+		return err
+	}
+	if port < 0 || port > 65535 {
+		return i18n.E("service.error.port")
+	}
+	old := s.InternalPort
+	if int64(port) == old {
+		return nil
+	}
+	if s.Template != "" {
+		return i18n.E("service.error.port_template")
+	}
+	eps, err := m.q.ListEndpoints(ctx, s.ID)
+	if err != nil {
+		return err
+	}
+	var own *dbq.Endpoint
+	for i := range eps {
+		switch {
+		case eps[i].Port == int64(port):
+			return i18n.E("service.error.port_taken", "port", port)
+		case eps[i].Port == old && old > 0:
+			own = &eps[i]
+		}
+	}
+	if port == 0 && own != nil {
+		n, err := m.q.CountEndpointDomains(ctx, sql.NullString{String: own.ID, Valid: true})
+		if err != nil {
+			return err
+		}
+		if n > 0 || own.Public == 1 {
+			return i18n.E("service.error.port_in_use")
+		}
+	}
+	tx, err := m.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	q := m.q.WithTx(tx)
+	now := m.now().Unix()
+	switch {
+	case own != nil && port == 0:
+		err = q.DeleteEndpoint(ctx, dbq.DeleteEndpointParams{ID: own.ID, ServiceID: s.ID})
+	case own != nil:
+		err = q.SetEndpointPort(ctx, dbq.SetEndpointPortParams{Port: int64(port), ID: own.ID, ServiceID: s.ID})
+	default:
+		err = defaultEndpoint(ctx, q, projectSlug, s.ID, s.Slug, int64(port), now)
+	}
+	if err != nil {
+		return err
+	}
+	if err := q.SetServiceInternalPort(ctx, dbq.SetServiceInternalPortParams{InternalPort: int64(port), UpdatedAt: now, ID: s.ID}); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	m.record(ctx, a, "service.port", "service", s.ID, audit.OK, map[string]any{"from": old, "port": port})
+	return m.applyEdge(ctx)
+}

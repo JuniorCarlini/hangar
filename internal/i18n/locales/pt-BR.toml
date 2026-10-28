@@ -451,6 +451,9 @@ delete = "Apagar serviço"
 name_mismatch = "O nome digitado não confere."
 
 [service.error]
+port_template = "A porta de um serviço de template faz parte do template."
+port_taken = "Este serviço já tem um endereço na porta {port}."
+port_in_use = "Esta porta está pública ou tem domínios. Deixe-a interna e tire os domínios antes de tirar a porta."
 volume_moving = "Os dados de um disco deste serviço estão sendo movidos (limite de tamanho). O serviço volta sozinho ao terminar."
 name = "Use um nome com pelo menos duas letras ou números."
 volume_shared = "O disco {volumes} deste serviço também é usado por {services}. Apague esses serviços primeiro; até lá o disco fica com este."
@@ -3097,6 +3100,8 @@ list = "Alertas"
 config = "Configuração"
 
 [resources]
+port = "Porta interna"
+port_hint = "A porta em que o app escuta. 0 = nenhuma: para workers e filas, que não atendem web; com porta, o deploy espera ela responder."
 title = "Recursos"
 memory = "Memória (MB)"
 cpus = "CPU"

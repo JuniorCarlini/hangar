@@ -24,6 +24,17 @@ func (q *Queries) BindDomainEndpoint(ctx context.Context, arg BindDomainEndpoint
 	return err
 }
 
+const countEndpointDomains = `-- name: CountEndpointDomains :one
+SELECT count(*) FROM domains WHERE endpoint_id = ?
+`
+
+func (q *Queries) CountEndpointDomains(ctx context.Context, endpointID sql.NullString) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEndpointDomains, endpointID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPublicEndpoints = `-- name: CountPublicEndpoints :one
 SELECT count(*) FROM endpoints WHERE service_id = ? AND public = 1
 `
@@ -374,6 +385,22 @@ type SetEndpointHostLabelParams struct {
 
 func (q *Queries) SetEndpointHostLabel(ctx context.Context, arg SetEndpointHostLabelParams) error {
 	_, err := q.db.ExecContext(ctx, setEndpointHostLabel, arg.HostLabel, arg.ID)
+	return err
+}
+
+const setEndpointPort = `-- name: SetEndpointPort :exec
+UPDATE endpoints SET port = ? WHERE id = ? AND service_id = ?
+`
+
+type SetEndpointPortParams struct {
+	Port      int64
+	ID        string
+	ServiceID string
+}
+
+// The service's web port moved: its endpoint (and the domains on it) follow.
+func (q *Queries) SetEndpointPort(ctx context.Context, arg SetEndpointPortParams) error {
+	_, err := q.db.ExecContext(ctx, setEndpointPort, arg.Port, arg.ID, arg.ServiceID)
 	return err
 }
 

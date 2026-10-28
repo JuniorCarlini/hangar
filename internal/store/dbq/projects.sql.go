@@ -845,6 +845,21 @@ func (q *Queries) SetServiceImage(ctx context.Context, arg SetServiceImageParams
 	return result.RowsAffected()
 }
 
+const setServiceInternalPort = `-- name: SetServiceInternalPort :exec
+UPDATE services SET internal_port = ?, updated_at = ? WHERE id = ?
+`
+
+type SetServiceInternalPortParams struct {
+	InternalPort int64
+	UpdatedAt    int64
+	ID           string
+}
+
+func (q *Queries) SetServiceInternalPort(ctx context.Context, arg SetServiceInternalPortParams) error {
+	_, err := q.db.ExecContext(ctx, setServiceInternalPort, arg.InternalPort, arg.UpdatedAt, arg.ID)
+	return err
+}
+
 const setServiceMaintenance = `-- name: SetServiceMaintenance :exec
 UPDATE services SET maintenance = ?, updated_at = ? WHERE id = ?
 `

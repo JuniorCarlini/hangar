@@ -297,6 +297,8 @@ type ServiceData struct {
 	EnvSuggest  *EnvSuggest // nil when the repository suggests nothing new
 	Domains     DomainsSection
 	CanBackup   bool
+	// FixedPort: a template's ports are part of it (Resources hides the field).
+	FixedPort   bool
 	Stateful    bool
 	Maintenance bool // visitors get the maintenance page instead of the app
 	Ports       []PortRow

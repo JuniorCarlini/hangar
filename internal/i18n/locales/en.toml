@@ -451,6 +451,9 @@ delete = "Delete service"
 name_mismatch = "The typed name does not match."
 
 [service.error]
+port_template = "A template service's port is part of the template."
+port_taken = "This service already has an address on port {port}."
+port_in_use = "This port is public or has domains. Make it internal and remove the domains before removing the port."
 volume_moving = "The data of a disk of this service is being moved (size limit). The service comes back by itself when it ends."
 name = "Use a name with at least two letters or digits."
 volume_shared = "This service's disk {volumes} is also used by {services}. Delete those services first; the disk stays with this one until then."
@@ -3096,6 +3099,8 @@ list = "Alerts"
 config = "Settings"
 
 [resources]
+port = "Internal port"
+port_hint = "The port the app listens on. 0 = none: for workers and queues that serve no web; with a port, a deploy waits for it to answer."
 title = "Resources"
 memory = "Memory (MB)"
 cpus = "CPU"

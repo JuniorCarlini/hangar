@@ -36,8 +36,8 @@ func (h *handlers) addVolume(w http.ResponseWriter, r *http.Request) {
 	redirectLocal(w, r, h.serviceBase(r)+"?tab=settings&ok=volume")
 }
 
-// setResources changes the memory and CPU limits; they apply on the next
-// deploy, like a new disk.
+// setResources changes the memory and CPU limits, and the port the service
+// listens on (0: a worker); they apply on the next deploy, like a new disk.
 func (h *handlers) setResources(w http.ResponseWriter, r *http.Request) {
 	mem, err := optInt(r.PostFormValue("memory_mb"))
 	var cpus float64
@@ -48,7 +48,18 @@ func (h *handlers) setResources(w http.ResponseWriter, r *http.Request) {
 		h.renderService(w, r, serviceView{status: http.StatusUnprocessableEntity, errMsg: i18n.T(r.Context(), "project.form.number_invalid")})
 		return
 	}
-	if err := h.projects.SetServiceResources(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), mem, cpus); err != nil {
+	project, service := r.PathValue("project"), r.PathValue("service")
+	err = h.projects.SetServiceResources(r.Context(), actor(r), project, service, mem, cpus)
+	// A template's port is not in the form; an empty field changes nothing.
+	if p := r.PostFormValue("port"); err == nil && p != "" {
+		var port int
+		if port, err = strconv.Atoi(strings.TrimSpace(p)); err != nil {
+			err = i18n.E("service.error.port")
+		} else {
+			err = h.projects.SetServicePort(r.Context(), actor(r), project, service, port)
+		}
+	}
+	if err != nil {
 		code, msg := userError(r, err)
 		h.renderService(w, r, serviceView{status: code, errMsg: msg})
 		return

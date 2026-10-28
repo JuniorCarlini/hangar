@@ -68,3 +68,10 @@ UPDATE domains SET endpoint_id = ? WHERE id = ? AND endpoint_id IS NULL;
 -- A custom domain whose first label is this one: an automatic link with it
 -- could end up on the same hostname.
 SELECT count(*) FROM domains WHERE hostname LIKE sqlc.arg(label) || '.%';
+
+-- name: SetEndpointPort :exec
+-- The service's web port moved: its endpoint (and the domains on it) follow.
+UPDATE endpoints SET port = ? WHERE id = ? AND service_id = ?;
+
+-- name: CountEndpointDomains :one
+SELECT count(*) FROM domains WHERE endpoint_id = ?;

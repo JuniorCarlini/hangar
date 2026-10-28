@@ -512,3 +512,66 @@ func TestServiceResourcesChangeOnNextDeploy(t *testing.T) {
 		t.Errorf("deploy got %d bytes, %d nano CPUs", spec.MemoryBytes, spec.NanoCPUs)
 	}
 }
+
+// A worker serves no port: with one, every deploy would wait for it to
+// answer. The port can change or go away after creation; the service's own
+// endpoint follows it, and nothing public loses its route silently.
+func TestServicePortChangesAndWorkers(t *testing.T) {
+	f := newFixture(t)
+	_, id := f.service(t)
+	ctx := context.Background()
+	endpoints := func() []Endpoint {
+		t.Helper()
+		eps, err := f.m.ListEndpoints(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return eps
+	}
+	if eps := endpoints(); len(eps) != 1 || eps[0].Port != 80 {
+		t.Fatalf("start: %+v", eps)
+	}
+
+	// Moved: the endpoint follows.
+	if err := f.m.SetServicePort(ctx, f.who, "lab", "web", 8080); err != nil {
+		t.Fatal(err)
+	}
+	if eps := endpoints(); len(eps) != 1 || eps[0].Port != 8080 {
+		t.Errorf("moved: %+v", eps)
+	}
+
+	// Public: taking the port away is refused.
+	ep := endpoints()[0]
+	if err := f.m.SetEndpointPublic(ctx, Actor{UserID: "usr_x", Sudo: true}, "lab", "web", ep.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.m.SetServicePort(ctx, f.who, "lab", "web", 0); errKey(err) != "service.error.port_in_use" {
+		t.Errorf("public endpoint: %v", err)
+	}
+	if err := f.m.SetEndpointPublic(ctx, f.who, "lab", "web", ep.ID, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// A worker: no port, no endpoint, and the deploy does not wait for one.
+	if err := f.m.SetServicePort(ctx, f.who, "lab", "web", 0); err != nil {
+		t.Fatal(err)
+	}
+	if eps := endpoints(); len(eps) != 0 {
+		t.Errorf("worker kept endpoints: %+v", eps)
+	}
+	if _, err := f.m.Deploy(ctx, f.who, "lab", "web", "manual"); err != nil {
+		t.Fatal(err)
+	}
+	f.m.Wait()
+	if spec, _ := f.n.spec("lab_web"); len(spec.Ports) != 0 {
+		t.Errorf("worker deployed with ports %+v", spec.Ports)
+	}
+
+	// And back: a port brings an internal endpoint again.
+	if err := f.m.SetServicePort(ctx, f.who, "lab", "web", 3000); err != nil {
+		t.Fatal(err)
+	}
+	if eps := endpoints(); len(eps) != 1 || eps[0].Port != 3000 || eps[0].Public {
+		t.Errorf("back: %+v", eps)
+	}
+}

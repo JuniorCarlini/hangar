@@ -122,3 +122,6 @@ SELECT project_id FROM pinned_projects WHERE user_id = ? ORDER BY pinned_at, pro
 -- name: SetServiceResources :exec
 -- Memory and CPU the next deploy gives the container.
 UPDATE services SET memory_bytes = ?, nano_cpus = ?, updated_at = ? WHERE id = ?;
+
+-- name: SetServiceInternalPort :exec
+UPDATE services SET internal_port = ?, updated_at = ? WHERE id = ?;

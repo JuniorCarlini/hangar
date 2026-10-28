@@ -460,6 +460,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	}
 	d.Domains.DNSProviders = edge.DNSProviders
 	d.CanBackup, d.Stateful = h.projects.CanDownloadBackup(s.Template), s.Stateful == 1
+	d.FixedPort = s.Template != ""
 	d.Maintenance = s.Maintenance == 1
 	d.ServerHint = i18n.T(r.Context(), "port.ssh_target")
 	// What the copy buttons give. Admins get every value with references

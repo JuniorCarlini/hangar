@@ -215,6 +215,14 @@ func TestServiceResourcesRoute(t *testing.T) {
 	if s.MemoryBytes != 1024<<20 || s.NanoCpus != 5e8 {
 		t.Errorf("stored %d bytes, %d nano CPUs", s.MemoryBytes, s.NanoCpus)
 	}
+	// A worker: port 0 from the same form.
+	rec = e.do(req{
+		method: "POST", target: "/p/lab/s/web/resources", cookies: []*http.Cookie{c},
+		form: url.Values{"csrf": {p.CSRFToken}, "memory_mb": {"1024"}, "cpus": {"0.5"}, "port": {"0"}},
+	})
+	if _, s, _ = e.pm.GetService(ctx, "lab", "web"); rec.Code != http.StatusSeeOther || s.InternalPort != 0 {
+		t.Errorf("port 0: %d, stored %d", rec.Code, s.InternalPort)
+	}
 	if rec = post(e, c, p.CSRFToken, "4", "1"); rec.Code == http.StatusSeeOther {
 		t.Error("4 MB accepted")
 	}
