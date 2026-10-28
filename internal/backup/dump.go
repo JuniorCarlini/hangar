@@ -13,11 +13,13 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/backup/pgroles"
 	"github.com/JuniorCarlini/hangar/internal/ids"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
@@ -63,6 +65,14 @@ var pgDumpCmd = []string{"sh", "-c", `exec pg_dump -Fc -U "$POSTGRES_USER" "$POS
 // verifyScript restores the dump read from stdin into a throwaway
 // PostgreSQL (same image, no network, scratch volume) and counts what came
 // back. It is a constant: nothing from the user reaches it.
+//
+// The dump is restored with its permissions, as a real restore does. The
+// roles they name are not in a pg_dump, so a schema-only rehearsal finds,
+// from PostgreSQL's own errors, each role the restore needs and creates it
+// (NOLOGIN, as the real restore does) before the real attempt. It prints
+// the roles it had to create (HANGAR-ROLE, hex) and the dump's ACL, POLICY
+// and DEFAULT ACL entries (HANGAR-ACL, hex), so the panel can check that
+// the real restore would find those same roles by reading the dump.
 const verifyScript = `set -eu
 umask 077
 cat > /scratch/dump
@@ -70,15 +80,36 @@ if command -v su-exec >/dev/null 2>&1; then AS="su-exec postgres"; else AS="gosu
 mkdir -p /scratch/pgdata /scratch/run
 chown postgres:postgres /scratch/pgdata /scratch/run /scratch/dump
 $AS initdb -D /scratch/pgdata -U postgres --auth=trust -E UTF8 >/dev/null
-$AS pg_ctl -D /scratch/pgdata -o "-c listen_addresses= -c unix_socket_directories=/scratch/run -c fsync=off" -w -t 300 start >/dev/null
-tables=$($AS pg_restore -l /scratch/dump | grep -c " TABLE DATA " || true)
-$AS pg_restore -h /scratch/run -U postgres -d postgres --no-owner --no-acl --exit-on-error /scratch/dump
+$AS pg_ctl -D /scratch/pgdata -o "-c listen_addresses= -c unix_socket_directories=/scratch/run -c fsync=off -c lc_messages=C" -w -t 300 start >/dev/null
+$AS pg_restore -l /scratch/dump > /scratch/run/toc
+tables=$(grep -c " TABLE DATA " /scratch/run/toc || true)
+grep -E '^[0-9]+; [0-9]+ [0-9]+ (ACL|POLICY|DEFAULT ACL) ' /scratch/run/toc > /scratch/run/acl.list || true
+chown postgres:postgres /scratch/run/acl.list
+if [ -s /scratch/run/acl.list ]; then
+  $AS pg_restore -L /scratch/run/acl.list -f /scratch/run/acl.sql /scratch/dump
+  printf 'HANGAR-ACL %s\n' "$(od -An -tx1 /scratch/run/acl.sql | tr -d ' \n')"
+fi
+$AS createdb -h /scratch/run -U postgres hangar_roles
+n=0
+until $AS pg_restore -h /scratch/run -U postgres -d hangar_roles --schema-only --no-owner --single-transaction --exit-on-error /scratch/dump 2>/scratch/run/err; do
+  role=$(sed -n 's/^.*ERROR:  role "\(.*\)" does not exist$/\1/p' /scratch/run/err | head -n 1)
+  if [ -z "$role" ] || [ "$n" -ge 200 ]; then cat /scratch/run/err >&2; exit 1; fi
+  printf 'CREATE ROLE :"r" NOLOGIN;\n' | $AS psql -h /scratch/run -U postgres -d postgres -qAtX -v ON_ERROR_STOP=1 -v r="$role" -f - >/dev/null
+  printf 'HANGAR-ROLE %s\n' "$(printf '%s' "$role" | od -An -tx1 | tr -d ' \n')"
+  n=$((n+1))
+done
+$AS dropdb -h /scratch/run -U postgres hangar_roles
+$AS pg_restore -h /scratch/run -U postgres -d postgres --no-owner --exit-on-error /scratch/dump
 counts=$($AS psql -h /scratch/run -U postgres -d postgres -AtX -v ON_ERROR_STOP=1 -c "select count(*), coalesce(sum((xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', schemaname, relname), false, true, '')))[1]::text::bigint), 0) from pg_stat_user_tables")
 echo "HANGAR-CHECK tables=$tables restored=${counts%%|*} rows=${counts##*|}"
 $AS pg_ctl -D /scratch/pgdata -m immediate stop >/dev/null
 `
 
-var checkRE = regexp.MustCompile(`HANGAR-CHECK tables=(\d+) restored=(\d+) rows=(\d+)`)
+var (
+	checkRE = regexp.MustCompile(`(?m)^HANGAR-CHECK tables=(\d+) restored=(\d+) rows=(\d+)\s*$`)
+	aclRE   = regexp.MustCompile(`(?m)^HANGAR-ACL ([0-9a-f]*)\s*$`)
+	roleRE  = regexp.MustCompile(`(?m)^HANGAR-ROLE ([0-9a-f]+)\s*$`)
+)
 
 // Check is what the test restore found.
 type Check struct {
@@ -86,6 +117,9 @@ type Check struct {
 	Restored int64 `json:"restored"` // tables in the throwaway database
 	Rows     int64 `json:"rows"`
 	Bytes    int64 `json:"bytes"` // dump size before encryption
+	// Roles are the roles the dump refers to that a fresh PostgreSQL
+	// lacks: a restore creates them without a password.
+	Roles []string `json:"roles,omitempty"`
 }
 
 func parseCheck(out string) (Check, error) {
@@ -100,7 +134,45 @@ func parseCheck(out string) (Check, error) {
 	if c.Restored < c.Tables {
 		return c, fmt.Errorf("the test restore has %d tables, the dump has %d", c.Restored, c.Tables)
 	}
-	return c, nil
+	roles, err := checkRoles(out)
+	c.Roles = roles
+	return c, err
+}
+
+// checkRoles compares the roles the test restore needed (PostgreSQL said
+// which) with the ones a real restore finds by reading the dump's
+// permissions (pgroles): a role only the first knows would make the real
+// restore fail, so the backup is not called tested.
+func checkRoles(out string) ([]string, error) {
+	var needed []string
+	for _, m := range roleRE.FindAllStringSubmatch(out, -1) {
+		if b, err := hex.DecodeString(m[1]); err == nil {
+			needed = append(needed, string(b))
+		}
+	}
+	if len(needed) == 0 {
+		return nil, nil
+	}
+	var found []string
+	if m := aclRE.FindStringSubmatch(out); m != nil {
+		sql, err := hex.DecodeString(m[1])
+		if err != nil {
+			return needed, fmt.Errorf("the test restore sent unreadable permissions: %w", err)
+		}
+		if found, err = pgroles.FromScript(bytes.NewReader(sql)); err != nil {
+			return needed, err
+		}
+	}
+	var missing []string
+	for _, r := range needed {
+		if !slices.Contains(found, r) {
+			missing = append(missing, strconv.Quote(r))
+		}
+	}
+	if len(missing) > 0 {
+		return needed, fmt.Errorf("the dump needs roles a restore would not create: %s", strings.Join(missing, ", "))
+	}
+	return needed, nil
 }
 
 type counter struct {
