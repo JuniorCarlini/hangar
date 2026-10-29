@@ -23,6 +23,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/gitsrc"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/ids"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/secrets"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
@@ -810,6 +811,18 @@ func (m *Manager) Logs(ctx context.Context, projectSlug, serviceSlug string, opt
 		return err
 	}
 	return m.node.Logs(ctx, projectSlug, serviceSlug, opt, fn)
+}
+
+// DeploymentPage is one keyset page of a service's deploys, newest first.
+func (m *Manager) DeploymentPage(ctx context.Context, serviceID string, req keyset.Request, size int) (keyset.Page[dbq.Deployment], error) {
+	return keyset.Fetch(req, size,
+		func(k keyset.Key, lim int64) ([]dbq.Deployment, error) {
+			return m.q.DeploymentsOlder(ctx, dbq.DeploymentsOlderParams{ServiceID: serviceID, At: k.At, ID: k.ID, Lim: lim})
+		},
+		func(k keyset.Key, lim int64) ([]dbq.Deployment, error) {
+			return m.q.DeploymentsNewer(ctx, dbq.DeploymentsNewerParams{ServiceID: serviceID, At: k.At, ID: k.ID, Lim: lim})
+		},
+		func(d dbq.Deployment) keyset.Key { return keyset.Key{At: d.StartedAt, ID: d.ID} })
 }
 
 // Deployments lists the latest deploys.

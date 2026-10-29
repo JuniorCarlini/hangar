@@ -20,6 +20,8 @@ type UpdateData struct {
 	// History is every update applied here, newest first (an update still
 	// being applied comes first).
 	History []UpdateStatus
+	// HistoryPager pages History (already cut to the page).
+	HistoryPager Pager
 	Flash      string
 	FlashError bool
 	// Checking: a lookup runs in the background (opening the page starts
@@ -187,6 +189,9 @@ templ Update(d UpdateData) {
 									}
 								</tbody>
 							</table>
+						</div>
+						<div class="mt-3">
+							@pagination(d.HistoryPager)
 						</div>
 					}
 				</div>

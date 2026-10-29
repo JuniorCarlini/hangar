@@ -14,6 +14,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/edge"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/ids"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
@@ -376,11 +377,19 @@ func (m *Manager) RotateCheckSecret(ctx context.Context, a Actor, serviceID stri
 // DomainActivity is what the dynamic domains page shows.
 type DomainActivity struct {
 	Recent      []dbq.TlsAskLog
+	Older       string // keyset cursors of the neighbour pages of Recent
+	Newer       string
 	Blocked     []dbq.DomainBlocklist
 	Certified   int64 // hostnames ever approved
 	NewThisHour int64
 	HourCap     int
 	DeniedToday int64
+}
+
+// AskKey is a decision's place in the page order: its time, then its
+// primary key as text (what AsksOlder and AsksNewer compare).
+func AskKey(a dbq.TlsAskLog) keyset.Key {
+	return keyset.Key{At: a.LastAt, ID: a.Hostname + "|" + a.Decision + "|" + strconv.FormatInt(a.Hour, 10)}
 }
 
 // SetEdgeCap tells the page the hourly cap on new customer domains.
@@ -445,25 +454,31 @@ func (m *Manager) SetDomainRequireTXT(ctx context.Context, a Actor, serviceID st
 	return m.applyEdge(ctx)
 }
 
-// DomainActivity lists recent certificate decisions (all, or only "allow"
-// or "deny") and the blocklist, with the numbers on top of the page.
-func (m *Manager) DomainActivity(ctx context.Context, decision string) (DomainActivity, error) {
-	var recent []dbq.TlsAskLog
-	var err error
-	if decision == "allow" || decision == "deny" {
-		recent, err = m.q.RecentAsksByDecision(ctx, dbq.RecentAsksByDecisionParams{Decision: decision, Limit: 200})
-	} else {
-		recent, err = m.q.RecentAsks(ctx, 200)
+// DomainActivity lists one keyset page of the certificate decisions (all,
+// or only "allow" or "deny"), newest first, and the blocklist, with the
+// numbers on top of the page.
+func (m *Manager) DomainActivity(ctx context.Context, decision string, req keyset.Request, size int) (DomainActivity, error) {
+	if decision != "allow" && decision != "deny" {
+		decision = ""
 	}
+	page, err := keyset.Fetch(req, size,
+		func(k keyset.Key, lim int64) ([]dbq.TlsAskLog, error) {
+			return m.q.AsksOlder(ctx, dbq.AsksOlderParams{Decision: decision, At: k.At, ID: k.ID, Lim: lim})
+		},
+		func(k keyset.Key, lim int64) ([]dbq.TlsAskLog, error) {
+			return m.q.AsksNewer(ctx, dbq.AsksNewerParams{Decision: decision, At: k.At, ID: k.ID, Lim: lim})
+		},
+		AskKey)
 	if err != nil {
 		return DomainActivity{}, err
 	}
+	recent := page.Rows
 	blocked, err := m.q.ListBlocked(ctx)
 	if err != nil {
 		return DomainActivity{}, err
 	}
 	hour := m.now().Unix() / 3600
-	act := DomainActivity{Recent: recent, Blocked: blocked, HourCap: m.HourCap(ctx)}
+	act := DomainActivity{Recent: recent, Older: page.Older, Newer: page.Newer, Blocked: blocked, HourCap: m.HourCap(ctx)}
 	act.Certified, _ = m.q.CountAllowedHosts(ctx)
 	act.NewThisHour, _ = m.q.CountNewAllowsSince(ctx, hour)
 	if v, err := m.q.CountDeniedSince(ctx, hour-23); err == nil {

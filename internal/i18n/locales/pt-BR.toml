@@ -1187,6 +1187,8 @@ label = "Paginação"
 prev = "Anterior"
 next = "Próxima"
 range = "{from}–{to} de {total}"
+newer = "Mais recentes"
+older = "Mais antigos"
 
 [tucano]
 show = "Mostrar"

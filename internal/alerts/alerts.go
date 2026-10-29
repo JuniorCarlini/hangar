@@ -28,6 +28,7 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/secrets"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
@@ -468,6 +469,32 @@ func (s *Service) MarkSeen(ctx context.Context, userID string, withSecurity bool
 		return err
 	}
 	return s.q.SetAlertSeen(ctx, dbq.SetAlertSeenParams{UserID: userID, LastID: latest})
+}
+
+// HistoryPage is one keyset page of the alerts (security ones only for
+// admins), newest first.
+func (s *Service) HistoryPage(ctx context.Context, withSecurity bool, req keyset.Request, size int) (keyset.Page[dbq.Alert], error) {
+	sec := boolInt(withSecurity)
+	return keyset.Fetch(req, size,
+		func(k keyset.Key, lim int64) ([]dbq.Alert, error) {
+			return s.q.AlertsOlder(ctx, dbq.AlertsOlderParams{WithSecurity: sec, BeforeID: k.At, Lim: lim})
+		},
+		func(k keyset.Key, lim int64) ([]dbq.Alert, error) {
+			return s.q.AlertsNewer(ctx, dbq.AlertsNewerParams{WithSecurity: sec, AfterID: k.At, Lim: lim})
+		},
+		func(a dbq.Alert) keyset.Key { return keyset.Key{At: a.ID} })
+}
+
+// DeliveriesPage is one keyset page of the delivery attempts, newest first.
+func (s *Service) DeliveriesPage(ctx context.Context, req keyset.Request, size int) (keyset.Page[dbq.AlertDelivery], error) {
+	return keyset.Fetch(req, size,
+		func(k keyset.Key, lim int64) ([]dbq.AlertDelivery, error) {
+			return s.q.AlertDeliveriesOlder(ctx, dbq.AlertDeliveriesOlderParams{BeforeID: k.At, Lim: lim})
+		},
+		func(k keyset.Key, lim int64) ([]dbq.AlertDelivery, error) {
+			return s.q.AlertDeliveriesNewer(ctx, dbq.AlertDeliveriesNewerParams{AfterID: k.At, Lim: lim})
+		},
+		func(d dbq.AlertDelivery) keyset.Key { return keyset.Key{At: d.ID} })
 }
 
 // Deliveries lists the newest delivery attempts.

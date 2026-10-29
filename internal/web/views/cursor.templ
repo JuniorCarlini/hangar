@@ -1,0 +1,71 @@
+package views
+
+import "net/url"
+
+// Cursor is the "newer / older" links of a keyset-paginated list
+// (internal/keyset): the server reads the cursor from Param and the links
+// keep the rest of Query (tab, filters).
+type Cursor struct {
+	Path   string
+	Query  url.Values
+	Param  string
+	Older  string // cursor of the next page down; "" = this is the last
+	Newer  string // cursor of the page above; "" = this is the first
+	Anchor string // fragment that brings the reader back to the list
+}
+
+// NewCursor builds the links of a list on path, keeping query.
+func NewCursor(path string, query url.Values, param, older, newer, anchor string) Cursor {
+	return Cursor{Path: path, Query: query, Param: param, Older: older, Newer: newer, Anchor: anchor}
+}
+
+func (c Cursor) href(cursor string) string {
+	q := url.Values{}
+	for k, v := range c.Query {
+		q[k] = v
+	}
+	q.Del(c.Param)
+	q.Del("ok") // a flash belongs to the action that set it, not to paging
+	if cursor != "" {
+		q.Set(c.Param, cursor)
+	}
+	out := c.Path
+	if s := q.Encode(); s != "" {
+		out += "?" + s
+	}
+	if c.Anchor != "" {
+		out += "#" + c.Anchor
+	}
+	return out
+}
+
+// cursorPager draws Tucano's pagination edges for a keyset list. It shows
+// nothing when everything fits on one page.
+templ cursorPager(c Cursor) {
+	if c.Older != "" || c.Newer != "" {
+		<nav class="tuc-pagination justify-end px-4 py-2" role="navigation" aria-label={ t(ctx, "pagination.label") }>
+			if c.Newer == "" {
+				<span class="tuc-btn is-ghost tuc-pagination__edge is-disabled" aria-hidden="true" aria-disabled="true">
+					@Icon("chevron-left", "size-3.5")
+					<span class="tuc-pagination__word">{ t(ctx, "pagination.newer") }</span>
+				</span>
+			} else {
+				<a class="tuc-btn is-ghost tuc-pagination__edge" href={ templ.SafeURL(c.href(c.Newer)) } rel="prev" aria-label={ t(ctx, "pagination.newer") }>
+					@Icon("chevron-left", "size-3.5")
+					<span class="tuc-pagination__word">{ t(ctx, "pagination.newer") }</span>
+				</a>
+			}
+			if c.Older == "" {
+				<span class="tuc-btn is-ghost tuc-pagination__edge is-disabled" aria-hidden="true" aria-disabled="true">
+					<span class="tuc-pagination__word">{ t(ctx, "pagination.older") }</span>
+					@Icon("chevron-right", "size-3.5")
+				</span>
+			} else {
+				<a class="tuc-btn is-ghost tuc-pagination__edge" href={ templ.SafeURL(c.href(c.Older)) } rel="next" aria-label={ t(ctx, "pagination.older") }>
+					<span class="tuc-pagination__word">{ t(ctx, "pagination.older") }</span>
+					@Icon("chevron-right", "size-3.5")
+				</a>
+			}
+		</nav>
+	}
+}

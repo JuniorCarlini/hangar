@@ -594,52 +594,6 @@ func (q *Queries) ListBackupRecipients(ctx context.Context) ([]BackupRecipient, 
 	return items, nil
 }
 
-const listBackupRuns = `-- name: ListBackupRuns :many
-SELECT id, service_id, label, kind, "trigger", class, status, object_key, size_bytes, sha256, verified, check_json, uploads_json, warning, error, created_by, started_at, finished_at FROM backup_runs ORDER BY started_at DESC LIMIT ?
-`
-
-func (q *Queries) ListBackupRuns(ctx context.Context, limit int64) ([]BackupRun, error) {
-	rows, err := q.db.QueryContext(ctx, listBackupRuns, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []BackupRun{}
-	for rows.Next() {
-		var i BackupRun
-		if err := rows.Scan(
-			&i.ID,
-			&i.ServiceID,
-			&i.Label,
-			&i.Kind,
-			&i.Trigger,
-			&i.Class,
-			&i.Status,
-			&i.ObjectKey,
-			&i.SizeBytes,
-			&i.Sha256,
-			&i.Verified,
-			&i.CheckJson,
-			&i.UploadsJson,
-			&i.Warning,
-			&i.Error,
-			&i.CreatedBy,
-			&i.StartedAt,
-			&i.FinishedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listBackupTargets = `-- name: ListBackupTargets :many
 SELECT id, name, provider, config_enc, lock_mode, object_lock_days, is_primary, checked_at, check_error, created_by, created_at FROM backup_targets ORDER BY is_primary DESC, created_at
 `

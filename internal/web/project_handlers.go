@@ -17,6 +17,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/edge"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
@@ -282,6 +283,13 @@ type serviceView struct {
 	status        int
 }
 
+// The deploy history pages by keyset (docs/20); each row carries its
+// build log (up to 16 KB), so a page is short.
+const (
+	deploysParam   = "deploys"
+	deploysPerPage = 10
+)
+
 func (h *handlers) servicePage(w http.ResponseWriter, r *http.Request) {
 	h.renderService(w, r, serviceView{status: http.StatusOK, flash: flashFrom(r)})
 }
@@ -388,7 +396,9 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 			d.Volumes = append(d.Volumes, volumeRow(r.Context(), v, d.HostFreeGB))
 		}
 	}
-	if deps, err := h.projects.Deployments(r.Context(), s.ID, 10); err == nil {
+	if page, err := h.projects.DeploymentPage(r.Context(), s.ID, keyset.Parse(r.URL.Query().Get(deploysParam)), deploysPerPage); err == nil {
+		deps := page.Rows
+		d.DeploysPage = views.NewCursor(r.URL.Path, r.URL.Query(), deploysParam, page.Older, page.Newer, "deploys")
 		targets := h.projects.RollbackTargets(r.Context(), s.ID, deps)
 		for _, dp := range deps {
 			d.Deploys = append(d.Deploys, views.DeployRow{

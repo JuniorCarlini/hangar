@@ -19,6 +19,7 @@ type AlertsData struct {
 	Security     []string // security alert kinds, always on
 	History      []AlertRow
 	Deliveries   []DeliveryRow
+	Page         Cursor // older and newer pages of the list on screen
 	Revealed     *RevealedSecret
 	Form         ChannelForm
 	Tab          string // "" (the alerts) or "config" (channels and rules)
@@ -573,6 +574,7 @@ templ alertHistory(d AlertsData) {
 				}
 			</ul>
 		}
+		@cursorPager(d.Page)
 	</section>
 }
 

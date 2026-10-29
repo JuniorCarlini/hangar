@@ -415,6 +415,7 @@ type ServiceData struct {
 	Pending     bool
 	Deploying   bool
 	Deploys     []DeployRow
+	DeploysPage Cursor // older and newer pages of Deploys
 	Env         []EnvRow
 	RefWarnings []RefWarning // broken references in Env
 	// UsedBy are the variables of other services that reference this one

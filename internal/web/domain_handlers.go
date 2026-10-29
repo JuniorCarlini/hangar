@@ -5,12 +5,14 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/edge"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
@@ -171,6 +173,12 @@ func (h *handlers) rotateCheckSecret(w http.ResponseWriter, r *http.Request) {
 
 // --- dynamic domains page ---------------------------------------------------
 
+// The certificate decisions page by keyset (docs/20).
+const (
+	asksParam   = "c"
+	asksPerPage = 50
+)
+
 func (h *handlers) domainsPage(w http.ResponseWriter, r *http.Request) {
 	flash := ""
 	switch r.URL.Query().Get("ok") {
@@ -202,7 +210,14 @@ func (h *handlers) renderDomains(w http.ResponseWriter, r *http.Request, status 
 		d.EntryPath = h.entryPath(r.Context(), d.EntryHost)
 	}
 	d.MinCap, d.MaxCap = projects.MinHourCap, projects.MaxHourCap
-	act, err := h.projects.DomainActivity(r.Context(), d.Filter)
+	act, err := h.projects.DomainActivity(r.Context(), d.Filter, keyset.Parse(r.URL.Query().Get(asksParam)), asksPerPage)
+	if d.Filter != "blocked" {
+		q := url.Values{}
+		if d.Filter != "" {
+			q.Set("f", d.Filter)
+		}
+		d.Page = views.NewCursor("/domains", q, asksParam, act.Older, act.Newer, "")
+	}
 	d.Certified, d.NewThisHour, d.HourCap, d.DeniedToday = act.Certified, act.NewThisHour, act.HourCap, act.DeniedToday
 	if err != nil {
 		code, msg := userError(r, err)

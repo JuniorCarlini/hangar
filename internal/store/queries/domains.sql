@@ -77,9 +77,6 @@ SELECT count(DISTINCT hostname) FROM tls_ask_log WHERE decision = 'allow';
 -- name: CountDeniedSince :one
 SELECT coalesce(sum(count), 0) FROM tls_ask_log WHERE decision = 'deny' AND hour >= ?;
 
--- name: RecentAsksByDecision :many
-SELECT * FROM tls_ask_log WHERE decision = ? ORDER BY last_at DESC LIMIT ?;
-
 -- name: GetEdgeSettings :one
 SELECT * FROM edge_settings WHERE id = 1;
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -12,14 +13,18 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/alerts"
 	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
 
 const (
 	historySize    = 50
-	deliveriesSize = 30
+	deliveriesSize = 50
 	bellSize       = 6
+	// pageParam is the keyset cursor of the list on screen (alerts or
+	// deliveries: one at a time).
+	pageParam = "c"
 )
 
 // alertFlashes are the ?ok= values the page confirms with a toast.
@@ -111,9 +116,17 @@ func (h *handlers) renderAlerts(w http.ResponseWriter, r *http.Request, v alerts
 			})
 		}
 	}
-	if list, err := h.alerts.Recent(ctx, admin, historySize); err == nil {
-		for _, a := range list {
-			d.History = append(d.History, alertRow(r, a))
+	req := keyset.Parse(r.URL.Query().Get(pageParam))
+	pageQuery := url.Values{}
+	if d.List != "" {
+		pageQuery.Set("f", d.List)
+	}
+	if !admin || d.List != "deliveries" {
+		if page, err := h.alerts.HistoryPage(ctx, admin, req, historySize); err == nil {
+			for _, a := range page.Rows {
+				d.History = append(d.History, alertRow(r, a))
+			}
+			d.Page = views.NewCursor("/alerts", pageQuery, pageParam, page.Older, page.Newer, "history")
 		}
 	}
 	if admin {
@@ -124,8 +137,9 @@ func (h *handlers) renderAlerts(w http.ResponseWriter, r *http.Request, v alerts
 				})
 			}
 		}
-		if dl, err := h.alerts.Deliveries(ctx, deliveriesSize); err == nil {
-			for _, x := range dl {
+		if page, err := h.alerts.DeliveriesPage(ctx, req, deliveriesSize); err == nil && d.List == "deliveries" {
+			d.Page = views.NewCursor("/alerts", pageQuery, pageParam, page.Older, page.Newer, "history")
+			for _, x := range page.Rows {
 				title := i18n.T(ctx, "alert.title.test")
 				if x.Kind != "test" {
 					title, _ = alerts.Texts(i18n.Locale(ctx), x.Kind, false, nil)

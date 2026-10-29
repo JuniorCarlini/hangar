@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
@@ -84,8 +85,15 @@ func (h *handlers) renderUpdate(w http.ResponseWriter, r *http.Request, status i
 		loggerFrom(r.Context()).Error("update history", "error", err)
 	}
 	d.History = append(d.History, updateHistory(rows)...)
+	// The history is derived from the audit log, so it is paged in memory
+	// (it is a few dozen rows: one per update).
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	d.HistoryPager = views.NewPager("/update", nil, page, len(d.History), updateHistoryPerPage)
+	d.History = d.History[d.HistoryPager.Offset():d.HistoryPager.End()]
 	render(w, r, status, views.Update(d))
 }
+
+const updateHistoryPerPage = 20
 
 func (h *handlers) updateCheck(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.updates.Check(r.Context()); err != nil {

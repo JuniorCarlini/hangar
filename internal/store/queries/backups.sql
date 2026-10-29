@@ -68,9 +68,6 @@ WHERE id = ?;
 -- name: GetBackupRun :one
 SELECT * FROM backup_runs WHERE id = ?;
 
--- name: ListBackupRuns :many
-SELECT * FROM backup_runs ORDER BY started_at DESC LIMIT ?;
-
 -- name: ListServiceBackupRuns :many
 SELECT * FROM backup_runs WHERE service_id = ? ORDER BY started_at DESC LIMIT ?;
 

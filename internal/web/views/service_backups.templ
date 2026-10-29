@@ -36,6 +36,7 @@ type ServiceBackups struct {
 	DefaultNew   string
 	MaxAt        string // ISO, the newest moment that can be chosen
 	Runs         []BackupRunRow
+	RunsPage     Cursor
 	Restores     []RestoreRow
 	// RestoreFailed is the newest restore when it failed: shown on top.
 	RestoreFailed *RestoreRow
@@ -140,6 +141,7 @@ templ tabBackups(d ServiceData) {
 			if len(d.Backups.Runs) > 0 {
 				@backupRunsTable(d.Backups.Runs, false, d.CanAdmin, d.SudoCritical)
 			}
+			@cursorPager(d.Backups.RunsPage)
 		</section>
 		if len(d.Backups.Restores) > 0 {
 			<section class={ cardClass }>

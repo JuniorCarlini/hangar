@@ -489,46 +489,6 @@ func (q *Queries) RecentAsks(ctx context.Context, limit int64) ([]TlsAskLog, err
 	return items, nil
 }
 
-const recentAsksByDecision = `-- name: RecentAsksByDecision :many
-SELECT hostname, decision, reason, hour, count, last_at, via FROM tls_ask_log WHERE decision = ? ORDER BY last_at DESC LIMIT ?
-`
-
-type RecentAsksByDecisionParams struct {
-	Decision string
-	Limit    int64
-}
-
-func (q *Queries) RecentAsksByDecision(ctx context.Context, arg RecentAsksByDecisionParams) ([]TlsAskLog, error) {
-	rows, err := q.db.QueryContext(ctx, recentAsksByDecision, arg.Decision, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []TlsAskLog{}
-	for rows.Next() {
-		var i TlsAskLog
-		if err := rows.Scan(
-			&i.Hostname,
-			&i.Decision,
-			&i.Reason,
-			&i.Hour,
-			&i.Count,
-			&i.LastAt,
-			&i.Via,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const setDomainRequireTXT = `-- name: SetDomainRequireTXT :exec
 UPDATE services SET domain_require_txt = ?, updated_at = ? WHERE id = ?
 `

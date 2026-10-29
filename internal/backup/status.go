@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
@@ -163,7 +164,6 @@ type Overview struct {
 	Mode       string // ModeSimple or ModeKit
 	Services   []Row
 	Panel      Row
-	Runs       []Run
 	Restores   []Restore // the newest restores of every service
 	Alerts     []Alert
 }
@@ -252,13 +252,6 @@ func (m *Manager) Overview(ctx context.Context) (Overview, error) {
 	}
 	o.Panel.Last = m.lastRun(ctx, PanelLabel, archive.KindPanel, false)
 	o.Panel.LastOK = m.lastRun(ctx, PanelLabel, archive.KindPanel, true)
-	runs, err := m.q.ListBackupRuns(ctx, 30)
-	if err != nil {
-		return o, err
-	}
-	for _, r := range runs {
-		o.Runs = append(o.Runs, toRun(r))
-	}
 	restores, err := m.q.ListRestores(ctx, 50)
 	if err != nil {
 		return o, err
@@ -352,6 +345,27 @@ func (m *Manager) AlertCount(ctx context.Context) int {
 	}
 	m.alertN, m.alertAt = n, m.now()
 	return n
+}
+
+// RunsPage is one keyset page of the backup runs, of every service
+// (serviceID "") or of one, newest first.
+func (m *Manager) RunsPage(ctx context.Context, serviceID string, req keyset.Request, size int) (keyset.Page[Run], error) {
+	p, err := keyset.Fetch(req, size,
+		func(k keyset.Key, lim int64) ([]dbq.BackupRun, error) {
+			return m.q.BackupRunsOlder(ctx, dbq.BackupRunsOlderParams{ServiceKey: serviceID, At: k.At, ID: k.ID, Lim: lim})
+		},
+		func(k keyset.Key, lim int64) ([]dbq.BackupRun, error) {
+			return m.q.BackupRunsNewer(ctx, dbq.BackupRunsNewerParams{ServiceKey: serviceID, At: k.At, ID: k.ID, Lim: lim})
+		},
+		func(r dbq.BackupRun) keyset.Key { return keyset.Key{At: r.StartedAt, ID: r.ID} })
+	if err != nil {
+		return keyset.Page[Run]{}, err
+	}
+	out := keyset.Page[Run]{Older: p.Older, Newer: p.Newer, Rows: make([]Run, 0, len(p.Rows))}
+	for _, r := range p.Rows {
+		out.Rows = append(out.Rows, toRun(r))
+	}
+	return out, nil
 }
 
 // ServiceRuns lists a service's recent backups.

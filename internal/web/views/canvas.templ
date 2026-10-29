@@ -493,9 +493,10 @@ templ servicePanel(d ServiceData) {
 									<span class="text-xs text-muted">{ t(ctx, "service.deploys.last", "n", len(d.Deploys)) }</span>
 								}
 							}
-							<div class={ cardBodyClass }>
+							<div class={ cardBodyClass } id="deploys">
 								@deploysTimeline(d)
 							</div>
+							@cursorPager(d.DeploysPage)
 						</section>
 				}
 				@sudoDialog(d)

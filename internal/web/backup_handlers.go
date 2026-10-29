@@ -19,6 +19,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/backup/s3"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/keyset"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
@@ -30,6 +31,13 @@ import (
 const backupTime = "02/01 15:04"
 
 // --- overview ---------------------------------------------------------------
+
+// The backup history pages by keyset (docs/20).
+const (
+	runsParam          = "runs"
+	runsPerPage        = 50
+	serviceRunsPerPage = 20
+)
 
 func (h *handlers) backupsPage(w http.ResponseWriter, r *http.Request) {
 	flash := ""
@@ -113,8 +121,11 @@ func (h *handlers) renderBackupsWith(w http.ResponseWriter, r *http.Request, sta
 		d.Services = append(d.Services, h.backupRow(ctx, s, now, servicePath(s.Project, s.Service)+"?tab=backups"))
 	}
 	d.Panel = h.backupRow(ctx, o.Panel, now, "")
-	for _, run := range o.Runs {
-		d.Runs = append(d.Runs, runRow(ctx, run))
+	if page, err := h.backups.RunsPage(ctx, "", keyset.Parse(r.URL.Query().Get(runsParam)), runsPerPage); err == nil {
+		for _, run := range page.Rows {
+			d.Runs = append(d.Runs, runRow(ctx, run))
+		}
+		d.RunsPage = views.NewCursor("/backups", r.URL.Query(), runsParam, page.Older, page.Newer, "history")
 	}
 	for _, f := range archive.Folders {
 		d.Folders = append(d.Folders, views.BackupFolder{Folder: f, Days: archive.DefaultRetentionDays[f], What: i18n.T(ctx, "backups.rules.folders."+f)})
@@ -451,14 +462,23 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 		b.Busy = !dl.Ready && dl.Error == ""
 	}
 	b.Busy = b.Busy || h.backups.Queued(s.ID)
+	// The latest base backup and whether one is running come from the
+	// newest runs, whatever page of the history is on screen.
 	if runs, err := h.backups.ServiceRuns(ctx, s.ID, 15); err == nil {
 		for _, run := range runs {
 			if run.Kind == archive.KindBase && run.Status == "ok" && b.LastBase == "" {
 				b.LastBase = run.Started.Format(backupTime)
 			}
-			b.Runs = append(b.Runs, runRow(ctx, run))
 			b.Busy = b.Busy || run.Status == "running"
 		}
+	}
+	if page, err := h.backups.RunsPage(ctx, s.ID, keyset.Parse(r.URL.Query().Get(runsParam)), serviceRunsPerPage); err == nil {
+		for _, run := range page.Rows {
+			b.Runs = append(b.Runs, runRow(ctx, run))
+		}
+		q := r.URL.Query()
+		q.Set("tab", "backups")
+		b.RunsPage = views.NewCursor(servicePath(p.Slug, s.Slug), q, runsParam, page.Older, page.Newer, "")
 	}
 	if rs, err := h.backups.ServiceRestores(ctx, p.Slug, s, 10); err == nil {
 		for i, x := range rs {

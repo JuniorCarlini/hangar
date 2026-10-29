@@ -9,6 +9,7 @@ type DomainsData struct {
 	Dynamic     string // "project/service" taking customer domains, or ""
 	DynamicURL  string
 	Recent      []AskRow
+	Page        Cursor // older and newer pages of Recent
 	Blocked     []BlockedRow
 	Filter      string
 	Certified   int64
@@ -226,6 +227,7 @@ templ Domains(d DomainsData) {
 					@blockedTable(d)
 				} else {
 					@recentTable(d)
+					@cursorPager(d.Page)
 				}
 			</section>
 			if d.CanAdmin {

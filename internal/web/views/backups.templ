@@ -27,6 +27,7 @@ type BackupsData struct {
 	Services    []BackupServiceRow
 	Panel       BackupServiceRow
 	Runs        []BackupRunRow
+	RunsPage    Cursor
 	Folders     []BackupFolder
 	Error       string
 	Flash       string
@@ -529,13 +530,14 @@ templ backupServiceRow(s BackupServiceRow, link bool) {
 }
 
 templ backupHistory(d BackupsData) {
-	<section class={ cardClass }>
+	<section class={ cardClass } id="history">
 		@cardHead(t(ctx, "backups.history.title"))
 		if len(d.Runs) == 0 {
 			@emptyState("history", t(ctx, "backups.history.empty"))
 		} else {
 			@backupRunsTable(d.Runs, true, d.CanAdmin, d.SudoActive)
 		}
+		@cursorPager(d.RunsPage)
 	</section>
 }
 

@@ -1190,6 +1190,8 @@ label = "Pagination"
 prev = "Previous"
 next = "Next"
 range = "{from}–{to} of {total}"
+newer = "Newer"
+older = "Older"
 
 [tucano]
 show = "Show"
