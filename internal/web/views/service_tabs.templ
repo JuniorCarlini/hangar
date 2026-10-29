@@ -1401,13 +1401,15 @@ func (l *VolumeLimitRow) busyText(ctx context.Context) string {
 templ volumeUsage(v VolumeRow) {
 	if l := v.Limit; l != nil && l.State != "failed" {
 		if l.Used != "" {
+			// One row: the bar takes what is left of the column, then the
+			// percentage and "18 MB de 2 GB".
 			<div class="flex items-center gap-2">
-				<div class="h-1 w-24 shrink-0 bg-surface-2" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ fmt.Sprint(l.Pct) } aria-label={ t(ctx, "volume.usage") }>
+				<div class="h-1 min-w-12 grow bg-surface-2" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ fmt.Sprint(l.Pct) } aria-label={ t(ctx, "volume.usage") }>
 					<div class={ "bar-fill h-1 " + toneBg(level(l.Pct)) + " " + pctWidth(l.Pct) }></div>
 				</div>
-				<span class={ "text-xs tabular-nums " + levelText(level(l.Pct)) }>{ fmt.Sprint(l.Pct) }%</span>
+				<span class={ "w-9 shrink-0 text-right text-xs tabular-nums " + levelText(level(l.Pct)) }>{ fmt.Sprint(l.Pct) }%</span>
+				<span class="shrink-0 text-xs whitespace-nowrap text-muted tabular-nums">{ t(ctx, "volume.usage_of", "used", l.Used, "size", l.Size) }</span>
 			</div>
-			<span class="block text-[11px] text-muted tabular-nums">{ t(ctx, "volume.usage_of", "used", l.Used, "size", l.Size) }</span>
 		} else {
 			<span class="block text-xs tabular-nums">{ t(ctx, "volume.limit.of", "size", l.Size) }</span>
 		}
@@ -1447,30 +1449,37 @@ templ resourcesCard(d ServiceData) {
 		@cardHead(t(ctx, "resources.title"))
 		<div class={ cardBodyClass }>
 			if d.CanAdmin {
-				<form method="post" action={ templ.SafeURL(d.base() + "/resources") } class="flex flex-wrap items-end gap-3">
+				// The fields share the card's width on one row (stacked on a
+				// phone), the hints below, Save on the right as in the other
+				// cards.
+				<form method="post" action={ templ.SafeURL(d.base() + "/resources") } class="flex flex-col gap-3">
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<div class="flex flex-col gap-1.5">
-						<label class="tuc-label" for="res-memory">{ t(ctx, "resources.memory") }</label>
-						<input class="tuc-input w-32 font-mono" id="res-memory" name="memory_mb" type="number" min="16" max="65536" step="1" required value={ strconv.FormatInt(d.MemoryMB, 10) }/>
-					</div>
-					<div class="flex flex-col gap-1.5">
-						<label class="tuc-label" for="res-cpus">{ t(ctx, "resources.cpus") }</label>
-						<input class="tuc-input w-24 font-mono" id="res-cpus" name="cpus" type="number" min="0.05" max="64" step="0.05" required value={ d.CPUs }/>
-					</div>
-					if !d.FixedPort {
-						<div class="flex flex-col gap-1.5">
-							<label class="tuc-label" for="res-port">{ t(ctx, "resources.port") }</label>
-							<input class="tuc-input w-28 font-mono" id="res-port" name="port" type="number" min="0" max="65535" step="1" required value={ strconv.FormatInt(d.Port, 10) }/>
+					<div class={ "grid grid-cols-1 gap-3", templ.KV("sm:grid-cols-3", !d.FixedPort), templ.KV("sm:grid-cols-2", d.FixedPort) }>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="res-memory">{ t(ctx, "resources.memory") }</label>
+							<input class="tuc-input w-full font-mono" id="res-memory" name="memory_mb" type="number" min="16" max="65536" step="1" required value={ strconv.FormatInt(d.MemoryMB, 10) }/>
 						</div>
-					}
-					<button class="tuc-btn is-outline" type="submit">
-						@Icon("save", "size-3.5")
-						{ t(ctx, "resources.save") }
-					</button>
-					<span class="tuc-hint w-full">{ t(ctx, "resources.hint") }</span>
+						<div class="flex min-w-0 flex-col gap-1.5">
+							<label class="tuc-label" for="res-cpus">{ t(ctx, "resources.cpus") }</label>
+							<input class="tuc-input w-full font-mono" id="res-cpus" name="cpus" type="number" min="0.05" max="64" step="0.05" required value={ d.CPUs }/>
+						</div>
+						if !d.FixedPort {
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="res-port">{ t(ctx, "resources.port") }</label>
+								<input class="tuc-input w-full font-mono" id="res-port" name="port" type="number" min="0" max="65535" step="1" required value={ strconv.FormatInt(d.Port, 10) }/>
+							</div>
+						}
+					</div>
+					<span class="tuc-hint">{ t(ctx, "resources.hint") }</span>
 					if !d.FixedPort {
-						<span class="tuc-hint w-full">{ t(ctx, "resources.port_hint") }</span>
+						<span class="tuc-hint">{ t(ctx, "resources.port_hint") }</span>
 					}
+					<div class="flex justify-end">
+						<button class="tuc-btn is-outline" type="submit">
+							@Icon("save", "size-3.5")
+							{ t(ctx, "resources.save") }
+						</button>
+					</div>
 				</form>
 			} else {
 				<p class="m-0 text-[13px] text-muted">{ t(ctx, "resources.summary", "memory", d.MemoryMB, "cpus", d.CPUs) }</p>
@@ -1496,7 +1505,7 @@ templ volumesCard(d ServiceData) {
 		} else {
 			<div class="tuc-table-wrap">
 				<table class="tuc-table is-compact w-full">
-					<thead><tr><th>{ t(ctx, "volume.name") }</th><th>{ t(ctx, "volume.path") }</th><th>{ t(ctx, "volume.usage") }</th></tr></thead>
+					<thead><tr><th>{ t(ctx, "volume.name") }</th><th>{ t(ctx, "volume.path") }</th><th class="w-1/2">{ t(ctx, "volume.usage") }</th></tr></thead>
 					<tbody>
 						for _, v := range d.Volumes {
 							<tr
@@ -1562,26 +1571,36 @@ templ volumeDialog(d ServiceData, v *VolumeRow) {
 						<label class="tuc-label" for="vol-name">{ t(ctx, "volume.name") }</label>
 						<input class="tuc-input font-mono" id="vol-name" name="name" required maxlength="30" pattern="[a-z][a-z0-9\-]{0,29}" placeholder="media" autofocus/>
 					</div>
-					<div class="flex flex-col gap-1.5">
-						<label class="tuc-label" for="vol-path">{ t(ctx, "volume.path") }</label>
-						<input class="tuc-input font-mono" id="vol-path" name="path" required maxlength="200" placeholder="/app/media"/>
-					</div>
-				} else {
-					<input type="hidden" name="name" value={ v.Name }/>
-					<div class="flex flex-col gap-1.5">
-						<label class="tuc-label" for={ id + "-path" }>{ t(ctx, "volume.path") }</label>
-						if v.Fixed {
-							<input class="tuc-input font-mono" id={ id + "-path" } value={ v.Path } disabled/>
-							<span class="tuc-hint">{ t(ctx, "volume.path_fixed") }</span>
-						} else {
-							<input class="tuc-input font-mono" id={ id + "-path" } name="path" required maxlength="200" value={ v.Path }/>
-						}
-					</div>
 				}
 				{{ sized := d.LimitsAvailable && (v == nil || v.Owner == "") }}
-				if sized {
-					@volumeSizeField(d, v, id)
-				}
+				// Path (wide) and size (narrow) on one row, their hints below.
+				<div class="flex flex-col gap-1.5">
+					<div class="flex items-end gap-3">
+						<div class="flex min-w-0 grow flex-col gap-1.5">
+							if v == nil {
+								<label class="tuc-label" for="vol-path">{ t(ctx, "volume.path") }</label>
+								<input class="tuc-input font-mono" id="vol-path" name="path" required maxlength="200" placeholder="/app/media"/>
+							} else {
+								<input type="hidden" name="name" value={ v.Name }/>
+								<label class="tuc-label" for={ id + "-path" }>{ t(ctx, "volume.path") }</label>
+								if v.Fixed {
+									<input class="tuc-input font-mono" id={ id + "-path" } value={ v.Path } disabled/>
+								} else {
+									<input class="tuc-input font-mono" id={ id + "-path" } name="path" required maxlength="200" value={ v.Path }/>
+								}
+							}
+						</div>
+						if sized {
+							@volumeSizeField(d, v, id)
+						}
+					</div>
+					if v != nil && v.Fixed {
+						<span class="tuc-hint">{ t(ctx, "volume.path_fixed") }</span>
+					}
+					if sized {
+						<span class="tuc-hint">{ t(ctx, "volume.size_hint", "free", d.HostFree) }</span>
+					}
+				</div>
 				<div class="flex flex-wrap items-center gap-2">
 					if v != nil && !v.Fixed && v.SharedWith == "" {
 						<button type="submit" form={ id + "-remove" } class="tuc-btn is-ghost text-danger">
@@ -1613,9 +1632,10 @@ templ volumeDialog(d ServiceData, v *VolumeRow) {
 	</dialog>
 }
 
-// volumeSizeField is the optional size of a disk. Setting or changing it
-// moves the data into a disk image, so it asks for sudo first; while the
-// data moves it cannot change.
+// volumeSizeField is the optional size of a disk, next to its path (its
+// hint goes under both, in volumeDialog). Setting or changing it moves the
+// data into a disk image, so it asks for sudo first; while the data moves
+// it cannot change.
 templ volumeSizeField(d ServiceData, v *VolumeRow, id string) {
 	{{ was, minGB := "", 1 }}
 	if v != nil {
@@ -1624,7 +1644,7 @@ templ volumeSizeField(d ServiceData, v *VolumeRow, id string) {
 			{{ was, minGB = fmt.Sprint(v.Limit.SizeGB), v.Limit.SizeGB }}
 		}
 	}
-	<div class="flex flex-col gap-1.5">
+	<div class="flex shrink-0 flex-col gap-1.5">
 		<label class="tuc-label" for={ id + "-size" }>{ t(ctx, "volume.size") }</label>
 		if !d.SudoActive {
 			<div>
@@ -1642,7 +1662,6 @@ templ volumeSizeField(d ServiceData, v *VolumeRow, id string) {
 		} else {
 			<input type="hidden" name="size_was" value={ was }/>
 		}
-		<span class="tuc-hint">{ t(ctx, "volume.size_hint", "free", d.HostFree) }</span>
 	</div>
 }
 

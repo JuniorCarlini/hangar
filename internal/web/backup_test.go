@@ -270,7 +270,7 @@ func TestBackupsPageListsServicesWithoutBackup(t *testing.T) {
 	c, _ := e.session(t, auth.RoleAdmin)
 	body := e.do(req{method: "GET", target: "/backups", cookies: []*http.Cookie{c}}).Body.String()
 	if !strings.Contains(body, "lab/maria") || !strings.Contains(body, "sem backup") || !strings.Contains(body, "Criar rotina") ||
-		!strings.Contains(body, `href="/p/lab/s/maria?tab=backups"`) {
+		!strings.Contains(body, `href="/p/lab/s/maria?tab=backups&amp;routine=1"`) {
 		t.Fatal("the database without a routine must show as not backed up")
 	}
 	if strings.Contains(body, "lab/adm") {
@@ -280,5 +280,17 @@ func TestBackupsPageListsServicesWithoutBackup(t *testing.T) {
 	tab := e.do(req{method: "GET", target: "/p/lab/s/maria?tab=backups", cookies: []*http.Cookie{c}}).Body.String()
 	if strings.Contains(tab, `name="consistency"`) {
 		t.Error("the routine must not offer a way to copy")
+	}
+}
+
+// A destination shows as host / bucket, the whole address in its tooltip.
+func TestTargetWhere(t *testing.T) {
+	for _, c := range []struct{ endpoint, bucket, prefix, want string }{
+		{"https://s3.us-east-005.backblazeb2.com", "hangar-backups", "", "s3.us-east-005.backblazeb2.com / hangar-backups"},
+		{"http://127.0.0.1:9000", "b", "/srv/", "127.0.0.1:9000 / b/srv"},
+	} {
+		if got := targetWhere(c.endpoint, c.bucket, c.prefix); got != c.want {
+			t.Errorf("targetWhere(%q) = %q, want %q", c.endpoint, got, c.want)
+		}
 	}
 }

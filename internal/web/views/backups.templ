@@ -53,11 +53,18 @@ type BackupTargetRow struct {
 	ID       string
 	Name     string
 	Provider string
-	Where    string
-	Lock     string
-	Checked  string
-	Error    string
-	Primary  bool
+	// Where is the endpoint's host and the bucket; WhereFull, the whole
+	// address (the tooltip).
+	Where     string
+	WhereFull string
+	// Lock is short ("Compliance · 7 dias"); LockHint says what the mode
+	// means (the tooltip).
+	Lock        string
+	LockHint    string
+	Checked     string
+	CheckedHint string
+	Error       string
+	Primary     bool
 }
 
 // BackupServiceRow is a line of the services table.
@@ -399,31 +406,38 @@ templ backupTargets(d BackupsData) {
 		} else {
 			<div class="tuc-table-wrap">
 				<table class="tuc-table is-compact w-full">
-					<thead><tr><th>{ t(ctx, "backups.targets.name") }</th><th>{ t(ctx, "backups.targets.where") }</th><th>{ t(ctx, "backups.targets.lock") }</th><th>{ t(ctx, "backups.targets.check") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<thead><tr><th>{ t(ctx, "backups.targets.name") }</th><th>{ t(ctx, "backups.targets.where") }</th><th class="max-lg:hidden">{ t(ctx, "backups.targets.lock") }</th><th class="max-xl:hidden">{ t(ctx, "backups.targets.check") }</th><th class="tuc-table__actions"></th></tr></thead>
 					<tbody>
 						for _, tg := range d.Targets {
+							// Each cell on one line, the long texts in tooltips, so the
+							// row never scrolls sideways and Test stays in view; the
+							// lock and the last test give way on narrow screens.
 							<tr>
-								<td>
-									{ tg.Name }
-									if tg.Primary {
-										<span class="tuc-badge is-info is-plain ml-1.5">{ t(ctx, "backups.targets.primary") }</span>
-									}
+								<td class="whitespace-nowrap">
+									<span class="inline-flex items-center gap-1.5">
+										{ tg.Name }
+										if tg.Primary {
+											<span class="tuc-badge is-info is-plain">{ t(ctx, "backups.targets.primary") }</span>
+										}
+									</span>
 								</td>
-								<td class="max-w-[320px] truncate font-mono text-xs">{ tg.Where }</td>
-								<td>
-									<span class="tuc-badge is-success">
+								<td class="w-full max-w-0 font-mono text-xs">
+									<span class="block truncate" title={ tg.WhereFull }>{ tg.Where }</span>
+								</td>
+								<td class="whitespace-nowrap max-lg:hidden">
+									<span class="tuc-badge is-success" title={ tg.LockHint }>
 										@Icon("lock", "size-3")
 										{ tg.Lock }
 									</span>
 								</td>
-								<td>
+								<td class="whitespace-nowrap max-xl:hidden">
 									if tg.Error != "" {
 										<span class="tuc-badge is-danger" title={ tg.Error }>{ t(ctx, "backups.targets.failed") }</span>
 									} else {
-										<span class="text-xs text-muted">{ tg.Checked }</span>
+										<span class="text-xs text-muted" title={ tg.CheckedHint }>{ tg.Checked }</span>
 									}
 								</td>
-								<td class="tuc-table__actions">
+								<td class="tuc-table__actions whitespace-nowrap">
 									<div class="flex justify-end gap-1 [&_form]:inline-flex">
 										if d.CanAdmin {
 											<form method="post" action="/backups/targets/check">
@@ -500,7 +514,8 @@ templ backupServiceRow(s BackupServiceRow, link bool) {
 		</td>
 		<td class="tuc-table__actions">
 			if link && !s.Covered {
-				<a class="tuc-btn is-outline is-sm" href={ templ.SafeURL(s.Href) }>
+				// Opens the service with its routine dialog already open.
+				<a class="tuc-btn is-outline is-sm" href={ templ.SafeURL(s.Href + "&routine=1") }>
 					@Icon("plus", "size-3.5")
 					{ t(ctx, "backups.services.create") }
 				</a>

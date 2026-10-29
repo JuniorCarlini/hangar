@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -95,12 +96,15 @@ func (h *handlers) renderBackupsWith(w http.ResponseWriter, r *http.Request, sta
 	}
 	for _, t := range o.Targets {
 		row := views.BackupTargetRow{
-			ID: t.ID, Name: t.Name, Provider: t.Provider, Where: t.Endpoint + "/" + t.Bucket + "/" + t.Prefix,
-			Lock:  i18n.T(ctx, "backups.targets.lock_value", "mode", lockModeLabel(ctx, t.LockMode), "days", t.LockDays),
-			Error: t.CheckError, Primary: t.Primary,
+			ID: t.ID, Name: t.Name, Provider: t.Provider,
+			Where: targetWhere(t.Endpoint, t.Bucket, t.Prefix), WhereFull: t.Endpoint + "/" + t.Bucket + "/" + t.Prefix,
+			Lock:     i18n.T(ctx, "backups.targets.lock_value", "mode", lockModeName(t.LockMode), "days", t.LockDays),
+			LockHint: lockModeLabel(ctx, t.LockMode),
+			Error:    t.CheckError, Primary: t.Primary,
 		}
 		if !t.CheckedAt.IsZero() {
-			row.Checked = i18n.T(ctx, "backups.targets.checked", "when", t.CheckedAt.Format(backupTime))
+			row.Checked = t.CheckedAt.Format(backupTime)
+			row.CheckedHint = i18n.T(ctx, "backups.targets.checked", "when", row.Checked)
 		}
 		d.Targets = append(d.Targets, row)
 	}
@@ -126,6 +130,28 @@ func (h *handlers) renderBackupsWith(w http.ResponseWriter, r *http.Request, sta
 		d.Alerts = append(d.Alerts, views.BackupAlert{Tone: tone, Text: alertText(ctx, a)})
 	}
 	render(w, r, status, views.Backups(d))
+}
+
+// targetWhere is a destination's place, short: the endpoint's host and
+// the bucket (and folder), "s3.us-east-005.backblazeb2.com / hangar-backups".
+func targetWhere(endpoint, bucket, prefix string) string {
+	host := endpoint
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		host = u.Host
+	}
+	out := host + " / " + bucket
+	if p := strings.Trim(prefix, "/"); p != "" {
+		out += "/" + p
+	}
+	return out
+}
+
+// lockModeName is the Object Lock mode's own name ("Compliance").
+func lockModeName(mode string) string {
+	if mode == s3.Governance {
+		return "Governance"
+	}
+	return "Compliance"
 }
 
 func lockModeLabel(ctx context.Context, mode string) string {
@@ -373,7 +399,10 @@ func (h *handlers) deleteTarget(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service) views.ServiceBackups {
 	ctx := r.Context()
 	method := h.projects.BackupMethod(ctx, s)
-	b := views.ServiceBackups{Supported: method != "", Volumes: method == projects.BackupVolume, Method: methodKey(method, h.projects.IsDatabase(s))}
+	b := views.ServiceBackups{
+		Supported: method != "", Volumes: method == projects.BackupVolume, Method: methodKey(method, h.projects.IsDatabase(s)),
+		OpenRoutine: r.URL.Query().Get("routine") == "1",
+	}
 	if !b.Supported {
 		return b
 	}
