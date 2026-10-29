@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -684,7 +685,11 @@ func (l *Local) exitCode(ctx context.Context, id string, since time.Time, inspec
 			if v, err := strconv.Atoi(m.Actor.Attributes["exitCode"]); err == nil {
 				code = v
 			}
-		case <-res.Err:
+		case err := <-res.Err:
+			// io.EOF closes the stream; any other error keeps what was read.
+			if err != nil && !errors.Is(err, io.EOF) {
+				return code
+			}
 			return code
 		case <-ectx.Done():
 			return code
