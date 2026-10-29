@@ -593,6 +593,7 @@ func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpe
 			if c.State != nil {
 				code = c.State.ExitCode
 			}
+			code = l.exitCode(ctx, id, start, code)
 			return l.startFailed(ctx, id, fmt.Sprintf("the new container stopped (exit code %d) after %s", code, time.Since(start).Round(time.Second)))
 		}
 		switch {
@@ -659,6 +660,38 @@ func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpe
 }
 
 // startFailed is a failed start with what the container wrote last.
+// exitCode is the code the container last exited with. Inspect loses it as
+// soon as the restart policy starts the container again (the new run reports
+// 0), so a zero is checked against the daemon's own "die" events.
+func (l *Local) exitCode(ctx context.Context, id string, since time.Time, inspected int) int {
+	if inspected != 0 {
+		return inspected
+	}
+	ectx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	res := l.c.Events(ectx, client.EventsListOptions{
+		Since:   strconv.FormatInt(since.Add(-time.Second).Unix(), 10),
+		Until:   strconv.FormatInt(time.Now().Unix()+1, 10),
+		Filters: client.Filters{}.Add("container", id).Add("event", "die"),
+	})
+	code := inspected
+	for {
+		select {
+		case m, ok := <-res.Messages:
+			if !ok {
+				return code
+			}
+			if v, err := strconv.Atoi(m.Actor.Attributes["exitCode"]); err == nil {
+				code = v
+			}
+		case <-res.Err:
+			return code
+		case <-ectx.Done():
+			return code
+		}
+	}
+}
+
 func (l *Local) startFailed(ctx context.Context, id, reason string) error {
 	return &startFailure{reason: reason, output: l.lastLines(ctx, id, failureLogLines, time.Time{})}
 }
