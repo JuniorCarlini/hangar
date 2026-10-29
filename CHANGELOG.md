@@ -12,6 +12,14 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.35] - 2026-10-29
+
+### Corrigido
+
+- O erro de um deploy cujo app morre ao ligar mostra o código de saída real
+  (antes podia aparecer "exit code 0" quando o Docker já tinha reiniciado o
+  contêiner).
+
 ## [0.5.34] - 2026-10-29
 
 ### Adicionado
@@ -892,7 +900,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.34...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.35...HEAD
+[0.5.35]: https://github.com/JuniorCarlini/hangar/compare/v0.5.34...v0.5.35
 [0.5.34]: https://github.com/JuniorCarlini/hangar/compare/v0.5.33...v0.5.34
 [0.5.33]: https://github.com/JuniorCarlini/hangar/compare/v0.5.32...v0.5.33
 [0.5.32]: https://github.com/JuniorCarlini/hangar/compare/v0.5.31...v0.5.32
