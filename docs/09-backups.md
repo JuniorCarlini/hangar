@@ -52,9 +52,11 @@ proteger.
 |---|---|---|---|
 | **PostgreSQL**: contínuo | Arquivamento de WAL com WAL-G (cifrado com chave pública) + base backup diário | contínuo (`archive_timeout=60s`) | **≤ 1 minuto** |
 | **PostgreSQL**: lógico | `pg_dump -Fc` + `pg_dumpall --roles-only` (usuários do banco) → age | diário (+ antes de todo deploy com migração e antes de atualizar versão) | 24 h (é a cópia "portátil") |
-| Redis de **filas/sessões** *(em breve)* | `BGSAVE` → RDB → zstd → age | a cada 6 h | 6 h |
-| Redis de **cache** | **não faz backup** (é descartável) | — | — |
-| Volumes de apps (e discos com limite) | serviço **pausado** durante a cópia → GNU `tar` do volume (montado só leitura num container descartável) → testado → zstd → age | na rotina do serviço | intervalo da rotina |
+| **MariaDB / MySQL** | receita do template: `mariadb-dump` de todos os bancos (uma transação) + usuários, papéis e permissões → testado num banco descartável → zstd → age | rotina do serviço (diária às 03:00 por padrão) | intervalo da rotina |
+| **MongoDB** | receita do template: `mongodump --archive` da instância inteira (usuários e papéis do `admin` junto) → testado → zstd → age | idem | idem |
+| **Redis / Valkey** (filas, sessões **e cache**) | receita do template: usuários ACL + snapshot RDB tirado como réplica (`--rdb`), sem pausar nem reiniciar → testado → zstd → age | idem | idem |
+| Outro banco (sem receita) | volumes copiados com o banco **parado** só durante a cópia → GNU `tar` → testado → zstd → age | idem | idem |
+| Volumes de apps (e discos com limite) | serviço **pausado** durante a cópia → GNU `tar` do volume (montado só leitura num container descartável) → testado → zstd → age | idem | idem |
 | **Painel Hangar** | `VACUUM INTO` do SQLite + `hangar.toml` + **chave mestra** + certificados | diário + a cada mudança de configuração | — |
 | Mídia no R2/S3 (fotos dos produtos) | Replicação do bucket para **outro provedor** (rclone, só cópia, nunca apaga do destino) | diário | 24 h |
 | Código | Já está no GitHub; imagens são reconstruídas. Opcional: espelhar o repositório | — | — |
@@ -157,12 +159,26 @@ Funciona **sem o painel**: se a VPS sumir, você ainda tem tudo.
 
 ## Baixar backup pelo painel
 
+"Baixar backup" é **sempre o serviço inteiro, num arquivo só**: os dados
+com os usuários e senhas, feitos do mesmo jeito que a rotina faz, e a
+configuração do serviço (`service.json`: imagem ou repositório, comando,
+portas e endpoints, domínios, volumes e tamanhos, recursos, healthcheck,
+comandos salvos e as variáveis com os valores). Não existe "só a
+configuração" nem "só os dados".
+
 ```
-[⬇ Baixar backup agora]  🔒 (2FA de novo)
+[⬇ Baixar backup]  🔒 (2FA de novo)
    │
-   ├─► gera pg_dump + usuários do banco na hora ──► testa ──► cifra com sua chave pública
+   ├─► gera o backup completo na hora (pg_dump + usuários, a receita do template
+   │   ou a cópia dos volumes) ──► testa ──► cifra com sua chave pública
+   ├─► + service.json (cifrado do mesmo jeito)
    └─► link de uso único, válido por 5 min ──► arquivo .zip ──► audit log
 ```
+
+- Com o kit, tudo no `.zip` é `.age` (o `service.json.age` também: ele tem
+  as senhas). No modo simples, o `.zip` vem aberto, `service.json` inclusive:
+  o arquivo já tem todos os dados do banco, então os valores das variáveis
+  em claro não pioram nada; guarde com cuidado.
 
 - O `.zip` tem tudo para restaurar em outro lugar, como era: `README.txt`
   (os comandos), `<nome>.roles.sql.age` (os usuários do PostgreSQL) e
@@ -191,24 +207,21 @@ disco com limite, que é um volume ligado à imagem ext4). Os botões são os
 mesmos da aba Backups: rotina, "Fazer backup", "Baixar backup", "Restaurar"
 e o histórico.
 
-**Quem tem:** o template diz (`backup = "pg_dump"` ou `backup = "volume"` no
-`template.toml`); um template sem isso não tem backup (um banco não pode ser
-copiado arquivo por arquivo enquanto roda: MariaDB, MongoDB e Redis esperam
-um método próprio). Serviço de imagem ou de Git tem assim que tiver um
-volume próprio. Um volume de outro serviço que ele monta é copiado pelo
-dono. O PostgreSQL continua só com `pg_dump` + WAL: nunca é pausado.
+**Quem tem:** todo serviço que guarda dados (veja "Todo serviço tem backup
+completo" abaixo). Um volume de outro serviço que ele monta é copiado pelo
+dono.
 
-**Consistência (por rotina):**
+**Como a cópia fica consistente (o Hangar escolhe, não é opção):**
 
-| Opção | O que faz | Quando |
-|---|---|---|
-| **Pausar** (padrão) | `docker pause` (congela os processos) de todo serviço que usa os volumes, só do fim da preparação ao fim do `tar`; depois segue de onde parou, com conexões e memória | Quase sempre: nenhum arquivo sai pela metade |
-| **Parar e subir** | para (o app desliga com calma, grava o que tem na memória) e sobe de novo | Apps que só gravam tudo ao desligar |
-| **Com o serviço rodando** | sem pausa | Volumes enormes; aceita que um arquivo gravado durante a cópia saia incompleto |
+| Serviço | O que faz |
+|---|---|
+| **Banco de dados sem receita** (template da categoria banco, ou imagem conhecida: mysql, mariadb, mongo, redis, valkey, postgres sem o template, rabbitmq...) | **para** o banco (ele desliga com calma, grava tudo) só do fim da preparação ao fim do `tar` e sobe de novo. É o único jeito seguro para qualquer banco copiado arquivo por arquivo |
+| Qualquer outro (RustFS, Uptime Kuma, apps) | `docker pause` (congela os processos) de todo serviço que usa os volumes, só do fim da preparação ao fim do `tar`; depois segue de onde parou, com conexões e memória |
 
-A pausa tem teto de 30 min: passou disso, o serviço volta e o backup falha
-dizendo para copiar com o serviço rodando ou num horário mais calmo. Se o
-painel cair no meio, ao voltar ele despausa o que ficou pausado.
+O tempo fora do ar (ou pausado) aparece no histórico ("fora do ar por 1,8 s").
+Tem teto de 30 min: passou disso, o serviço volta e o backup falha. Se o
+painel cair no meio, ao voltar ele despausa o que ficou pausado (um banco
+parado volta pelo próprio Docker, que o sobe com o painel).
 
 **Como a cópia é feita, sem texto puro em disco:**
 
@@ -263,10 +276,10 @@ fim do tar ─► despausa ─► confere: volumes = tar = teste ─► "testado
   volumes de cada serviço com backup, da cópia mais nova (um serviço sem
   cópia sobe com os volumes vazios e o comando avisa).
 
-**Baixar:** "Baixar backup" faz a cópia (pausada só durante a cópia, não
-durante o download) e oferece um `.zip` de uso único com `README.txt` e
-`<nome>.volumes.tar.zst.age` (com kit) ou `<nome>.volumes.tar` aberto (modo
-simples). `hangar-cofre decrypt <nome>.zip` gera o `.tar`; para abrir:
+**Baixar:** "Baixar backup" faz a cópia (parada ou pausada só durante a
+cópia, não durante o download) e oferece um `.zip` de uso único com
+`README.txt`, `service.json(.age)` e `<nome>.volumes.tar.zst.age` (com kit)
+ou `<nome>.volumes.tar` aberto (modo simples). `hangar-cofre decrypt <nome>.zip` gera o `.tar`; para abrir:
 `sudo tar -xpf <nome>.volumes.tar --numeric-owner --acls --xattrs -C pasta`
 (uma pasta por volume), ou direto num volume do Docker com o comando do
 README. `hangar-cofre restore-local` ainda é só para PostgreSQL.
@@ -277,6 +290,128 @@ volume de app com ~70 MB lógicos (esparso), 0,1 s; o RustFS do teste, 0,1 s. Al
 gargalo é o fluxo do container para o host através da VM do OrbStack
 (`cat` de 1 GiB pelo `docker run` leva 13–15 s sozinho); num Linux, onde o
 Docker é local, deve ser bem menor (falta medir na VPS).
+
+**Tempo fora do ar medido** (`integration_recipes_test.go`, mesmo Mac):
+
+| Serviço | Método | Fora do ar | Backup testado em |
+|---|---|---|---|
+| MariaDB (template) | receita | nenhum | 6,1 s (1.500 linhas, 4 usuários) |
+| MySQL 8 (template de teste) | receita | nenhum | 9,2 s |
+| MongoDB (template) | receita | nenhum | 5,0 s (700 documentos, 2 usuários, 1 papel) |
+| Redis de filas (template) | receita | nenhum (o mesmo processo, sem reinício) | 8,0 s (inclui a espera de até 5 s que o Redis faz antes de um snapshot para réplica) |
+| MariaDB da imagem, sem template (156 MB no volume) | volumes, banco parado | 1,0 s entre parar e mandar subir; respondeu de novo cerca de 2 s depois | 4,3 s |
+
+O tempo fora do ar de uma cópia parada é medido do "parar" ao "subir" e
+fica no histórico; o banco ainda leva o próprio tempo de partida para
+aceitar conexões.
+
+## Todo serviço tem backup completo
+
+Regra do dono: **um backup é sempre o serviço inteiro** (cada byte de dado,
+com usuários, senhas e permissões: um clone). Não há opção de "só dados" ou
+"só configuração", nem de como copiar. A aba Backups de cada serviço tem só:
+Fazer backup, Baixar backup, Restaurar, rotinas (só a frequência) e o
+histórico. O Hangar escolhe o método sozinho:
+
+```
+o template declara uma receita? ──sim──► receita (dump nativo, sem parar)
+        │ não
+        ▼
+é PostgreSQL do template? ──sim──► pg_dump + usuários (e WAL, se ligado)
+        │ não
+        ▼
+tem volumes próprios? ──não──► nada a copiar (a aba diz isso)
+        │ sim
+        ▼
+é banco? (categoria "database" do template, ou imagem conhecida)
+        ├─ sim ─► cópia dos volumes com o banco PARADO (sobe de novo no fim)
+        └─ não ─► cópia dos volumes com o serviço PAUSADO
+```
+
+- **Rotina padrão:** todo serviço que guarda dados criado a partir de um
+  template (no catálogo ou como banco de um compose) já nasce com uma
+  rotina diária às 03:00. Ela espera um destino (e, com o kit, a chave)
+  para rodar; a tela de Backups mostra "sem backup" até lá.
+- **Tela de Backups:** a tabela "Serviços" lista **todo** serviço que guarda
+  dados; o que não tem rotina aparece como **sem backup**, com o botão
+  **Criar rotina** (abre a aba do serviço).
+- Serviços que já existiam antes desta versão não ganham rotina sozinhos:
+  aparecem como "sem backup" até alguém criar.
+
+### Receitas nativas (`[backup]` no `template.toml`)
+
+Para um banco novo bastar um template, a receita fica no próprio template:
+
+```toml
+[backup]
+method = "recipe"
+extension = "sql"                       # nome do arquivo no download
+env = ["MARIADB_ROOT_PASSWORD"]         # variáveis que a instância de teste recebe
+serve = ["docker-entrypoint.sh", "mariadbd"]   # sobe uma instância vazia (teste)
+ready = ["sh", "-c", "mariadb-admin ... ping"] # 0 = aceita a restauração
+dump = ["bash", "-c", "..."]            # escreve o backup inteiro no stdout
+restore = ["bash", "-c", "..."]         # lê o backup do stdin numa instância vazia
+verify = ["bash", "-c", "..."]          # imprime HANGAR-CHECK nome=número ...
+```
+
+(`backup = "pg_dump"` e `backup = "volume"` continuam valendo; `[backup]`
+com `method = "pg_dump"` ou `"volume"` também.)
+
+- **dump** roda no contêiner do serviço (`docker exec`, com as variáveis
+  dele: a senha nunca vai para a linha de comando do hangard nem para o
+  log). A saída passa pelo hangard, que comprime (zstd) e cifra (age) para o
+  staging **e, ao mesmo tempo**, a entrega a um contêiner descartável da
+  mesma imagem (sem rede, dados num volume de rascunho apagado no fim, só
+  as variáveis de `env`). Lá o `serve` sobe uma instância vazia, o `ready`
+  diz quando ela aceita, o `restore` carrega o backup e o `verify` conta o
+  que ela tem. O mesmo `verify` roda antes no serviço. O backup só é
+  **testado** se a restauração deu certo e a cópia não perdeu nada que o
+  original tinha (uma contagem que era maior que zero e virou zero, ou que
+  sumiu, reprova). Números podem diferir um pouco: o serviço seguiu
+  trabalhando durante o dump.
+- O dump só começa depois que a instância de teste está pronta, para não
+  segurar o banco aberto à toa.
+- No bucket: `diario|semanal|mensal/<projeto>/<serviço>/<data>.native.zst.age`,
+  com o metadado `hangar-template`.
+- **Restaurar** é igual para todo método: **serviço novo** (clona o serviço,
+  com as mesmas variáveis e tamanhos de disco, sobe vazio e carrega o
+  backup com `restore`) ou **sobrescrever** (backup do estado atual antes;
+  para quem usa os volumes, esvazia os volumes, sobe o serviço vazio de
+  novo e carrega; se falhar depois de mexer, o backup feito antes volta do
+  mesmo jeito). A recuperação de desastre carrega o backup mais novo de
+  cada serviço com receita.
+- Erros que o banco devolve passam por um filtro que esconde senhas e
+  hashes (`IDENTIFIED BY PASSWORD '…'`, `AS 0x…`).
+
+**O que cada receita do catálogo leva:**
+
+| Template | Backup | Usuários | Teste conta |
+|---|---|---|---|
+| MariaDB | `mariadb-dump --single-transaction --routines --events --triggers --hex-blob --add-drop-database` de todo banco que não é do sistema | `SHOW CREATE USER` (hash da senha) + `SHOW GRANTS` de cada usuário e papel, `SET DEFAULT ROLE` incluso; ficam de fora só as contas do próprio servidor (root, healthcheck, mariadb.sys, mysql@localhost), que a instância nova cria das variáveis | bancos, tabelas, linhas (COUNT exato), usuários |
+| MongoDB | `mongodump --archive` da instância inteira; restaura com `mongorestore --archive --drop` | `admin.system.users` e `admin.system.roles` vão no arquivo (mesmos hashes SCRAM) | bancos, coleções, documentos, usuários, papéis |
+| Redis / Valkey (cache e filas) | uma linha com o tamanho dos usuários ACL, os usuários (`ACL LIST`, sem o `default`, cuja senha é a variável do serviço) e um snapshot RDB pedido como réplica (`redis-cli --rdb -`) | todos os usuários ACL com o hash da senha e as regras | chaves, usuários |
+
+Escolhas e limites:
+
+- **MySQL 8**: o catálogo não tem template MySQL; a receita equivalente
+  (`mysqldump ... --set-gtid-purged=OFF` + `SHOW CREATE USER` com
+  `print_identified_with_as_hex`, para o hash `caching_sha2_password` sair
+  em hexadecimal) é testada de ponta a ponta num template de teste
+  (`TestMySQLRecipe`). Um template MySQL futuro só precisa copiá-la.
+- **MongoDB sem `--oplog`**: o template roda um `mongod` sozinho (sem
+  réplica), que não tem oplog; o `mongodump` copia cada coleção como ela
+  estava ao ser lida. Um template com replica set pode usar `--oplog` /
+  `--oplogReplay` na própria receita.
+- **Redis/Valkey por receita, não por cópia do volume**: parar o Redis para
+  copiar apagaria o cache (o template de cache não grava em disco) e os
+  usuários ACL criados em tempo de execução (não estão em arquivo). O
+  snapshot é tirado como uma réplica tira (sem pausa, sem reinício). Para
+  restaurar, o `restore` sobe um segundo `redis-server` em
+  `127.0.0.1:6390` com o snapshot, faz do serviço réplica dele até a cópia
+  terminar (a réplica descarta o que tinha), promove de volta e recria os
+  usuários ACL; o serviço então grava do jeito dele (AOF nas filas). Precisa
+  de memória para duas cópias dos dados durante a restauração. Usuários ACL
+  sem `aclfile` continuam valendo até o Redis reiniciar, como no original.
 
 ## Usuários do banco (roles) vão junto com cada dump
 
@@ -395,8 +530,8 @@ painel com credencial só leitura).
 ### Peças
 
 - **Painel** — tela `/backups` (kit, destinos, bancos, histórico, regras do
-  bucket) e aba **Backups** de cada Postgres (agenda, WAL, baixar,
-  restaurar). Chaves e destinos: dono + sudo. Restaurar e baixar: admin +
+  bucket) e aba **Backups** de cada serviço que guarda dados (rotina, WAL no
+  Postgres, baixar, restaurar). Chaves e destinos: dono + sudo. Restaurar e baixar: admin +
   sudo. Tudo auditado.
 - **Destino** — ao salvar, o painel grava um objeto de prova com trava, lê
   de volta e tenta apagar: se conseguir apagar, ou se o bucket não tiver
@@ -413,9 +548,19 @@ painel com credencial só leitura).
 - **Desastre** — na VPS nova: `hangard restore -cofre cofre.toml`
   (painel, chave mestra, certificados; o que existia vai para o lado) e
   depois `sudo -u hangar hangard restore databases -cofre cofre.toml`
-  (redes, cada Postgres até o último minuto, depois os serviços).
+  (redes, cada Postgres até o último minuto, cada serviço com receita do
+  backup mais novo, os volumes dos outros, depois o resto).
 
 ### Como foi testado
+
+Backups completos de todo serviço (`integration_recipes_test.go`): MariaDB,
+MySQL 8 (template de teste), MongoDB e Redis (filas) recebem dados e um
+usuário do app com senha e permissões (papel, ACL), passam pelo backup
+**testado**, voltam num serviço novo, onde o usuário entra com a **senha
+original** e lê os mesmos dados, e por cima do mesmo serviço. Um MariaDB
+criado da imagem (sem template) passa pelo caminho genérico: volume copiado
+com o banco parado, clone e sobrescrever. Tempos medidos estão na seção
+"Tempo fora do ar".
 
 `go test -tags integration ./internal/backup/...` sobe um MinIO com bucket
 travado (compliance) e um Postgres real: dump testado (contagem de linhas),
