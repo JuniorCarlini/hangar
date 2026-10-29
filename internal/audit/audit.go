@@ -7,7 +7,6 @@
 package audit
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -62,6 +61,13 @@ func (l *Logger) Observe(fn func(Entry)) {
 // New creates a Logger on the panel database.
 func New(db *sql.DB) *Logger {
 	return &Logger{db: db, now: time.Now}
+}
+
+// WithClock makes the logger stamp records with now instead of the wall
+// clock (tests that write records in the past).
+func (l *Logger) WithClock(now func() time.Time) *Logger {
+	l.now = now
+	return l
 }
 
 var genesis = make([]byte, sha256.Size)
@@ -161,12 +167,27 @@ func (e *TamperError) Error() string {
 	return fmt.Sprintf("audit log tampered at record %d: %s", e.ID, e.Reason)
 }
 
-// Verify walks the whole chain and returns how many records it checked.
+// Verify walks the whole chain, the archived chunks first (docs/20), and
+// returns how many records it checked one by one (expired chunks are
+// checked by their hashes only).
 func Verify(ctx context.Context, q *dbq.Queries) (int, error) {
 	const page = 500
 	prev := genesis
 	var lastID int64
 	count := 0
+
+	chunks, err := q.ListAuditArchive(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("audit: read archive: %w", err)
+	}
+	for _, c := range chunks {
+		n, err := verifyChunk(prev, c)
+		count += n
+		if err != nil {
+			return count, err
+		}
+		prev, lastID = c.LastHash, c.LastID
+	}
 
 	for {
 		rows, err := q.ListAuditAfter(ctx, dbq.ListAuditAfterParams{ID: lastID, Limit: page})
@@ -174,11 +195,8 @@ func Verify(ctx context.Context, q *dbq.Queries) (int, error) {
 			return count, fmt.Errorf("audit: read: %w", err)
 		}
 		for _, r := range rows {
-			if !bytes.Equal(r.PrevHash, prev) {
-				return count, &TamperError{ID: r.ID, Reason: "removed_or_reordered"}
-			}
-			if !bytes.Equal(r.Hash, chainHash(prev, r)) {
-				return count, &TamperError{ID: r.ID, Reason: "content_changed"}
+			if err := checkLink(prev, r); err != nil {
+				return count, err
 			}
 			prev = r.Hash
 			lastID = r.ID

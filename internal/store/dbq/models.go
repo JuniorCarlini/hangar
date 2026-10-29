@@ -60,6 +60,20 @@ type AlertSeen struct {
 	LastID int64
 }
 
+type AuditArchive struct {
+	FirstID    int64
+	LastID     int64
+	Records    int64
+	FirstTs    string
+	LastTs     string
+	PrevHash   []byte
+	LastHash   []byte
+	Data       []byte
+	DataSha256 []byte
+	ArchivedAt int64
+	ExpiredAt  sql.NullInt64
+}
+
 type AuditLog struct {
 	ID          int64
 	Ts          string

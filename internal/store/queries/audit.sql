@@ -27,3 +27,33 @@ LEFT JOIN projects p ON p.id = s.project_id
 WHERE a.action IN (sqlc.slice(actions))
 ORDER BY a.id DESC
 LIMIT ?;
+
+-- name: OldestAudit :one
+SELECT id, ts FROM audit_log ORDER BY id LIMIT 1;
+
+-- name: LastAuditBefore :one
+-- The newest record older than ts, never the newest of all: the hot table
+-- always keeps one record, so new ids keep growing past the archived ones
+-- (INTEGER PRIMARY KEY reuses max(id) + 1) and the next record has a hash
+-- to chain from.
+SELECT CAST(coalesce(max(a.id), 0) AS INTEGER) FROM audit_log a
+WHERE a.ts < sqlc.arg(before) AND a.id < (SELECT max(m.id) FROM audit_log m);
+
+-- name: DeleteAuditThrough :execrows
+DELETE FROM audit_log WHERE id <= ?;
+
+-- name: ListAuditArchive :many
+SELECT * FROM audit_archive ORDER BY first_id;
+
+-- name: LastAuditArchive :one
+SELECT * FROM audit_archive ORDER BY first_id DESC LIMIT 1;
+
+-- name: InsertAuditArchive :exec
+INSERT INTO audit_archive (first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: ExpirableAuditArchives :many
+SELECT first_id FROM audit_archive WHERE data IS NOT NULL AND last_ts < ? ORDER BY first_id;
+
+-- name: ExpireAuditArchive :exec
+UPDATE audit_archive SET data = NULL, expired_at = ? WHERE first_id = ?;

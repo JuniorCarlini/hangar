@@ -11,6 +11,59 @@ import (
 	"strings"
 )
 
+const deleteAuditThrough = `-- name: DeleteAuditThrough :execrows
+DELETE FROM audit_log WHERE id <= ?
+`
+
+func (q *Queries) DeleteAuditThrough(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteAuditThrough, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const expirableAuditArchives = `-- name: ExpirableAuditArchives :many
+SELECT first_id FROM audit_archive WHERE data IS NOT NULL AND last_ts < ? ORDER BY first_id
+`
+
+func (q *Queries) ExpirableAuditArchives(ctx context.Context, lastTs string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, expirableAuditArchives, lastTs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var first_id int64
+		if err := rows.Scan(&first_id); err != nil {
+			return nil, err
+		}
+		items = append(items, first_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const expireAuditArchive = `-- name: ExpireAuditArchive :exec
+UPDATE audit_archive SET data = NULL, expired_at = ? WHERE first_id = ?
+`
+
+type ExpireAuditArchiveParams struct {
+	ExpiredAt sql.NullInt64
+	FirstID   int64
+}
+
+func (q *Queries) ExpireAuditArchive(ctx context.Context, arg ExpireAuditArchiveParams) error {
+	_, err := q.db.ExecContext(ctx, expireAuditArchive, arg.ExpiredAt, arg.FirstID)
+	return err
+}
+
 const insertAudit = `-- name: InsertAudit :one
 INSERT INTO audit_log (
     ts, actor_id, ip, user_agent, action, target_type, target_id, outcome, summary_json, prev_hash, hash
@@ -49,6 +102,79 @@ func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) (int64
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const insertAuditArchive = `-- name: InsertAuditArchive :exec
+INSERT INTO audit_archive (first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertAuditArchiveParams struct {
+	FirstID    int64
+	LastID     int64
+	Records    int64
+	FirstTs    string
+	LastTs     string
+	PrevHash   []byte
+	LastHash   []byte
+	Data       []byte
+	DataSha256 []byte
+	ArchivedAt int64
+}
+
+func (q *Queries) InsertAuditArchive(ctx context.Context, arg InsertAuditArchiveParams) error {
+	_, err := q.db.ExecContext(ctx, insertAuditArchive,
+		arg.FirstID,
+		arg.LastID,
+		arg.Records,
+		arg.FirstTs,
+		arg.LastTs,
+		arg.PrevHash,
+		arg.LastHash,
+		arg.Data,
+		arg.DataSha256,
+		arg.ArchivedAt,
+	)
+	return err
+}
+
+const lastAuditArchive = `-- name: LastAuditArchive :one
+SELECT first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, expired_at FROM audit_archive ORDER BY first_id DESC LIMIT 1
+`
+
+func (q *Queries) LastAuditArchive(ctx context.Context) (AuditArchive, error) {
+	row := q.db.QueryRowContext(ctx, lastAuditArchive)
+	var i AuditArchive
+	err := row.Scan(
+		&i.FirstID,
+		&i.LastID,
+		&i.Records,
+		&i.FirstTs,
+		&i.LastTs,
+		&i.PrevHash,
+		&i.LastHash,
+		&i.Data,
+		&i.DataSha256,
+		&i.ArchivedAt,
+		&i.ExpiredAt,
+	)
+	return i, err
+}
+
+const lastAuditBefore = `-- name: LastAuditBefore :one
+SELECT CAST(coalesce(max(a.id), 0) AS INTEGER) FROM audit_log a
+WHERE a.ts < ?1 AND a.id < (SELECT max(m.id) FROM audit_log m)
+`
+
+// The newest record older than ts, never the newest of all: the hot table
+// always keeps one record, so new ids keep growing past the archived ones
+// (INTEGER PRIMARY KEY reuses max(id) + 1) and the next record has a hash
+// to chain from.
+func (q *Queries) LastAuditBefore(ctx context.Context, before string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, lastAuditBefore, before)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const lastAuditHash = `-- name: LastAuditHash :one
@@ -109,6 +235,61 @@ func (q *Queries) ListAuditAfter(ctx context.Context, arg ListAuditAfterParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const listAuditArchive = `-- name: ListAuditArchive :many
+SELECT first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, expired_at FROM audit_archive ORDER BY first_id
+`
+
+func (q *Queries) ListAuditArchive(ctx context.Context) ([]AuditArchive, error) {
+	rows, err := q.db.QueryContext(ctx, listAuditArchive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditArchive{}
+	for rows.Next() {
+		var i AuditArchive
+		if err := rows.Scan(
+			&i.FirstID,
+			&i.LastID,
+			&i.Records,
+			&i.FirstTs,
+			&i.LastTs,
+			&i.PrevHash,
+			&i.LastHash,
+			&i.Data,
+			&i.DataSha256,
+			&i.ArchivedAt,
+			&i.ExpiredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const oldestAudit = `-- name: OldestAudit :one
+SELECT id, ts FROM audit_log ORDER BY id LIMIT 1
+`
+
+type OldestAuditRow struct {
+	ID int64
+	Ts string
+}
+
+func (q *Queries) OldestAudit(ctx context.Context) (OldestAuditRow, error) {
+	row := q.db.QueryRowContext(ctx, oldestAudit)
+	var i OldestAuditRow
+	err := row.Scan(&i.ID, &i.Ts)
+	return i, err
 }
 
 const recentActivity = `-- name: RecentActivity :many
