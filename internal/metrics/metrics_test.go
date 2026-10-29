@@ -234,32 +234,6 @@ func TestDownsamplingAndRetention(t *testing.T) {
 		t.Fatalf("hour rows = %+v", hours)
 	}
 
-	// Old rows past retention.
-	old := start.Add(-8 * 24 * time.Hour).Unix()
-	ancient := start.Add(-91 * 24 * time.Hour).Unix()
-	for _, p := range []dbq.UpsertMetricParams{
-		{Key: HostKey, Resolution: "1m", Ts: old - old%60},
-		{Key: HostKey, Resolution: "1h", Ts: old - old%3600},
-		{Key: HostKey, Resolution: "1h", Ts: ancient - ancient%3600},
-	} {
-		if err := q.UpsertMetric(ctx, p); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := c.prune(ctx, start); err != nil {
-		t.Fatal(err)
-	}
-	mins, _ = q.ListMetrics(ctx, dbq.ListMetricsParams{Key: HostKey, Resolution: "1m", Ts: 0})
-	for _, m := range mins {
-		if m.Ts < start.Add(-minuteKeep).Unix() {
-			t.Error("minute rows older than 7 days must be deleted")
-		}
-	}
-	hours, _ = q.ListMetrics(ctx, dbq.ListMetricsParams{Key: HostKey, Resolution: "1h", Ts: 0})
-	if len(hours) != 2 {
-		t.Errorf("hour rows after retention = %d, want the 8-day-old one and the current", len(hours))
-	}
-
 	// History: the 1 h window comes from memory, 24 h from the minute rows.
 	h, err := c.History(ctx, HostKey, ParsePeriod("1h"))
 	if err != nil || len(h) != 60 {

@@ -32,6 +32,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/metrics"
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/projects"
+	"github.com/JuniorCarlini/hangar/internal/retention"
 	"github.com/JuniorCarlini/hangar/internal/secrets"
 	"github.com/JuniorCarlini/hangar/internal/statuspage"
 	"github.com/JuniorCarlini/hangar/internal/store"
@@ -322,7 +323,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
 
-	go st.RunMaintenance(ctx, 6*time.Hour, log)
+	go retention.New(st, cfg.DataDir, log).Run(ctx)
 	go cleanupSessions(ctx, core.Auth, log)
 	go mc.Run(ctx)
 	if cfg.Scan.Enabled {

@@ -317,24 +317,6 @@ func (q *Queries) ListAlertRules(ctx context.Context) ([]AlertRule, error) {
 	return items, nil
 }
 
-const pruneAlertDeliveries = `-- name: PruneAlertDeliveries :exec
-DELETE FROM alert_deliveries WHERE created_at < ?
-`
-
-func (q *Queries) PruneAlertDeliveries(ctx context.Context, createdAt int64) error {
-	_, err := q.db.ExecContext(ctx, pruneAlertDeliveries, createdAt)
-	return err
-}
-
-const pruneAlerts = `-- name: PruneAlerts :exec
-DELETE FROM alerts WHERE created_at < ?
-`
-
-func (q *Queries) PruneAlerts(ctx context.Context, createdAt int64) error {
-	_, err := q.db.ExecContext(ctx, pruneAlerts, createdAt)
-	return err
-}
-
 const recentAlertDeliveries = `-- name: RecentAlertDeliveries :many
 SELECT id, alert_id, channel_id, channel_name, channel_kind, kind, status, attempts, error, created_at FROM alert_deliveries ORDER BY id DESC LIMIT ?
 `

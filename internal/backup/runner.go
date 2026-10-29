@@ -201,7 +201,6 @@ func (m *Manager) schedule(ctx context.Context) {
 			_ = m.push(job{actor: System, trigger: trigger, kind: archive.KindBase, service: s.ID})
 		}
 	}
-	_ = m.q.PruneBackupRuns(ctx, now.Add(-400*24*time.Hour).Unix())
 }
 
 // needsBase: a base backup goes with every scheduled run while WAL is on,

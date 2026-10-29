@@ -899,15 +899,6 @@ func (q *Queries) MaxAuditID(ctx context.Context) (int64, error) {
 	return column_1, err
 }
 
-const pruneBackupRuns = `-- name: PruneBackupRuns :exec
-DELETE FROM backup_runs WHERE started_at < ?
-`
-
-func (q *Queries) PruneBackupRuns(ctx context.Context, startedAt int64) error {
-	_, err := q.db.ExecContext(ctx, pruneBackupRuns, startedAt)
-	return err
-}
-
 const setBackupPolicyNextRun = `-- name: SetBackupPolicyNextRun :exec
 UPDATE backup_policies SET next_run_at = ? WHERE id = ?
 `

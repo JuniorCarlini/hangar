@@ -9,20 +9,6 @@ import (
 	"context"
 )
 
-const deleteMetricsBefore = `-- name: DeleteMetricsBefore :exec
-DELETE FROM metrics WHERE resolution = ? AND ts < ?
-`
-
-type DeleteMetricsBeforeParams struct {
-	Resolution string
-	Ts         int64
-}
-
-func (q *Queries) DeleteMetricsBefore(ctx context.Context, arg DeleteMetricsBeforeParams) error {
-	_, err := q.db.ExecContext(ctx, deleteMetricsBefore, arg.Resolution, arg.Ts)
-	return err
-}
-
 const listMetrics = `-- name: ListMetrics :many
 SELECT ts, cpu_pct, mem_bytes, mem_limit, net_rx, net_tx, disk_used, disk_total
 FROM metrics

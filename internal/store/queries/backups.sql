@@ -89,8 +89,6 @@ WHERE label = ? AND kind = ? AND class = ? AND status = 'ok' AND started_at >= ?
 -- name: FailRunningBackupRuns :exec
 UPDATE backup_runs SET status = 'failed', error = ?, finished_at = ? WHERE status = 'running';
 
--- name: PruneBackupRuns :exec
-DELETE FROM backup_runs WHERE started_at < ?;
 
 -- name: GetWALStatus :one
 SELECT * FROM wal_status WHERE service_id = ?;

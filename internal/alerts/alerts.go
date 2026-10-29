@@ -101,11 +101,8 @@ const (
 	// delivery is dropped (the alert stays in the panel).
 	channelBurst  = 20
 	channelWindow = 10 * time.Minute
-	// Retention (docs/20).
-	alertKeep    = 90 * 24 * time.Hour
-	deliveryKeep = 30 * 24 * time.Hour
-	queueSize    = 256
-	sendTimeout  = 15 * time.Second
+	queueSize     = 256
+	sendTimeout   = 15 * time.Second
 )
 
 // Options tunes the Service (tests point the channels at fake servers).
@@ -168,7 +165,8 @@ func (s *Service) Start(ctx context.Context) {
 	s.mu.Unlock()
 	go s.deliverLoop(ctx)
 	go s.observeLoop(ctx)
-	go s.pruneLoop(ctx)
+	// Old alerts and deliveries are pruned by the retention janitor
+	// (internal/retention, docs/20).
 }
 
 // Wait blocks until queued deliveries are done (tests and shutdown).
@@ -443,25 +441,6 @@ func (s *Service) MutedUntil(ctx context.Context) time.Time {
 
 func (s *Service) mutedAt(ctx context.Context, now time.Time) bool {
 	return s.MutedUntil(ctx).After(now)
-}
-
-func (s *Service) pruneLoop(ctx context.Context) {
-	t := time.NewTicker(time.Hour)
-	defer t.Stop()
-	for {
-		now := s.opt.Now()
-		if err := s.q.PruneAlerts(ctx, now.Add(-alertKeep).Unix()); err != nil && ctx.Err() == nil {
-			s.log.Warn("prune alerts", "error", err)
-		}
-		if err := s.q.PruneAlertDeliveries(ctx, now.Add(-deliveryKeep).Unix()); err != nil && ctx.Err() == nil {
-			s.log.Warn("prune alert deliveries", "error", err)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
 }
 
 // Recent lists the newest alerts (security ones only for admins).

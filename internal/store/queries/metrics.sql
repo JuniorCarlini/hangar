@@ -13,8 +13,6 @@ FROM metrics m
 WHERE m.resolution = '1m' AND m.ts >= sqlc.arg(since)
 GROUP BY m.key, m.ts - m.ts % 3600;
 
--- name: DeleteMetricsBefore :exec
-DELETE FROM metrics WHERE resolution = ? AND ts < ?;
 
 -- name: ListMetrics :many
 SELECT ts, cpu_pct, mem_bytes, mem_limit, net_rx, net_tx, disk_used, disk_total

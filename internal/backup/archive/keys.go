@@ -40,6 +40,10 @@ var classFolder = map[string]string{
 const (
 	folderWAL   = "wal"
 	folderPanel = "painel"
+	// FolderWAL and FolderPanel name those folders for the retention of
+	// the run records (DefaultRetentionDays).
+	FolderWAL   = folderWAL
+	FolderPanel = folderPanel
 )
 
 // DefaultRetentionDays is how long each folder is kept by the suggested

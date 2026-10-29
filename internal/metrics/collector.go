@@ -1,7 +1,7 @@
 // Package metrics samples the host and the containers Hangar manages and
 // keeps their history small (docs/06, docs/20): the last hour at 10 s in
-// memory, 1-minute averages for 7 days and 1-hour averages for 90 days in
-// SQLite.
+// memory, 1-minute and 1-hour averages in SQLite. How long those live is
+// the retention janitor's job (internal/retention: 2 days and 90 days).
 package metrics
 
 import (
@@ -20,10 +20,11 @@ import (
 
 // Sampling and retention.
 const (
-	Step         = 10 * time.Second
-	ringSize     = int(time.Hour / Step)
-	minuteKeep   = 7 * 24 * time.Hour
-	hourKeep     = 90 * 24 * time.Hour
+	Step     = 10 * time.Second
+	ringSize = int(time.Hour / Step)
+	// rollupSince is how far back the start-up rollup recomputes hours
+	// from minutes (covers a panel that was down while minutes remained).
+	rollupSince  = 48 * time.Hour
 	diskEvery    = 10 * time.Minute // "docker system df" is expensive
 	reclaimEvery = 24 * time.Hour   // prune old build cache and dangling images
 	statsLimit   = 4                // container readings at once
@@ -81,17 +82,16 @@ type Collector struct {
 	now     func() time.Time
 	read    func(string) (string, error)
 
-	mu        sync.RWMutex
-	latest    Snapshot
-	rings     map[string]*ring
-	prevAt    time.Time
-	prevCPU   cpuTimes
-	prevRx    uint64
-	prevTx    uint64
-	prevCtr   map[string]ctrReading // by container id
-	minute    int64                 // start of the minute being accumulated
-	acc       map[string]*accum
-	lastPrune time.Time
+	mu      sync.RWMutex
+	latest  Snapshot
+	rings   map[string]*ring
+	prevAt  time.Time
+	prevCPU cpuTimes
+	prevRx  uint64
+	prevTx  uint64
+	prevCtr map[string]ctrReading // by container id
+	minute  int64                 // start of the minute being accumulated
+	acc     map[string]*accum
 }
 
 type ctrReading struct {
@@ -121,7 +121,7 @@ func (c *Collector) Run(ctx context.Context) {
 	if c == nil {
 		return
 	}
-	if err := c.q.RollupMetricHours(ctx, c.now().Add(-minuteKeep).Unix()); err != nil {
+	if err := c.q.RollupMetricHours(ctx, c.now().Add(-rollupSince).Unix()); err != nil {
 		c.log.Warn("metrics rollup", "error", err)
 	}
 	go c.runDisk(ctx)
@@ -375,8 +375,8 @@ func (c *Collector) pruneRingsLocked(now time.Time) {
 	}
 }
 
-// write stores finished minutes, refreshes the current and previous hour's
-// averages and, once an hour, drops what is past retention.
+// write stores finished minutes and refreshes the current and previous
+// hour's averages.
 func (c *Collector) write(ctx context.Context, now time.Time, rows []dbq.UpsertMetricParams) {
 	for _, r := range rows {
 		if err := c.q.UpsertMetric(ctx, r); err != nil {
@@ -388,19 +388,6 @@ func (c *Collector) write(ctx context.Context, now time.Time, rows []dbq.UpsertM
 	if err := c.q.RollupMetricHours(ctx, hour-3600); err != nil {
 		c.log.Warn("metrics rollup", "error", err)
 	}
-	if now.Sub(c.lastPrune) >= time.Hour {
-		c.lastPrune = now
-		if err := c.prune(ctx, now); err != nil {
-			c.log.Warn("metrics retention", "error", err)
-		}
-	}
-}
-
-func (c *Collector) prune(ctx context.Context, now time.Time) error {
-	if err := c.q.DeleteMetricsBefore(ctx, dbq.DeleteMetricsBeforeParams{Resolution: "1m", Ts: now.Add(-minuteKeep).Unix()}); err != nil {
-		return err
-	}
-	return c.q.DeleteMetricsBefore(ctx, dbq.DeleteMetricsBeforeParams{Resolution: "1h", Ts: now.Add(-hourKeep).Unix()})
 }
 
 // Latest is the most recent snapshot (zero before the first reading).

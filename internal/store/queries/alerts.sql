@@ -62,11 +62,6 @@ SELECT * FROM alert_deliveries ORDER BY id DESC LIMIT ?;
 -- name: CountChannelDeliveriesSince :one
 SELECT count(*) FROM alert_deliveries WHERE channel_id = ? AND status = 'sent' AND kind <> 'test' AND created_at >= ?;
 
--- name: PruneAlerts :exec
-DELETE FROM alerts WHERE created_at < ?;
-
--- name: PruneAlertDeliveries :exec
-DELETE FROM alert_deliveries WHERE created_at < ?;
 
 -- name: RememberLoginIP :execrows
 -- Inserts the address when it is new; the row count says whether it was.
