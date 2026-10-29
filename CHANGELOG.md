@@ -12,6 +12,27 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.32] - 2026-10-29
+
+### Corrigido
+
+- **Pausa curta no backup de discos**: a cópia é feita com o serviço
+  rodando e a pausa cobre só uma segunda passada com o que mudou. Num disco
+  de 1 GB a pausa caiu de dezenas de segundos para menos de 0,1 s. Sem espaço
+  para a cópia intermediária, volta ao jeito antigo e avisa no log.
+- **Backup que não trava**: um arquivo apagado no meio da cópia, ou um
+  ajudante que falha cedo, agora vira erro em vez de deixar o backup parado.
+- **Serviço pausado pelo backup**: o card volta para "Rodando" sozinho, e o
+  painel não acusa mais "parado" durante a cópia.
+- **Links diretos**: abrir um serviço pelo endereço abre o painel do
+  serviço na aba pedida; "Criar rotina" na página Backups já abre a rotina.
+- **Telas mais compactas**: rotina de backup numa linha, uso do disco
+  alinhado, caminho e tamanho do disco lado a lado, card Recursos ocupando a
+  largura com Salvar à direita, tabela de destinos sem quebrar nem rolar.
+- **Imagem do Caddy atualizada**: Go 1.27.3, go-jose 4.1.6, chi 5.4.0,
+  x/net 0.62 e os pacotes do Alpine (curl, brotli) com as correções de
+  segurança.
+
 ## [0.5.31] - 2026-10-29
 
 ### Adicionado
@@ -846,7 +867,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.31...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.32...HEAD
+[0.5.32]: https://github.com/JuniorCarlini/hangar/compare/v0.5.31...v0.5.32
 [0.5.31]: https://github.com/JuniorCarlini/hangar/compare/v0.5.30...v0.5.31
 [0.5.30]: https://github.com/JuniorCarlini/hangar/compare/v0.5.29...v0.5.30
 [0.5.29]: https://github.com/JuniorCarlini/hangar/compare/v0.5.28...v0.5.29
