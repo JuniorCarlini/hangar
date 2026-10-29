@@ -101,7 +101,9 @@ pack() { tar --create --file=- --format=posix --sparse --one-file-system ` + tar
 unpack() { tar --extract --file=- --listed-incremental=/dev/null --preserve-permissions --same-owner ` + tarFlags + ` -C "$HANGAR_STAGE/d"; }
 how="direct"
 if [ -n "${HANGAR_STAGE:-}" ]; then
-  used=$(du -sxcB1 -- "$@" | tail -n1 | cut -f1)
+  # The volumes are live here: a file gone between listing and reading
+  # makes du complain (and exit 1), not wrong.
+  used=$( { du -sxcB1 -- "$@" 2>/dev/null || true; } | tail -n1 | cut -f1)
   free=$(df -B1 --output=avail "$HANGAR_STAGE" | tail -n1 | tr -d ' ')
   need=$((2 * used + ${HANGAR_RESERVE:-0}))
   if [ "$free" -lt "$need" ]; then

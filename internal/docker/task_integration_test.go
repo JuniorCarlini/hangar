@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"encoding/hex"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +38,21 @@ func TestRunTaskStdinScratchAndCleanup(t *testing.T) {
 	task.Cmd = []string{"sh", "-c", "echo quebrou >&2; exit 3"}
 	if err := l.RunTask(ctx, task, nil, &out); err == nil || !strings.Contains(err.Error(), "exited with 3") || !strings.Contains(err.Error(), "quebrou") {
 		t.Fatalf("failing task: %v", err)
+	}
+
+	// A task that fails before reading its input returns, even while the
+	// caller keeps that input open (it waits for the task's output first).
+	inR, inW := io.Pipe()
+	defer func() { _ = inW.Close() }()
+	done := make(chan error, 1)
+	go func() { done <- l.RunTask(ctx, task, inR, &out) }()
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "exited with 3") {
+			t.Fatalf("early failure with open input: %v", err)
+		}
+	case <-time.After(60 * time.Second):
+		t.Fatal("a task that ended early must not wait for its input to end")
 	}
 
 	// Nothing is left behind: no task container, no scratch volume.

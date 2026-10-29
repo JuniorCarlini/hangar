@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
@@ -152,8 +153,18 @@ func (l *Local) pump(ctx context.Context, h *client.HijackedResponse, stdin io.R
 		// connection broke): stop feeding stdin.
 		h.Close()
 	}
-	ierr := <-inErr
 	code, err := exit()
+	// A process that ended without reading all its input (it failed
+	// early) must not leave its caller waiting for an exit code until
+	// the caller's own input ends: that caller may be waiting for this
+	// process's output, which is over. The copy ends once the caller
+	// closes its reader.
+	var ierr error
+	select {
+	case ierr = <-inErr:
+	case <-time.After(2 * time.Second):
+		h.Close()
+	}
 	switch {
 	case err != nil:
 		return fmt.Errorf("%s: %w", what, err)
