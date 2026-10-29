@@ -110,6 +110,12 @@ func (l *Local) Deploy(ctx context.Context, spec node.ServiceSpec, opt node.Depl
 	if err != nil && res.Previous == "" {
 		res.Previous = untouched
 	}
+	// What the new container last wrote goes under the reason (the first
+	// line, which alerts show), after what became of the previous version.
+	var sf *startFailure
+	if errors.As(err, &sf) && len(sf.output) > 0 {
+		err = &withOutput{err: err, output: sf.output}
+	}
 	return res, err
 }
 
@@ -171,7 +177,7 @@ func (l *Local) recreate(ctx context.Context, spec node.ServiceSpec, ref, old st
 		return fail(id, fmt.Errorf("start container: %w", err))
 	}
 	progress(node.PhaseHealth, "")
-	if err := l.waitHealthy(ctx, id, spec, opt); err != nil {
+	if err := l.waitHealthy(ctx, id, spec, opt, progress); err != nil {
 		l.tail(ctx, id, progress)
 		return fail(id, err)
 	}
@@ -269,7 +275,12 @@ func (l *Local) restorePrevious(ctx context.Context, spec node.ServiceSpec, fail
 	if _, err := l.c.ContainerStart(rctx, prev, client.ContainerStartOptions{}); err != nil {
 		return fmt.Errorf("start: %w", err)
 	}
-	return l.waitHealthy(rctx, prev, spec, opt)
+	if err := l.waitHealthy(rctx, prev, spec, opt, nil); err != nil {
+		// Plain text: the output a deploy error carries is the new
+		// version's, not this one's.
+		return errors.New(err.Error())
+	}
+	return nil
 }
 
 func (l *Local) rolling(ctx context.Context, spec node.ServiceSpec, ref, old string, opt node.DeployOptions, progress func(string, string)) (node.DeployResult, error) {
@@ -292,7 +303,7 @@ func (l *Local) rolling(ctx context.Context, spec node.ServiceSpec, ref, old str
 		return node.DeployResult{}, fmt.Errorf("start container: %w", err)
 	}
 	progress(node.PhaseHealth, "")
-	if err := l.waitHealthy(ctx, id, spec, opt); err != nil {
+	if err := l.waitHealthy(ctx, id, spec, opt, progress); err != nil {
 		l.tail(ctx, id, progress)
 		discard()
 		return node.DeployResult{}, fmt.Errorf("%w (the previous version is still live)", err)
@@ -499,12 +510,75 @@ func (l *Local) tail(ctx context.Context, id string, progress func(string, strin
 	})
 }
 
+// While a new container starts, the deploy log says every
+// healthReportEvery how long it has been waiting and what the app last
+// wrote; a failure carries the app's last failureLogLines lines.
+const (
+	healthReportEvery = 15 * time.Second
+	failureLogLines   = 10
+)
+
+// startFailure is a new container that never became ready: reason says why
+// (the first line of the deploy error), output is what it wrote last.
+type startFailure struct {
+	reason string
+	output []string
+}
+
+func (e *startFailure) Error() string { return e.reason }
+
+// withOutput puts a failed start's last output under the whole deploy
+// error, after what became of the previous version.
+type withOutput struct {
+	err    error
+	output []string
+}
+
+func (e *withOutput) Error() string {
+	return e.err.Error() + "\nlast output:\n" + strings.Join(e.output, "\n")
+}
+
+func (e *withOutput) Unwrap() error { return e.err }
+
+// healthTarget says what the deploy waits for, for the progress lines
+// ("" when it only waits a few seconds of the container running).
+func healthTarget(c container.InspectResponse, opt node.DeployOptions) string {
+	switch {
+	case c.State != nil && c.State.Health != nil:
+		return "the healthcheck to pass"
+	case opt.Port > 0 && opt.HealthPath != "":
+		return fmt.Sprintf("the app to answer GET %s on port %d", opt.HealthPath, opt.Port)
+	case opt.Port > 0:
+		return fmt.Sprintf("the app to accept connections on port %d", opt.Port)
+	}
+	return ""
+}
+
+// waitReport is a progress line while the new container starts: what it
+// waits for, for how long so far out of how long at most, and the app's
+// newest output (or how long it has been quiet).
+func waitReport(target string, elapsed, limit time.Duration, newest string, quiet time.Duration) string {
+	line := fmt.Sprintf("waiting for %s: %s of %s", target, elapsed.Round(time.Second), limit.Round(time.Second))
+	switch {
+	case newest != "":
+		line += "; last output: " + newest
+	case quiet > 0:
+		line += fmt.Sprintf("; no output for %s", quiet.Round(time.Second))
+	}
+	return line
+}
+
 // waitHealthy waits until the container is ready: Docker's healthcheck when
 // the image or template has one, else an HTTP GET on HealthPath, else a TCP
 // connect on the port, else a few seconds running without restarting. A
-// container that exits fails at once.
-func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpec, opt node.DeployOptions) error {
-	deadline := time.Now().Add(opt.HealthTimeout)
+// container that exits or restarts fails at once, with its last output;
+// one still running (an app migrating or uploading its static files before
+// it listens) is waited for up to opt.HealthTimeout, and progress (may be
+// nil) hears how it goes.
+func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpec, opt node.DeployOptions, progress func(string, string)) error {
+	start := time.Now()
+	deadline := start.Add(opt.HealthTimeout)
+	nextReport, lastOutput := start.Add(healthReportEvery), start
 	runningSince := time.Time{}
 	httpc := &http.Client{Timeout: 3 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	var last string
@@ -519,7 +593,7 @@ func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpe
 			if c.State != nil {
 				code = c.State.ExitCode
 			}
-			return fmt.Errorf("the new container stopped (exit code %d)", code)
+			return l.startFailed(ctx, id, fmt.Sprintf("the new container stopped (exit code %d) after %s", code, time.Since(start).Round(time.Second)))
 		}
 		switch {
 		case c.State.Health != nil:
@@ -527,7 +601,7 @@ func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpe
 			case container.Healthy:
 				return nil
 			case container.Unhealthy:
-				return errors.New("healthcheck reported unhealthy")
+				return l.startFailed(ctx, id, "healthcheck reported unhealthy")
 			}
 			last = "waiting for the healthcheck"
 		case opt.Port > 0:
@@ -564,8 +638,17 @@ func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpe
 				return nil
 			}
 		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("not healthy after %s: %s", opt.HealthTimeout, last)
+		now := time.Now()
+		if now.After(deadline) {
+			return l.startFailed(ctx, id, fmt.Sprintf("not healthy after %s: %s", opt.HealthTimeout, last))
+		}
+		if target := healthTarget(c, opt); progress != nil && target != "" && !now.Before(nextReport) {
+			newest := l.newestLine(ctx, id, nextReport.Add(-healthReportEvery))
+			if newest != "" {
+				lastOutput = now
+			}
+			progress(node.PhaseHealth, waitReport(target, now.Sub(start), opt.HealthTimeout, newest, now.Sub(lastOutput)))
+			nextReport = now.Add(healthReportEvery)
 		}
 		select {
 		case <-ctx.Done():
@@ -573,6 +656,48 @@ func (l *Local) waitHealthy(ctx context.Context, id string, spec node.ServiceSpe
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+// startFailed is a failed start with what the container wrote last.
+func (l *Local) startFailed(ctx context.Context, id, reason string) error {
+	return &startFailure{reason: reason, output: l.lastLines(ctx, id, failureLogLines, time.Time{})}
+}
+
+// newestLine is the last line the container wrote since since ("" when it
+// wrote nothing).
+func (l *Local) newestLine(ctx context.Context, id string, since time.Time) string {
+	lines := l.lastLines(ctx, id, 1, since)
+	if len(lines) == 0 {
+		return ""
+	}
+	return lines[0]
+}
+
+// lastLines reads the container's last n non-empty log lines (written
+// after since, when set).
+func (l *Local) lastLines(ctx context.Context, id string, n int, since time.Time) []string {
+	opts := client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Tail: strconv.Itoa(n)}
+	if !since.IsZero() {
+		opts.Since = strconv.FormatInt(since.Unix(), 10)
+	}
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	rc, err := l.c.ContainerLogs(rctx, id, opts)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = rc.Close() }()
+	var out []string
+	_ = demux(rc, func(ln node.LogLine) error {
+		if t := strings.TrimSpace(ln.Text); t != "" {
+			out = append(out, t)
+		}
+		return nil
+	})
+	if len(out) > n {
+		out = out[len(out)-n:]
+	}
+	return out
 }
 
 func containerAddr(c container.InspectResponse, spec node.ServiceSpec, port int) string {

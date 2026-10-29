@@ -24,7 +24,7 @@ pending → building → starting → healthy → switching → live
 3. **starting**: cria o container novo com nome `<serviço>-<deploy-id curto>`,
    mesmas redes, envs, volumes e limites.
 4. **healthy**: espera healthcheck (HTTP no caminho configurado, ou
-   healthcheck do Docker), timeout configurável (padrão 120 s).
+   healthcheck do Docker), pelo "Tempo para ligar" do serviço (padrão 5 min).
 5. **switching**: atualiza o upstream no Caddy para o container novo
    (`POST /load` atômico). Conexões em andamento terminam no antigo.
 6. **live**: para o antigo com `SIGTERM` + período de graça (padrão 30 s),
@@ -79,14 +79,21 @@ um deployment novo apontando para a imagem antiga (sem rebuild).
   porta). A tela diz qual estratégia o serviço usa e por quê.
 - **Healthcheck:** o da imagem ou do template; senão `GET` no caminho
   configurado (resposta abaixo de 400); senão conexão TCP na porta; senão 5 s
-  rodando sem reiniciar. Timeout 2 min, ou mais quando o healthcheck
-  guardado no serviço (template, compose) pode demorar mais para decidir:
-  `start_period + interval × retries + timeout` (com os padrões do Docker
-  para o que faltar), no máximo os 15 min do deploy inteiro. Um servidor
-  que carrega o mundo ou o banco por minutos não é dado como falho no
-  meio da subida. Falhou: o novo é apagado, o antigo
-  nunca saiu do ar, e as últimas linhas de log do novo vão para o log do
-  deploy.
+  rodando sem reiniciar. Espera o **Tempo para ligar** do serviço
+  (Configurações → Deploy, ao lado do caminho do healthcheck; de 1 a 15 min,
+  vazio = padrão de 5 min), como o `startupProbe` do Kubernetes e o *grace
+  period* do Render e do Fly: um app Django ou Rails que roda as migrações
+  e envia os estáticos ao ligar não é dado como falho no meio da subida.
+  Espera mais quando o healthcheck guardado no serviço (template, compose)
+  pode demorar mais para decidir: `start_period + interval × retries +
+  timeout` (com os padrões do Docker para o que faltar), no máximo os
+  15 min do deploy inteiro — é assim que um template sugere mais tempo.
+  Enquanto espera, o log do deploy diz a cada 15 s quanto já passou do
+  limite e a última linha que o app escreveu (ou há quanto tempo está
+  quieto). Container que sai ou reinicia falha na hora, sem esperar o
+  limite, e o erro do deploy traz as últimas linhas que ele escreveu.
+  Falhou: o novo é apagado, o antigo nunca saiu do ar, e as últimas linhas
+  de log do novo vão para o log do deploy.
 - **Pré-deploy:** container temporário com a imagem nova, mesmas variáveis,
   redes e volumes, sem porta; roda uma vez por deploy; código de saída
   diferente de zero aborta o deploy antes de qualquer troca.
