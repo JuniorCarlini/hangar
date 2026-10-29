@@ -86,6 +86,8 @@ type Manager struct {
 	// a deploy under way (claim), so a second click cannot run the same
 	// thing alongside.
 	busy sync.Map
+	// held are the services a backup paused or stopped (Hold).
+	held heldSet
 	// notifier hears about failed deploys (SetDeployNotifier).
 	notifier DeployNotifier
 	// created hears about services just created from a template

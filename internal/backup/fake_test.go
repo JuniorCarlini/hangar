@@ -60,8 +60,9 @@ type fakeNode struct {
 	volIn       []byte
 	volMounts   []node.TaskMount
 	events      []string
-	verifyLies  bool  // the test of the copy reports another count
-	sourceExtra int64 // the volumes held this many more entries
+	verifyLies  bool   // the test of the copy reports another count
+	sourceExtra int64  // the volumes held this many more entries
+	onGo        func() // called when the copy gets its "go" (the services are held)
 	// A template's recipe (fakeRecipe): what its dump writes, what its
 	// verify prints on the service and in the test instance, what the
 	// test instance and the restore received, and the test's spec.

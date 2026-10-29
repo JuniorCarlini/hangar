@@ -34,15 +34,23 @@ func (f *fakeNode) volumeTask(spec node.TaskSpec, stdin io.Reader, stdout io.Wri
 	switch script {
 	case volumeCopyScript:
 		f.mu.Lock()
-		data, extra := f.volTar, f.sourceExtra
+		data, extra, onGo := f.volTar, f.sourceExtra, f.onGo
 		f.mu.Unlock()
 		f.event("copy " + strings.Join(names, ","))
-		if _, err := io.WriteString(stdout, "HANGAR-READY\n"); err != nil {
+		// With a scratch volume the copy is staged (two passes).
+		ready := "HANGAR-READY direct\n"
+		if spec.Scratch != "" && spec.Env["HANGAR_STAGE"] == spec.Scratch {
+			ready = "HANGAR-READY staged used=4096 free=1099511627776\n"
+		}
+		if _, err := io.WriteString(stdout, ready); err != nil {
 			return err
 		}
 		line, _ := bufio.NewReader(stdin).ReadString('\n')
 		if line != "go\n" {
 			return errors.New("the copy did not get its go")
+		}
+		if onGo != nil {
+			onGo()
 		}
 		f.event("tar")
 		e, b := countTar(data)
@@ -217,9 +225,16 @@ func TestVolumeBackupPausesTestsAndUploads(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	s := f.volumeService(t)
+	heldDuringCopy := false
+	f.n.onGo = func() { heldDuringCopy = f.pm.Held("lab", "files") }
 	runID, err := f.m.backupVolume(ctx, f.who, s, TriggerManual, "")
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Held while paused, so the reconciler and the alerts leave it alone;
+	// let go after.
+	if !heldDuringCopy || f.pm.Held("lab", "files") {
+		t.Fatalf("held during the copy %v, after %v", heldDuringCopy, f.pm.Held("lab", "files"))
 	}
 	if ev := f.n.eventList(); !slices.Equal(ev, []string{"copy data", "pause files", "tar", "unpause files"}) {
 		t.Fatalf("events: %v", ev)
@@ -230,7 +245,7 @@ func TestVolumeBackupPausesTestsAndUploads(t *testing.T) {
 		t.Fatalf("run: %+v %+v", run, o)
 	}
 	var c VolumeCheck
-	if err := json.Unmarshal([]byte(run.CheckJson), &c); err != nil || c.Files != 7 || c.Mode != ConsistencyPause || !slices.Equal(c.Paused, []string{"files"}) {
+	if err := json.Unmarshal([]byte(run.CheckJson), &c); err != nil || c.Files != 7 || c.Mode != ConsistencyPause || !slices.Equal(c.Paused, []string{"files"}) || !c.Staged {
 		t.Fatalf("check: %s", run.CheckJson)
 	}
 	info, err := f.store.Head(ctx, "lab/"+run.ObjectKey)

@@ -45,6 +45,9 @@ func (m *Manager) Reconcile(ctx context.Context) ([]Drift, error) {
 		if n, _ := m.q.HasRunningDeployment(ctx, s.ID); n > 0 {
 			continue // deploy in progress: the container disappears and returns on purpose
 		}
+		if m.Held(s.ProjectSlug, s.Slug) {
+			continue // paused or stopped by a backup, which lets it go on
+		}
 		c, ok := byService[s.ID]
 		switch {
 		case !ok:
@@ -176,7 +179,8 @@ type Watched struct {
 
 // WatchedServices lists the services that should be running: wanted
 // running, deployed at least once and not in the middle of a deploy (when
-// the container disappears on purpose). Stopped by the user is not "down".
+// the container disappears on purpose) and not held by a backup (paused
+// or stopped for a copy). Stopped by the user is not "down".
 func (m *Manager) WatchedServices(ctx context.Context) ([]Watched, error) {
 	if m.node == nil {
 		return nil, ErrDockerDisabled
@@ -192,6 +196,9 @@ func (m *Manager) WatchedServices(ctx context.Context) ([]Watched, error) {
 		}
 		if n, err := m.q.HasRunningDeployment(ctx, s.ID); err != nil || n > 0 {
 			continue
+		}
+		if m.Held(s.ProjectSlug, s.Slug) {
+			continue // paused or stopped by a backup: not down
 		}
 		if last, err := m.q.LastLiveDeployment(ctx, s.ID); err != nil || last.ID == "" {
 			continue

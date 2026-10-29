@@ -215,8 +215,23 @@ dono.
 
 | Serviço | O que faz |
 |---|---|
-| **Banco de dados sem receita** (template da categoria banco, ou imagem conhecida: mysql, mariadb, mongo, redis, valkey, postgres sem o template, rabbitmq...) | **para** o banco (ele desliga com calma, grava tudo) só do fim da preparação ao fim do `tar` e sobe de novo. É o único jeito seguro para qualquer banco copiado arquivo por arquivo |
-| Qualquer outro (RustFS, Uptime Kuma, apps) | `docker pause` (congela os processos) de todo serviço que usa os volumes, só do fim da preparação ao fim do `tar`; depois segue de onde parou, com conexões e memória |
+| **Banco de dados sem receita** (template da categoria banco, ou imagem conhecida: mysql, mariadb, mongo, redis, valkey, postgres sem o template, rabbitmq...) | **para** o banco (ele desliga com calma, grava tudo) só durante a 2ª passada (abaixo) e sobe de novo. É o único jeito seguro para qualquer banco copiado arquivo por arquivo |
+| Qualquer outro (RustFS, Uptime Kuma, apps) | `docker pause` (congela os processos) de todo serviço que usa os volumes, só durante a 2ª passada; depois segue de onde parou, com conexões e memória |
+
+**Duas passadas** (como um backup com rsync): o container auxiliar primeiro
+copia os volumes **com o serviço rodando** para um volume de rascunho dele
+(GNU `tar` para `tar`, com arquivo de snapshot); com o serviço pausado (ou
+parado), uma 2ª passada incremental traz só o que mudou nesse meio tempo
+(conteúdo, dono, permissão, links, arquivos novos e apagados) e conta o que
+os volumes têm. O serviço volta logo depois dessa contagem: o `tar` que vira
+o backup sai do rascunho, que ninguém mais escreve. Se o disco do servidor
+não comporta o rascunho (2× o volume + 1 GB), a cópia é feita numa passada
+só, com o serviço pausado o tempo todo, e o log do painel diz o porquê.
+O rascunho some com o container.
+
+Enquanto um backup segura um serviço, o reconciliador e os alertas não o
+contam como parado ("panel and Docker disagree"), e nada além do backup o
+liga de novo.
 
 O tempo fora do ar (ou pausado) aparece no histórico ("fora do ar por 1,8 s").
 Tem teto de 30 min: passou disso, o serviço volta e o backup falha. Se o
@@ -227,12 +242,13 @@ parado volta pelo próprio Docker, que o sobe com o painel).
 
 ```
 container descartável (debian, sem rede, volumes só leitura)
-  "pronto" ─► painel pausa ─► conta (find) ─► GNU tar ──┐
+  1ª passada ao vivo (tar ─► rascunho) ─► "pronto" ─► painel pausa ─►
+  2ª passada (só o que mudou) ─► conta (find) ─► despausa ─► GNU tar do rascunho ──┐
                                                          ▼
 hangard: confere cada entrada (nomes, tipos, limites) ─► zstd ─► age ─► arquivo cifrado no staging
          └─► ao mesmo tempo, 2º container descartável lê o tar com GNU tar
              (cada arquivo inteiro) e devolve entradas, bytes e SHA-256
-fim do tar ─► despausa ─► confere: volumes = tar = teste ─► "testado" ─► envia a todos os destinos ─► confere tamanho e SHA-256 de cada cópia
+fim do tar ─► confere: volumes (contados na pausa) = tar = teste ─► "testado" ─► envia a todos os destinos ─► confere tamanho e SHA-256 de cada cópia
 ```
 
 - O tar guarda donos (números), permissões (setuid, sticky), links
@@ -284,12 +300,14 @@ ou `<nome>.volumes.tar` aberto (modo simples). `hangar-cofre decrypt <nome>.zip`
 (uma pasta por volume), ou direto num volume do Docker com o comando do
 README. `hangar-cofre restore-local` ainda é só para PostgreSQL.
 
-**Tempo de pausa medido** (`TestVolumePauseTime`, Mac M-series com OrbStack):
-1 GiB de log (comprime ~9000×) pausou 11,6 s; 1 GiB aleatório, 18,7 s; um
-volume de app com ~70 MB lógicos (esparso), 0,1 s; o RustFS do teste, 0,1 s. Ali o
-gargalo é o fluxo do container para o host através da VM do OrbStack
-(`cat` de 1 GiB pelo `docker run` leva 13–15 s sozinho); num Linux, onde o
-Docker é local, deve ser bem menor (falta medir na VPS).
+**Tempo de pausa medido** (`TestVolumePauseTime`, Mac M-series com Docker
+Desktop): numa passada só, 1 GiB aleatório pausava 36 s e 1 GiB de log 22 s
+(na VPS ARM, o RustFS de 1,1 GB pausava 50 s). Com as duas passadas, os
+mesmos volumes pausam 0,07 s: a 2ª passada só percorre os nomes e copia o
+que mudou. Um arquivo grande alterado entre as passadas é copiado inteiro de
+novo na pausa (o tar compara arquivo a arquivo, não bloco a bloco).
+`TestVolumeBackupWhileWriting` copia um serviço que não para de criar,
+reescrever e apagar arquivos: 67 ms de pausa em duas passadas, 239 ms numa.
 
 **Tempo fora do ar medido** (`integration_recipes_test.go`, mesmo Mac):
 

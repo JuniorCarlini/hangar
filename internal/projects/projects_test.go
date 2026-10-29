@@ -362,6 +362,28 @@ func TestReconcileDetectsMissingContainer(t *testing.T) {
 	}
 }
 
+// A service a backup paused or stopped is neither drift nor down while
+// held (two holds count apart), and is again once let go.
+func TestReconcileIgnoresServicesHeldByABackup(t *testing.T) {
+	f := newFixture(t)
+	f.service(t)
+	ctx := context.Background()
+	r1 := f.m.Hold("lab", "web")
+	r2 := f.m.Hold("lab", "web")
+	if d, err := f.m.Reconcile(ctx); err != nil || len(d) != 0 {
+		t.Fatalf("held: Reconcile = %+v, %v", d, err)
+	}
+	r1()
+	r1() // twice is once
+	if !f.m.Held("lab", "web") {
+		t.Fatal("still held by the second copy")
+	}
+	r2()
+	if d, err := f.m.Reconcile(ctx); err != nil || len(d) != 1 {
+		t.Fatalf("let go: Reconcile = %+v, %v", d, err)
+	}
+}
+
 func TestCreateProjectNamedDerivesTheIdentifier(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()

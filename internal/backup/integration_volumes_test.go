@@ -199,7 +199,7 @@ func TestVolumeBackupAndRestore(t *testing.T) {
 	run, _ := e.m.q.GetBackupRun(ctx, runID)
 	var c VolumeCheck
 	_ = json.Unmarshal([]byte(run.CheckJson), &c)
-	if run.Status != "ok" || run.Verified != 1 || c.Mode != ConsistencyPause || !slices.Equal(c.Paused, []string{"files"}) || c.Files < 15 {
+	if run.Status != "ok" || run.Verified != 1 || c.Mode != ConsistencyPause || !slices.Equal(c.Paused, []string{"files"}) || c.Files < 15 || !c.Staged {
 		t.Fatalf("run: %+v %s", run, run.CheckJson)
 	}
 	t.Logf("copy: %d entries, %d bytes, tar %d, sealed %d, paused %d ms", c.Files, c.Bytes, c.TarBytes, run.SizeBytes, c.PauseMS)
@@ -258,6 +258,72 @@ func TestVolumeBackupAndRestore(t *testing.T) {
 		t.Fatalf("no copy of the state before overwriting: %+v", runs)
 	}
 }
+
+// The service keeps writing (creating, rewriting, removing files) while
+// its volume is copied: the live first pass sees it all move, the second
+// pass, paused, brings over what changed, and the copy adds up to what the
+// volume held during the pause. With no room for the scratch copy, the
+// copy is taken in one pass, paused throughout, and still adds up.
+func TestVolumeBackupWhileWriting(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	e := newRealEnv(t, ctx)
+	if _, err := e.pm.CreateProject(ctx, e.who, e.project, "E2E writing"); err != nil {
+		t.Fatal(err)
+	}
+	s := e.volumeService(t, ctx, "busy")
+	e.populate(t, ctx, s.Vols[0].Docker)
+	e.helper(t, ctx, s.Vols[0].Docker, `mkdir -p /v/data/w && for i in $(seq 1 400); do head -c 65536 /dev/urandom > /v/data/w/f$i; done`, false, nil)
+	tasker := e.pm.Node().(node.Tasker)
+	for _, c := range []struct {
+		name    string
+		reserve int64
+		staged  bool
+	}{
+		{"two passes", stagingReserve, true},
+		{"one pass", 1 << 60, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			stageReserve = c.reserve
+			defer func() { stageReserve = stagingReserve }()
+			// Run inside the service's container (paused with it), for a
+			// bounded time: an exec does not end when its caller goes.
+			wrote := make(chan error, 1)
+			go func() {
+				wrote <- tasker.ExecIO(ctx, e.project, "busy", []string{"sh", "-c", writerScript}, nil, io.Discard)
+			}()
+			time.Sleep(time.Second)
+			runID, err := e.m.backupVolume(ctx, e.who, s, TriggerManual, "")
+			if werr := <-wrote; werr != nil {
+				t.Fatalf("writer: %v", werr)
+			}
+			if err != nil {
+				t.Fatalf("backup: %v", err)
+			}
+			run, _ := e.m.q.GetBackupRun(ctx, runID)
+			var vc VolumeCheck
+			_ = json.Unmarshal([]byte(run.CheckJson), &vc)
+			if run.Status != "ok" || run.Verified != 1 || vc.Staged != c.staged || vc.PauseMS <= 0 || vc.Files < 400 {
+				t.Fatalf("run: %+v %s", run, run.CheckJson)
+			}
+			t.Logf("%s: %d entries, paused %d ms", c.name, vc.Files, vc.PauseMS)
+			if !e.running(t, ctx, "busy") {
+				t.Fatal("the service must run again after the copy")
+			}
+			time.Sleep(1100 * time.Millisecond) // the next copy gets its own key
+		})
+	}
+}
+
+// writerScript rewrites, creates, removes and chmods files in /data/w
+// for 8 seconds.
+const writerScript = `end=$(( $(date +%s) + 8 )); i=0
+while [ "$(date +%s)" -lt "$end" ]; do
+  i=$((i+1))
+  head -c 8192 /dev/urandom > /data/w/f$((i % 400 + 1))
+  echo "$i" > /data/w/n$((i % 50)); rm -f /data/w/n$(((i + 25) % 50))
+  chmod $(( i % 2 ? 600 : 644 )) /data/w/f$(((i + 7) % 400 + 1))
+done`
 
 func diffLines(want, got string) string {
 	w, g := strings.Split(want, "\n"), strings.Split(got, "\n")

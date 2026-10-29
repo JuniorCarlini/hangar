@@ -38,15 +38,27 @@ import (
 // Hangar picks (svcRef.hold): a database is stopped (it shuts down
 // cleanly, so its files are whole) and started again; anything else is
 // paused (its processes freeze, nothing is written) and goes on where it
-// was once the tar ends.
+// was.
+//
+// The hold is kept short with two passes, as rsync-based backups do. The
+// helper first copies the volumes live into a scratch volume of its own
+// (tar piped into tar, with a GNU tar snapshot file); then, with the
+// services held, a second, incremental pass brings over only what changed
+// meanwhile (files whose content, owner, mode or links changed, new ones,
+// and the removal of the ones gone), and counts what the volumes hold.
+// The services go on right after that count: the tar that becomes the
+// backup is read from the scratch copy, which nothing writes to. When the
+// server's disk cannot hold the scratch copy, the copy is taken in one
+// pass, all of it with the services held, as before.
 //
 // The tar streams through this process, which encrypts it (zstd, then
 // age) into the staging dir and, at the same time, feeds it to a second
 // throwaway container that reads it back with GNU tar: a copy is called
 // tested only when what that container counted (entries, bytes, SHA-256
 // of the stream) matches what this process saw and what the volumes held
-// when the copy started. Plaintext never lands on disk, and the server
-// never needs to decrypt to test, as with dumps.
+// while the services were held. Plaintext never lands on disk outside
+// the scratch volume (removed with the helper), and the server never
+// needs to decrypt to test, as with dumps.
 
 // VolumeHelperImage runs the copy and the restore of volumes: GNU tar
 // with ACL and extended-attribute support, findutils, bash. It runs as
@@ -61,22 +73,67 @@ const VolumeHelperImage = "debian:13-slim"
 // restoring them needs privileges no helper has.
 const tarFlags = `--numeric-owner --acls --xattrs --xattrs-include='user.*'`
 
-// volumeCopyScript writes a line when it is ready, waits for "go" (the
-// services are paused by then), counts what the volumes hold and writes
-// that line, then the tar. It runs in /v, where each volume is mounted
-// read-only under its name; the names come as arguments, never into the
-// script. Sockets are skipped (tar cannot keep them). With
-// HANGAR_LIVE=1, tar's "file changed as we read it" (exit 1) is accepted.
+// stageDir is where the copy helper mounts its scratch volume.
+const stageDir = "/stage"
+
+// stageReserve is what the scratch copy leaves free on the disk it is on
+// (tests raise it to take the one-pass way).
+var stageReserve = stagingReserve
+
+// volumeCopyScript runs in /v, where each volume is mounted read-only
+// under its name; the names come as arguments, never into the script.
+//
+// With HANGAR_STAGE set (a scratch volume), it first copies the volumes
+// live into it when its disk has room for them twice (the scratch copy,
+// and the encrypted copy the panel writes, maybe to the same disk) plus
+// HANGAR_RESERVE. It then writes its ready line, which says how it will
+// copy: "HANGAR-READY staged" or "HANGAR-READY direct" (with why, and the
+// numbers), and waits for "go" (the services are held by then). Staged,
+// it brings the scratch copy up to date (only what changed), counts what
+// the volumes hold and writes that line (the services can go on from
+// there), then the tar of the scratch copy. Direct, it counts and writes
+// the tar of the volumes themselves. Sockets are skipped (tar cannot keep
+// them). With HANGAR_LIVE=1, tar's "file changed as we read it" (exit 1)
+// is accepted.
 const volumeCopyScript = `set -euo pipefail
 cd /v
-echo HANGAR-READY
+pack() { tar --create --file=- --format=posix --sparse --one-file-system ` + tarFlags + ` "$@"; }
+unpack() { tar --extract --file=- --listed-incremental=/dev/null --preserve-permissions --same-owner ` + tarFlags + ` -C "$HANGAR_STAGE/d"; }
+how="direct"
+if [ -n "${HANGAR_STAGE:-}" ]; then
+  used=$(du -sxcB1 -- "$@" | tail -n1 | cut -f1)
+  free=$(df -B1 --output=avail "$HANGAR_STAGE" | tail -n1 | tr -d ' ')
+  need=$((2 * used + ${HANGAR_RESERVE:-0}))
+  if [ "$free" -lt "$need" ]; then
+    how="direct reason=no_room used=$used free=$free need=$need"
+  else
+    mkdir "$HANGAR_STAGE/d"
+    rcs=(0 0)
+    pack --listed-incremental="$HANGAR_STAGE/snar" -- "$@" | unpack || rcs=("${PIPESTATUS[@]}")
+    if [ "${rcs[0]}" -le 1 ] && [ "${rcs[1]}" -eq 0 ]; then
+      how="staged used=$used free=$free"
+    else
+      rm -rf "$HANGAR_STAGE/d" "$HANGAR_STAGE/snar"
+      how="direct reason=stage_failed used=$used free=$free need=$need"
+    fi
+  fi
+fi
+echo "HANGAR-READY $how"
 IFS= read -r go
 [ "$go" = go ] || exit 3
+if [ "${how%% *}" = staged ]; then
+  pack --listed-incremental="$HANGAR_STAGE/snar" -- "$@" | unpack
+fi
 entries=$(find "$@" -xdev ! -type s -printf . | wc -c)
 bytes=$(find "$@" -xdev -type f -printf '%D:%i %s\n' | sort -u -k1,1 | awk '{s+=$2} END {printf "%d", s}')
 echo "HANGAR-SOURCE entries=$entries bytes=$bytes"
+if [ "${how%% *}" = staged ]; then
+  cd "$HANGAR_STAGE/d"
+  pack -- "$@"
+  exit 0
+fi
 rc=0
-tar --create --file=- --format=posix --sparse --one-file-system ` + tarFlags + ` -- "$@" || rc=$?
+pack -- "$@" || rc=$?
 if [ "$rc" -eq 1 ] && [ "${HANGAR_LIVE:-0}" = 1 ]; then rc=0; fi
 exit "$rc"
 `
@@ -110,6 +167,7 @@ echo "HANGAR-RESTORED entries=$entries bytes=$bytes"
 `
 
 var (
+	readyRE    = regexp.MustCompile(`^HANGAR-READY(?: (staged|direct)(?: reason=(\w+))?(?: used=(\d+))?(?: free=(\d+))?(?: need=(\d+))?)?\s*$`)
 	sourceRE   = regexp.MustCompile(`^HANGAR-SOURCE entries=(\d+) bytes=(\d+)\s*$`)
 	verifyRE   = regexp.MustCompile(`(?m)^HANGAR-VERIFY entries=(\d+) bytes=(\d+) sha256=([0-9a-f]{64})\s*$`)
 	restoredRE = regexp.MustCompile(`(?m)^HANGAR-RESTORED entries=(\d+) bytes=(\d+)\s*$`)
@@ -131,6 +189,10 @@ type VolumeCheck struct {
 	PauseMS int64    `json:"pause_ms,omitempty"`
 	// TarBytes is the size of the tar before compression.
 	TarBytes int64 `json:"tar_bytes"`
+	// Staged: the copy was taken in two passes (live, then only what
+	// changed with the services held), so the hold lasted only the
+	// second one.
+	Staged bool `json:"staged,omitempty"`
 }
 
 // maxPause is the longest a service stays paused (or stopped) for a
@@ -239,8 +301,14 @@ func (m *Manager) hold(ctx context.Context, s svcRef, mode string) (held []strin
 	if mode == ConsistencyPause && !canPause {
 		return nil, undo, ErrNoDocker
 	}
+	var unhold []func()
 	release := func(names []string) {
 		bg := context.WithoutCancel(ctx)
+		defer func() {
+			for _, f := range unhold {
+				f()
+			}
+		}()
 		for _, u := range names {
 			var err error
 			if mode == ConsistencyPause {
@@ -258,6 +326,9 @@ func (m *Manager) hold(ctx context.Context, s svcRef, mode string) (held []strin
 		if err != nil || !st.Running {
 			continue
 		}
+		// Marked before the pause, so the reconciler never sees it paused
+		// unmarked.
+		unhold = append(unhold, m.projects.Hold(s.Project, u))
 		if mode == ConsistencyPause {
 			err = p.Pause(ctx, s.Project, u)
 		} else {
@@ -354,10 +425,27 @@ func (m *Manager) copyVolumes(ctx context.Context, s svcRef, mode string, sink i
 	if mode == ConsistencyLive {
 		env["HANGAR_LIVE"] = "1"
 	}
+	spec := volumeSpec(s, volumeCopyScript, true, names, env)
+	if mode != ConsistencyLive {
+		// Room for the live first pass (see volumeCopyScript).
+		spec.Scratch = stageDir
+		env["HANGAR_STAGE"] = stageDir
+		env["HANGAR_RESERVE"] = strconv.FormatInt(stageReserve, 10)
+	}
 	stop := func(t *liveTask) error { return t.stop(func() { cancel(errTaskEnded) }) }
-	src := startTask(ctx, tk, volumeSpec(s, volumeCopyScript, true, names, env))
-	if _, err := src.line("HANGAR-READY"); err != nil {
+	src := startTask(ctx, tk, spec)
+	ready, err := src.line("HANGAR-READY")
+	if err != nil {
 		return c, fmt.Errorf("copy of the volumes: %w", errors.Join(err, stop(src)))
+	}
+	if rm := readyRE.FindStringSubmatch(strings.TrimSpace(ready)); rm != nil {
+		c.Staged = rm[1] == "staged"
+		if rm[2] != "" {
+			// Not fatal: the copy is still whole, the services are only
+			// held for all of it.
+			m.log.Warn("volumes copied in one pass, with the services held for all of it", "service", s.label(), "reason", rm[2],
+				"used", rm[3], "free", rm[4], "need", rm[5])
+		}
 	}
 	var ver *liveTask
 	if verify {
@@ -377,8 +465,9 @@ func (m *Manager) copyVolumes(ctx context.Context, s svcRef, mode string, sink i
 		return errors.Join(errs...)
 	}
 
-	// Both helpers are up: from here to the end of the tar the services
-	// wait, so that span is all the pause (or the stop) lasts.
+	// Both helpers are up (and the live first pass is done): from here to
+	// the count of a staged copy, or to the end of a direct tar, the
+	// services wait, so that span is all the pause (or the stop) lasts.
 	start := m.now()
 	held, resume, err := m.hold(ctx, s, mode)
 	if err != nil {
@@ -398,6 +487,21 @@ func (m *Manager) copyVolumes(ctx context.Context, s svcRef, mode string, sink i
 	})
 	defer timer.Stop()
 
+	// Once the volumes are copied (staged: brought up to date in the
+	// scratch copy; direct: the tar is over or failed), the services go
+	// on right away, while the rest is read, encrypted and tested.
+	var ended sync.Once
+	end := func() {
+		ended.Do(func() {
+			timer.Stop()
+			resume()
+			if len(held) > 0 {
+				c.PauseMS = m.now().Sub(start).Milliseconds()
+				m.log.Info("volumes copied", "service", s.label(), "mode", mode, "staged", c.Staged, "paused", held, "pause", m.now().Sub(start).Round(time.Millisecond))
+			}
+		})
+	}
+
 	if _, err := io.WriteString(src.in, "go\n"); err != nil {
 		resume()
 		return c, stopAll(err)
@@ -412,6 +516,11 @@ func (m *Manager) copyVolumes(ctx context.Context, s svcRef, mode string, sink i
 	if sm == nil {
 		resume()
 		return c, stopAll(fmt.Errorf("copy of the volumes: unreadable count %q", strings.TrimSpace(line)))
+	}
+	if c.Staged {
+		// The scratch copy is up to date and counted: nothing the
+		// services do now changes the backup.
+		end()
 	}
 
 	type scanned struct {
@@ -430,18 +539,6 @@ func (m *Manager) copyVolumes(ctx context.Context, s svcRef, mode string, sink i
 	outs := []io.Writer{sink, scanW, plainSum, &plain}
 	if ver != nil {
 		outs = append(outs, ver.in)
-	}
-	// Once the tar is over (or failed), the services go on right away,
-	// while what is still buffered is encrypted and tested.
-	var ended sync.Once
-	end := func() {
-		ended.Do(func() {
-			resume()
-			if len(held) > 0 {
-				c.PauseMS = m.now().Sub(start).Milliseconds()
-				m.log.Info("volumes copied", "service", s.label(), "mode", mode, "paused", held, "pause", m.now().Sub(start).Round(time.Millisecond))
-			}
-		})
 	}
 	cerr := relay(io.MultiWriter(outs...), src.out, end)
 	end()
@@ -725,6 +822,8 @@ func (m *Manager) restoreVolumes(ctx context.Context, a Actor, id string, t svcR
 	var stopped []string
 	for _, u := range t.volumeUsers() {
 		if st, err := m.projects.Status(ctx, t.Project, u); err == nil && st.Running {
+			unhold := m.projects.Hold(t.Project, u)
+			defer unhold()
 			if err := n.Stop(ctx, t.Project, u); err != nil {
 				return false, fmt.Errorf("stop %s: %w", u, err)
 			}
