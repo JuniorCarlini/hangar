@@ -410,7 +410,8 @@
   });
   window.addEventListener('popstate', function () { swap(location.pathname + location.search, false); });
 
-  // While something deploys, the cards follow it without reloading the
+  // While something deploys (or a card is in a passing state: paused by
+  // a backup, restarting), the cards follow it without reloading the
   // page: every 2 s the project page is fetched and only the cards that
   // changed are updated, so the zoom, the open drawer (or a closed one)
   // and anything being typed stay as they are. A progress bar fills up to
@@ -474,7 +475,7 @@
         updateCard(cur, next);
         drawerStale = true;
       });
-      if (fresh.dataset.deploying === 'true') {
+      if (fresh.dataset.watch === 'true') {
         setTimeout(poll, 2000);
         return;
       }
@@ -486,5 +487,5 @@
       }
     }).catch(function () { setTimeout(poll, 5000); });
   }
-  if (svg.dataset.deploying === 'true') setTimeout(poll, 2000);
+  if (svg.dataset.watch === 'true') setTimeout(poll, 2000);
 })();

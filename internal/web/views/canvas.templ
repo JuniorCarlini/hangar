@@ -17,7 +17,10 @@ type CanvasData struct {
 	Groups      []CanvasGroup
 	Internet    *CanvasBox
 	Deploying   bool
-	CanCreate   bool
+	// Watch: a card is in a passing state (paused by a backup, restarting):
+	// the canvas keeps checking until it settles, as while deploying.
+	Watch     bool
+	CanCreate bool
 	CanOperate  bool
 	Error       string
 	Flash       string
@@ -159,6 +162,7 @@ templ ProjectCanvas(d CanvasData, s *ServiceData) {
 						data-can-connect={ fmt.Sprint(d.CanOperate) }
 						data-nothing={ t(ctx, "connect.nothing") }
 						data-deploying={ fmt.Sprint(d.Deploying) }
+						data-watch={ fmt.Sprint(d.Deploying || d.Watch) }
 						role="group"
 						aria-label={ t(ctx, "canvas.label") }
 					>

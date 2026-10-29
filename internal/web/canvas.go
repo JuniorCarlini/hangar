@@ -206,8 +206,13 @@ func (h *handlers) buildCanvas(r *http.Request, p dbq.Project, selected string) 
 		if cn.Pending && cn.State != "deploying" {
 			d.Pending = append(d.Pending, n.Slug)
 		}
-		if cn.State == "deploying" {
+		switch cn.State {
+		case "deploying":
 			d.Deploying = true
+		case "paused", "restarting", "created", "removing":
+			// A backup pauses a service for a moment, a restart takes a
+			// few seconds: the card must not stay on that state.
+			d.Watch = true
 		}
 	}
 	d.Width, d.Height = maxX+cvMargin, maxY+cvMargin+40
