@@ -29,6 +29,14 @@ type ServiceSnapshot struct {
 	Domains   []string           `json:"domains,omitempty"`
 	Env       []SnapshotVar      `json:"env,omitempty"`
 	Commands  []SnapshotCommand  `json:"saved_commands,omitempty"`
+	// Stateful marks a service made to keep data (a template's database).
+	Stateful bool `json:"stateful,omitempty"`
+	// Exports are the connection values other services reference
+	// (${{service.KEY}}); Offers, the variables it offers them.
+	Exports []SnapshotVar   `json:"exports,omitempty"`
+	Offers  []string        `json:"offers,omitempty"`
+	Deploy  *SnapshotDeploy `json:"deploy,omitempty"`
+	Canvas  *SnapshotCanvas `json:"canvas,omitempty"`
 }
 
 // SnapshotGit is a Git service's source (never its token).
@@ -37,6 +45,9 @@ type SnapshotGit struct {
 	Branch     string `json:"branch"`
 	Subdir     string `json:"subdir,omitempty"`
 	Dockerfile string `json:"dockerfile,omitempty"`
+	// Credential is the id of the server-wide Git credential it used: on
+	// the same server the copy uses it too.
+	Credential string `json:"credential,omitempty"`
 }
 
 // SnapshotLimits are the service's resources.
@@ -64,6 +75,10 @@ type SnapshotEndpoint struct {
 	Name   string `json:"name,omitempty"`
 	Port   int    `json:"port"`
 	Public bool   `json:"public"`
+	// Label is the stored label (every language it has); Sslip, whether
+	// its automatic link is on.
+	Label string `json:"label,omitempty"`
+	Sslip bool   `json:"sslip,omitempty"`
 }
 
 // SnapshotVar is a variable.
@@ -79,6 +94,20 @@ type SnapshotCommand struct {
 	Command string `json:"command"`
 }
 
+// SnapshotDeploy are the service's deploy settings, as stored.
+type SnapshotDeploy struct {
+	Predeploy        json.RawMessage `json:"predeploy,omitempty"`
+	HealthPath       string          `json:"health_path,omitempty"`
+	Validate         json.RawMessage `json:"validate,omitempty"`
+	ValidateTimeoutS int64           `json:"validate_timeout_s,omitempty"`
+}
+
+// SnapshotCanvas is where the service's card sits on the canvas.
+type SnapshotCanvas struct {
+	X int64 `json:"x"`
+	Y int64 `json:"y"`
+}
+
 // Snapshot reads the configuration of a service (ServiceSnapshot).
 func (m *Manager) Snapshot(ctx context.Context, projectSlug, serviceSlug string) (ServiceSnapshot, error) {
 	p, s, err := m.GetService(ctx, projectSlug, serviceSlug)
@@ -87,17 +116,34 @@ func (m *Manager) Snapshot(ctx context.Context, projectSlug, serviceSlug string)
 	}
 	out := ServiceSnapshot{
 		Format: 1, Project: p.Slug, Service: s.Slug, Template: s.Template, Image: s.Image, Port: s.InternalPort,
-		Res: SnapshotLimits{MemoryBytes: s.MemoryBytes, NanoCPUs: s.NanoCpus, Pids: s.PidsLimit, ReadOnly: s.ReadOnly == 1, StopGraceS: s.StopGraceS},
+		Res:      SnapshotLimits{MemoryBytes: s.MemoryBytes, NanoCPUs: s.NanoCpus, Pids: s.PidsLimit, ReadOnly: s.ReadOnly == 1, StopGraceS: s.StopGraceS},
+		Stateful: s.Stateful == 1,
 	}
 	_ = json.Unmarshal([]byte(s.CommandJson), &out.Cmd)
 	_ = json.Unmarshal([]byte(s.CapAddJson), &out.Res.CapAdd)
-	if s.HealthJson != "" && json.Valid([]byte(s.HealthJson)) && s.HealthJson != "null" {
+	if rawSet(s.HealthJson) {
 		out.Check = json.RawMessage(s.HealthJson)
+	}
+	d := SnapshotDeploy{HealthPath: s.HealthPath, ValidateTimeoutS: s.ValidateTimeoutS}
+	if rawSet(s.PredeployJson) {
+		d.Predeploy = json.RawMessage(s.PredeployJson)
+	}
+	if rawSet(s.ValidateJson) {
+		d.Validate = json.RawMessage(s.ValidateJson)
+	}
+	if d.Predeploy != nil || d.Validate != nil || d.HealthPath != "" || d.ValidateTimeoutS != 0 {
+		out.Deploy = &d
+	}
+	if s.CanvasX.Valid && s.CanvasY.Valid {
+		out.Canvas = &SnapshotCanvas{X: s.CanvasX.Int64, Y: s.CanvasY.Int64}
 	}
 	if g, ok, err := m.GetGitSource(ctx, s.ID); err != nil {
 		return out, err
 	} else if ok {
 		out.Git = &SnapshotGit{URL: g.URL, Branch: g.Branch, Subdir: g.Subdir, Dockerfile: g.Dockerfile}
+		if !g.CredentialMine {
+			out.Git.Credential = g.CredentialID
+		}
 	}
 	vols, err := m.ListServiceVolumes(ctx, p.Slug, s)
 	if err != nil {
@@ -110,12 +156,14 @@ func (m *Manager) Snapshot(ctx context.Context, projectSlug, serviceSlug string)
 		}
 		out.Vols = append(out.Vols, sv)
 	}
-	eps, err := m.ListEndpoints(ctx, s.ID)
+	eps, err := m.q.ListEndpoints(ctx, s.ID)
 	if err != nil {
 		return out, err
 	}
 	for _, e := range eps {
-		out.Endpoints = append(out.Endpoints, SnapshotEndpoint{Name: e.Name, Port: e.Port, Public: e.Public})
+		out.Endpoints = append(out.Endpoints, SnapshotEndpoint{
+			Name: e.Name, Port: int(e.Port), Public: e.Public == 1, Label: e.Label, Sslip: e.SslipEnabled == 1,
+		})
 	}
 	doms, err := m.ListDomains(ctx, s.ID)
 	if err != nil {
@@ -138,5 +186,28 @@ func (m *Manager) Snapshot(ctx context.Context, projectSlug, serviceSlug string)
 	for _, c := range cmds {
 		out.Commands = append(out.Commands, SnapshotCommand{Name: c.Name, Command: c.Command})
 	}
+	exps, err := m.q.ListExports(ctx, s.ID)
+	if err != nil {
+		return out, err
+	}
+	for _, e := range exps {
+		plain, err := m.box.Open(e.ValueEnc, exportAD(s.ID, e.Key))
+		if err != nil {
+			return out, err
+		}
+		out.Exports = append(out.Exports, SnapshotVar{Key: e.Key, Value: string(plain), Secret: e.Secret == 1})
+	}
+	offers, err := m.q.ListOffers(ctx, s.ID)
+	if err != nil {
+		return out, err
+	}
+	if len(offers) > 0 {
+		out.Offers = offers
+	}
 	return out, nil
+}
+
+// rawSet reports whether a stored JSON column holds a value.
+func rawSet(s string) bool {
+	return s != "" && s != "null" && s != "[]" && s != "{}" && json.Valid([]byte(s))
 }

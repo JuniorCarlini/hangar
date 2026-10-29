@@ -48,6 +48,24 @@ func (m *Manager) BackupMethod(ctx context.Context, s dbq.Service) string {
 	return ""
 }
 
+// SnapshotMethod is BackupMethod for a service of a backup before it
+// exists on this server: what its template here declares, else a copy of
+// the volumes it owns.
+func (m *Manager) SnapshotMethod(s ServiceSnapshot) string {
+	if t, ok := m.serviceTemplate(dbq.Service{Template: s.Template}); ok {
+		switch t.Backup {
+		case BackupPGDump, BackupRecipe:
+			return t.Backup
+		}
+	}
+	for _, v := range s.Vols {
+		if v.From == "" {
+			return BackupVolume
+		}
+	}
+	return ""
+}
+
 func (m *Manager) serviceTemplate(s dbq.Service) (*templates.Template, bool) {
 	if s.Template == "" {
 		return nil, false
