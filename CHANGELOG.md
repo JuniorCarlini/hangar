@@ -12,6 +12,16 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.33] - 2026-10-29
+
+### Mudado
+
+- **Editor do .env com cara de editor de código**: abre em tela grande como
+  o terminal, com número de linha, chaves em azul, comentários em verde e as
+  conexões do Hangar (`${{serviço.VAR}}`) destacadas na cor do painel,
+  enquanto você digita. Linhas longas rolam para o lado sem quebrar; linhas
+  sem `=` ficam sublinhadas e contadas no rodapé.
+
 ## [0.5.32] - 2026-10-29
 
 ### Corrigido
@@ -867,7 +877,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.32...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.33...HEAD
+[0.5.33]: https://github.com/JuniorCarlini/hangar/compare/v0.5.32...v0.5.33
 [0.5.32]: https://github.com/JuniorCarlini/hangar/compare/v0.5.31...v0.5.32
 [0.5.31]: https://github.com/JuniorCarlini/hangar/compare/v0.5.30...v0.5.31
 [0.5.30]: https://github.com/JuniorCarlini/hangar/compare/v0.5.29...v0.5.30
