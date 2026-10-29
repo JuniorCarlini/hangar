@@ -64,6 +64,7 @@ func TestCheckSnapshots(t *testing.T) {
 		"env key":    func(s *ServiceSnapshot) { s.Env[0].Key = "A=B" },
 		"port":       func(s *ServiceSnapshot) { s.Endpoints = []SnapshotEndpoint{{Port: 70000}} },
 		"health":     func(s *ServiceSnapshot) { s.Check = []byte("{") },
+		"grace":      func(s *ServiceSnapshot) { s.Deploy = &SnapshotDeploy{StartupGraceS: 24 * 3600} },
 	} {
 		s := ok()
 		edit(&s)

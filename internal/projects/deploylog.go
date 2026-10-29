@@ -179,6 +179,14 @@ const (
 	MaxValidateTimeout     = 30 * time.Minute
 )
 
+// Bounds of the startup grace: how long a new version may take to answer
+// its health check. Zero means node.DefaultHealthTimeout; it cannot
+// outlast the deploy itself.
+const (
+	MinStartupGrace = time.Minute
+	MaxStartupGrace = deployTimeout
+)
+
 // DeploySettings is the "Deploy" card of a service.
 type DeploySettings struct {
 	PreDeploy  string
@@ -189,6 +197,10 @@ type DeploySettings struct {
 	Validate string
 	// ValidateTimeout limits it (zero = DefaultValidateTimeout).
 	ValidateTimeout time.Duration
+	// StartupGrace is how long the new version may take to start
+	// answering before the deploy gives up (zero = node.DefaultHealthTimeout):
+	// an app that migrates or uploads static files before it listens.
+	StartupGrace time.Duration
 }
 
 // GetDeploySettings reads the pre-deploy command, health path and
@@ -200,11 +212,12 @@ func (m *Manager) GetDeploySettings(s dbq.Service) DeploySettings {
 	return DeploySettings{
 		PreDeploy: JoinCommand(cmd), HealthPath: s.HealthPath,
 		Validate: JoinCommand(validate), ValidateTimeout: time.Duration(s.ValidateTimeoutS) * time.Second,
+		StartupGrace: time.Duration(s.StartupGraceS) * time.Second,
 	}
 }
 
-// SetDeploySettings stores the pre-deploy command, health path and
-// validation command; they apply from the next deploy.
+// SetDeploySettings stores the pre-deploy command, health path, startup
+// grace and validation command; they apply from the next deploy.
 func (m *Manager) SetDeploySettings(ctx context.Context, a Actor, serviceID string, in DeploySettings) error {
 	cmd, err := SplitCommand(in.PreDeploy)
 	if err != nil {
@@ -221,6 +234,10 @@ func (m *Manager) SetDeploySettings(ctx context.Context, a Actor, serviceID stri
 	if timeout < MinValidateTimeout || timeout > MaxValidateTimeout {
 		return i18n.E("deploy.error.validate_timeout", "max", int(MaxValidateTimeout.Minutes()))
 	}
+	if in.StartupGrace != 0 && (in.StartupGrace < MinStartupGrace || in.StartupGrace > MaxStartupGrace) {
+		return i18n.E("deploy.error.startup_grace", "min", int(MinStartupGrace.Minutes()), "max", int(MaxStartupGrace.Minutes()))
+	}
+	grace := int64(in.StartupGrace / time.Second)
 	path := strings.TrimSpace(in.HealthPath)
 	if path != "" && (!strings.HasPrefix(path, "/") || len(path) > 200 || strings.ContainsAny(path, " \t\r\n#")) {
 		return i18n.E("deploy.error.health_path")
@@ -228,12 +245,13 @@ func (m *Manager) SetDeploySettings(ctx context.Context, a Actor, serviceID stri
 	if err := m.q.SetServiceDeploySettings(ctx, dbq.SetServiceDeploySettingsParams{
 		PredeployJson: commandJSON(cmd), HealthPath: path,
 		ValidateJson: commandJSON(validate), ValidateTimeoutS: int64(timeout / time.Second),
-		UpdatedAt: m.now().Unix(), ID: serviceID,
+		StartupGraceS: grace, UpdatedAt: m.now().Unix(), ID: serviceID,
 	}); err != nil {
 		return err
 	}
 	m.record(ctx, a, "service.deploy_settings", "service", serviceID, audit.OK, map[string]any{
 		"predeploy": cmd, "health_path": path, "validate": validate, "validate_timeout_s": int(timeout / time.Second),
+		"startup_grace_s": grace,
 	})
 	return nil
 }

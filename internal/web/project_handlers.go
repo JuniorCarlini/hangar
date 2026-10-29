@@ -404,6 +404,11 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	if ds.ValidateTimeout > 0 {
 		d.ValidateMinutes = strconv.Itoa(int(ds.ValidateTimeout.Minutes()))
 	}
+	if ds.StartupGrace > 0 {
+		d.StartupMinutes = strconv.Itoa(int(ds.StartupGrace.Minutes()))
+	}
+	d.StartupDefault = int(node.DefaultHealthTimeout.Minutes())
+	d.StartupMax = int(projects.MaxStartupGrace.Minutes())
 	if deps, err := h.projects.Dependents(r.Context(), p.Slug, s.Slug); err == nil {
 		d.UsedBy = dependentsLabel(r, deps)
 		for _, dep := range deps {

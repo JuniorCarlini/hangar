@@ -389,6 +389,11 @@ type SuggestedVar struct {
 type ServiceData struct {
 	Validate        string // command run in the new container before it takes over
 	ValidateMinutes string
+	// StartupMinutes is the service's startup grace ("" = the default,
+	// StartupDefault); StartupMax is the most it may be.
+	StartupMinutes  string
+	StartupDefault  int
+	StartupMax      int
 	Volumes         []VolumeRow // disks: what survives deploys
 	// LimitsAvailable: disks can get a size limit here (the root unit
 	// hangar-volumes answered); HostFree is the server's free disk.
@@ -709,7 +714,7 @@ templ deploysTimeline(d ServiceData) {
 						</span>
 					}
 					if dp.Error != "" {
-						<p class="text-xs text-danger">{ dp.Error }</p>
+						<p class="text-xs break-words whitespace-pre-line text-danger">{ dp.Error }</p>
 					}
 					if dp.Log != "" {
 						<details class="deploy-log">
@@ -864,14 +869,16 @@ func portValue(p int64) string {
 }
 
 // deployField is a row of the deploy settings: the label on the left, the field and its hint on the right (stacked when the card is narrow, as in the drawer).
-templ deployField(id, label, hint string) {
+templ deployField(id, label string, hints ...string) {
 	<div class="grid min-w-0 items-start gap-1.5 @xl:grid-cols-[190px_minmax(0,1fr)] @xl:gap-4">
 		<label class="tuc-label inline-flex items-center @xl:h-9" for={ id }>
 			{ label }
 		</label>
 		<div class="flex min-w-0 flex-col gap-1.5">
 			{ children... }
-			<p class="tuc-hint m-0">{ hint }</p>
+			for _, hint := range hints {
+				<p class="tuc-hint m-0">{ hint }</p>
+			}
 		</div>
 	</div>
 }
@@ -899,8 +906,17 @@ templ deploySettings(d ServiceData) {
 					@deployField("predeploy", t(ctx, "deploy.settings.predeploy"), t(ctx, "deploy.settings.predeploy_hint")) {
 						<input class="tuc-input font-mono text-[13px]" id="predeploy" name="predeploy" value={ d.PreDeploy } placeholder={ t(ctx, "deploy.settings.predeploy_placeholder") } autocomplete="off"/>
 					}
-					@deployField("health_path", t(ctx, "deploy.settings.health_path"), t(ctx, "deploy.settings.health_hint")) {
-						<input class="tuc-input font-mono text-[13px]" id="health_path" name="health_path" value={ d.HealthPath } placeholder={ t(ctx, "deploy.settings.health_placeholder") } autocomplete="off"/>
+					// The path (wide) and how long the new version may take to
+					// answer it (narrow) share the row, their hints below.
+					@deployField("health_path", t(ctx, "deploy.settings.health_path"), t(ctx, "deploy.settings.health_hint"), t(ctx, "deploy.settings.startup_grace_hint")) {
+						<div class="flex min-w-0 flex-wrap items-center gap-2">
+							<input class="tuc-input min-w-40 grow basis-40 font-mono text-[13px]" id="health_path" name="health_path" value={ d.HealthPath } placeholder={ t(ctx, "deploy.settings.health_placeholder") } autocomplete="off"/>
+							<div class="flex shrink-0 items-center gap-2">
+								<label class="text-[13px] whitespace-nowrap text-muted" for="startup_grace">{ t(ctx, "deploy.settings.startup_grace") }</label>
+								<input class="tuc-input w-16 shrink-0 text-center font-mono text-[13px]" id="startup_grace" name="startup_grace" type="number" min="1" max={ fmt.Sprint(d.StartupMax) } step="1" value={ d.StartupMinutes } placeholder={ fmt.Sprint(d.StartupDefault) }/>
+								<span class="shrink-0 text-[13px] text-muted">min</span>
+							</div>
+						</div>
 					}
 					@deployField("validate", t(ctx, "deploy.settings.validate"), t(ctx, "deploy.settings.validate_hint")) {
 						<div class="flex min-w-0 items-center gap-2">

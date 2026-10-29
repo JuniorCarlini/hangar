@@ -410,6 +410,7 @@ type Service struct {
 	Maintenance          int64
 	StopGraceS           int64
 	DomainRequireTxt     int64
+	StartupGraceS        int64
 }
 
 type ServiceAlias struct {

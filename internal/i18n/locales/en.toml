@@ -1218,12 +1218,15 @@ health = "waiting to be healthy"
 switch = "switching"
 
 [deploy.error]
+startup_grace = "The startup time goes from {min} to {max} minutes."
 validate_timeout = "The validation time limit goes from 1 to {max} minutes."
 command = "Invalid command (unclosed quote or too long)."
 health_path = "The healthcheck path starts with / and has no spaces (e.g. /healthz)."
 rollback = "You can only roll back to one of the last 5 deploys that went live (not the current one)."
 
 [deploy.settings]
+startup_grace = "Startup time"
+startup_grace_hint = "Apps that run migrations or upload files when they start may need more time."
 validate = "Validation command"
 validate_placeholder = "python manage.py check --deploy"
 validate_timeout = "Limit (min)"

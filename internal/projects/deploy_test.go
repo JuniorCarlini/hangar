@@ -189,3 +189,68 @@ func TestHealthWaitFollowsTheHealthcheck(t *testing.T) {
 		t.Errorf("capped by the deploy timeout: %s, want %s", got, deployTimeout)
 	}
 }
+
+// The startup grace of a service (an app that migrates and uploads its
+// static files before it listens) is how long its deploy waits; zero is
+// the default, and it stays within the deploy's own limit.
+func TestStartupGrace(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	_, id := f.service(t)
+	deploy := func() time.Duration {
+		t.Helper()
+		if _, err := f.m.Deploy(ctx, f.who, "lab", "web", "manual"); err != nil {
+			t.Fatal(err)
+		}
+		f.m.Wait()
+		return f.n.lastOpt().HealthTimeout
+	}
+	read := func() time.Duration {
+		t.Helper()
+		_, s, err := f.m.GetService(ctx, "lab", "web")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f.m.GetDeploySettings(s).StartupGrace
+	}
+	if got := deploy(); got != node.DefaultHealthTimeout || got < 5*time.Minute {
+		t.Errorf("default: %s, want %s (at least 5 min)", got, node.DefaultHealthTimeout)
+	}
+	if err := f.m.SetDeploySettings(ctx, f.who, id, DeploySettings{HealthPath: "/health/", StartupGrace: 10 * time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != 10*time.Minute {
+		t.Errorf("stored: %s", got)
+	}
+	if got := deploy(); got != 10*time.Minute {
+		t.Errorf("set to 10 min: the deploy waits %s", got)
+	}
+	for _, bad := range []time.Duration{30 * time.Second, MaxStartupGrace + time.Minute, -time.Minute} {
+		err := f.m.SetDeploySettings(ctx, f.who, id, DeploySettings{StartupGrace: bad})
+		if err == nil {
+			t.Errorf("accepted a grace of %s", bad)
+		}
+	}
+	if got := read(); got != 10*time.Minute {
+		t.Errorf("a refused value must keep the stored one: %s", got)
+	}
+	if err := f.m.SetDeploySettings(ctx, f.who, id, DeploySettings{StartupGrace: MaxStartupGrace}); err != nil {
+		t.Fatalf("the most a deploy allows: %v", err)
+	}
+	if got := deploy(); got != deployTimeout {
+		t.Errorf("max: %s, want %s", got, deployTimeout)
+	}
+	// A backup of the project keeps it.
+	if snap, err := f.m.Snapshot(ctx, "lab", "web"); err != nil || snap.Deploy == nil || snap.Deploy.StartupGraceS != int64(MaxStartupGrace.Seconds()) {
+		t.Errorf("snapshot: %+v %v", snap.Deploy, err)
+	}
+	if err := f.m.SetDeploySettings(ctx, f.who, id, DeploySettings{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := read(); got != 0 {
+		t.Errorf("empty goes back to the default: %s", got)
+	}
+	if got := deploy(); got != node.DefaultHealthTimeout {
+		t.Errorf("back to the default: %s", got)
+	}
+}

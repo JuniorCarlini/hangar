@@ -86,7 +86,7 @@ UPDATE deployments SET image_ref = ? WHERE id = ?;
 SELECT * FROM deployments WHERE id = ? AND service_id = ?;
 
 -- name: SetServiceDeploySettings :exec
-UPDATE services SET predeploy_json = ?, health_path = ?, validate_json = ?, validate_timeout_s = ?, updated_at = ? WHERE id = ?;
+UPDATE services SET predeploy_json = ?, health_path = ?, validate_json = ?, validate_timeout_s = ?, startup_grace_s = ?, updated_at = ? WHERE id = ?;
 
 -- name: SetServiceImage :execrows
 -- Points the service at another image, only if it still runs the one the

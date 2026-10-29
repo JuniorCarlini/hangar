@@ -144,8 +144,11 @@ type DeployOptions struct {
 	// Port and HealthPath tell how to know the new container is ready when
 	// the image has no Docker healthcheck: HTTP GET on the path, or a TCP
 	// connect on the port when the path is empty.
-	Port          int
-	HealthPath    string
+	Port       int
+	HealthPath string
+	// HealthTimeout is how long the new container may take to become
+	// ready (see HealthWait). A container that stops meanwhile fails the
+	// deploy at once; one still running is waited for up to this long.
 	HealthTimeout time.Duration
 	// Progress receives each phase change and log line (may be nil).
 	Progress func(phase, line string)
@@ -276,8 +279,10 @@ type Health struct {
 }
 
 // DefaultHealthTimeout is how long a deploy waits for the new container to
-// be ready when nothing says otherwise.
-const DefaultHealthTimeout = 2 * time.Minute
+// be ready when nothing says otherwise: enough for an app that runs its
+// migrations or uploads its static files before it listens (a Django or
+// Rails boot), the grace period other platforms give by default.
+const DefaultHealthTimeout = 5 * time.Minute
 
 // Docker's own defaults for a healthcheck field left at zero.
 const (
@@ -287,14 +292,18 @@ const (
 )
 
 // HealthWait is how long a deploy should wait for a container with this
-// healthcheck to report healthy: the time Docker itself may take to decide
-// (start period, then every retry at its interval, plus the last probe's
-// timeout), never less than DefaultHealthTimeout and never more than
-// limit. A server that loads a large world or database for minutes before
-// it answers is not a failed deploy, and in a recreate deploy giving up
-// early would remove a container that was about to become healthy.
-func HealthWait(h *Health, limit time.Duration) time.Duration {
-	wait := DefaultHealthTimeout
+// healthcheck to report healthy: the service's startup grace (zero =
+// DefaultHealthTimeout), or longer when Docker itself may take more to
+// decide (start period, then every retry at its interval, plus the last
+// probe's timeout), and never more than limit. A server that loads a large
+// world or database for minutes before it answers is not a failed deploy,
+// and in a recreate deploy giving up early would remove a container that
+// was about to become healthy.
+func HealthWait(h *Health, grace, limit time.Duration) time.Duration {
+	wait := grace
+	if wait <= 0 {
+		wait = DefaultHealthTimeout
+	}
 	if h != nil {
 		interval, timeout, retries := h.Interval, h.Timeout, h.Retries
 		if interval <= 0 {

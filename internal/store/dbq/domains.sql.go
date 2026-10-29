@@ -145,7 +145,7 @@ func (q *Queries) DeleteDomain(ctx context.Context, arg DeleteDomainParams) (Del
 }
 
 const dynamicService = `-- name: DynamicService :one
-SELECT s.id, s.project_id, s.slug, s.image, s.internal_port, s.memory_bytes, s.nano_cpus, s.pids_limit, s.read_only, s.command_json, s.desired_state, s.created_at, s.updated_at, s.dynamic_domains, s.domain_check_path, s.domain_check_secret_enc, s.template, s.stateful, s.health_json, s.cap_add_json, s.predeploy_json, s.health_path, s.canvas_x, s.canvas_y, s.validate_json, s.validate_timeout_s, s.maintenance, s.stop_grace_s, s.domain_require_txt, p.slug AS project_slug FROM services s JOIN projects p ON p.id = s.project_id
+SELECT s.id, s.project_id, s.slug, s.image, s.internal_port, s.memory_bytes, s.nano_cpus, s.pids_limit, s.read_only, s.command_json, s.desired_state, s.created_at, s.updated_at, s.dynamic_domains, s.domain_check_path, s.domain_check_secret_enc, s.template, s.stateful, s.health_json, s.cap_add_json, s.predeploy_json, s.health_path, s.canvas_x, s.canvas_y, s.validate_json, s.validate_timeout_s, s.maintenance, s.stop_grace_s, s.domain_require_txt, s.startup_grace_s, p.slug AS project_slug FROM services s JOIN projects p ON p.id = s.project_id
 WHERE s.dynamic_domains = 1
 `
 
@@ -179,6 +179,7 @@ type DynamicServiceRow struct {
 	Maintenance          int64
 	StopGraceS           int64
 	DomainRequireTxt     int64
+	StartupGraceS        int64
 	ProjectSlug          string
 }
 
@@ -215,6 +216,7 @@ func (q *Queries) DynamicService(ctx context.Context) (DynamicServiceRow, error)
 		&i.Maintenance,
 		&i.StopGraceS,
 		&i.DomainRequireTxt,
+		&i.StartupGraceS,
 		&i.ProjectSlug,
 	)
 	return i, err
@@ -256,7 +258,7 @@ func (q *Queries) GetEdgeSettings(ctx context.Context) (EdgeSetting, error) {
 }
 
 const getServiceByID = `-- name: GetServiceByID :one
-SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance, stop_grace_s, domain_require_txt FROM services WHERE id = ?
+SELECT id, project_id, slug, image, internal_port, memory_bytes, nano_cpus, pids_limit, read_only, command_json, desired_state, created_at, updated_at, dynamic_domains, domain_check_path, domain_check_secret_enc, template, stateful, health_json, cap_add_json, predeploy_json, health_path, canvas_x, canvas_y, validate_json, validate_timeout_s, maintenance, stop_grace_s, domain_require_txt, startup_grace_s FROM services WHERE id = ?
 `
 
 func (q *Queries) GetServiceByID(ctx context.Context, id string) (Service, error) {
@@ -292,6 +294,7 @@ func (q *Queries) GetServiceByID(ctx context.Context, id string) (Service, error
 		&i.Maintenance,
 		&i.StopGraceS,
 		&i.DomainRequireTxt,
+		&i.StartupGraceS,
 	)
 	return i, err
 }

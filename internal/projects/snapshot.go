@@ -100,6 +100,7 @@ type SnapshotDeploy struct {
 	HealthPath       string          `json:"health_path,omitempty"`
 	Validate         json.RawMessage `json:"validate,omitempty"`
 	ValidateTimeoutS int64           `json:"validate_timeout_s,omitempty"`
+	StartupGraceS    int64           `json:"startup_grace_s,omitempty"`
 }
 
 // SnapshotCanvas is where the service's card sits on the canvas.
@@ -124,14 +125,14 @@ func (m *Manager) Snapshot(ctx context.Context, projectSlug, serviceSlug string)
 	if rawSet(s.HealthJson) {
 		out.Check = json.RawMessage(s.HealthJson)
 	}
-	d := SnapshotDeploy{HealthPath: s.HealthPath, ValidateTimeoutS: s.ValidateTimeoutS}
+	d := SnapshotDeploy{HealthPath: s.HealthPath, ValidateTimeoutS: s.ValidateTimeoutS, StartupGraceS: s.StartupGraceS}
 	if rawSet(s.PredeployJson) {
 		d.Predeploy = json.RawMessage(s.PredeployJson)
 	}
 	if rawSet(s.ValidateJson) {
 		d.Validate = json.RawMessage(s.ValidateJson)
 	}
-	if d.Predeploy != nil || d.Validate != nil || d.HealthPath != "" || d.ValidateTimeoutS != 0 {
+	if d.Predeploy != nil || d.Validate != nil || d.HealthPath != "" || d.ValidateTimeoutS != 0 || d.StartupGraceS != 0 {
 		out.Deploy = &d
 	}
 	if s.CanvasX.Valid && s.CanvasY.Valid {

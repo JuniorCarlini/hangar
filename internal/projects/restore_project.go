@@ -121,6 +121,8 @@ func checkSnapshots(snaps []ServiceSnapshot) error {
 			return badSnapshot("%s: cpus", s.Service)
 		case s.Res.Pids < 0 || s.Res.StopGraceS < 0 || s.Res.StopGraceS > int64(node.MaxStopGrace.Seconds()):
 			return badSnapshot("%s: limits", s.Service)
+		case s.Deploy != nil && (s.Deploy.StartupGraceS < 0 || s.Deploy.StartupGraceS > int64(MaxStartupGrace.Seconds())):
+			return badSnapshot("%s: startup grace", s.Service)
 		case len(s.Vols) > MaxVolumes:
 			return badSnapshot("%s: too many volumes", s.Service)
 		}
@@ -278,7 +280,8 @@ func (m *Manager) CreateFromSnapshots(ctx context.Context, a Actor, name string,
 				val = string(d.Validate)
 			}
 			if err := q.SetServiceDeploySettings(ctx, dbq.SetServiceDeploySettingsParams{
-				PredeployJson: pre, HealthPath: d.HealthPath, ValidateJson: val, ValidateTimeoutS: d.ValidateTimeoutS, UpdatedAt: now, ID: id,
+				PredeployJson: pre, HealthPath: d.HealthPath, ValidateJson: val, ValidateTimeoutS: d.ValidateTimeoutS,
+				StartupGraceS: d.StartupGraceS, UpdatedAt: now, ID: id,
 			}); err != nil {
 				return out, err
 			}

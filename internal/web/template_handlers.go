@@ -302,6 +302,19 @@ func (h *handlers) saveDeploySettings(w http.ResponseWriter, r *http.Request) {
 		}
 		in.ValidateTimeout = time.Duration(mins) * time.Minute
 	}
+	// The startup grace (minutes) likewise; sent empty, it goes back to
+	// the panel's default.
+	in.StartupGrace = cur.StartupGrace
+	if _, ok := r.PostForm["startup_grace"]; ok {
+		in.StartupGrace = 0
+		if v := strings.TrimSpace(r.PostFormValue("startup_grace")); v != "" {
+			mins, err := strconv.Atoi(v)
+			if err != nil || mins < 1 {
+				mins = -1 // out of range: SetDeploySettings refuses it with the message
+			}
+			in.StartupGrace = time.Duration(mins) * time.Minute
+		}
+	}
 	err := h.projects.SetDeploySettings(r.Context(), actor(r), s.ID, in)
 	if err != nil {
 		code, msg := userError(r, err)

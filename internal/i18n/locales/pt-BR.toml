@@ -1215,12 +1215,15 @@ switch = "trocando"
 restore = "voltando a versão anterior"
 
 [deploy.error]
+startup_grace = "O tempo para ligar vai de {min} a {max} minutos."
 command = "Comando inválido (aspas sem fechar ou longo demais)."
 health_path = "O caminho do healthcheck começa com / e não tem espaços (ex.: /healthz)."
 rollback = "Só dá para voltar para um dos últimos 5 deploys que ficaram ativos (e não o atual)."
 validate_timeout = "O tempo limite da validação vai de 1 a {max} minutos."
 
 [deploy.settings]
+startup_grace = "Tempo para ligar"
+startup_grace_hint = "Apps que rodam migrações ou enviam arquivos ao ligar podem precisar de mais tempo."
 validate = "Comando de validação"
 validate_placeholder = "python manage.py check --deploy"
 validate_timeout = "Limite (min)"
