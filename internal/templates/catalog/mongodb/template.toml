@@ -1,5 +1,5 @@
 id = "mongodb"
-version = 2
+version = 3
 category = "database"
 tags = ["nosql", "document"]
 docs = "https://www.mongodb.com/docs/manual/"
@@ -50,3 +50,55 @@ secret = true
 # it checked; the disk can be increased later with one click.
 [volumes.data]
 size = "10GB"
+
+# The whole instance, as a clone (docs/09): mongodump --archive of every
+# database, admin included, so the users with their password hashes and
+# the custom roles come back with the data. mongod here is standalone (no
+# oplog): each collection is copied as it was when mongodump read it. The
+# password goes to the tools in a file descriptor, never on a command line.
+#
+# The restore loads into an empty instance as a temporary root user: the
+# archive replaces the service's own user (same name), which would end the
+# session of a restore running as it. Afterwards that user gets the
+# service's password back (what the apps connect with) and the temporary
+# one is removed.
+[backup]
+method = "recipe"
+extension = "archive"
+env = ["MONGO_INITDB_ROOT_USERNAME", "MONGO_INITDB_ROOT_PASSWORD"]
+serve = ["docker-entrypoint.sh", "mongod", "--wiredTigerCacheSizeGB", "0.25"]
+# The entrypoint's first-run server has no authentication: ready only once
+# the real one, which requires it, accepts the root user.
+ready = ["mongosh", "--quiet", "mongodb://127.0.0.1:27017/admin", "--eval", 'db.auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD); quit(db.adminCommand({ getCmdLineOpts: 1 }).parsed.security?.authorization === "enabled" ? 0 : 1)']
+dump = ["bash", "-c", '''
+set -euo pipefail
+pw=${MONGO_INITDB_ROOT_PASSWORD//\'/\'\'}
+exec mongodump --host 127.0.0.1 --port 27017 --authenticationDatabase admin -u "$MONGO_INITDB_ROOT_USERNAME" --config <(printf "password: '%s'\n" "$pw") --archive --quiet
+''']
+restore = ["bash", "-c", '''
+set -euo pipefail
+export HANGAR_USER="hangar_restore_$(head -c 6 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+export HANGAR_PW="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+mongo() { mongosh --quiet mongodb://127.0.0.1:27017/admin --eval "$1"; }
+mongo 'db.auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD); db.createUser({ user: process.env.HANGAR_USER, pwd: process.env.HANGAR_PW, roles: ["root"] })' >/dev/null
+trap 'mongo "db.auth(process.env.HANGAR_USER, process.env.HANGAR_PW); db.dropUser(process.env.HANGAR_USER)" >/dev/null 2>&1 || true' EXIT
+mongorestore --host 127.0.0.1 --port 27017 --authenticationDatabase admin -u "$HANGAR_USER" --config <(printf "password: '%s'\n" "$HANGAR_PW") --archive
+mongo 'db.auth(process.env.HANGAR_USER, process.env.HANGAR_PW); if (db.getUser(process.env.MONGO_INITDB_ROOT_USERNAME)) db.changeUserPassword(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)' >/dev/null
+''']
+verify = ["mongosh", "--quiet", "mongodb://127.0.0.1:27017/admin", "--eval", '''
+db.auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD);
+let dbs = 0, collections = 0, documents = 0;
+for (const d of db.adminCommand({ listDatabases: 1, nameOnly: true }).databases) {
+  if (["admin", "local", "config"].includes(d.name)) continue;
+  dbs++;
+  const s = db.getSiblingDB(d.name);
+  for (const c of s.getCollectionInfos({ type: "collection" })) {
+    if (c.name.startsWith("system.")) continue;
+    collections++;
+    documents += s.getCollection(c.name).countDocuments({});
+  }
+}
+const users = db.getSiblingDB("admin").getCollection("system.users").countDocuments({});
+const roles = db.getSiblingDB("admin").getCollection("system.roles").countDocuments({});
+print(`HANGAR-CHECK databases=${dbs} collections=${collections} documents=${documents} users=${users} roles=${roles}`);
+''']

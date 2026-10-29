@@ -1,5 +1,5 @@
 id = "mariadb"
-version = 2
+version = 3
 category = "database"
 tags = ["sql", "relational", "mysql"]
 docs = "https://mariadb.com/docs/server/"
@@ -58,3 +58,59 @@ secret = true
 # it checked; the disk can be increased later with one click.
 [volumes.data]
 size = "10GB"
+
+# The whole server, as a clone (docs/09): every database with its routines,
+# events and triggers (mariadb-dump, one consistent transaction), then the
+# users with their password hashes, the roles and every grant. The server's
+# own accounts (root, healthcheck, mariadb.sys, mysql) are left out: a new
+# instance makes them from the service's variables, as its healthcheck
+# expects. Restored into an empty instance, the apps log in as before.
+[backup]
+method = "recipe"
+extension = "sql"
+env = ["MARIADB_ROOT_PASSWORD"]
+serve = ["docker-entrypoint.sh", "mariadbd", "--innodb-buffer-pool-size=64M", "--skip-name-resolve"]
+# Over TCP: the entrypoint's first-run server listens only on its socket,
+# so this answers once the instance is fully set up.
+ready = ["sh", "-c", 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-admin -uroot -h127.0.0.1 --protocol=TCP --connect-timeout=2 ping']
+dump = ["bash", "-c", '''
+set -euo pipefail
+export MYSQL_PWD="$MARIADB_ROOT_PASSWORD"
+sql() { mariadb -uroot -N -r -B "$@"; }
+own="user IN ('root', 'mariadb.sys', 'healthcheck', '') OR (user = 'mysql' AND host = 'localhost')"
+dbs=()
+while IFS= read -r d; do dbs+=("$d"); done < <(sql -e "SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys') ORDER BY 1")
+echo "-- Hangar: full backup of a MariaDB server (databases, then users, roles and grants)"
+if [ "${#dbs[@]}" -gt 0 ]; then
+  mariadb-dump -uroot --single-transaction --routines --events --triggers --hex-blob --add-drop-database --max-allowed-packet=1G --databases "${dbs[@]}"
+fi
+echo "-- users, roles and grants"
+sql -e "SELECT CONCAT('CREATE ROLE IF NOT EXISTS ', QUOTE(user), ';') FROM mysql.user WHERE is_role = 'Y' ORDER BY 1"
+users=$(sql -e "SELECT CONCAT(QUOTE(user), '@', QUOTE(host)) FROM mysql.user WHERE is_role = 'N' AND NOT ($own) ORDER BY 1")
+while IFS= read -r acct; do
+  [ -n "$acct" ] || continue
+  echo "DROP USER IF EXISTS $acct;"
+  printf '%s;\n' "$(sql -e "SHOW CREATE USER $acct")"
+done <<< "$users"
+# Grants on a table or routine that no longer exists stay in the server
+# after a DROP but cannot be granted again: they are left out.
+dangling=$(sql -e "SELECT CONCAT(' ON \`', REPLACE(t.Db, '\`', '\`\`'), '\`.\`', REPLACE(t.Table_name, '\`', '\`\`'), '\` TO ') FROM mysql.tables_priv t WHERE NOT EXISTS (SELECT 1 FROM information_schema.tables i WHERE i.table_schema = t.Db AND i.table_name = t.Table_name) UNION SELECT CONCAT(' ON ', p.Routine_type, ' \`', REPLACE(p.Db, '\`', '\`\`'), '\`.\`', REPLACE(p.Routine_name, '\`', '\`\`'), '\` TO ') FROM mysql.procs_priv p WHERE NOT EXISTS (SELECT 1 FROM information_schema.routines r WHERE r.routine_schema = p.Db AND r.routine_name = p.Routine_name AND r.routine_type = p.Routine_type)")
+grants=$(sql -e "SELECT CONCAT(QUOTE(user), IF(is_role = 'Y', '', CONCAT('@', QUOTE(host)))) FROM mysql.user WHERE NOT ($own) ORDER BY is_role DESC, 1")
+while IFS= read -r acct; do
+  [ -n "$acct" ] || continue
+  g=$(sql -e "SHOW GRANTS FOR $acct")
+  if [ -n "$dangling" ]; then g=$(grep -vF -f <(printf '%s\n' "$dangling") <<< "$g" || true); fi
+  [ -z "$g" ] || sed 's/$/;/' <<< "$g"
+done <<< "$grants"
+echo "FLUSH PRIVILEGES;"
+''']
+restore = ["bash", "-c", 'export MYSQL_PWD="$MARIADB_ROOT_PASSWORD"; exec mariadb -uroot --binary-mode --max-allowed-packet=1G']
+verify = ["bash", "-c", '''
+set -euo pipefail
+export MYSQL_PWD="$MARIADB_ROOT_PASSWORD"
+sql() { mariadb -uroot -N -r -B "$@"; }
+own="user IN ('root', 'mariadb.sys', 'healthcheck', '') OR (user = 'mysql' AND host = 'localhost')"
+mine="table_type = 'BASE TABLE' AND table_schema NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')"
+count=$(sql -e "SET SESSION group_concat_max_len = 1073741824; SELECT CONCAT('SELECT 0', IFNULL(GROUP_CONCAT(CONCAT(' + (SELECT COUNT(*) FROM \`', REPLACE(table_schema, '\`', '\`\`'), '\`.\`', REPLACE(table_name, '\`', '\`\`'), '\`)') SEPARATOR ''), '')) FROM information_schema.tables WHERE $mine")
+echo "HANGAR-CHECK databases=$(sql -e "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')") tables=$(sql -e "SELECT COUNT(*) FROM information_schema.tables WHERE $mine") rows=$(sql -e "$count") users=$(sql -e "SELECT COUNT(*) FROM mysql.user WHERE NOT ($own)")"
+''']

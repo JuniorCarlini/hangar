@@ -1,5 +1,5 @@
 id = "valkey-cache"
-version = 1
+version = 2
 category = "cache"
 tags = ["valkey", "redis", "key-value", "cache"]
 docs = "https://valkey.io/docs/"
@@ -27,3 +27,68 @@ value = "6379"
 key = "PASSWORD"
 value = "${password}"
 secret = true
+
+# Every key and every ACL user, as a clone (docs/09), with no pause and no
+# restart, so a cache keeps what it holds. The backup is a line with the
+# size of the ACL users (ACL LIST, without default, whose password is the
+# service's variable), those users, then an RDB snapshot that valkey-cli
+# takes as a replica would (--rdb). The restore loads that snapshot into a
+# second valkey-server on 127.0.0.1:6390, makes the service its replica
+# until the copy is in (the replica drops what it had), promotes it back
+# and recreates the ACL users; the service then saves it its own way.
+[backup]
+method = "recipe"
+extension = "valkey"
+env = ["VALKEY_PASSWORD"]
+serve = ["sh", "-c", 'exec valkey-server --requirepass "$VALKEY_PASSWORD" --bind 127.0.0.1 --save "" --appendonly no']
+ready = ["sh", "-c", 'VALKEYCLI_AUTH="$VALKEY_PASSWORD" valkey-cli --no-auth-warning ping | grep -q PONG']
+dump = ["bash", "-c", '''
+set -euo pipefail
+export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
+acl=$(valkey-cli --no-auth-warning ACL LIST | { grep -v '^user default ' || true; })
+printf 'HANGAR-REDIS-ACL %s\n' "$(printf '%s' "$acl" | wc -c)"
+printf '%s' "$acl"
+exec valkey-cli --no-auth-warning --rdb - 2>/dev/null
+''']
+restore = ["bash", "-c", '''
+set -euo pipefail
+export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
+cli() { valkey-cli --no-auth-warning "$@"; }
+IFS=' ' read -r tag n
+[ "$tag" = HANGAR-REDIS-ACL ] || { echo "not a Hangar backup of Valkey" >&2; exit 3; }
+acl=$(dd bs=1 count="$n" 2>/dev/null)
+dir=$(mktemp -d)
+pid=
+trap '[ -z "$pid" ] || kill "$pid" 2>/dev/null; rm -rf "$dir"' EXIT
+cat > "$dir/dump.rdb"
+valkey-server --port 6390 --bind 127.0.0.1 --dir "$dir" --dbfilename dump.rdb --save "" --appendonly no --repl-diskless-sync-delay 0 > "$dir/log" 2>&1 &
+pid=$!
+i=0
+until valkey-cli -p 6390 ping 2>/dev/null | grep -q PONG; do
+  i=$((i+1)); [ "$i" -lt 3000 ] || { tail -n 20 "$dir/log" >&2; exit 1; }
+  sleep 0.2
+done
+cli REPLICAOF 127.0.0.1 6390 >/dev/null
+i=0
+until info=$(cli INFO replication) && grep -q '^master_link_status:up' <<< "$info" && ! grep -q '^master_sync_in_progress:1' <<< "$info"; do
+  i=$((i+1)); [ "$i" -lt 18000 ] || { cli REPLICAOF NO ONE >/dev/null; echo "the copy did not load in an hour" >&2; exit 1; }
+  sleep 0.2
+done
+cli REPLICAOF NO ONE >/dev/null
+set -f
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  set -- $line
+  [ "$1" = user ] || continue
+  name=$2; shift 2
+  cli ACL SETUSER "$name" reset "$@" >/dev/null
+done <<< "$acl"
+cli ACL SAVE >/dev/null 2>&1 || true
+''']
+verify = ["bash", "-c", '''
+set -euo pipefail
+export VALKEYCLI_AUTH="$VALKEY_PASSWORD"
+keys=$(valkey-cli --no-auth-warning INFO keyspace | sed -n 's/^db[0-9]*:keys=\([0-9]*\).*/\1/p' | awk '{s+=$1} END {print s+0}')
+users=$(valkey-cli --no-auth-warning ACL USERS | { grep -vc '^default$' || true; })
+echo "HANGAR-CHECK keys=$keys users=$users"
+''']

@@ -43,10 +43,12 @@ func (t Text) In(locale string) string {
 // Categories a template may declare.
 var Categories = []string{"database", "cache", "queue", "search", "storage", "automation", "monitoring", "admin", "other"}
 
-// Backup methods a template may declare (backup = "..."). pg_dump dumps
-// the PostgreSQL of its services; volume copies the files of the volumes
-// they own (paused for the copy), so only templates whose services are
-// not databases with a dump method of their own declare it.
+// Backup methods a template may declare (backup = "..." or a [backup]
+// table). pg_dump dumps the PostgreSQL of its services; recipe runs the
+// template's own dump and restore commands (Recipe); volume copies the
+// files of the volumes they own. A template that declares none is still
+// backed up when its services own volumes: as a copy of them, stopped for
+// it when the template is a database (docs/09).
 const (
 	BackupPGDump = "pg_dump"
 	BackupVolume = "volume"
@@ -75,8 +77,10 @@ type Template struct {
 	Services []Service
 	Exports  []Export
 	// Backup says how the template's services are backed up:
-	// BackupPGDump, BackupVolume or "" (none).
+	// BackupPGDump, BackupRecipe, BackupVolume or "" (Hangar decides).
 	Backup string
+	// Recipe is the native backup of a BackupRecipe template.
+	Recipe *Recipe
 	// Endpoints are the container ports the service exposes over HTTP and
 	// can get an external link (docs/28). Empty = no web page.
 	Endpoints []Endpoint
@@ -224,14 +228,21 @@ func (t *Template) Validate() error {
 		return errors.New("description: en and pt-BR are required")
 	case len(t.Services) == 0:
 		return errors.New("compose.yaml: no services")
-	case t.Backup != "" && t.Backup != BackupPGDump && t.Backup != BackupVolume:
+	case t.Backup != "" && t.Backup != BackupPGDump && t.Backup != BackupVolume && t.Backup != BackupRecipe:
 		return fmt.Errorf("backup: unknown kind %q", t.Backup)
+	case (t.Backup == BackupRecipe) != (t.Recipe != nil):
+		return errors.New("backup: a recipe needs the [backup] table")
 	case len(t.Tags) > 8:
 		return errors.New("tags: at most 8")
 	}
 	for _, tag := range t.Tags {
 		if !tagRE.MatchString(tag) {
 			return fmt.Errorf("tags: invalid tag %q", tag)
+		}
+	}
+	if t.Recipe != nil {
+		if err := t.Recipe.Validate(); err != nil {
+			return err
 		}
 	}
 	for _, txt := range []Text{t.Name, t.Description} {

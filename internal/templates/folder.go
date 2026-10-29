@@ -33,7 +33,7 @@ type manifest struct {
 	Category    string                `toml:"category"`
 	Tags        []string              `toml:"tags"`
 	Docs        string                `toml:"docs"`
-	Backup      string                `toml:"backup"`
+	Backup      any                   `toml:"backup"`
 	Main        string                `toml:"main"`
 	MinHangar   string                `toml:"min_hangar"`
 	Name        Text                  `toml:"name"`
@@ -117,10 +117,14 @@ func Parse(id string, files map[string][]byte) (*Template, error) {
 	if err != nil {
 		return nil, err
 	}
+	method, recipe, err := parseBackup(m.Backup)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", FileMeta, err)
+	}
 
 	t := &Template{
 		ID: m.ID, Version: m.Version, Category: m.Category, Tags: m.Tags, Name: m.Name, Description: m.Description,
-		Docs: m.Docs, MinHangar: m.MinHangar, Backup: m.Backup, Services: services, Exports: m.Exports,
+		Docs: m.Docs, MinHangar: m.MinHangar, Backup: method, Recipe: recipe, Services: services, Exports: m.Exports,
 		Logo: files[FileLogo], Readme: string(files[FileReadme]),
 	}
 	for _, e := range m.Endpoints {
