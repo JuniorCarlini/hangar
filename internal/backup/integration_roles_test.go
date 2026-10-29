@@ -318,12 +318,12 @@ func TestDumpWithAppRolesRestoresIntoNewService(t *testing.T) {
 	done()
 	_ = zf.Close()
 	zr, err := zip.OpenReader(zipPath)
-	if err != nil || len(zr.File) != 3 {
-		t.Fatalf("bundle: %v", err)
+	if err != nil || len(zr.File) != 4 || zr.File[3].Name != ServiceFile+".age" {
+		t.Fatalf("bundle (README, roles, dump, service.json): %v", err)
 	}
 	_ = zr.Close()
 	out, err := v.DecryptBackup(zipPath, "")
-	if err != nil || len(out) != 4 {
+	if err != nil || len(out) != 5 {
 		t.Fatalf("decrypt the bundle: %+v %v", out, err)
 	}
 
