@@ -12,6 +12,23 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.36] - 2026-10-29
+
+### Adicionado
+
+- **Retenção de dados no padrão de mercado**: uma faxina de hora em hora
+  apaga, aos poucos e sem travar o banco, o que só acumula. Métricas por
+  minuto ficam 48 h (e por hora, 90 dias); domínios recusados, 7 dias;
+  deploys, os últimos 100 por serviço com os logs dos últimos 20; alertas,
+  90 dias depois da última ocorrência; histórico de backups enquanto o
+  arquivo existe no bucket; vulnerabilidades resolvidas, 180 dias. Depois
+  disso o SQLite devolve o espaço aos poucos.
+- **Auditoria arquivada sem quebrar a corrente**: registros com mais de 400
+  dias viram blocos mensais compactados, guardados por 7 anos, e a
+  verificação confere blocos e tabela até a origem.
+- **Paginação**: histórico de deploys, backups, alertas, entregas e domínios
+  ganham "Mais recentes" / "Mais antigos", sem carregar tudo de uma vez.
+
 ## [0.5.35] - 2026-10-29
 
 ### Corrigido
@@ -900,7 +917,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.35...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.36...HEAD
+[0.5.36]: https://github.com/JuniorCarlini/hangar/compare/v0.5.35...v0.5.36
 [0.5.35]: https://github.com/JuniorCarlini/hangar/compare/v0.5.34...v0.5.35
 [0.5.34]: https://github.com/JuniorCarlini/hangar/compare/v0.5.33...v0.5.34
 [0.5.33]: https://github.com/JuniorCarlini/hangar/compare/v0.5.32...v0.5.33
