@@ -64,6 +64,18 @@ test.describe('com Docker', () => {
     await expect(page).toHaveURL(new RegExp(`/p/${slug}$`));
   });
 
+  test('link direto abre a gaveta na aba pedida', async ({ page }) => {
+    // A fresh page on the service's address: the drawer opens with the
+    // page (not only after every image loaded) and stays on that address.
+    await page.goto(`/p/${slug}/s/cache?tab=variables`);
+    const drawer = page.locator('dialog#svc-panel');
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole('tab', { name: 'Variáveis' })).toHaveAttribute('aria-selected', 'true');
+    await page.waitForTimeout(2500); // past the canvas's first refresh
+    await expect(drawer).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/p/${slug}/s/cache\\?tab=variables$`));
+  });
+
   test('gráfico do serviço mostra a barra apontada por cima da gaveta', async ({ page }) => {
     // The panel reads the container every 10 s: wait for the first bar.
     const drawer = page.locator('dialog#svc-panel');

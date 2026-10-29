@@ -128,11 +128,15 @@
   }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
   raiseAll();
 
-  // A dialog marked data-open (a form came back with an error) opens by
-  // itself: through Tucano's own instance, which is what its triggers call
-  // (a trigger may sit in a closed dropdown), else through the trigger.
-  window.addEventListener('load', function () {
+  // A dialog marked data-open (a form came back with an error, a link that
+  // asks for it) opens by itself: through Tucano's own instance, which is
+  // what its triggers call (a trigger may sit in a closed dropdown), else
+  // through the trigger. Right after Tucano is set up (it runs first), not
+  // at "load", which waits for every image: in document order, so a
+  // drawer opens before a dialog inside it.
+  function openMarked() {
     document.querySelectorAll('dialog.tuc-modal[data-open="true"], dialog.tuc-drawer[data-open="true"]').forEach(function (d) {
+      if (d.open) return;
       if (d._tucano && typeof d._tucano.open === 'function') {
         d._tucano.open();
         return;
@@ -146,7 +150,13 @@
       var shown = document.querySelector('dialog[open] [data-reveal]');
       if (shown) shown.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-  });
+  }
+  // This script is deferred, so it runs before DOMContentLoaded (the page
+  // is already "interactive" then): wait for it, after Tucano's own
+  // listener, which adopts the dialogs. A page shown again from the
+  // back/forward cache does not run this again.
+  document.addEventListener('DOMContentLoaded', openMarked);
+
   // Forms that destroy or change something important ask first, in a
   // Tucano dialog whose color says what kind of action it is (data-tone:
   // danger red, warning yellow, success green; default purple).
@@ -223,13 +233,15 @@
     if (e.persisted) document.querySelectorAll('form[data-sending]').forEach(unlock);
   });
 
-  // The "done" notice of a redirect (?ok=…) is shown once: take it out of
-  // the address so a reload, a refresh while something runs or the back
-  // button does not show it again.
+  // The "done" notice of a redirect (?ok=…) and a dialog a link opened
+  // (?routine=1) are shown once: take them out of the address so a reload,
+  // a refresh while something runs or the back button does not show them
+  // again.
   (function () {
     var u = new URL(location.href);
-    if (!u.searchParams.has('ok')) return;
+    if (!u.searchParams.has('ok') && !u.searchParams.has('routine')) return;
     u.searchParams.delete('ok');
+    u.searchParams.delete('routine');
     history.replaceState(history.state, '', u.pathname + u.search + u.hash);
   })();
 
