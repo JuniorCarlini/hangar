@@ -12,6 +12,17 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.37] - 2026-10-29
+
+### Mudado
+
+- **Atualizações e vulnerabilidades por serviço**: a tela lista cada
+  serviço (e o Caddy do servidor) com as falhas por gravidade e por o que
+  fazer, do mais arriscado para o menos, com filtros e busca. Cada serviço
+  tem a própria página de detalhe e o próprio "Copiar", que leva só as
+  falhas dele; "Copiar tudo" continua no topo. A aba Visão de cada serviço
+  mostra um resumo das vulnerabilidades com atalho para o detalhe.
+
 ## [0.5.36] - 2026-10-29
 
 ### Adicionado
@@ -917,7 +928,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.36...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.37...HEAD
+[0.5.37]: https://github.com/JuniorCarlini/hangar/compare/v0.5.36...v0.5.37
 [0.5.36]: https://github.com/JuniorCarlini/hangar/compare/v0.5.35...v0.5.36
 [0.5.35]: https://github.com/JuniorCarlini/hangar/compare/v0.5.34...v0.5.35
 [0.5.34]: https://github.com/JuniorCarlini/hangar/compare/v0.5.33...v0.5.34
