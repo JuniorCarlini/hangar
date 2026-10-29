@@ -46,7 +46,7 @@ domains          (id, service_id → services, hostname UNIQUE, kind CHECK(kind 
                   path_prefix, redirect_to, created_at)
 domain_blocklist (hostname PRIMARY KEY, reason, created_at, created_by)
 tls_ask_log      (hostname, decision, reason, hour, count, last_at,              -- agregado por hora,
-                  PRIMARY KEY(hostname, decision, hour))                        -- retenção 30 dias ([20])
+                  PRIMARY KEY(hostname, decision, hour))                        -- negadas 7 dias, aprovadas 180 ([20])
 app_check_config (service_id PRIMARY KEY → services, path, hmac_secret_enc, timeout_ms)
 
 -- Operação
@@ -95,9 +95,11 @@ status_links     (id, name, token_hash UNIQUE, naming CHECK(naming IN ('alias','
                   revoked_at NULL, created_by, created_at, last_access_at, access_count)
 service_aliases  (service_id PRIMARY KEY → services, public_label)
 
--- Auditoria (append-only; trigger impede UPDATE/DELETE)
+-- Auditoria (append-only; trigger impede UPDATE, e DELETE do que não foi arquivado)
 audit_log        (id INTEGER PRIMARY KEY, ts, user_id, ip, user_agent, action, target_type,
                   target_id, summary_json, prev_hash, hash)
+audit_archive    (first_id PRIMARY KEY, last_id, records, first_ts, last_ts, prev_hash,
+                  last_hash, data NULL, data_sha256, archived_at, expired_at NULL) -- um mês por linha ([20])
 settings         (key PRIMARY KEY, value_json)
 ```
 

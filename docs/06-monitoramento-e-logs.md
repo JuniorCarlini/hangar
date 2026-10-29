@@ -18,8 +18,10 @@
   envia a cada ~1 s; agregamos em janelas de 10 s).
 - **Memória**: ring buffer com a última hora em resolução de 10 s (para a tela
   ao vivo).
-- **SQLite**: tabela `metrics` com agregados de 1 min (retenção 7 dias) e de
-  1 h (retenção 90 dias). Downsampling feito por job a cada hora.
+- **SQLite**: tabela `metrics` com agregados de 1 min (retenção 48 h: os
+  gráficos só leem minutos até a faixa de 24 h) e de 1 h (retenção 90 dias).
+  O rollup para horas roda a cada minuto; a poda, na faxina de hora em hora
+  ([20](20-logs-e-retencao.md)).
 - Custo estimado: dezenas de serviços cabem em poucos MB de RAM e < 1% de CPU.
 
 ### Telas
@@ -41,8 +43,9 @@ Política completa de onde cada log fica e por quanto tempo: [20](20-logs-e-rete
   Pausar, filtrar por texto, alternar stdout/stderr, baixar.
 - **Histórico**: o que o log driver `local` guarda (até ~150 MB por container).
   Busca simples por texto e intervalo de tempo.
-- **Logs de build e deploy**: gravados em arquivo por deployment
-  (`/var/lib/hangar/deployments/<id>.log`), retenção dos últimos 20 por serviço.
+- **Logs de build e deploy**: os últimos 16 KB de cada deploy ficam em
+  `deployments.log`; o log fica nos 20 deploys mais novos de cada serviço e o
+  histórico, nos 100 mais novos (paginado na aba do serviço).
 - **Logs de acesso do Caddy**: JSON, filtráveis por domínio (útil para ver o
   tráfego de cada loja).
 - Escape de sequências ANSI/HTML antes de exibir (log é entrada não confiável).
