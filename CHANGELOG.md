@@ -12,6 +12,21 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.34] - 2026-10-29
+
+### Adicionado
+
+- **Tempo para ligar**: cada serviço define quanto tempo a versão nova pode
+  levar para começar a responder (Configurações → Deploy, de 1 a 15 min).
+  O padrão subiu de 2 para 5 minutos, para apps que rodam migrações ou
+  enviam arquivos ao ligar subirem sem ajuda.
+
+### Mudado
+
+- **Deploy que morre ao ligar falha na hora**, com as últimas linhas do log
+  do app no erro; enquanto o app liga, o log do deploy mostra o progresso a
+  cada 15 s. A versão anterior continua no ar em qualquer falha.
+
 ## [0.5.33] - 2026-10-29
 
 ### Mudado
@@ -877,7 +892,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.33...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.34...HEAD
+[0.5.34]: https://github.com/JuniorCarlini/hangar/compare/v0.5.33...v0.5.34
 [0.5.33]: https://github.com/JuniorCarlini/hangar/compare/v0.5.32...v0.5.33
 [0.5.32]: https://github.com/JuniorCarlini/hangar/compare/v0.5.31...v0.5.32
 [0.5.31]: https://github.com/JuniorCarlini/hangar/compare/v0.5.30...v0.5.31
