@@ -14,14 +14,16 @@
 # Caddy, update both digests to the new tag's digest and the module versions
 # below; to add a DNS provider, add a --with line with its pinned caddy-dns
 # module and list the provider in edge.DNSProviders.
-FROM caddy:2.11-builder-alpine@sha256:d6161a2c82fd58b3205048958fb6246d0c5d892beee8a47e90944610c4efd100 AS builder
+FROM caddy:2.11-builder-alpine@sha256:ef9b65adf9a224770c6d5f6d1ae1bf99bc3caaa78d8c4bae3ea949ee6984f301 AS builder
 # The Caddy release and the Go modules with fixes newer than that release
 # are named here, so the edge does not wait for the next official image.
 RUN xcaddy build v2.11.7 \
     --with github.com/caddy-dns/cloudflare@v0.2.4 \
-    --replace golang.org/x/net=golang.org/x/net@v0.61.0
+    --replace golang.org/x/net=golang.org/x/net@v0.62.0 \
+    --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6 \
+    --replace github.com/go-chi/chi/v5=github.com/go-chi/chi/v5@v5.4.0
 
-FROM caddy:2.11-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+FROM caddy:2.11-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
 # The official image is rebuilt rarely: take the Alpine fixes published
 # since (this runs only when this file changes; the release reuses the
 # image otherwise).
