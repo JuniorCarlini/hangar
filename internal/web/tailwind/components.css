@@ -378,6 +378,41 @@ html.is-busy, html.is-busy .node { cursor: progress; }
 .terminal-modal__head { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 12px 16px; border-bottom: 1px solid var(--p-border); }
 .terminal-modal__head .tuc-modal__title { margin: 0; font-size: 16px; font-weight: 600; }
 .terminal-frame { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; background: var(--p-surface); }
+/* The service's .env modal: almost the whole screen (like the terminal),
+   the editor taking what the text and the buttons leave. */
+.env-modal .tuc-modal__panel { overflow: hidden; }
+.env-modal__form { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.env-modal__status { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-width: 0; font-family: var(--p-mono); font-size: 12px; color: var(--p-muted); }
+.env-modal__invalid { color: var(--p-danger); }
+@media (max-width: 40rem) { .env-modal__status { flex-basis: 100%; } }
+/* The editor: a textarea over the same text drawn in colors (.env-editor__hl)
+   and a line-number gutter. Both layers must share every metric (font,
+   size, line height, padding, tab size) so the caret lands on the letters;
+   lines never wrap, a long one scrolls sideways under a fixed gutter. The
+   script adds .is-live: until then the textarea shows its own text. */
+.env-editor { --env-line: 20px; --env-pad: 10px; position: relative; display: flex; flex: 1 1 auto; min-height: 240px; overflow: hidden; border: 1px solid var(--p-border); border-radius: var(--p-radius); background: var(--p-log-bg); color: var(--p-log-fg); font-family: var(--p-mono); font-size: 13px; line-height: var(--env-line); }
+.env-editor:focus-within { border-color: var(--p-border-strong); box-shadow: 0 0 0 1px var(--p-border-strong); }
+.env-editor__gutter { flex: 0 0 auto; position: relative; overflow: hidden; min-width: 3.5em; border-right: 1px solid var(--p-border); color: var(--p-log-time); text-align: right; user-select: none; }
+.env-editor__nums { padding: var(--env-pad) 10px var(--env-pad) 12px; white-space: pre; will-change: transform; }
+.env-editor__main { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
+.env-editor__hl, .env-editor__input { margin: 0; padding: var(--env-pad) 14px; border: 0; font: inherit; line-height: var(--env-line); letter-spacing: 0; tab-size: 4; white-space: pre; font-variant-ligatures: none; font-kerning: none; }
+.env-editor__hl { position: absolute; top: 0; left: 0; min-width: 100%; pointer-events: none; color: var(--p-log-fg); will-change: transform; }
+.env-editor__hl code { font: inherit; }
+.env-editor__input { position: absolute; inset: 0; width: 100%; height: 100%; box-sizing: border-box; resize: none; overflow: auto; overflow-wrap: normal; background: transparent; color: var(--p-log-fg); caret-color: var(--p-fg); outline: none; }
+.env-editor__input::placeholder { color: var(--p-log-time); }
+.env-editor__input::selection { background: color-mix(in srgb, var(--p-info) 30%, transparent); }
+.env-editor:not(.is-live) .env-editor__hl { display: none; }
+.env-editor.is-live .env-editor__input { color: transparent; }
+.env-editor.is-live .env-editor__input::selection { color: transparent; }
+/* The colors: keys light blue, comments green, values the editor's own
+   text; a Hangar reference (${{service.VAR}}) in the accent, like the "ref"
+   values of the variables table; a plain ${VAR} softer. Backgrounds and
+   shadows only: padding or bold would move the letters off the caret. */
+.env-k { color: var(--p-info); }
+.env-c { color: var(--p-success); }
+.env-ref { color: var(--p-accent-text); background: var(--p-accent-soft); border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-accent) 35%, transparent); }
+.env-var { color: var(--p-warning); }
+.env-bad { color: color-mix(in srgb, var(--p-danger) 70%, var(--p-log-fg)); text-decoration: underline wavy var(--p-danger); text-decoration-skip-ink: none; text-underline-offset: 3px; }
 /* The terminal page fills its frame: toolbar on top, saved commands on the
    left (on top on a phone), the shell taking the rest. */
 .terminal-page { height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 16px; background: var(--p-surface); }

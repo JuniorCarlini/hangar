@@ -10,6 +10,164 @@
   // in the drawer), and this script runs only once, so everything is wired
   // by delegation.
 
+  // --- the editor -----------------------------------------------------------
+  //
+  // The textarea stays the real editor (caret, selection, undo/redo, paste,
+  // IME, mobile keyboards); it draws its text transparent over a <pre> with
+  // the same text in colors, and a gutter numbers the lines. Lines never
+  // wrap, so a number always sits beside its line; the <pre> and the
+  // gutter follow the textarea's scroll. The text can hold secrets: it is
+  // only ever written into this page, never logged or sent anywhere else.
+
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  // A Hangar reference (${{service.VAR}}, ${{project.service.VAR}}), then a
+  // plain interpolation (${VAR}, ${VAR:-default}, $VAR).
+  var interpRE = /\$\{\{[^{}\n]*\}\}|\$\{[A-Za-z_][A-Za-z0-9_]*(?:[:?+-][^}\n]*)?\}|\$[A-Za-z_][A-Za-z0-9_]*/g;
+  var keyRE = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
+
+  function valueHTML(v) {
+    var out = "";
+    var last = 0;
+    interpRE.lastIndex = 0;
+    var m;
+    while ((m = interpRE.exec(v))) {
+      out += esc(v.slice(last, m.index));
+      out += '<span class="' + (m[0].charAt(1) === "{" && m[0].charAt(2) === "{" ? "env-ref" : "env-var") + '">' + esc(m[0]) + "</span>";
+      last = m.index + m[0].length;
+    }
+    return out + esc(v.slice(last));
+  }
+
+  // lineHTML colors one line; bad reports a line that is neither blank, a
+  // comment nor KEY=value (marked, never blocking the save).
+  function lineHTML(l, st) {
+    if (!/\S/.test(l)) return esc(l);
+    var c = /^(\s*)(#.*)$/.exec(l);
+    if (c) return esc(c[1]) + '<span class="env-c">' + esc(c[2]) + "</span>";
+    var i = l.indexOf("=");
+    if (i < 0) {
+      st.bad++;
+      return '<span class="env-bad">' + esc(l) + "</span>";
+    }
+    var key = l.slice(0, i);
+    var k = /^(\s*)(export\s+)?(.*?)(\s*)$/.exec(key);
+    var cls = keyRE.test(k[3]) ? "env-k" : "env-k env-bad";
+    return esc(k[1] + (k[2] || "")) + '<span class="' + cls + '">' + esc(k[3] || " ") + "</span>" +
+      esc(k[4]) + "=" + valueHTML(l.slice(i + 1));
+  }
+
+  function parts(ed) {
+    if (!ed._env) {
+      ed._env = {
+        ta: ed.querySelector("[data-envimport-src]"),
+        hl: ed.querySelector("[data-env-hl]"),
+        pre: ed.querySelector(".env-editor__hl"),
+        nums: ed.querySelector("[data-env-gutter]"),
+        status: ed.parentNode.querySelector("[data-env-status]"),
+        lines: -1
+      };
+    }
+    return ed._env;
+  }
+
+  function sync(ed) {
+    var p = parts(ed);
+    if (!p.ta) return;
+    var x = p.ta.scrollLeft, y = p.ta.scrollTop;
+    p.pre.style.transform = "translate(" + -x + "px," + -y + "px)";
+    p.nums.style.transform = "translateY(" + -y + "px)";
+  }
+
+  function position(ed) {
+    var p = parts(ed);
+    if (!p.status || !p.ta) return;
+    var pos = p.status.querySelector("[data-env-pos]");
+    if (!pos) return;
+    var at = p.ta.selectionStart || 0;
+    var before = p.ta.value.slice(0, at);
+    var line = before.split("\n").length;
+    var col = at - before.lastIndexOf("\n");
+    pos.textContent = (p.status.getAttribute("data-pos") || "")
+      .replace("{line}", line).replace("{col}", col);
+  }
+
+  function render(ed) {
+    var p = parts(ed);
+    if (!p.ta || !p.hl || !p.nums) return;
+    var lines = p.ta.value.split("\n");
+    var st = { bad: 0 };
+    var out = new Array(lines.length);
+    for (var i = 0; i < lines.length; i++) out[i] = lineHTML(lines[i], st);
+    // The trailing newline keeps a last empty line as tall as the
+    // textarea's.
+    p.hl.innerHTML = out.join("\n") + "\n";
+    if (p.lines !== lines.length) {
+      var n = new Array(lines.length);
+      for (var j = 0; j < lines.length; j++) n[j] = j + 1;
+      p.nums.textContent = n.join("\n");
+      p.lines = lines.length;
+    }
+    if (p.status) {
+      var bad = p.status.querySelector("[data-env-invalid]");
+      if (bad) {
+        bad.hidden = st.bad === 0;
+        bad.textContent = st.bad === 1 ? p.status.getAttribute("data-invalid-one") || ""
+          : (p.status.getAttribute("data-invalid-other") || "").replace("{n}", st.bad);
+      }
+    }
+    ed.classList.add("is-live");
+    sync(ed);
+    position(ed);
+  }
+
+  function renderIn(root) {
+    if (!root || !root.querySelectorAll) return;
+    var eds = root.querySelectorAll("[data-env-editor]");
+    for (var i = 0; i < eds.length; i++) render(eds[i]);
+  }
+
+  function editorOf(t) {
+    return t && t.matches && t.matches("[data-envimport-src]") ? t.closest("[data-env-editor]") : null;
+  }
+
+  // Delegated: the Variables tab can be swapped in after this script ran.
+  document.addEventListener("input", function (e) {
+    var ed = editorOf(e.target);
+    if (ed) render(ed);
+  });
+  // scroll does not bubble: listen in the capture phase.
+  document.addEventListener("scroll", function (e) {
+    var ed = editorOf(e.target);
+    if (ed) sync(ed);
+  }, true);
+  ["keyup", "mouseup", "focusin"].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      var ed = editorOf(e.target);
+      if (ed) position(ed);
+    });
+  });
+  // Draw the editor when its modal opens, however it opens (a button, a
+  // link straight to it, the connector).
+  new MutationObserver(function (list) {
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i].target;
+      if (t.open && t.querySelector) renderIn(t);
+    }
+  }).observe(document.documentElement, { attributes: true, attributeFilter: ["open"], subtree: true });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { renderIn(document); });
+  } else {
+    renderIn(document);
+  }
+
+  function refresh(form) {
+    var ed = form.querySelector("[data-env-editor]");
+    if (ed) render(ed);
+  }
+
   // appendSuggested adds the repository's suggested variables (the
   // "Suggested variables" card) to the end of the editor, under a comment
   // naming the file. A key already in the editor, even commented out, is
@@ -36,6 +194,7 @@
     if (text && !/\n$/.test(text)) text += "\n";
     if (text) text += "\n";
     ta.value = text + "# " + (src.getAttribute("data-comment") || "") + "\n" + lines.join("\n") + "\n";
+    refresh(form);
   }
 
   // appendBlock puts the connector's lines (a "# service" comment, then
@@ -73,6 +232,7 @@
     }
     if (text && !/\n$/.test(text)) text += "\n";
     ta.value = text;
+    refresh(form);
     ta.focus();
     return changed + added.length;
   }

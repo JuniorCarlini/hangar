@@ -210,7 +210,9 @@ templ tabVariables(d ServiceData) {
 		if len(d.ConnectOffers) > 0 {
 			@connectorDialog(d)
 		}
-		<dialog class="tuc-modal is-lg" id="env-bulk" aria-labelledby="env-bulk-title">
+		// Almost the whole screen, like the terminal: the file reads as code
+		// (envimport.js colors it and numbers its lines as you type).
+		<dialog class="tuc-modal is-full env-modal" id="env-bulk" aria-labelledby="env-bulk-title">
 			<div class="tuc-modal__panel">
 				<div class="tuc-modal__header">
 					<h2 class="tuc-modal__title" id="env-bulk-title">{ t(ctx, "service.env.bulk") }</h2>
@@ -218,7 +220,7 @@ templ tabVariables(d ServiceData) {
 						@Icon("x", "size-4")
 					</button>
 				</div>
-				<form method="post" action={ templ.SafeURL(d.base() + "/env/bulk") } class="tuc-modal__body" data-envimport>
+				<form method="post" action={ templ.SafeURL(d.base() + "/env/bulk") } class="tuc-modal__body env-modal__form" data-envimport>
 					<input type="hidden" name="csrf" value={ d.CSRF }/>
 					// Saving is the whole file: a line taken out deletes that
 					// variable. A secret the editor could not show (not an
@@ -234,22 +236,34 @@ templ tabVariables(d ServiceData) {
 							}
 						</div>
 					}
-					<div class="flex flex-col gap-1.5">
-						<div class="flex items-center justify-between gap-2">
-							<label class="tuc-label" for="bulk-env">{ t(ctx, "service.env.bulk_label") }</label>
-							<button type="button" class="tuc-btn is-ghost is-sm" data-env-copy data-copied={ t(ctx, "common.copied") } title={ t(ctx, "service.env.copy_hint") }>
-								@Icon("copy", "size-3.5")
-								<span data-env-copy-label>{ t(ctx, "service.env.copy") }</span>
-							</button>
-						</div>
-						<textarea class="tuc-input font-mono text-[13px]" id="bulk-env" name="env" rows="16" spellcheck="false" autocomplete="off" placeholder={ t(ctx, "service.env.bulk_placeholder") } data-envimport-src>{ d.EnvText }</textarea>
-						// The copy button gives this (references resolved) while
-						// the editor is untouched; once edited, the editor's text.
-						if d.EnvCopy != "" {
-							<template data-env-resolved>{ d.EnvCopy }</template>
-						}
+					<div class="flex items-center justify-between gap-2">
+						<label class="tuc-label" for="bulk-env">{ t(ctx, "service.env.bulk_label") }</label>
+						<button type="button" class="tuc-btn is-ghost is-sm" data-env-copy data-copied={ t(ctx, "common.copied") } title={ t(ctx, "service.env.copy_hint") }>
+							@Icon("copy", "size-3.5")
+							<span data-env-copy-label>{ t(ctx, "service.env.copy") }</span>
+						</button>
 					</div>
-					<div class="flex justify-end gap-2">
+					// The textarea is the editor (caret, selection, undo,
+					// paste); the colored text is drawn under it and the line
+					// numbers beside it, both moved with its scroll. Without
+					// the script it is a plain monospace textarea.
+					<div class="env-editor" data-env-editor>
+						<div class="env-editor__gutter" aria-hidden="true"><div class="env-editor__nums" data-env-gutter></div></div>
+						<div class="env-editor__main">
+							<pre class="env-editor__hl" aria-hidden="true"><code data-env-hl></code></pre>
+							<textarea class="env-editor__input" id="bulk-env" name="env" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder={ t(ctx, "service.env.bulk_placeholder") } data-envimport-src>{ d.EnvText }</textarea>
+						</div>
+					</div>
+					// The copy button gives this (references resolved) while
+					// the editor is untouched; once edited, the editor's text.
+					if d.EnvCopy != "" {
+						<template data-env-resolved>{ d.EnvCopy }</template>
+					}
+					<div class="tuc-modal__footer">
+						<span class="env-modal__status" data-env-status data-pos={ t(ctx, "service.env.editor_pos") } data-invalid-one={ t(ctx, "service.env.editor_invalid_one") } data-invalid-other={ t(ctx, "service.env.editor_invalid_other") }>
+							<span data-env-pos></span>
+							<span class="env-modal__invalid" data-env-invalid hidden></span>
+						</span>
 						<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
 						<button type="submit" class="tuc-btn is-primary">
 							@Icon("save", "size-3.5")

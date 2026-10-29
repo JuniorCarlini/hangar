@@ -125,4 +125,87 @@ test.describe('com Docker', () => {
     // Redis prints its banner on start.
     await expect(logs).toContainText(/Ready to accept connections|Server initialized/i, { timeout: 30_000 });
   });
+
+  // Last: it changes the service's variables (a reference to a service
+  // that does not exist only warns until the next deploy).
+  test('editor do .env colore enquanto digita, numera as linhas e rola de lado', async ({ page }) => {
+    await page.goto(`/p/${slug}/s/cache?tab=variables`);
+    const drawer = page.locator('dialog#svc-panel');
+    await drawer.getByRole('button', { name: '.env', exact: true }).click();
+    const modal = page.locator('dialog#env-bulk');
+    await expect(modal).toBeVisible();
+    const editor = modal.locator('[data-env-editor]');
+    await expect(editor).toHaveClass(/is-live/);
+    const ta = modal.locator('#bulk-env');
+
+    // Big: almost the whole viewport, like the terminal.
+    const vp = page.viewportSize()!;
+    // (polled: the panel grows from 95% as it opens)
+    const panel = modal.locator('.tuc-modal__panel');
+    await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(vp.width * 0.9);
+    await expect.poll(async () => (await panel.boundingBox())!.height).toBeGreaterThan(vp.height * 0.9);
+
+    // Keep what is there (saving replaces the whole file) and type below it.
+    const before = await ta.inputValue();
+    await ta.focus();
+    await ta.evaluate((el: HTMLTextAreaElement) => el.setSelectionRange(el.value.length, el.value.length));
+    const long =
+      'FCM_SERVICE_ACCOUNT={"type":"service_account","private_key":"-----BEGIN PRIVATE KEY-----\\nMIIE' +
+      'A'.repeat(400) +
+      '\\n-----END PRIVATE KEY-----\\n"}';
+    let typed = before && !before.endsWith('\n') ? '\n' : '';
+    typed += '\n# =====\n# Banco\n# =====\nDB_HOST=${{db.HOST}}\nDB_URL=postgres://${DB_USER}@host/db\n\n# Firebase\n';
+    await page.keyboard.type(typed);
+    // Colored as typed, not only on load.
+    await expect(editor.locator('.env-ref')).toHaveText('${{db.HOST}}');
+    await expect(editor.locator('.env-k', { hasText: 'DB_HOST' })).toBeVisible();
+    await expect(editor.locator('.env-c', { hasText: '# Banco' })).toBeVisible();
+    await expect(editor.locator('.env-c', { hasText: '# =====' })).toHaveCount(2);
+    await expect(editor.locator('.env-var')).toHaveText('${DB_USER}');
+    // A long value pasted in one go, then a line without "=".
+    await page.keyboard.insertText(long + '\n');
+    await page.keyboard.type('linha sem igual\n');
+    await expect(editor.locator('.env-bad')).toHaveText('linha sem igual');
+    await expect(modal.locator('[data-env-invalid]')).toHaveText('1 linha sem “=”');
+
+    const value = await ta.inputValue();
+    expect(value).toBe(before + typed + long + '\nlinha sem igual\n');
+    // One number per line.
+    const nums = await editor.locator('[data-env-gutter]').textContent();
+    expect(nums!.split('\n').length).toBe(value.split('\n').length);
+
+    // No soft wrap: the long line scrolls sideways inside the editor, the
+    // colored text follows and the gutter stays put.
+    expect(await ta.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    await ta.evaluate((el) => {
+      el.scrollLeft = 300;
+      el.scrollTop = 0;
+    });
+    await expect(editor.locator('.env-editor__hl')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, -300, 0)');
+    await expect(editor.locator('[data-env-gutter]')).toHaveCSS('transform', /none|matrix\(1, 0, 0, 1, 0, -?0\)/);
+
+    // The marked line only warns here (the server refuses it): take it out
+    // as one would, and the mark goes with it.
+    await ta.evaluate((el: HTMLTextAreaElement) => {
+      const at = el.value.lastIndexOf('linha sem igual\n');
+      el.focus();
+      el.setSelectionRange(at, at + 'linha sem igual\n'.length);
+    });
+    await page.keyboard.press('Backspace');
+    await expect(modal.locator('[data-env-invalid]')).toBeHidden();
+    await expect(editor.locator('.env-bad')).toHaveCount(0);
+    const saved = await ta.inputValue();
+    expect(saved).toBe(before + typed + long + '\n');
+
+    // Saved as written, and the editor reopens with the same text.
+    await modal.getByRole('button', { name: 'Salvar' }).click();
+    // The page cleans ?ok=env off the address: wait for the saved state,
+    // the warning about the reference to a service that does not exist.
+    await expect(page.getByText('DB_HOST aponta para o serviço db')).toBeVisible();
+    await page.goto(`/p/${slug}/s/cache?tab=variables`);
+    await drawer.getByRole('button', { name: '.env', exact: true }).click();
+    await expect(modal).toBeVisible();
+    expect((await ta.inputValue()).trimEnd()).toBe(saved.trimEnd());
+    await expect(editor.locator('.env-ref')).toHaveText('${{db.HOST}}');
+  });
 });
