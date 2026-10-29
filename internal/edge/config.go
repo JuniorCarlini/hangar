@@ -38,6 +38,16 @@ const (
 	CertsDir = "/data/caddy/certificates"
 )
 
+// storageClean is how often Caddy sweeps its certificate storage (docs/20).
+// It is Caddy's default, pinned here because the retention of on-demand
+// certificates relies on it: a refused host never gets a certificate (the
+// ask endpoint says no before any issuance, and failed attempts are not
+// stored); a host removed from the panel stops being renewed (the ask is
+// asked again and refuses), and the sweep deletes a certificate once it
+// has been expired for two weeks (certmagic's grace). So the storage only
+// ever holds hosts that are, or were until recently, valid.
+const storageClean = "24h"
+
 // certFile matches the certificate of the requested host, whatever the
 // issuer (Let's Encrypt, Pebble in tests). Caddy escapes glob characters
 // in placeholders, so a visitor's Host header cannot widen the pattern.
@@ -210,9 +220,11 @@ func BuildConfig(in ConfigInput) ([]byte, error) {
 		tlsApp["automation"] = obj{
 			"policies":  policies,
 			"on_demand": obj{"permission": obj{"module": "http", "endpoint": in.AskURL}},
+			// See storageClean.
+			"storage_clean_interval": storageClean,
 		}
 	} else if len(policies) > 0 {
-		tlsApp["automation"] = obj{"policies": policies}
+		tlsApp["automation"] = obj{"policies": policies, "storage_clean_interval": storageClean}
 	}
 
 	// The :443 server redirects HTTP by itself (the :80 server does it, with

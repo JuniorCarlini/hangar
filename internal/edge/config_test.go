@@ -53,6 +53,10 @@ func TestConfigWithDynamicDomains(t *testing.T) {
 	if get(perm, "module") != "http" || get(perm, "endpoint") != "http://172.30.0.1:7701/internal/tls/ask" {
 		t.Errorf("on-demand permission: %v", perm)
 	}
+	// Caddy sweeps expired certificates of hosts no longer approved (docs/20).
+	if get(m, "apps", "tls", "automation", "storage_clean_interval") != "24h" {
+		t.Errorf("storage clean interval: %v", get(m, "apps", "tls", "automation", "storage_clean_interval"))
+	}
 	routes, _ := get(m, "apps", "http", "servers", "edge", "routes").([]any)
 	if len(routes) != 3 {
 		t.Fatalf("routes: %d", len(routes))
