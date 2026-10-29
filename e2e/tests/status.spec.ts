@@ -14,6 +14,20 @@ test('página de atualizações abre pelo menu', async ({ page }) => {
   await expect(page.getByText('Nenhuma verificação ainda.')).toBeVisible();
 });
 
+// Each service (and the server's own image) has its page; before any scan
+// it says so and offers nothing to copy.
+test('página de um serviço nas atualizações', async ({ page }) => {
+  await page.goto('/updates/server');
+  await expect(page.getByRole('heading', { level: 1, name: 'servidor · Caddy' })).toBeVisible();
+  await expect(page.getByText('Ainda não verificado.')).toBeVisible();
+  await expect(page.locator('[data-copy-url]')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Todos os serviços' }).click();
+  await expect(page).toHaveURL('/updates');
+
+  const missing = await page.goto('/updates/e2e-pw-nada/web');
+  expect(missing?.status()).toBe(404);
+});
+
 test.describe('links de status', () => {
   // At a stricter level, confirming sudo replaces the session, which would
   // log the saved session of the other tests out: this test logs in on its own.

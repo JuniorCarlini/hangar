@@ -487,6 +487,7 @@ templ servicePanel(d ServiceData) {
 					default:
 						@pendingBanner(d)
 						@tabMetrics(d)
+						@serviceVulnsCard(d.Vulns)
 						<section class={ cardClass }>
 							@cardHead(t(ctx, "service.deploys.title")) {
 								if len(d.Deploys) > 0 {

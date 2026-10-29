@@ -12,6 +12,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/deps"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
 )
@@ -37,19 +38,30 @@ type vulnExport struct {
 	// Repos are the Git sources of the services that build from one, by
 	// service id.
 	Repos map[string]projects.GitSource
+	// Scope names what was copied when it is not everything ("lab/web",
+	// "projeto lab").
+	Scope string
 }
 
-// updatesExport answers the page's copy buttons: one section (?bucket=) or
-// every section, as Markdown.
+// updatesExport answers the copy buttons: one section (?bucket=) or every
+// section, of one service (?service=project/service, or "edge" for the
+// server's own image), one project (?project=) or everything, as Markdown.
+// The scope only narrows what the user may already see.
 func (h *handlers) updatesExport(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	bucket := r.FormValue("bucket")
-	if bucket != "" && !validBucket(bucket) {
+	bucket, service, project := r.FormValue("bucket"), r.FormValue("service"), r.FormValue("project")
+	if bucket != "" && !validBucket(bucket) || service != "" && !validScope(service) || project != "" && !node.SlugRE.MatchString(project) {
 		http.Error(w, i18n.T(ctx, "error.bad_request"), http.StatusBadRequest)
 		return
 	}
 	x := vulnExport{At: time.Now(), Buckets: sectionOrder, Groups: map[string][]deps.Group{}, Repos: map[string]projects.GitSource{}}
 	x.Host, _ = os.Hostname()
+	switch {
+	case service != "":
+		x.Scope = targetLabel(ctx, service)
+	case project != "":
+		x.Scope = i18n.T(ctx, "deps.export.project", "project", project)
+	}
 	if bucket != "" {
 		x.Buckets = []string{bucket}
 	}
@@ -60,13 +72,18 @@ func (h *handlers) updatesExport(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, msg, status)
 			return
 		}
-		hangarUpdate := false
-		if h.updates != nil {
-			if av, _ := h.updates.Latest(); av != nil {
-				hangarUpdate = true
+		fs = visibleFindings(PrincipalFrom(ctx), fs)
+		if service != "" || project != "" {
+			scoped := fs[:0:0]
+			for _, f := range fs {
+				if service != "" && f.Where() != service || project != "" && f.Project != project {
+					continue
+				}
+				scoped = append(scoped, f)
 			}
+			fs = scoped
 		}
-		x.Groups = deps.GroupFindings(visibleFindings(PrincipalFrom(ctx), fs), hangarUpdate)
+		x.Groups = deps.GroupFindings(fs, h.hangarUpdate())
 		for _, b := range x.Buckets {
 			for _, g := range x.Groups[b] {
 				if g.ServiceID == "" {
@@ -108,7 +125,11 @@ func visibleFindings(who *auth.Principal, fs []deps.Finding) []deps.Finding {
 func vulnMarkdown(ctx context.Context, x vulnExport) string {
 	var b strings.Builder
 	date := x.At.UTC().Format("2006-01-02 15:04 UTC")
-	b.WriteString("# " + i18n.T(ctx, "deps.export.title", "host", x.Host) + "\n\n")
+	if x.Scope != "" {
+		b.WriteString("# " + i18n.T(ctx, "deps.export.title_scoped", "scope", x.Scope, "host", x.Host) + "\n\n")
+	} else {
+		b.WriteString("# " + i18n.T(ctx, "deps.export.title", "host", x.Host) + "\n\n")
+	}
 	b.WriteString(i18n.T(ctx, "deps.export.intro", "host", x.Host, "date", date) + "\n")
 
 	total := 0

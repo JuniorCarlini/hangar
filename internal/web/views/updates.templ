@@ -7,25 +7,121 @@ import (
 	"sort"
 )
 
-// UpdatesData feeds the "Updates and vulnerabilities" page (docs/14): the
-// vulnerabilities sorted by what to do about them.
-type UpdatesData struct {
+// UpdatesActions is what the user may do from the updates pages.
+type UpdatesActions struct {
 	CSRF       string
 	CanOperate bool
 	CanAdmin   bool
 	CanUpdate  bool // may open the Hangar update page (owner)
 	SudoActive bool
-	Running    bool
-	LastRun    string // "há 2 h"; "" = never
-	LastError  bool
-	Bucket     string // filter; "" = every section
-	Cards      []BucketCard
-	Sections   []UpdatesSection
-	// Empty: nothing pending at all (the sections are all empty).
+}
+
+// UpdatesData feeds the "Updates and vulnerabilities" page (docs/14): the
+// services with what is pending in each, the riskiest first.
+type UpdatesData struct {
+	UpdatesActions
+	Running   bool
+	LastRun   string // "há 2 h"; "" = never
+	LastError bool
+	// Filters of the list: an action (bucket), a severity, a search.
+	Bucket   string
+	Sev      string
+	Query    string
+	Filtered bool
+	Cards    []BucketCard
+	Services []VulnServiceRow
+	Total    int    // services matching the filters
+	From     int    // 1-based first row when this is a later "Load more" page; 0 on the first
+	NextHref string // the next "Load more" ("" = no more)
+	// Empty: nothing pending at all.
 	Empty        bool
 	IgnoredCount int
 	Ignores      []IgnoreRow
 	Problems     []ScanProblem
+	Error        string
+	Flash        string
+}
+
+// Filters are the list's filters as a query (for the chips and "Load
+// more").
+func (d UpdatesData) Filters() url.Values {
+	q := url.Values{}
+	if d.Bucket != "" {
+		q.Set("bucket", d.Bucket)
+	}
+	if d.Sev != "" {
+		q.Set("sev", d.Sev)
+	}
+	if d.Query != "" {
+		q.Set("q", d.Query)
+	}
+	return q
+}
+
+// filterHref is the list with one filter set to v (or cleared when it is
+// already v: a chip toggles), the others kept.
+func (d UpdatesData) filterHref(key, v string) string {
+	q := d.Filters()
+	if q.Get(key) == v {
+		q.Del(key)
+	} else {
+		q.Set(key, v)
+	}
+	if s := q.Encode(); s != "" {
+		return "/updates?" + s
+	}
+	return "/updates"
+}
+
+// VulnServiceRow is one service (or the server's own image) in the list.
+type VulnServiceRow struct {
+	Key      string // "lab/web", "edge"
+	Label    string // "lab/web", "servidor · Caddy"
+	Project  string // "" for the server
+	Source   string // its image or repository
+	Repo     bool
+	Href     string // its page
+	Export   string // its copy button
+	Sev      []SevCount
+	Actions  []ActionCount
+	Total    int
+	LastScan string
+	// ScanError: its last inventory could not read everything.
+	ScanError bool
+}
+
+// SevCount is how many advisories of one severity.
+type SevCount struct {
+	Sev string
+	N   int
+}
+
+// ActionCount is how many rows of one bucket.
+type ActionCount struct {
+	Bucket string
+	N      int
+}
+
+// UpdatesTargetData feeds one service's page: its rows by what to do.
+type UpdatesTargetData struct {
+	UpdatesActions
+	Running     bool
+	Label       string
+	Source      string
+	Repo        bool
+	ServiceHref string // the service on its project ("" for the server)
+	Path        string // this page
+	Export      string
+	LastScan    string
+	ScanError   string
+	Scanned     bool
+	Sev         []SevCount
+	Cards       []BucketCard
+	Sections    []UpdatesSection
+	// Bucket is the one section asked for (a "Load more" page).
+	Bucket       string
+	Empty        bool
+	IgnoredCount int
 	Error        string
 	Flash        string
 }
@@ -36,15 +132,14 @@ type BucketCard struct {
 	Count  int
 }
 
-// UpdatesSection is one bucket's card.
+// UpdatesSection is one bucket's card on a service's page.
 type UpdatesSection struct {
-	Bucket string
-	Rows   []GroupRow
-	Total  int
-	// More: the section shows only its first rows; the rest are behind the
-	// bucket filter.
-	More  bool
-	Pager Pager // when the page is filtered to this bucket
+	Bucket   string
+	Rows     []GroupRow
+	Total    int
+	Export   string
+	From     int    // 1-based first row on a later page; 0 on the first
+	NextHref string // the next "Load more" ("" = no more)
 }
 
 // Row actions.
@@ -108,8 +203,20 @@ type IgnoreRow struct {
 // ScanProblem is a target whose inventory could not read everything.
 type ScanProblem struct {
 	Where    string
+	Href     string
 	Detail   string
 	Packages int
+}
+
+// ServiceVulns is the vulnerability summary on a service's Visão tab.
+type ServiceVulns struct {
+	Sev      []SevCount
+	Actions  []ActionCount
+	Total    int
+	Href     string
+	Export   string
+	LastScan string
+	Scanned  bool
 }
 
 // SortScanProblems orders problems by place.
@@ -141,23 +248,21 @@ func bucketTone(b string) string {
 	return ""
 }
 
-// exportHref is where a "Copy" button fetches its Markdown: one section, or
-// every one when b is "".
-func exportHref(b string) string {
-	if b == "" {
-		return "/updates/export"
+// chipClass is a filter chip, pressed or not.
+func chipClass(on bool) string {
+	if on {
+		return "tuc-btn is-outline is-sm border-accent bg-accent-soft"
 	}
-	return "/updates/export?bucket=" + url.QueryEscape(b)
+	return "tuc-btn is-ghost is-sm"
 }
 
-func bucketHref(b string) string {
-	if b == "" {
-		return "/updates"
-	}
-	return "/updates?bucket=" + url.QueryEscape(b)
-}
+// updatesSevChips are the severity filters (no "unknown": it is noise).
+var updatesSevChips = []string{"critical", "high", "medium", "low"}
 
-// Updates is the updates and vulnerabilities page.
+// updatesActionChips are the action filters, in page order.
+var updatesActionChips = []string{"deploy", "tag", "code", "wait", "updates"}
+
+// Updates is the updates and vulnerabilities page: the services.
 templ Updates(d UpdatesData) {
 	@shell(t(ctx, "deps.page_title")) {
 		if d.Running {
@@ -165,31 +270,14 @@ templ Updates(d UpdatesData) {
 			<span hidden data-busy-poll></span>
 		}
 		@pageHead(t(ctx, "deps.title"), d.subtitle(ctx)) {
-			if d.Bucket != "" {
-				<a class="tuc-btn is-ghost is-sm" href="/updates">
-					@Icon("x", "size-3.5")
-					{ t(ctx, "deps.show_all") }
-				</a>
-			}
 			if !d.Empty {
-				<button type="button" class="tuc-btn is-outline" data-copy-url={ exportHref("") } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } title={ t(ctx, "deps.export.copy_all_hint") }>
+				<button type="button" class="tuc-btn is-outline" data-copy-url="/updates/export" data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } title={ t(ctx, "deps.export.copy_all_hint") }>
 					@Icon("copy", "size-3.5")
 					{ t(ctx, "deps.export.copy_all") }
 				</button>
 			}
 			if d.CanOperate {
-				<form method="post" action="/updates/scan">
-					<input type="hidden" name="csrf" value={ d.CSRF }/>
-					<button class="tuc-btn is-primary" type="submit" disabled?={ d.Running }>
-						if d.Running {
-							<span class="tuc-spinner" aria-hidden="true"></span>
-							{ t(ctx, "deps.scanning") }
-						} else {
-							@Icon("refresh-cw", "size-3.5")
-							{ t(ctx, "deps.scan_now") }
-						}
-					</button>
-				</form>
+				@scanButton(d.CSRF, d.Running)
 			}
 		}
 		@pageBody() {
@@ -197,14 +285,14 @@ templ Updates(d UpdatesData) {
 			@toast("success", d.Flash)
 			<div class="flex flex-wrap gap-3">
 				for _, c := range d.Cards {
-					<a class={ "flex flex-[1_1_180px] flex-col gap-0.5 rounded-md border bg-surface px-4 py-3.5 text-fg no-underline hover:border-border-strong", templ.KV("border-accent bg-accent-soft", d.Bucket == c.Bucket), templ.KV("border-border", d.Bucket != c.Bucket) } href={ templ.SafeURL(bucketHref(c.Bucket)) } aria-current?={ d.Bucket == c.Bucket }>
+					<a class={ "flex flex-[1_1_180px] flex-col gap-0.5 rounded-md border bg-surface px-4 py-3.5 text-fg no-underline hover:border-border-strong", templ.KV("border-accent bg-accent-soft", d.Bucket == c.Bucket), templ.KV("border-border", d.Bucket != c.Bucket) } href={ templ.SafeURL(d.filterHref("bucket", c.Bucket)) } aria-current?={ d.Bucket == c.Bucket }>
 						<span class="text-xs text-muted">{ t(ctx, "deps.bucket." + c.Bucket) }</span>
 						<span class={ "text-[22px] leading-[30px] font-semibold tabular-nums " + bucketTone(c.Bucket) }>{ fmt.Sprint(c.Count) }</span>
 						<span class="text-xs text-subtle">{ t(ctx, "deps.bucket_sub." + c.Bucket) }</span>
 					</a>
 				}
 			</div>
-			if d.Empty {
+			if d.Empty && !d.Filtered && len(d.Services) == 0 {
 				<section class={ cardClass }>
 					<div class={ cardBodyClass }>
 						if d.LastRun == "" {
@@ -214,23 +302,11 @@ templ Updates(d UpdatesData) {
 						}
 					</div>
 				</section>
-			}
-			for _, s := range d.Sections {
-				@updatesSection(d, s)
+			} else {
+				@servicesCard(d)
 			}
 			if d.IgnoredCount > 0 {
 				<p class="m-0 text-xs text-muted">{ t(ctx, "deps.ignored_count", "n", d.IgnoredCount) }</p>
-			}
-			for _, s := range d.Sections {
-				for _, r := range s.Rows {
-					@advisoriesDialog(r)
-					if d.CanOperate {
-						@ignoreDialog(d, r)
-					}
-				}
-			}
-			if d.CanAdmin {
-				@sudoModal(d.CSRF, "/updates", d.SudoActive)
 			}
 			if len(d.Problems) > 0 {
 				<section class={ cardClass }>
@@ -242,7 +318,7 @@ templ Updates(d UpdatesData) {
 								<li class="flex items-center gap-2.5">
 									@Icon("triangle-alert", "size-4 text-warning")
 									<div class="flex min-w-0 flex-col">
-										<span class="font-mono text-xs">{ p.Where }</span>
+										<a class="font-mono text-xs text-fg no-underline hover:text-accent-text hover:underline" href={ templ.SafeURL(p.Href) }>{ p.Where }</a>
 										<span class="truncate font-mono text-[11px] text-subtle" title={ p.Detail }>{ p.Detail }</span>
 									</div>
 								</li>
@@ -252,94 +328,362 @@ templ Updates(d UpdatesData) {
 				</section>
 			}
 			if len(d.Ignores) > 0 {
-				<section class={ cardClass }>
-					@cardHead(t(ctx, "deps.ignores"))
-					<div class={ cardBodyClass }>
-						<div class="tuc-table-wrap">
-							<table class="tuc-table is-compact w-full">
-								<thead><tr><th>{ t(ctx, "deps.col.where") }</th><th>{ t(ctx, "deps.col.package") }</th><th>{ t(ctx, "deps.col.until") }</th><th>{ t(ctx, "deps.col.reason") }</th><th class="tuc-table__actions"></th></tr></thead>
-								<tbody>
-									for _, i := range d.Ignores {
-										<tr>
-											<td class="font-mono text-xs">{ i.Where }</td>
-											<td class="font-mono text-xs">
-												{ i.Package }
-												if i.Advisory != "" {
-													<span class="text-subtle">{ " · " + i.Advisory }</span>
-												}
-											</td>
-											<td class="text-muted">{ i.Until }</td>
-											<td>{ i.Reason }</td>
-											<td class="tuc-table__actions">
-												if d.CanOperate {
-													<form data-confirm={ t(ctx, "confirm.unignore.title") } data-confirm-text={ t(ctx, "confirm.unignore.text") } data-confirm-ok={ t(ctx, "confirm.unignore.ok") } data-tone="warning" method="post" action="/updates/unignore">
-														<input type="hidden" name="csrf" value={ d.CSRF }/>
-														<input type="hidden" name="id" value={ i.ID }/>
-														<button class="tuc-btn is-outline is-sm" type="submit">
-															@Icon("eye", "size-3.5")
-															{ t(ctx, "deps.unignore") }
-														</button>
-													</form>
-												}
-											</td>
-										</tr>
-									}
-								</tbody>
-							</table>
-						</div>
-					</div>
-				</section>
+				@ignoresCard(d)
 			}
 		}
 	}
 }
 
-// updatesSection is one bucket: its title, one sentence and the rows.
-templ updatesSection(d UpdatesData, s UpdatesSection) {
-	<section class={ cardClass } id={ "bucket-" + s.Bucket }>
-		@cardHead(t(ctx, "deps.bucket."+s.Bucket)) {
-			<span class="text-xs text-muted tabular-nums">{ t(ctx, "deps.rows", "n", s.Total) }</span>
-			if s.Total > 0 {
-				<button type="button" class="tuc-btn is-ghost is-sm" data-copy-url={ exportHref(s.Bucket) } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } aria-label={ t(ctx, "deps.export.copy_section", "section", t(ctx, "deps.bucket."+s.Bucket)) } title={ t(ctx, "deps.export.copy_section", "section", t(ctx, "deps.bucket."+s.Bucket)) }>
-					@Icon("copy", "size-3.5")
-					{ t(ctx, "deps.copy") }
-				</button>
+templ scanButton(csrf string, running bool) {
+	<form method="post" action="/updates/scan">
+		<input type="hidden" name="csrf" value={ csrf }/>
+		<button class="tuc-btn is-primary" type="submit" disabled?={ running }>
+			if running {
+				<span class="tuc-spinner" aria-hidden="true"></span>
+				{ t(ctx, "deps.scanning") }
+			} else {
+				@Icon("refresh-cw", "size-3.5")
+				{ t(ctx, "deps.scan_now") }
 			}
+		</button>
+	</form>
+}
+
+// servicesCard is the list: filters on top, one row per service, "Load
+// more" at the end (ui.js appends the next rows; without it the link
+// opens them).
+templ servicesCard(d UpdatesData) {
+	<section class={ cardClass } id="svc-list" data-more-list>
+		@cardHead(t(ctx, "deps.svc.list_title")) {
+			<span class="text-xs text-muted tabular-nums">{ t(ctx, "deps.svc.count", "n", d.Total) }</span>
 		}
 		<div class={ cardBodyClass }>
-			<p class="m-0 text-[13px] text-muted">{ t(ctx, "deps.bucket_hint." + s.Bucket) }</p>
-			if len(s.Rows) == 0 {
-				<p class="m-0 text-[13px] text-subtle">{ t(ctx, "deps.bucket_empty") }</p>
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+				<form class="relative min-w-0 flex-[1_1_240px] max-w-[360px]" method="get" action="/updates" role="search">
+					if d.Bucket != "" {
+						<input type="hidden" name="bucket" value={ d.Bucket }/>
+					}
+					if d.Sev != "" {
+						<input type="hidden" name="sev" value={ d.Sev }/>
+					}
+					@Icon("search", "pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted")
+					<input class="tuc-input w-full pl-8" type="search" name="q" value={ d.Query } maxlength="100" placeholder={ t(ctx, "deps.svc.search") } aria-label={ t(ctx, "deps.svc.search") } autocomplete="off"/>
+				</form>
+				<div class="flex flex-wrap items-center gap-1" role="group" aria-label={ t(ctx, "deps.col.severity") }>
+					for _, s := range updatesSevChips {
+						<a class={ chipClass(d.Sev == s) } href={ templ.SafeURL(d.filterHref("sev", s)) } aria-pressed={ fmt.Sprint(d.Sev == s) }>{ t(ctx, "deps.chip." + s) }</a>
+					}
+				</div>
+				<div class="flex flex-wrap items-center gap-1" role="group" aria-label={ t(ctx, "deps.svc.col_actions") }>
+					for _, b := range updatesActionChips {
+						<a class={ chipClass(d.Bucket == b) } href={ templ.SafeURL(d.filterHref("bucket", b)) } aria-pressed={ fmt.Sprint(d.Bucket == b) }>{ t(ctx, "deps.bucket." + b) }</a>
+					}
+				</div>
+				if d.Filtered {
+					<a class="tuc-btn is-ghost is-sm" href="/updates">
+						@Icon("x", "size-3.5")
+						{ t(ctx, "deps.show_all") }
+					</a>
+				}
+			</div>
+			if d.From > 0 {
+				<span class="text-xs text-muted tabular-nums">{ t(ctx, "pagination.range", "from", d.From, "to", d.From+len(d.Services)-1, "total", d.Total) }</span>
+			}
+			if len(d.Services) == 0 {
+				<p class="m-0 text-[13px] text-subtle">{ t(ctx, "deps.svc.no_match") }</p>
 			} else {
 				<div class="tuc-table-wrap">
-					<table class="tuc-table is-compact w-full min-w-[860px]">
+					<table class="tuc-table is-compact w-full min-w-[820px]">
 						<thead>
 							<tr>
+								<th>{ t(ctx, "deps.svc.col_service") }</th>
 								<th>{ t(ctx, "deps.col.severity") }</th>
-								<th>{ t(ctx, "deps.col.where") }</th>
-								<th>{ t(ctx, "deps.col.package") }</th>
-								<th>{ t(ctx, "deps.col.version") }</th>
-								<th>{ t(ctx, "deps.col.flaws") }</th>
+								<th>{ t(ctx, "deps.svc.col_actions") }</th>
+								<th>{ t(ctx, "deps.svc.col_scan") }</th>
 								<th class="tuc-table__actions"></th>
 							</tr>
 						</thead>
-						<tbody>
-							for _, r := range s.Rows {
-								@groupRow(d, r)
+						<tbody data-more-items>
+							for _, s := range d.Services {
+								@serviceRow(s)
 							}
 						</tbody>
 					</table>
 				</div>
-				if s.More {
-					<a class="tuc-btn is-ghost is-sm self-start" href={ templ.SafeURL(bucketHref(s.Bucket)) }>{ t(ctx, "deps.show_bucket", "n", s.Total) }</a>
-				}
-				@pagination(s.Pager)
+				@loadMore(d.NextHref)
 			}
 		</div>
 	</section>
 }
 
-templ groupRow(d UpdatesData, r GroupRow) {
+templ serviceRow(s VulnServiceRow) {
+	<tr>
+		<td class="max-w-[360px]">
+			<span class="flex min-w-0 items-center gap-2.5">
+				<span class="inline-flex size-7 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted" aria-hidden="true">
+					if s.Project == "" {
+						@Icon("server", "size-3.5")
+					} else if s.Repo {
+						@Icon("git-branch", "size-3.5")
+					} else {
+						@Icon("container", "size-3.5")
+					}
+				</span>
+				<span class="flex min-w-0 flex-col">
+					<a class="truncate font-mono text-xs text-fg no-underline hover:text-accent-text hover:underline" href={ templ.SafeURL(s.Href) }>{ s.Label }</a>
+					if s.Source != "" {
+						<span class="truncate font-mono text-[11px] text-subtle" title={ s.Source }>{ s.Source }</span>
+					}
+				</span>
+			</span>
+		</td>
+		<td>
+			if len(s.Sev) > 0 {
+				@sevBadges(s.Sev)
+			} else if s.Total == 0 {
+				<span class="inline-flex items-center gap-1 text-xs text-success">
+					@Icon("shield-check", "size-3.5")
+					{ t(ctx, "deps.svc.clean") }
+				</span>
+			} else {
+				<span class="text-xs text-muted">—</span>
+			}
+		</td>
+		<td>
+			@actionBadges(s.Actions)
+		</td>
+		<td class="whitespace-nowrap text-xs text-muted">
+			<span class="inline-flex items-center gap-1">
+				if s.ScanError {
+					<span class="inline-flex text-warning" role="img" title={ t(ctx, "deps.svc.scan_error") } aria-label={ t(ctx, "deps.svc.scan_error") }>
+						@Icon("triangle-alert", "size-3.5")
+					</span>
+				}
+				if s.LastScan != "" {
+					{ s.LastScan }
+				} else {
+					{ t(ctx, "deps.svc.never") }
+				}
+			</span>
+		</td>
+		<td class="tuc-table__actions">
+			<span class="inline-flex items-center justify-end gap-1.5">
+				if s.Total > 0 {
+					<button type="button" class="tuc-btn is-ghost is-sm" data-copy-url={ s.Export } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } title={ t(ctx, "deps.svc.copy_hint", "where", s.Label) } aria-label={ t(ctx, "deps.svc.copy_hint", "where", s.Label) }>
+						@Icon("copy", "size-3.5")
+						{ t(ctx, "deps.copy") }
+					</button>
+				}
+				<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL(s.Href) } aria-label={ t(ctx, "deps.svc.open", "where", s.Label) } title={ t(ctx, "deps.svc.open", "where", s.Label) }>
+					@Icon("chevron-right", "size-4")
+				</a>
+			</span>
+		</td>
+	</tr>
+}
+
+templ sevBadges(sev []SevCount) {
+	<span class="inline-flex flex-wrap items-center gap-1">
+		for _, c := range sev {
+			<span class={ sevBadge(c.Sev) }>{ t(ctx, "deps.sev_n." + c.Sev, "n", c.N) }</span>
+		}
+	</span>
+}
+
+templ actionBadges(acts []ActionCount) {
+	if len(acts) == 0 {
+		<span class="text-xs text-muted">—</span>
+	} else {
+		<span class="inline-flex flex-wrap items-center gap-1">
+			for _, a := range acts {
+				<span class="tuc-badge">{ t(ctx, "deps.act_n." + a.Bucket, "n", a.N) }</span>
+			}
+		</span>
+	}
+}
+
+// loadMore is the "Load more" link of a list ([data-more-list]): ui.js
+// fetches it and appends the rows; without JavaScript it opens them.
+templ loadMore(href string) {
+	if href != "" {
+		<div class="flex justify-center" data-more-foot>
+			<a class="tuc-btn is-outline is-sm" href={ templ.SafeURL(href) } data-load-more>
+				@Icon("chevron-down", "size-3.5")
+				{ t(ctx, "deps.load_more") }
+			</a>
+		</div>
+	}
+}
+
+templ ignoresCard(d UpdatesData) {
+	<section class={ cardClass }>
+		@cardHead(t(ctx, "deps.ignores"))
+		<div class={ cardBodyClass }>
+			<div class="tuc-table-wrap">
+				<table class="tuc-table is-compact w-full">
+					<thead><tr><th>{ t(ctx, "deps.col.where") }</th><th>{ t(ctx, "deps.col.package") }</th><th>{ t(ctx, "deps.col.until") }</th><th>{ t(ctx, "deps.col.reason") }</th><th class="tuc-table__actions"></th></tr></thead>
+					<tbody>
+						for _, i := range d.Ignores {
+							<tr>
+								<td class="font-mono text-xs">{ i.Where }</td>
+								<td class="font-mono text-xs">
+									{ i.Package }
+									if i.Advisory != "" {
+										<span class="text-subtle">{ " · " + i.Advisory }</span>
+									}
+								</td>
+								<td class="text-muted">{ i.Until }</td>
+								<td>{ i.Reason }</td>
+								<td class="tuc-table__actions">
+									if d.CanOperate {
+										<form data-confirm={ t(ctx, "confirm.unignore.title") } data-confirm-text={ t(ctx, "confirm.unignore.text") } data-confirm-ok={ t(ctx, "confirm.unignore.ok") } data-tone="warning" method="post" action="/updates/unignore">
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<input type="hidden" name="id" value={ i.ID }/>
+											<button class="tuc-btn is-outline is-sm" type="submit">
+												@Icon("eye", "size-3.5")
+												{ t(ctx, "deps.unignore") }
+											</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</section>
+}
+
+// UpdatesTarget is one service's page: its findings by what to do, with
+// the actions the panel can take and a copy of just this service.
+templ UpdatesTarget(d UpdatesTargetData) {
+	@shell(t(ctx, "deps.svc.page_title", "where", d.Label)) {
+		if d.Running {
+			<span hidden data-busy-poll></span>
+		}
+		@pageHead(d.Label, d.subtitle(ctx)) {
+			<a class="tuc-btn is-ghost is-sm" href="/updates">
+				@Icon("arrow-left", "size-3.5")
+				{ t(ctx, "deps.svc.back") }
+			</a>
+			if d.ServiceHref != "" {
+				<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(d.ServiceHref) }>
+					@Icon("external-link", "size-3.5")
+					{ t(ctx, "deps.svc.open_service") }
+				</a>
+			}
+			if !d.Empty {
+				<button type="button" class="tuc-btn is-outline" data-copy-url={ d.Export } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } title={ t(ctx, "deps.svc.copy_hint", "where", d.Label) }>
+					@Icon("copy", "size-3.5")
+					{ t(ctx, "deps.copy") }
+				</button>
+			}
+		}
+		@pageBody() {
+			@errorAlert(d.Error)
+			@toast("success", d.Flash)
+			<div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
+				if d.Source != "" {
+					<span class="inline-flex min-w-0 items-center gap-1.5">
+						if d.ServiceHref == "" {
+							@Icon("server", "size-3.5")
+						} else if d.Repo {
+							@Icon("git-branch", "size-3.5")
+						} else {
+							@Icon("container", "size-3.5")
+						}
+						<span class="truncate font-mono">{ d.Source }</span>
+					</span>
+				}
+				if len(d.Sev) > 0 {
+					@sevBadges(d.Sev)
+				}
+			</div>
+			if d.ScanError != "" {
+				@notice("warning", "triangle-alert", t(ctx, "deps.svc.scan_error_detail", "detail", d.ScanError))
+			}
+			<div class="flex flex-wrap gap-3">
+				for _, c := range d.Cards {
+					<a class="flex flex-[1_1_180px] flex-col gap-0.5 rounded-md border border-border bg-surface px-4 py-3.5 text-fg no-underline hover:border-border-strong" href={ templ.SafeURL(d.Path + "#bucket-" + c.Bucket) }>
+						<span class="text-xs text-muted">{ t(ctx, "deps.bucket." + c.Bucket) }</span>
+						<span class={ "text-[22px] leading-[30px] font-semibold tabular-nums " + bucketTone(c.Bucket) }>{ fmt.Sprint(c.Count) }</span>
+						<span class="text-xs text-subtle">{ t(ctx, "deps.bucket_sub." + c.Bucket) }</span>
+					</a>
+				}
+			</div>
+			if d.Empty {
+				<section class={ cardClass }>
+					<div class={ cardBodyClass }>
+						if !d.Scanned {
+							@emptyState("shield", t(ctx, "deps.svc.not_scanned"))
+						} else {
+							@emptyState("shield-check", t(ctx, "deps.svc.empty"))
+						}
+					</div>
+				</section>
+			}
+			for _, s := range d.Sections {
+				@updatesSection(d, s)
+			}
+			if d.IgnoredCount > 0 {
+				<p class="m-0 text-xs text-muted">{ t(ctx, "deps.ignored_count", "n", d.IgnoredCount) }</p>
+			}
+			if d.CanAdmin {
+				@sudoModal(d.CSRF, d.Path, d.SudoActive)
+			}
+		}
+	}
+}
+
+// updatesSection is one bucket of a service: its title, one sentence, the
+// rows and their dialogs (inside the list, so "Load more" brings both).
+templ updatesSection(d UpdatesTargetData, s UpdatesSection) {
+	<section class={ cardClass } id={ "bucket-" + s.Bucket } data-more-list>
+		@cardHead(t(ctx, "deps.bucket."+s.Bucket)) {
+			<span class="text-xs text-muted tabular-nums">{ t(ctx, "deps.rows", "n", s.Total) }</span>
+			<button type="button" class="tuc-btn is-ghost is-sm" data-copy-url={ s.Export } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } aria-label={ t(ctx, "deps.export.copy_section", "section", t(ctx, "deps.bucket."+s.Bucket)) } title={ t(ctx, "deps.export.copy_section", "section", t(ctx, "deps.bucket."+s.Bucket)) }>
+				@Icon("copy", "size-3.5")
+				{ t(ctx, "deps.copy") }
+			</button>
+		}
+		<div class={ cardBodyClass }>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "deps.bucket_hint." + s.Bucket) }</p>
+			if s.From > 0 {
+				<span class="text-xs text-muted tabular-nums">{ t(ctx, "pagination.range", "from", s.From, "to", s.From+len(s.Rows)-1, "total", s.Total) }</span>
+			}
+			<div class="tuc-table-wrap">
+				<table class="tuc-table is-compact w-full min-w-[760px]">
+					<thead>
+						<tr>
+							<th>{ t(ctx, "deps.col.severity") }</th>
+							<th>{ t(ctx, "deps.col.package") }</th>
+							<th>{ t(ctx, "deps.col.version") }</th>
+							<th>{ t(ctx, "deps.col.flaws") }</th>
+							<th class="tuc-table__actions"></th>
+						</tr>
+					</thead>
+					<tbody data-more-items>
+						for _, r := range s.Rows {
+							@groupRow(d.UpdatesActions, r)
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="contents" data-more-items>
+				for _, r := range s.Rows {
+					@advisoriesDialog(r)
+					if d.CanOperate {
+						@ignoreDialog(d.CSRF, r, d.Path, s.Bucket)
+					}
+				}
+			</div>
+			@loadMore(s.NextHref)
+		</div>
+	</section>
+}
+
+templ groupRow(a UpdatesActions, r GroupRow) {
 	<tr>
 		<td>
 			if r.Kind != "" {
@@ -348,14 +692,7 @@ templ groupRow(d UpdatesData, r GroupRow) {
 				<span class={ sevBadge(r.Severity) }>{ t(ctx, "deps.sev." + r.Severity) }</span>
 			}
 		</td>
-		<td class="font-mono text-xs">
-			if r.Href != "" {
-				<a class="text-fg no-underline hover:text-accent-text hover:underline" href={ templ.SafeURL(r.Href) }>{ r.Where }</a>
-			} else {
-				{ r.Where }
-			}
-		</td>
-		<td class="max-w-[280px]">
+		<td class="max-w-[320px]">
 			<div class="flex min-w-0 flex-col">
 				<span class="truncate font-mono text-xs" title={ r.Packages }>{ r.Packages }</span>
 				<span class="text-xs text-subtle">{ r.Ecosystem }</span>
@@ -383,8 +720,8 @@ templ groupRow(d UpdatesData, r GroupRow) {
 		</td>
 		<td class="tuc-table__actions">
 			<span class="inline-flex items-center justify-end gap-1.5">
-				@rowAction(d, r)
-				if d.CanOperate {
+				@rowAction(a, r)
+				if a.CanOperate {
 					<button type="button" class="tuc-btn is-ghost is-sm" data-tuc-modal={ "#ignore-" + r.ID }>
 						@Icon("eye-off", "size-3.5")
 						{ t(ctx, "deps.ignore.button") }
@@ -397,12 +734,12 @@ templ groupRow(d UpdatesData, r GroupRow) {
 
 // rowAction is the one button the panel can do for the row, or what to do
 // by hand, or why it waits.
-templ rowAction(d UpdatesData, r GroupRow) {
+templ rowAction(a UpdatesActions, r GroupRow) {
 	switch r.Action {
 		case ActDeploy:
-			if d.CanOperate {
+			if a.CanOperate {
 				<form class="inline-flex" method="post" action={ templ.SafeURL("/p/" + r.Project + "/s/" + r.Service + "/deploy") }>
-					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="csrf" value={ a.CSRF }/>
 					<button class="tuc-btn is-primary is-sm" type="submit">
 						@Icon("rocket", "size-3.5")
 						{ t(ctx, "deps.do.deploy") }
@@ -410,7 +747,7 @@ templ rowAction(d UpdatesData, r GroupRow) {
 				</form>
 			}
 		case ActHangar:
-			if d.CanUpdate {
+			if a.CanUpdate {
 				<a class="tuc-btn is-primary is-sm" href="/update">
 					@Icon("download", "size-3.5")
 					{ t(ctx, "deps.do.hangar") }
@@ -419,16 +756,16 @@ templ rowAction(d UpdatesData, r GroupRow) {
 				<span class="text-xs text-muted">{ t(ctx, "deps.do.hangar_owner") }</span>
 			}
 		case ActTag:
-			if d.CanAdmin && d.SudoActive {
+			if a.CanAdmin && a.SudoActive {
 				<form class="inline-flex" data-confirm={ t(ctx, "confirm.image.title", "name", r.Where) } data-confirm-text={ t(ctx, "confirm.image.text") } data-confirm-ok={ t(ctx, "confirm.image.ok") } data-tone="warning" method="post" action={ templ.SafeURL("/p/" + r.Project + "/s/" + r.Service + "/image") }>
-					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<input type="hidden" name="csrf" value={ a.CSRF }/>
 					<input type="hidden" name="tag" value={ r.Tag }/>
 					<button class="tuc-btn is-primary is-sm" type="submit">
 						@Icon("circle-arrow-up", "size-3.5")
 						{ t(ctx, "deps.do.tag", "tag", r.Tag) }
 					</button>
 				</form>
-			} else if d.CanAdmin {
+			} else if a.CanAdmin {
 				<button type="button" class="tuc-btn is-primary is-sm" data-tuc-modal="#sudo-dialog">
 					@Icon("circle-arrow-up", "size-3.5")
 					{ t(ctx, "deps.do.tag", "tag", r.Tag) }
@@ -524,9 +861,9 @@ templ advisoriesDialog(r GroupRow) {
 }
 
 // ignoreDialog asks why and for how long a row is ignored. The form
-// carries the filter and the page so the redirect comes back to the same
-// place.
-templ ignoreDialog(d UpdatesData, r GroupRow) {
+// carries the service's page and the section so the redirect comes back
+// to them.
+templ ignoreDialog(csrf string, r GroupRow, back, bucket string) {
 	<dialog class="tuc-modal is-md is-warning" id={ "ignore-" + r.ID } aria-labelledby={ "ignore-title-" + r.ID }>
 		<div class="tuc-modal__panel">
 			<div class="tuc-modal__header">
@@ -536,16 +873,12 @@ templ ignoreDialog(d UpdatesData, r GroupRow) {
 				</button>
 			</div>
 			<form method="post" action="/updates/ignore" class="tuc-modal__body flex flex-col gap-4">
-				<input type="hidden" name="csrf" value={ d.CSRF }/>
+				<input type="hidden" name="csrf" value={ csrf }/>
 				for _, id := range r.IDs {
 					<input type="hidden" name="id" value={ id }/>
 				}
-				if d.Bucket != "" {
-					<input type="hidden" name="bucket" value={ d.Bucket }/>
-				}
-				if p := d.page(); p > 1 {
-					<input type="hidden" name="page" value={ fmt.Sprint(p) }/>
-				}
+				<input type="hidden" name="back" value={ back }/>
+				<input type="hidden" name="bucket" value={ bucket }/>
 				<p class="tuc-modal__text">{ t(ctx, "deps.ignore.text") }</p>
 				<fieldset class="flex flex-col gap-2 border-0 p-0">
 					<legend class="tuc-label mb-1.5">{ t(ctx, "deps.ignore.mode") }</legend>
@@ -576,14 +909,47 @@ templ ignoreDialog(d UpdatesData, r GroupRow) {
 	</dialog>
 }
 
-// page is the page of the filtered section (1 when not filtered).
-func (d UpdatesData) page() int {
-	for _, s := range d.Sections {
-		if s.Bucket == d.Bucket {
-			return s.Pager.Page
-		}
+// serviceVulnsCard is the service's vulnerabilities on its Visão tab: the
+// counts, its page and its copy button.
+templ serviceVulnsCard(v *ServiceVulns) {
+	if v != nil {
+		<section class={ cardClass } id="svc-vulns">
+			@cardHead(t(ctx, "deps.svc.card_title")) {
+				if v.Total > 0 {
+					<button type="button" class="tuc-btn is-ghost is-sm" data-copy-url={ v.Export } data-copied={ t(ctx, "common.copied") } data-copy-failed={ t(ctx, "deps.export.copy_failed") } title={ t(ctx, "deps.svc.copy_hint_here") }>
+						@Icon("copy", "size-3.5")
+						{ t(ctx, "deps.copy") }
+					</button>
+				}
+				<a class="tuc-btn is-ghost is-sm" href={ templ.SafeURL(v.Href) }>
+					{ t(ctx, "deps.svc.details") }
+					@Icon("chevron-right", "size-3.5")
+				</a>
+			}
+			<div class={ cardBodyClass }>
+				if v.Total == 0 {
+					<p class="m-0 inline-flex items-center gap-1.5 text-[13px] text-muted">
+						if v.Scanned {
+							@Icon("shield-check", "size-4 text-success")
+							{ t(ctx, "deps.svc.nothing", "when", v.LastScan) }
+						} else {
+							@Icon("shield", "size-4")
+							{ t(ctx, "deps.svc.not_scanned") }
+						}
+					</p>
+				} else {
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+						@sevBadges(v.Sev)
+						@actionBadges(v.Actions)
+						<span class="grow"></span>
+						if v.LastScan != "" {
+							<span class="text-xs text-muted">{ t(ctx, "deps.svc.scanned", "when", v.LastScan) }</span>
+						}
+					</div>
+				}
+			</div>
+		</section>
 	}
-	return 1
 }
 
 func (d UpdatesData) subtitle(ctx context.Context) string {
@@ -594,4 +960,11 @@ func (d UpdatesData) subtitle(ctx context.Context) string {
 		return t(ctx, "deps.last_run_partial", "when", d.LastRun)
 	}
 	return t(ctx, "deps.last_run", "when", d.LastRun)
+}
+
+func (d UpdatesTargetData) subtitle(ctx context.Context) string {
+	if d.LastScan == "" {
+		return t(ctx, "deps.never")
+	}
+	return t(ctx, "deps.last_run", "when", d.LastScan)
 }

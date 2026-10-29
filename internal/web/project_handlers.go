@@ -563,6 +563,7 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.OpenTerminal = r.URL.Query().Get("terminal") == "1"
 	if d.Tab == "overview" {
 		d.Metrics = h.serviceMetrics(r, s, len(d.Volumes) > 0)
+		d.Vulns = h.serviceVulns(r.Context(), pr, p.Slug, s.Slug, s.ID)
 	}
 	if d.Tab == "backups" {
 		d.Backups = h.serviceBackups(r, p, s)

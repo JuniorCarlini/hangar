@@ -41,21 +41,39 @@ func TestUpdatesPageAndOverviewAlert(t *testing.T) {
 	id := e.labService(t)
 	e.seedFindings(t, id)
 	c, _ := e.session(t, auth.RoleViewer)
+	get := func(target string) string {
+		t.Helper()
+		rec := e.do(req{method: "GET", target: target, cookies: []*http.Cookie{c}})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: %d", target, rec.Code)
+		}
+		return rec.Body.String()
+	}
 
-	page := e.do(req{method: "GET", target: "/updates", cookies: []*http.Cookie{c}})
-	body := page.Body.String()
-	if page.Code != http.StatusOK {
-		t.Fatalf("updates page: %d", page.Code)
+	// The list names the service and the server, each with its page.
+	list := get("/updates")
+	for _, want := range []string{`id="svc-list"`, `href="/updates/lab/web"`, `href="/updates/server"`, "servidor · Caddy", "1 crítica", "1 aguardando", "1 versão nova"} {
+		if !strings.Contains(list, want) {
+			t.Errorf("updates list misses %q", want)
+		}
 	}
 	// Found before remedies existed: waits, marked as not checked yet (no
 	// command: a waiting row is never the user's own code).
+	body := get("/updates/lab/web")
 	for _, want := range []string{
-		"django", "5.2.7", "GHSA-test-1", "ainda não verificado", "1.30-alpine", "Caddy", "https://osv.dev/vulnerability/GHSA-test-1",
+		"django", "5.2.7", "GHSA-test-1", "ainda não verificado", "1.30-alpine", "https://osv.dev/vulnerability/GHSA-test-1",
 		`id="bucket-wait"`, `id="bucket-updates"`,
 	} {
 		if !strings.Contains(body, want) {
-			t.Errorf("updates page misses %q", want)
+			t.Errorf("service page misses %q", want)
 		}
+	}
+	// Another service's rows (the server's Caddy) stay on its own page.
+	if strings.Contains(body, "3.0-alpine") {
+		t.Error("the service page lists the server's image")
+	}
+	if srv := get("/updates/server"); !strings.Contains(srv, "3.0-alpine") || strings.Contains(srv, "django") {
+		t.Error("server page: its image only")
 	}
 	// Text from OSV is data: escaped, never markup.
 	if strings.Contains(body, "<script>alert(1)") {
@@ -63,18 +81,23 @@ func TestUpdatesPageAndOverviewAlert(t *testing.T) {
 	}
 	// A viewer sees but cannot ignore, scan, deploy or switch.
 	for _, act := range []string{`action="/updates/ignore"`, `action="/updates/scan"`, `/deploy"`, `/image"`, `#sudo-dialog`} {
-		if strings.Contains(body, act) {
+		if strings.Contains(body, act) || strings.Contains(list, act) {
 			t.Errorf("viewer gets the operator action %s", act)
 		}
 	}
 
-	ov := e.do(req{method: "GET", target: "/", cookies: []*http.Cookie{c}}).Body.String()
+	ov := get("/")
 	if !strings.Contains(ov, "1 vulnerabilidade crítica") || !strings.Contains(ov, `href="/updates"`) {
 		t.Error("overview without the vulnerability alert")
 	}
 
-	if rec := e.do(req{method: "GET", target: "/updates?bucket=updates", cookies: []*http.Cookie{c}}); strings.Contains(rec.Body.String(), "django==") {
-		t.Error("bucket filter ignored")
+	if body := get("/updates/lab/web?bucket=updates"); strings.Contains(body, "GHSA-test-1") || !strings.Contains(body, "1.30-alpine") {
+		t.Error("bucket filter of the service page ignored")
+	}
+	for _, target := range []string{"/updates/lab/nope", "/updates/nope/web", "/updates/LAB/web"} {
+		if rec := e.do(req{method: "GET", target: target, cookies: []*http.Cookie{c}}); rec.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404", target, rec.Code)
+		}
 	}
 }
 
@@ -116,14 +139,15 @@ func TestUpdatesPageSections(t *testing.T) {
 	id := e.labService(t)
 	e.seedBuckets(t, id)
 	c, _ := e.session(t, auth.RoleOwner)
-	get := func() string {
+	getAt := func(target string) string {
 		t.Helper()
-		rec := e.do(req{method: "GET", target: "/updates", cookies: []*http.Cookie{c}})
+		rec := e.do(req{method: "GET", target: target, cookies: []*http.Cookie{c}})
 		if rec.Code != http.StatusOK {
-			t.Fatalf("updates: %d", rec.Code)
+			t.Fatalf("%s: %d", target, rec.Code)
 		}
 		return rec.Body.String()
 	}
+	get := func() string { t.Helper(); return getAt("/updates/lab/web") }
 	section := func(body, bucket string) string {
 		t.Helper()
 		i := strings.Index(body, `id="bucket-`+bucket+`"`)
@@ -134,16 +158,26 @@ func TestUpdatesPageSections(t *testing.T) {
 		if j := strings.Index(rest[1:], "</section>"); j > 0 {
 			rest = rest[:j]
 		}
+		// The rows, not their dialogs (which hold the ignore form).
+		if j := strings.Index(rest, `<div class="contents" data-more-items>`); j > 0 {
+			rest = rest[:j]
+		}
 		return rest
 	}
 
-	body := get()
-	// Cards count rows: openssl (2 advisories) is one deploy row; the
-	// image switch is one row; edge waits (no Hangar release yet).
+	// The list's cards count every service's rows: openssl (2 advisories)
+	// is one deploy row; the image switch is one row; the edge waits (no
+	// Hangar release yet).
+	list := getAt("/updates")
 	for _, want := range []string{`text-danger">1<`, `text-warning">1<`, `text-info">1<`, `">3</span>`} {
-		if !strings.Contains(body, want) {
+		if !strings.Contains(list, want) {
 			t.Errorf("cards: missing %s", want)
 		}
+	}
+	// The service's own cards leave the server's row out.
+	body := get()
+	if !strings.Contains(body, `">2</span>`) || strings.Contains(body, `">3</span>`) {
+		t.Error("service cards should count only its rows")
 	}
 	dep := section(body, "deploy")
 	if !strings.Contains(dep, "openssl") || !strings.Contains(dep, "2 falhas") || !strings.Contains(dep, `action="/p/lab/s/web/deploy"`) || !strings.Contains(dep, "3.5.4-r0") {
@@ -159,7 +193,7 @@ func TestUpdatesPageSections(t *testing.T) {
 		t.Errorf("code section: %s", code)
 	}
 	wait := section(body, "wait")
-	for _, want := range []string{"stdlib (gosu)", "3 falhas", "1.25.4", "imagem ainda não saiu", "sem correção ainda", "vem com uma versão do Hangar", "servidor · Caddy"} {
+	for _, want := range []string{"stdlib (gosu)", "3 falhas", "1.25.4", "imagem ainda não saiu", "sem correção ainda"} {
 		if !strings.Contains(wait, want) {
 			t.Errorf("wait section misses %q", want)
 		}
@@ -175,9 +209,12 @@ func TestUpdatesPageSections(t *testing.T) {
 		t.Error("advisory list of the stdlib row")
 	}
 
+	if srv := section(getAt("/updates/server"), "wait"); !strings.Contains(srv, "vem com uma versão do Hangar") {
+		t.Errorf("server's wait section: %s", srv)
+	}
 	// A Hangar release is out: the edge goes to "deploy", as "Update Hangar".
 	e.upd.available = &update.Available{Version: "v1.1.0"}
-	dep = section(get(), "deploy")
+	dep = section(getAt("/updates/server"), "deploy")
 	if !strings.Contains(dep, `href="/update"`) || !strings.Contains(dep, "Atualizar Hangar") {
 		t.Errorf("edge with a Hangar release: %s", dep)
 	}
@@ -185,7 +222,7 @@ func TestUpdatesPageSections(t *testing.T) {
 	// With sudo the switch is a form posting the tag.
 	e.now = e.now.Add(30 * time.Second)
 	p, _ := e.svc.Authenticate(context.Background(), c.Value)
-	rec := e.do(req{method: "POST", target: "/sudo", form: url.Values{"csrf": {p.CSRFToken}, "code": {e.code(t)}, "next": {"/updates"}}, cookies: []*http.Cookie{c}})
+	rec := e.do(req{method: "POST", target: "/sudo", form: url.Values{"csrf": {p.CSRFToken}, "code": {e.code(t)}, "next": {"/updates/lab/web"}}, cookies: []*http.Cookie{c}})
 	c = cookie(rec, sessionCookie)
 	tag = section(get(), "tag")
 	if !strings.Contains(tag, `action="/p/lab/s/web/image"`) || !strings.Contains(tag, `name="tag" value="1.31-alpine"`) {
@@ -198,7 +235,7 @@ func TestUpdatesActionsByRole(t *testing.T) {
 	id := e.labService(t)
 	e.seedBuckets(t, id)
 	c, _ := e.session(t, auth.RoleOperator)
-	body := e.do(req{method: "GET", target: "/updates", cookies: []*http.Cookie{c}}).Body.String()
+	body := e.do(req{method: "GET", target: "/updates/lab/web", cookies: []*http.Cookie{c}}).Body.String()
 	if !strings.Contains(body, `action="/p/lab/s/web/deploy"`) || !strings.Contains(body, `action="/updates/ignore"`) {
 		t.Error("operator: deploy and ignore expected")
 	}
@@ -283,18 +320,18 @@ func TestUpdateHistoryListsEveryUpdate(t *testing.T) {
 	}
 }
 
-// A filtered section shows 25 rows per page, loudest first; the full page
-// shows the first rows of each section with a link to the rest; the cards
-// count every row; out-of-range pages are clamped, and ignoring a row
-// returns to its section and page.
+// A service's section shows its first 50 rows and a "Load more" to the
+// next ones (server-side: the link opens just that section's next rows);
+// out-of-range pages are clamped; the cards count every row; ignoring a
+// row returns to the service's page at its section.
 func TestUpdatesPagination(t *testing.T) {
 	e := newEnv(t)
 	id := e.labService(t)
 	e.seedFindings(t, id)
-	for i := range 57 {
+	for i := range 119 {
 		q := fmt.Sprintf(`INSERT INTO dependency_findings (id, service_id, target, ecosystem, package, current_version, fixed_version, severity, level,
 			advisory_id, kind, remedy, first_seen_at, last_seen_at)
-		 VALUES ('dep_pkg%02d', '%s', '', 'Debian:13', 'pkg-%02d', '1.0', '', 'high', 'security', 'CVE-%02d', 'vuln', 'no_fix', 1, 1)`, i, id, i, i)
+		 VALUES ('dep_pkg%03d', '%s', '', 'Debian:13', 'pkg-%03d', '1.0', '', 'high', 'security', 'CVE-%03d', 'vuln', 'no_fix', 1, 1)`, i, id, i, i)
 		if _, err := e.st.DB.Exec(q); err != nil {
 			t.Fatal(err)
 		}
@@ -315,46 +352,50 @@ func TestUpdatesPagination(t *testing.T) {
 	}
 	rows := func(body string) int { return strings.Count(body, `data-tuc-modal="#ignore-`) }
 
-	full := get("/updates")
-	if !strings.Contains(full, `href="/updates?bucket=wait"`) || !strings.Contains(full, "Ver todos (58)") || strings.Contains(full, "tuc-pagination") {
-		t.Error("full page: the wait section should show its first rows and link to the rest")
+	full := get("/updates/lab/web")
+	if rows(full) != 50+1 || !strings.Contains(full, `href="/updates/lab/web?bucket=wait&amp;page=2" data-load-more`) || !strings.Contains(full, "120 itens") {
+		t.Errorf("first page: %d rows, or no load more", rows(full))
 	}
-	first := get("/updates?bucket=wait")
-	if rows(first) != 25 || !strings.Contains(first, "1–25 de 58") || !strings.Contains(first, "ainda não verificado") {
-		t.Errorf("page 1: %d rows, range or loudest row missing", rows(first))
+	if !strings.Contains(full, "ainda não verificado") {
+		t.Error("the loudest row is not first")
 	}
-	if !strings.Contains(first, `class="tuc-pagination"`) || !strings.Contains(first, `href="/updates?bucket=wait&amp;page=2"`) {
-		t.Error("page 1 without Tucano pagination")
-	}
-	second := get("/updates?bucket=wait&page=2&ok=scan")
-	if rows(second) != 25 || !strings.Contains(second, "26–50 de 58") || strings.Contains(second, "django==") {
+	second := get("/updates/lab/web?bucket=wait&page=2")
+	if rows(second) != 50 || !strings.Contains(second, "51–100 de 120") || strings.Contains(second, `id="bucket-updates"`) ||
+		!strings.Contains(second, `page=3" data-load-more`) {
 		t.Errorf("page 2: %d rows or wrong slice", rows(second))
 	}
-	if !strings.Contains(second, `aria-current="page">2<`) || regexp.MustCompile(`href="/updates\?[^"]*ok=scan`).MatchString(second) {
-		t.Error("page 2 not current, or page links keep the flash")
+	last := get("/updates/lab/web?bucket=wait&page=3")
+	if rows(last) != 20 || strings.Contains(last, "data-load-more") {
+		t.Errorf("last page: %d rows, or a load more past the end", rows(last))
 	}
-	if !strings.Contains(second, `name="page" value="2"`) || !strings.Contains(second, `name="bucket" value="wait"`) {
-		t.Error("ignore form does not carry the section and page")
-	}
-	// The cards count every row, not the page.
-	if !strings.Contains(second, `">58</span>`) {
-		t.Error("summary cards count only the page")
-	}
-	for target, want := range map[string]string{"/updates?bucket=wait&page=99": "51–58 de 58", "/updates?bucket=wait&page=abc": "1–25 de 58", "/updates?bucket=wait&page=-3": "1–25 de 58"} {
+	for target, want := range map[string]string{"/updates/lab/web?bucket=wait&page=99": "101–120 de 120", "/updates/lab/web?bucket=wait&page=abc": "page=2\" data-load-more", "/updates/lab/web?bucket=wait&page=-3": "page=2\" data-load-more"} {
 		if body := get(target); !strings.Contains(body, want) {
 			t.Errorf("%s not clamped to %q", target, want)
 		}
 	}
-	// One page of results: no pagination at all.
-	if body := get("/updates?bucket=updates"); strings.Contains(body, "tuc-pagination") || !strings.Contains(body, "1.30-alpine") {
-		t.Error("pagination shown for a single page")
+	// The cards count every row, not the page.
+	if !strings.Contains(second, `">120</span>`) {
+		t.Error("summary cards count only the page")
+	}
+	// The ignore form carries the page to come back to.
+	if !strings.Contains(second, `name="back" value="/updates/lab/web"`) || !strings.Contains(second, `name="bucket" value="wait"`) {
+		t.Error("ignore form does not carry the service's page and section")
 	}
 
 	rec := e.do(req{method: "POST", target: "/updates/ignore", form: url.Values{
-		"csrf": {p.CSRFToken}, "id": {"dep_pkg30"}, "mode": {"days"}, "reason": {"sem pressa"}, "page": {"2"}, "bucket": {"wait"},
+		"csrf": {p.CSRFToken}, "id": {"dep_pkg030"}, "mode": {"days"}, "reason": {"sem pressa"}, "back": {"/updates/lab/web"}, "bucket": {"wait"},
 	}, cookies: []*http.Cookie{c}})
-	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || loc != "/updates?bucket=wait&ok=ignored&page=2" {
+	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || loc != "/updates/lab/web?ok=ignored#bucket-wait" {
 		t.Errorf("ignore redirect: %d %q", rec.Code, loc)
+	}
+	// Anywhere else than an updates page goes back to the list.
+	for _, back := range []string{"https://evil.example/", "//evil.example", "/updates/lab/web/../../x", "/p/lab/s/web"} {
+		rec = e.do(req{method: "POST", target: "/updates/ignore", form: url.Values{
+			"csrf": {p.CSRFToken}, "id": {"dep_pkg031"}, "mode": {"days"}, "reason": {"sem pressa"}, "back": {back},
+		}, cookies: []*http.Cookie{c}})
+		if loc := rec.Header().Get("Location"); loc != "/updates?ok=ignored" {
+			t.Errorf("back %q: redirect %q", back, loc)
+		}
 	}
 }
 
@@ -374,7 +415,7 @@ func TestIgnoreRowHidesItsPackages(t *testing.T) {
 	if err := e.st.DB.QueryRow(`SELECT until_version FROM finding_ignores WHERE package = 'openssl' AND advisory_id = ''`).Scan(&until); err != nil || until != "3.5.4-r0" {
 		t.Errorf("rule until %q (%v), want the highest fixed version", until, err)
 	}
-	body := e.do(req{method: "GET", target: "/updates", cookies: []*http.Cookie{c}}).Body.String()
+	body := e.do(req{method: "GET", target: "/updates/lab/web", cookies: []*http.Cookie{c}}).Body.String()
 	if strings.Contains(body, `id="bucket-deploy"`) {
 		t.Error("the ignored row is still listed")
 	}

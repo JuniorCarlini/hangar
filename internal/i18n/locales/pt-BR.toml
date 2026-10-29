@@ -1612,10 +1612,9 @@ state = "Estado"
 updated = "Atualizado"
 
 [deps]
+load_more = "Carregar mais"
 flaws_title = { one = "1 falha em {where}", other = "{n} falhas em {where}" }
 flaws = { one = "1 falha", other = "{n} falhas" }
-show_bucket = "Ver todos ({n})"
-bucket_empty = "Nada neste grupo."
 rows = { one = "1 item", other = "{n} itens" }
 page_title = "Atualizações · Hangar"
 title = "Atualizações e vulnerabilidades"
@@ -3130,6 +3129,8 @@ major = "só na {tag} (major)"
 unchecked = "ainda não verificado"
 
 [deps.export]
+title_scoped = "Vulnerabilidades de {scope} em {host}"
+project = "projeto {project}"
 copy_all = "Copiar tudo"
 copy_all_hint = "Copia todas as seções em Markdown, para colar para quem vai corrigir"
 copy_section = "Copiar {section} em Markdown"
@@ -3153,6 +3154,52 @@ waiting = "Nada a fazer agora ({reason})."
 image = "imagem {name}"
 image_eco = "imagem"
 severe_other = "{severe} graves · {other} outras"
+
+[deps.svc]
+list_title = "Serviços"
+count = { one = "1 serviço", other = "{n} serviços" }
+search = "Buscar serviço, projeto ou imagem"
+no_match = "Nenhum serviço com esses filtros."
+clean = "Nada pendente"
+edge_source = "imagem do Caddy, vem com o Hangar"
+col_service = "Serviço"
+col_actions = "O que fazer"
+col_scan = "Verificado"
+open = "Abrir {where}"
+copy_hint = "Copiar as vulnerabilidades de {where} em Markdown"
+copy_hint_here = "Copiar as vulnerabilidades deste serviço em Markdown, para colar para quem vai corrigir"
+never = "não verificado"
+scan_error = "Inventário incompleto: parte da imagem não pôde ser lida."
+scan_error_detail = "O inventário deste serviço ficou incompleto ({detail}). O que foi lido continua sendo verificado."
+page_title = "{where} · Atualizações · Hangar"
+back = "Todos os serviços"
+open_service = "Abrir serviço"
+empty = "Nada pendente neste serviço: sem vulnerabilidade conhecida e na versão mais nova."
+not_scanned = "Ainda não verificado. A verificação roda todo dia às 06:00."
+card_title = "Vulnerabilidades"
+details = "Ver detalhes"
+nothing = "Nada pendente na última verificação ({when})."
+scanned = "verificado {when}"
+
+[deps.chip]
+critical = "Crítica"
+high = "Alta"
+medium = "Média"
+low = "Baixa"
+
+[deps.sev_n]
+critical = { one = "1 crítica", other = "{n} críticas" }
+high = { one = "1 alta", other = "{n} altas" }
+medium = { one = "1 média", other = "{n} médias" }
+low = { one = "1 baixa", other = "{n} baixas" }
+unknown = { one = "1 sem nota", other = "{n} sem nota" }
+
+[deps.act_n]
+deploy = { one = "1 com deploy", other = "{n} com deploy" }
+tag = { one = "1 trocar versão", other = "{n} trocar versão" }
+code = { one = "1 no código", other = "{n} no código" }
+wait = { one = "1 aguardando", other = "{n} aguardando" }
+updates = { one = "1 versão nova", other = "{n} versões novas" }
 
 [volume.limit]
 size = "Tamanho (GB)"

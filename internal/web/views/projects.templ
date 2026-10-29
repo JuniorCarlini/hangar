@@ -448,6 +448,8 @@ type ServiceData struct {
 	OpenTerminal bool
 	Metrics      ServiceMetrics // filled only on the metrics tab
 	Backups      ServiceBackups // filled only on the backups tab
+	// Vulns is the vulnerability summary of the Visão tab (nil = none).
+	Vulns        *ServiceVulns
 	PreDeploy    string
 	HealthPath   string
 	Git          *GitView // nil for a service that runs an image

@@ -1615,10 +1615,9 @@ state = "State"
 updated = "Updated"
 
 [deps]
+load_more = "Load more"
 flaws_title = { one = "1 advisory in {where}", other = "{n} advisories in {where}" }
 flaws = { one = "1 advisory", other = "{n} advisories" }
-show_bucket = "Show all ({n})"
-bucket_empty = "Nothing in this group."
 rows = { one = "1 item", other = "{n} items" }
 page_title = "Updates · Hangar"
 title = "Updates and vulnerabilities"
@@ -3132,6 +3131,8 @@ major = "only in {tag} (major)"
 unchecked = "not checked yet"
 
 [deps.export]
+title_scoped = "Vulnerabilities of {scope} on {host}"
+project = "project {project}"
 copy_all = "Copy all"
 copy_all_hint = "Copies every section as Markdown, to paste to whoever will fix it"
 copy_section = "Copy {section} as Markdown"
@@ -3155,6 +3156,52 @@ waiting = "Nothing to do yet ({reason})."
 image = "image {name}"
 image_eco = "image"
 severe_other = "{severe} severe · {other} other"
+
+[deps.svc]
+list_title = "Services"
+count = { one = "1 service", other = "{n} services" }
+search = "Search service, project or image"
+no_match = "No service matches these filters."
+clean = "Nothing pending"
+edge_source = "Caddy image, comes with Hangar"
+col_service = "Service"
+col_actions = "What to do"
+col_scan = "Checked"
+open = "Open {where}"
+copy_hint = "Copy the vulnerabilities of {where} as Markdown"
+copy_hint_here = "Copy this service's vulnerabilities as Markdown, to paste to whoever will fix them"
+never = "not checked"
+scan_error = "Incomplete inventory: part of the image could not be read."
+scan_error_detail = "This service's inventory is incomplete ({detail}). What could be read is still checked."
+page_title = "{where} · Updates · Hangar"
+back = "All services"
+open_service = "Open service"
+empty = "Nothing pending in this service: no known vulnerability and up to date."
+not_scanned = "Not checked yet. The check runs every day at 06:00."
+card_title = "Vulnerabilities"
+details = "View details"
+nothing = "Nothing pending at the last check ({when})."
+scanned = "checked {when}"
+
+[deps.chip]
+critical = "Critical"
+high = "High"
+medium = "Medium"
+low = "Low"
+
+[deps.sev_n]
+critical = { one = "1 critical", other = "{n} critical" }
+high = { one = "1 high", other = "{n} high" }
+medium = { one = "1 medium", other = "{n} medium" }
+low = { one = "1 low", other = "{n} low" }
+unknown = { one = "1 unrated", other = "{n} unrated" }
+
+[deps.act_n]
+deploy = { one = "1 by deploy", other = "{n} by deploy" }
+tag = { one = "1 switch version", other = "{n} switch version" }
+code = { one = "1 in code", other = "{n} in code" }
+wait = { one = "1 waiting", other = "{n} waiting" }
+updates = { one = "1 new version", other = "{n} new versions" }
 
 [volume.limit]
 size = "Size (GB)"

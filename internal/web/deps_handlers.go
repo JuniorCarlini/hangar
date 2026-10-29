@@ -3,13 +3,10 @@ package web
 import (
 	"context"
 	"net/http"
-	"net/url"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/deps"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
@@ -18,12 +15,6 @@ import (
 // --- updates and vulnerabilities page (docs/14, docs/17 § 3.8) ---------------
 
 const (
-	// rowsPerSection is how many rows a section shows on the full page; the
-	// rest are behind its filter.
-	rowsPerSection = 10
-	// rowsPerPage is one page of a filtered section: a real server can have
-	// hundreds of rows waiting for a fix.
-	rowsPerPage = 25
 	// advisoriesPerRow bounds the list in a row's dialog.
 	advisoriesPerRow = 200
 )
@@ -45,16 +36,25 @@ func (h *handlers) updatesPage(w http.ResponseWriter, r *http.Request) {
 	h.renderUpdates(w, r, http.StatusOK, "", flash)
 }
 
+// renderUpdates is the list of services (and the server's own image) with
+// what is pending in each, the riskiest first, filtered by a severity, an
+// action and a search, one "Load more" at a time. The cards on top are the
+// totals of every service.
 func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status int, errMsg, flash string) {
 	ctx := r.Context()
 	pr := PrincipalFrom(ctx)
 	d := views.UpdatesData{
-		CSRF: pr.CSRFToken, CanOperate: pr.Role >= auth.RoleOperator, CanAdmin: pr.Role >= auth.RoleAdmin,
-		CanUpdate: pr.Role >= auth.RoleOwner, SudoActive: pr.SudoFor(auth.SudoStrict, time.Now()),
-		Error: errMsg, Flash: flash, Bucket: r.FormValue("bucket"), Running: h.deps.Running(),
+		UpdatesActions: updatesActions(pr), Error: errMsg, Flash: flash, Running: h.deps.Running(),
+		Bucket: r.FormValue("bucket"), Sev: r.FormValue("sev"), Query: strings.TrimSpace(r.FormValue("q")),
 	}
 	if !validBucket(d.Bucket) {
 		d.Bucket = ""
+	}
+	if !validSev(d.Sev) {
+		d.Sev = ""
+	}
+	if len(d.Query) > 100 {
+		d.Query = d.Query[:100]
 	}
 	if h.deps == nil {
 		d.Empty = true
@@ -73,50 +73,40 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 	if err != nil {
 		status, d.Error = userError(r, err)
 	}
+	fs = visibleFindings(pr, fs)
 	for _, f := range fs {
 		if f.Ignored {
 			d.IgnoredCount++
 		}
 	}
-	// The edge's image comes with Hangar: a newer release is its "deploy".
-	hangarUpdate := false
-	if h.updates != nil {
-		if av, _ := h.updates.Latest(); av != nil {
-			hangarUpdate = true
-		}
-	}
-	groups := deps.GroupFindings(fs, hangarUpdate)
-	for _, b := range deps.Buckets {
-		d.Cards = append(d.Cards, views.BucketCard{Bucket: b, Count: len(groups[b])})
-	}
+	groups := deps.GroupFindings(fs, h.hangarUpdate())
 	d.Empty = true
-	page, _ := strconv.Atoi(r.FormValue("page"))
 	for _, b := range sectionOrder {
-		rows := groups[b]
-		if len(rows) > 0 {
+		if len(groups[b]) > 0 {
 			d.Empty = false
 		}
-		if d.Bucket != "" && b != d.Bucket || d.Bucket == "" && len(rows) == 0 {
-			continue
+		if b != deps.BucketUpdates {
+			d.Cards = append(d.Cards, views.BucketCard{Bucket: b, Count: len(groups[b])})
 		}
-		s := views.UpdatesSection{Bucket: b, Total: len(rows)}
-		shown := rows
-		if d.Bucket == "" {
-			if len(rows) > rowsPerSection {
-				shown, s.More = rows[:rowsPerSection], true
-			}
-		} else {
-			q := url.Values{"bucket": {b}}
-			s.Pager = views.NewPager("/updates", q, page, len(rows), rowsPerPage)
-			shown = rows[s.Pager.Offset():s.Pager.End()]
-		}
-		for _, g := range shown {
-			s.Rows = append(s.Rows, groupRow(ctx, g))
-		}
-		d.Sections = append(d.Sections, s)
 	}
-	if d.Bucket != "" {
-		d.Empty = false // the filtered section says it is empty itself
+
+	scans, err := h.deps.Scans(ctx)
+	if err != nil {
+		loggerFrom(ctx).Error("dependency scans", "error", err)
+	}
+	known := h.vulnServices(ctx)
+	targets := h.listTargets(ctx, pr, groups, scans, known, d.Sev, d.Bucket, d.Query)
+	d.Filtered = d.Sev != "" || d.Bucket != "" || d.Query != ""
+	d.Total = len(targets)
+	from, to, next := chunk(pageNum(r), len(targets), targetsPerPage)
+	if next > 0 {
+		d.NextHref = withPage("/updates", d.Filters(), next)
+	}
+	if from > 0 {
+		d.From = from + 1
+	}
+	for _, t := range targets[from:to] {
+		d.Services = append(d.Services, h.targetRow(ctx, t))
 	}
 
 	ign, err := h.deps.Ignores(ctx)
@@ -133,10 +123,6 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 		}
 		d.Ignores = append(d.Ignores, row)
 	}
-	scans, err := h.deps.Scans(ctx)
-	if err != nil {
-		loggerFrom(ctx).Error("dependency scans", "error", err)
-	}
 	// After a restart the in-memory last run is gone: use the newest
 	// stored inventory.
 	if d.LastRun == "" {
@@ -150,7 +136,7 @@ func (h *handlers) renderUpdates(w http.ResponseWriter, r *http.Request, status 
 			d.LastRun = ago(ctx, newest.Format(time.RFC3339Nano), time.Now())
 		}
 	}
-	d.Problems = h.scanProblems(ctx, scans)
+	d.Problems = scanProblems(ctx, scans, known)
 	render(w, r, status, views.Updates(d))
 }
 
@@ -174,25 +160,21 @@ func targetLabel(ctx context.Context, where string) string {
 
 // scanProblems names the targets whose last inventory could not read
 // everything (a distroless image without find/cat, a stopped container).
-func (h *handlers) scanProblems(ctx context.Context, scans map[string]deps.ScanInfo) []views.ScanProblem {
-	names := map[string]string{deps.EdgeTarget: targetLabel(ctx, deps.EdgeTarget)}
-	if list, err := h.projects.ListProjects(ctx); err == nil {
-		for _, p := range list {
-			svcs, err := h.projects.ListServices(ctx, p.ID)
-			if err != nil {
-				continue
-			}
-			for _, s := range svcs {
-				names[s.ID] = p.Slug + "/" + s.Slug
-			}
-		}
-	}
+func scanProblems(ctx context.Context, scans map[string]deps.ScanInfo, known map[string]knownService) []views.ScanProblem {
 	var out []views.ScanProblem
 	for key, s := range scans {
-		if s.Error == "" || names[key] == "" {
+		if s.Error == "" {
 			continue
 		}
-		out = append(out, views.ScanProblem{Where: names[key], Detail: s.Error, Packages: s.Packages})
+		where, href := targetLabel(ctx, deps.EdgeTarget), serverPath
+		if key != deps.EdgeTarget {
+			k, ok := known[key]
+			if !ok {
+				continue
+			}
+			where, href = k.Project+"/"+k.Service, targetHref(k.Project, k.Service)
+		}
+		out = append(out, views.ScanProblem{Where: where, Href: href, Detail: s.Error, Packages: s.Packages})
 	}
 	views.SortScanProblems(out)
 	return out
@@ -422,16 +404,17 @@ func (h *handlers) updatesIgnore(w http.ResponseWriter, r *http.Request) {
 		h.renderUpdates(w, r, code, msg, "")
 		return
 	}
-	// Back to the section and page the row was on (clamped on render if
-	// it was the last row of the last page).
-	q := url.Values{"ok": {"ignored"}}
-	if b := r.PostFormValue("bucket"); validBucket(b) {
-		q.Set("bucket", b)
-		if n, _ := strconv.Atoi(r.PostFormValue("page")); n > 1 {
-			q.Set("page", strconv.Itoa(n))
-		}
+	// Back to the service's page, at the section the row was in.
+	back := r.PostFormValue("back")
+	if !validTargetPath(back) {
+		redirectLocal(w, r, "/updates?ok=ignored")
+		return
 	}
-	redirectLocal(w, r, "/updates?"+q.Encode())
+	to := back + "?ok=ignored"
+	if b := r.PostFormValue("bucket"); validBucket(b) {
+		to += "#bucket-" + b
+	}
+	redirectLocal(w, r, to)
 }
 
 func (h *handlers) updatesUnignore(w http.ResponseWriter, r *http.Request) {

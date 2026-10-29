@@ -83,10 +83,68 @@ func TestUpdatesExportMarkdown(t *testing.T) {
 		t.Errorf("english export: %s", en)
 	}
 
-	// The page offers the buttons.
+	// The list offers everything and each service; a service's page, the
+	// service and each of its sections.
 	page := e.do(req{method: "GET", target: "/updates", cookies: []*http.Cookie{c}}).Body.String()
-	if !strings.Contains(page, `data-copy-url="/updates/export"`) || !strings.Contains(page, `data-copy-url="/updates/export?bucket=code"`) {
-		t.Error("updates page without the copy buttons")
+	if !strings.Contains(page, `data-copy-url="/updates/export"`) || !strings.Contains(page, `data-copy-url="/updates/export?service=lab%2Fweb"`) ||
+		!strings.Contains(page, `data-copy-url="/updates/export?service=edge"`) {
+		t.Error("updates list without the copy buttons")
+	}
+	svc := e.do(req{method: "GET", target: "/updates/lab/web", cookies: []*http.Cookie{c}}).Body.String()
+	if !strings.Contains(svc, `data-copy-url="/updates/export?service=lab%2Fweb"`) || !strings.Contains(svc, `data-copy-url="/updates/export?bucket=code&amp;service=lab%2Fweb"`) {
+		t.Error("service page without the copy buttons")
+	}
+}
+
+// Copying one service gives only its findings; one project, only its
+// services; the scope never widens what the user may see.
+func TestUpdatesExportScope(t *testing.T) {
+	e := newEnv(t)
+	id := e.labService(t)
+	e.seedBuckets(t, id)
+	other, err := e.pm.CreateService(context.Background(), projects.Actor{UserID: "usr_x"}, "lab", projects.ServiceInput{Slug: "api", Image: "python:3.12"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.pm.Wait()
+	if _, err := e.st.DB.Exec(`INSERT INTO dependency_findings (id, service_id, target, ecosystem, package, current_version, fixed_version,
+		severity, level, advisory_id, source, kind, remedy, first_seen_at, last_seen_at)
+		VALUES ('dep_api', ?, '', 'PyPI', 'django', '5.2.3', '5.2.7', 'critical', 'critical', 'GHSA-api-1', '/app/uv.lock', 'vuln', 'code', 1, 1)`, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	c, _ := e.session(t, auth.RoleViewer)
+	get := func(target string) (int, string) {
+		t.Helper()
+		rec := e.do(req{method: "GET", target: target, cookies: []*http.Cookie{c}})
+		return rec.Code, rec.Body.String()
+	}
+
+	_, web := get("/updates/export?service=lab/web")
+	if !strings.HasPrefix(web, "# Vulnerabilidades de lab/web em ") || !strings.Contains(web, "### lab/web") || !strings.Contains(web, "openssl") {
+		t.Errorf("service export:\n%s", web)
+	}
+	if strings.Contains(web, "lab/api") || strings.Contains(web, "GHSA-api-1") || strings.Contains(web, "CVE-2026-0006") {
+		t.Errorf("service export carries other services:\n%s", web)
+	}
+	_, api := get("/updates/export?service=lab%2Fapi&bucket=code")
+	if !strings.Contains(api, "GHSA-api-1") || strings.Contains(api, "pillow") || strings.Contains(api, "## Resolve com deploy") {
+		t.Errorf("service section export:\n%s", api)
+	}
+	_, edge := get("/updates/export?service=edge")
+	if !strings.Contains(edge, "# Vulnerabilidades de servidor · Caddy em ") || !strings.Contains(edge, "CVE-2026-0006") || strings.Contains(edge, "openssl") {
+		t.Errorf("server export:\n%s", edge)
+	}
+	_, proj := get("/updates/export?project=lab")
+	if !strings.Contains(proj, "# Vulnerabilidades de projeto lab em ") || !strings.Contains(proj, "### lab/web") || !strings.Contains(proj, "### lab/api") || strings.Contains(proj, "CVE-2026-0006") {
+		t.Errorf("project export:\n%s", proj)
+	}
+	if _, none := get("/updates/export?service=loja/web"); !strings.Contains(none, "Nada pendente nesta seção.") {
+		t.Errorf("unknown service: %s", none)
+	}
+	for _, bad := range []string{"?service=lab", "?service=../web", "?service=lab/web/x", "?project=LAB", "?project=a/b"} {
+		if code, _ := get("/updates/export" + bad); code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", bad, code)
+		}
 	}
 }
 

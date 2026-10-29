@@ -258,6 +258,9 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET /updates", h.updatesPage, viewer)
 	// The page's "Copy" buttons: what it shows, as Markdown.
 	rt.HandleFunc("GET /updates/export", h.updatesExport, viewer)
+	// One service's findings (and the server's own image's).
+	rt.HandleFunc("GET "+serverPath, h.updatesServerPage, viewer)
+	rt.HandleFunc("GET /updates/{project}/{service}", h.updatesServicePage, viewer)
 	rt.HandleFunc("POST /updates/scan", h.updatesScan, Policy{Role: auth.RoleOperator, Audit: "deps.scan"})
 	rt.HandleFunc("POST /updates/ignore", h.updatesIgnore, Policy{Role: auth.RoleOperator, Audit: "deps.ignore", AuditByHandler: true})
 	rt.HandleFunc("POST /updates/unignore", h.updatesUnignore, Policy{Role: auth.RoleOperator, Audit: "deps.unignore", AuditByHandler: true})

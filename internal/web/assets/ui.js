@@ -63,6 +63,39 @@
     done.then(function () { copyToast(b, true); }, function () { copyToast(b, false); })
       .then(function () { b.disabled = false; });
   });
+  // "Load more" ([data-load-more] inside a [data-more-list] with an id):
+  // fetch the next page, move its [data-more-items] children into ours (a
+  // table body, the rows' dialogs) and take its footer, which links the
+  // page after or is gone on the last one. On any failure the link opens
+  // the next page as a plain navigation.
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-load-more]');
+    var list = a && a.closest('[data-more-list]');
+    if (!list || !list.id || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault();
+    if (a.getAttribute('aria-busy') === 'true') return;
+    a.setAttribute('aria-busy', 'true');
+    fetch(a.href, { credentials: 'same-origin', headers: { Accept: 'text/html' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('status ' + r.status);
+        return r.text();
+      })
+      .then(function (html) {
+        var src = new DOMParser().parseFromString(html, 'text/html').getElementById(list.id);
+        if (!src) throw new Error('list');
+        var to = list.querySelectorAll('[data-more-items]');
+        src.querySelectorAll('[data-more-items]').forEach(function (box, i) {
+          if (!to[i]) return;
+          while (box.firstChild) to[i].appendChild(document.adoptNode(box.firstChild));
+        });
+        var foot = list.querySelector('[data-more-foot]');
+        var next = src.querySelector('[data-more-foot]');
+        if (foot && next) foot.replaceWith(document.adoptNode(next));
+        else if (foot) foot.remove();
+        if (window.Tucano && Tucano.init) Tucano.init(list);
+      })
+      .catch(function () { location.href = a.href; });
+  });
   // Names become identifiers the way the server derives them
   // (projects.Slugify — keep both in step): lowercase, no accents, anything
   // else a hyphen, at most 32 characters, "s-" before a leading digit.
