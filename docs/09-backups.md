@@ -441,6 +441,74 @@ continua sendo um `pg_dump -Fc` puro, que qualquer ferramenta lê.
 - Os hashes das senhas só existem cifrados (no bucket e no download com kit)
   e nunca aparecem em log, auditoria ou tela.
 
+## Backup do projeto (um arquivo com tudo)
+
+Em **Projeto ▸ Configurações ▸ Baixar backup do projeto** 🔒 (admin, 2FA de
+novo, como o download de um serviço) sai **um arquivo só**,
+`<projeto>-<data>.hangar.zip`, com todos os serviços do projeto. Não há
+opções: é sempre tudo.
+
+```
+<projeto>-20261028T120000Z.hangar.zip
+├── README.txt
+├── project.json(.age)        conexões com outros projetos
+├── services/
+│   ├── db/                   igual ao download do serviço:
+│   │   ├── README.txt          README, dados, usuários e service.json
+│   │   ├── lab_db-….roles.sql(.age)
+│   │   ├── lab_db-….dump(.age)
+│   │   └── service.json(.age)
+│   ├── files/ (…volumes.tar…)
+│   └── web/   (só README e service.json: não guarda dados)
+└── manifest.json             por último: formato, versão do Hangar, cada
+                              arquivo com papel, tamanho e SHA-256
+```
+
+- Os dados de cada serviço são o **backup testado mais recente que está no
+  destino**, copiado como está: o serviço não é parado nem pausado para isso.
+  Quem ainda não tem backup (ou cujo backup não serve, por exemplo feito com
+  outra chave) ganha um agora, do jeito automático de sempre (pg_dump +
+  usuários, receita do template ou cópia dos volumes). O `manifest.json` diz
+  de onde veio cada um (`source`: `backup` ou `now`).
+- Cifra: a mesma regra do download de um serviço. Com o kit, todo arquivo de
+  dados e de configuração é `.age`; no modo simples, vem tudo aberto.
+- O `service.json` agora também guarda os exports (o que os outros serviços
+  referenciam), as variáveis oferecidas, as configurações de deploy e a
+  posição no canvas.
+- Audit log: `project.backup.prepare` (o arquivo ficou pronto, e de onde veio
+  cada serviço) e `project.backup.download` (o arquivo foi baixado); o
+  download também vira alerta de segurança, como o de um serviço.
+
+### Restaurar o projeto
+
+**Novo projeto ▸ A partir de um backup** 🔒: nome do projeto, o arquivo e,
+se ele foi feito com o kit, o kit (e a frase-senha). Sempre vira um
+**projeto novo**: nunca sobrescreve um projeto que existe.
+
+1. O arquivo sobe direto para a pasta de staging (em streaming, sem passar do
+   espaço livre do disco); o manifesto é conferido (formato, caminhos, o que
+   cada serviço precisa) e o kit é testado lendo o `project.json`.
+2. O projeto e os serviços são criados com a configuração de cada um. As
+   referências e os nomes dos containers do projeto original passam a apontar
+   para a cópia (`${{lab.db.X}}` → `${{db.X}}`, `lab_db` → `copia_db`);
+   `${{db.X}}` já resolve na cópia. Discos compartilhados continuam
+   compartilhados entre os serviços da cópia. Conexões com projetos que
+   existem neste servidor são refeitas.
+3. Em segundo plano: cada arquivo é conferido contra o SHA-256 do manifesto;
+   depois cada serviço com dados sobe e recebe os dados pela **mesma
+   restauração** de um backup do serviço num serviço novo (com os usuários e
+   senhas do banco); por fim sobem os outros.
+4. **Os domínios voltam desligados** e os endpoints ficam internos, para a
+   cópia não tirar o tráfego do original. O projeto mostra um aviso com os
+   domínios que ficaram de fora (e o que mais ficou para decidir: endereços
+   que eram públicos, conexões com projetos que não existem aqui, serviços do
+   Git sem credencial, usuários criados sem senha, serviços que não subiram).
+5. Se a restauração falha, os serviços criados são removidos; o projeto vazio
+   fica com o erro, para apagar ou tentar de novo.
+
+Audit log: `project.restore.start` (com o arquivo, e se uma chave foi usada) e
+`project.restore` (o resultado).
+
 ## Restaurar
 
 ### Pelo painel
