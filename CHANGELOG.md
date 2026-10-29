@@ -12,6 +12,26 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.30] - 2026-10-28
+
+### Adicionado
+
+- **Backup completo para qualquer banco**: MariaDB, MySQL, MongoDB, Redis e
+  Valkey ganham backup como o Postgres: o banco inteiro, com os usuários e
+  senhas, testado num banco descartável antes de valer, sem parar o serviço.
+  Os templates trazem a "receita" de cada banco; um banco que o Hangar não
+  conhece é copiado com o serviço parado por um instante.
+- **Nenhum serviço sem backup**: serviço novo com dados ganha rotina diária
+  às 03:00 sozinho, e a página Backups lista quem está "sem backup", com
+  "Criar rotina".
+- **Baixar backup traz tudo**: dados, usuários e a configuração do serviço
+  num arquivo só.
+
+### Mudado
+
+- O Hangar escolhe sozinho o jeito de copiar cada serviço; a pergunta
+  "Durante a cópia" saiu da rotina.
+
 ## [0.5.29] - 2026-10-28
 
 ### Adicionado
@@ -813,7 +833,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.29...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.30...HEAD
+[0.5.30]: https://github.com/JuniorCarlini/hangar/compare/v0.5.29...v0.5.30
 [0.5.29]: https://github.com/JuniorCarlini/hangar/compare/v0.5.28...v0.5.29
 [0.5.28]: https://github.com/JuniorCarlini/hangar/compare/v0.5.27...v0.5.28
 [0.5.27]: https://github.com/JuniorCarlini/hangar/compare/v0.5.26...v0.5.27
