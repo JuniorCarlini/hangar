@@ -328,6 +328,16 @@ func (m *Manager) loadRoles(ctx context.Context, key string, ids []age.Identity)
 	if rk == "" {
 		return g, false, nil
 	}
+	if src := localFrom(ctx); src != nil {
+		rc, _, err := src.get(rk)
+		if errors.Is(err, errNoPart) {
+			return g, false, nil
+		}
+		if err != nil {
+			return g, false, err
+		}
+		return readRoles(rc, ids)
+	}
 	ts, err := m.targets(ctx)
 	if err != nil {
 		return g, false, err
@@ -341,22 +351,27 @@ func (m *Manager) loadRoles(ctx context.Context, key string, ids []age.Identity)
 			}
 			continue
 		}
-		plain, err := archive.Open(rc, ids, archive.DefaultLimits)
-		if err != nil {
-			_ = rc.Close()
-			return g, false, err
-		}
-		raw, err := io.ReadAll(io.LimitReader(plain, pgroles.MaxGlobals+1))
-		_ = plain.Close()
-		_ = rc.Close()
-		if err != nil {
-			return g, false, err
-		}
-		g, err = pgroles.ParseGlobals(string(raw))
-		return g, err == nil, err
+		return readRoles(rc, ids)
 	}
 	if len(errs) > 0 {
 		return g, false, fmt.Errorf("read the roles of the backup: %w", errors.Join(errs...))
 	}
 	return g, false, nil
+}
+
+// readRoles decrypts and parses the roles saved with a dump, and closes rc.
+func readRoles(rc io.ReadCloser, ids []age.Identity) (pgroles.Globals, bool, error) {
+	var g pgroles.Globals
+	defer func() { _ = rc.Close() }()
+	plain, err := archive.Open(rc, ids, archive.DefaultLimits)
+	if err != nil {
+		return g, false, err
+	}
+	raw, err := io.ReadAll(io.LimitReader(plain, pgroles.MaxGlobals+1))
+	_ = plain.Close()
+	if err != nil {
+		return g, false, err
+	}
+	g, err = pgroles.ParseGlobals(string(raw))
+	return g, err == nil, err
 }

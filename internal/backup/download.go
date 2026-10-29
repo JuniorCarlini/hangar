@@ -30,8 +30,10 @@ var randRead = rand.Read
 // service's configuration) waiting to be fetched once as one bundle
 // (archive.WriteBundle).
 type download struct {
-	Token     string
-	UserID    string
+	Token  string
+	UserID string
+	// ServiceID is the service's id, or the project's for a project
+	// backup (Project set).
 	ServiceID string
 	Label     string
 	FileName  string
@@ -46,12 +48,18 @@ type download struct {
 	// Open: the simple mode's server holds the key, so the files go out
 	// decrypted (encrypted only while they wait here).
 	Open bool
+	// Project is set for a backup of a whole project (ProjectID instead
+	// of ServiceID): its files go out as a project bundle.
+	Project *projectBundle
 }
 
 // dlFile is a staged file of a download and its name in the bundle.
 type dlFile struct {
 	Name string
 	Path string
+	// Role is what the file is (partData, partRoles, partConfig), for
+	// the manifest of a project backup.
+	Role string
 }
 
 // Download is what the UI shows about a prepared download.
@@ -174,47 +182,74 @@ func (m *Manager) prepareFiles(ctx context.Context, s svcRef, base string) (file
 			files = nil
 		}
 	}()
+	files, summary, _, err = m.prepareData(ctx, s, base)
+	if err != nil {
+		return files, nil, err
+	}
+	cf, err := m.configFile(ctx, s)
+	if err != nil {
+		return files, nil, err
+	}
+	return append(files, cf), summary, nil
+}
+
+// prepareData makes a tested, encrypted backup of s's data in the staging
+// dir, the way s is always backed up, and names its files after base. A
+// copy of volumes also returns what it holds (its object metadata, so a
+// restore knows the volumes).
+func (m *Manager) prepareData(ctx context.Context, s svcRef, base string) (files []dlFile, summary map[string]any, volumes string, err error) {
 	switch s.Method {
 	case projects.BackupVolume:
 		v, err := m.archiveVolumes(ctx, s, s.hold())
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 		_ = v.file.f.Close()
-		files = []dlFile{{Name: base + archive.ExtVolumes, Path: v.file.f.Name()}}
+		files = []dlFile{{Name: base + archive.ExtVolumes, Path: v.file.f.Name(), Role: partData}}
 		summary = map[string]any{"files": v.check.Files, "bytes": v.check.Bytes, "pause_ms": v.check.PauseMS, "mode": v.check.Mode}
+		volumes = archive.VolumeManifest{Volumes: v.check.Volumes}.Meta()
 	case projects.BackupRecipe:
 		sf, check, err := m.archiveRecipe(ctx, s)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 		_ = sf.f.Close()
-		files = []dlFile{{Name: base + "." + s.Recipe.FileExt() + ".zst.age", Path: sf.f.Name()}}
+		files = []dlFile{{Name: base + "." + s.Recipe.FileExt() + ".zst.age", Path: sf.f.Name(), Role: partData}}
 		summary = map[string]any{"counts": check.Restored}
 	default:
 		dd, err := m.dumpAndVerify(ctx, s)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 		_ = dd.dump.f.Close()
 		_ = dd.roles.f.Close()
-		files = []dlFile{{Name: base + archive.ExtRoles, Path: dd.roles.f.Name()}, {Name: base + archive.ExtDump, Path: dd.dump.f.Name()}}
+		files = []dlFile{{Name: base + archive.ExtRoles, Path: dd.roles.f.Name(), Role: partRoles}, {Name: base + archive.ExtDump, Path: dd.dump.f.Name(), Role: partData}}
 		summary = map[string]any{"rows": dd.check.Rows, "tables": dd.check.Tables}
 	}
+	return files, summary, volumes, nil
+}
+
+// configFile seals s's configuration (ServiceFile) into the staging dir.
+func (m *Manager) configFile(ctx context.Context, s svcRef) (dlFile, error) {
 	cfg, err := m.serviceJSON(ctx, s)
 	if err != nil {
-		return files, nil, err
+		return dlFile{}, err
 	}
+	return m.sealedJSON(ctx, ServiceFile, cfg)
+}
+
+// sealedJSON seals a configuration file named name into the staging dir.
+func (m *Manager) sealedJSON(ctx context.Context, name string, b []byte) (dlFile, error) {
 	rcpts, err := m.recipients(ctx)
 	if err != nil {
-		return files, nil, err
+		return dlFile{}, err
 	}
-	sf, err := m.sealBytes(rcpts, "service-*.age", cfg)
+	sf, err := m.sealBytes(rcpts, "config-*.age", b)
 	if err != nil {
-		return files, nil, err
+		return dlFile{}, err
 	}
 	_ = sf.f.Close()
-	return append(files, dlFile{Name: ServiceFile + ".age", Path: sf.f.Name()}), summary, nil
+	return dlFile{Name: name + ".age", Path: sf.f.Name(), Role: partConfig}, nil
 }
 
 // ServiceFile is the service's configuration in a download.
@@ -226,7 +261,12 @@ func (m *Manager) serviceJSON(ctx context.Context, s svcRef) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	b, err := json.MarshalIndent(snap, "", "  ")
+	return indentJSON(snap)
+}
+
+// indentJSON is v as an indented JSON file.
+func indentJSON(v any) ([]byte, error) {
+	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +280,7 @@ func (m *Manager) PendingDownload(userID, serviceID string) (Download, bool) {
 	defer m.dlMu.Unlock()
 	m.expireLocked()
 	for _, d := range m.downloads {
-		if d.UserID == userID && d.ServiceID == serviceID {
+		if d.UserID == userID && d.ServiceID == serviceID && d.Project == nil {
 			return Download{Token: d.Token, FileName: d.FileName, Size: d.Size, Ready: d.Ready, Error: d.Error, Expires: d.Expires}, true
 		}
 	}
@@ -266,6 +306,9 @@ func (m *Manager) TakeDownload(ctx context.Context, a Actor, token string) (Bund
 		return nil, "", nil, projects.ErrNotFound
 	}
 	delete(m.downloads, d.Token)
+	if d.Project != nil {
+		return m.takeProject(ctx, a, d)
+	}
 	var opened []io.Closer
 	done := func() {
 		for _, f := range opened {

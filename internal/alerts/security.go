@@ -27,6 +27,8 @@ var SensitiveActions = []string{
 	"service.endpoint.sslip_on",
 	"project.link",
 	"service.backup.download",
+	"project.backup.download",
+	"project.restore.start",
 	"system.update.request",
 	"alerts.channel.delete",
 	"alerts.channel.toggle",

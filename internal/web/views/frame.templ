@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
 
@@ -483,22 +484,83 @@ templ newProjectDialog(n Nav) {
 					@Icon("x", "size-4")
 				</button>
 			</div>
-			<form method="post" action="/projects" class="tuc-modal__body flex flex-col gap-4">
-				<input type="hidden" name="csrf" value={ n.CSRF }/>
+			<div class="tuc-modal__body flex flex-col gap-4">
 				@errorAlert(n.NewProject.Error)
-				<div class="flex min-w-0 flex-col gap-1.5">
-					<label class="tuc-label" for="np-name">{ t(ctx, "projects.form.name") }</label>
-					<input class="tuc-input" id="np-name" name="name" required maxlength="80" autofocus autocomplete="off" placeholder={ t(ctx, "projects.form.name_placeholder") } value={ n.NewProject.Name } data-slug-preview="#np-slug-out"/>
-					<span class="tuc-hint">{ t(ctx, "projects.form.slug_hint") } <span class="font-mono"><span id="np-slug-out" data-empty="lab">lab</span>_web</span></span>
+				<div class="tuc-tabs" data-tuc-tabs>
+					<div class="tuc-tabs__list">
+						<button type="button" class="tuc-tabs__tab" aria-selected={ fmt.Sprint(!n.NewProject.Backup) }>
+							@Icon("folder-plus", "size-3.5")
+							{ t(ctx, "projects.tab_blank") }
+						</button>
+						<button type="button" class="tuc-tabs__tab" aria-selected={ fmt.Sprint(n.NewProject.Backup) }>
+							@Icon("archive-restore", "size-3.5")
+							{ t(ctx, "projects.tab_backup") }
+						</button>
+					</div>
+					<div class="tuc-tabs__panel pt-4" hidden?={ n.NewProject.Backup }>
+						<form method="post" action="/projects" class="flex flex-col gap-4">
+							<input type="hidden" name="csrf" value={ n.CSRF }/>
+							<div class="flex min-w-0 flex-col gap-1.5">
+								<label class="tuc-label" for="np-name">{ t(ctx, "projects.form.name") }</label>
+								<input class="tuc-input" id="np-name" name="name" required maxlength="80" autofocus autocomplete="off" placeholder={ t(ctx, "projects.form.name_placeholder") } value={ n.NewProject.Name } data-slug-preview="#np-slug-out"/>
+								<span class="tuc-hint">{ t(ctx, "projects.form.slug_hint") } <span class="font-mono"><span id="np-slug-out" data-empty="lab">lab</span>_web</span></span>
+							</div>
+							<div class="flex justify-end gap-2">
+								<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+								<button class="tuc-btn is-primary" type="submit">
+									@Icon("folder-plus", "size-3.5")
+									{ t(ctx, "projects.form.submit") }
+								</button>
+							</div>
+						</form>
+					</div>
+					<div class="tuc-tabs__panel pt-4" hidden?={ !n.NewProject.Backup }>
+						@restoreProjectForm(n)
+					</div>
 				</div>
-				<div class="flex justify-end gap-2">
-					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
-					<button class="tuc-btn is-primary" type="submit">
-						@Icon("folder-plus", "size-3.5")
-						{ t(ctx, "projects.form.submit") }
-					</button>
-				</div>
-			</form>
+			</div>
 		</div>
 	</dialog>
+}
+
+// restoreProjectForm is "A partir de um backup": a project backup file
+// (and the kit, when it was made with one) becomes a new project. The file
+// is streamed, so the CSRF token goes in the URL (Policy.Upload).
+templ restoreProjectForm(n Nav) {
+	if !n.SudoCritical {
+		<p class="m-0 text-[13px] text-muted">{ t(ctx, "projects.restore.sudo") }</p>
+		@sudoFormID("np-sudo", n.CSRF, "/?new=1&from=backup", t(ctx, "service.sudo_label"))
+	} else {
+		<form method="post" action={ templ.SafeURL("/projects/restore?csrf=" + url.QueryEscape(n.CSRF)) } enctype="multipart/form-data" class="flex flex-col gap-4">
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "projects.restore.hint") }</p>
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<label class="tuc-label" for="np-rname">{ t(ctx, "projects.form.name") }</label>
+				<input class="tuc-input" id="np-rname" name="name" required maxlength="80" autocomplete="off" placeholder={ t(ctx, "projects.form.name_placeholder") } value={ n.NewProject.Name }/>
+			</div>
+			<div class="flex min-w-0 flex-col gap-1.5">
+				<span class="tuc-label is-required">{ t(ctx, "projects.restore.file") }</span>
+				<input id="np-file" name="file" type="file" accept=".zip,application/zip" required data-tuc-upload aria-label={ t(ctx, "projects.restore.file") }/>
+				<span class="tuc-hint">{ t(ctx, "projects.restore.file_hint") }</span>
+			</div>
+			<div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-3">
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<span class="tuc-label">{ t(ctx, "svcbackup.kit") }</span>
+					<input id="np-kit" name="kit" type="file" accept=".txt,.age,text/plain" data-tuc-upload data-max-size="64KB" aria-label={ t(ctx, "svcbackup.kit") }/>
+					<span class="tuc-hint">{ t(ctx, "projects.restore.kit_hint") }</span>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1.5">
+					<label class="tuc-label" for="np-pass">{ t(ctx, "svcbackup.passphrase") }</label>
+					<input class="tuc-input" id="np-pass" name="passphrase" type="password" autocomplete="off" data-tuc-reveal/>
+					<span class="tuc-hint">{ t(ctx, "svcbackup.passphrase_hint") }</span>
+				</div>
+			</div>
+			<div class="flex justify-end gap-2">
+				<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
+				<button class="tuc-btn is-primary" type="submit">
+					@Icon("archive-restore", "size-3.5")
+					{ t(ctx, "projects.restore.submit") }
+				</button>
+			</div>
+		</form>
+	}
 }

@@ -114,6 +114,8 @@ func TestBackupRoutesPolicies(t *testing.T) {
 		"POST /p/{project}/s/{service}/backup":          {auth.RoleAdmin, auth.SudoCritical},
 		"GET /backups/download/{token}":                 {auth.RoleAdmin, auth.SudoCritical},
 		"GET /backups/runs/{id}/download":               {auth.RoleAdmin, auth.SudoCritical},
+		"POST /p/{project}/backup":                      {auth.RoleAdmin, auth.SudoCritical},
+		"POST /projects/restore":                        {auth.RoleAdmin, auth.SudoCritical},
 	}
 	for pattern, w := range want {
 		p, ok := registered[pattern]

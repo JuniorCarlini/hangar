@@ -45,6 +45,8 @@ type Nav struct {
 	CanStatus bool
 	CSRF      string // for the forms in the account menu
 	CanCreate bool   // may create projects
+	// SudoCritical: the critical actions (restoring a project) may run now.
+	SudoCritical bool
 	// BackupAlerts counts backup problems (docs/09 alerts).
 	BackupAlerts int
 	// KitCheckDue asks the owner to confirm the recovery kit is still kept.
@@ -90,6 +92,8 @@ type NewProjectForm struct {
 	Open  bool
 	Error string
 	Name  string
+	// Backup opens the dialog on "A partir de um backup".
+	Backup bool
 }
 
 // NavProject is a project in the sidebar.

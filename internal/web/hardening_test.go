@@ -22,6 +22,7 @@ var criticalActions = []string{
 	"service.delete", "project.delete",
 	"service.terminal.open", "service.volume.wipe",
 	"service.backup.download", "backup.download_link", "backup.restore.start",
+	"project.backup.download", "project.restore.start",
 	"backup.key.add", "backup.key.confirm", "backup.key.remove",
 	"backup.target.add", "backup.target.remove",
 	"user.invite", "user.invite.cancel", "user.update", "user.remove",

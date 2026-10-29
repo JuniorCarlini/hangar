@@ -263,6 +263,8 @@ name = "Name up to 60 characters, without < or >."
 [projects]
 update_text = "Signed and verified. The update takes under a minute and rolls back by itself if it fails."
 new = "New project"
+tab_blank = "Blank"
+tab_backup = "From a backup"
 update_banner = "Hangar {version} is available."
 update_view = "View update"
 docker_down = "Docker unavailable: the panel could not reach Docker; projects and services are read-only."
@@ -1887,6 +1889,8 @@ service_endpoint_public = "put a service on the internet"
 service_endpoint_sslip_on = "turned on a service's automatic link"
 project_link = "connected two projects"
 service_backup_download = "downloaded a backup"
+project_backup_download = "downloaded a project backup"
+project_restore_start = "restored a project from a backup"
 system_update_request = "requested a Hangar update"
 alerts_channel_delete = "removed an alert channel"
 alerts_channel_toggle = "paused or resumed an alert channel"
@@ -3352,3 +3356,86 @@ cpus = "CPU"
 save = "Save"
 hint = "Limits of the container: it never goes past them. They apply on the next deploy."
 summary = "{memory} MB of memory · {cpus} CPU"
+
+[projects.restore]
+sudo = "Restoring a project brings data and passwords back: confirm your identity first."
+hint = "Creates a new project with every service in the file, each with its data and configuration. No existing project is changed, and domains come back off so the copy takes no traffic from the original."
+file = "Project backup"
+file_hint = "The .hangar.zip file downloaded from the project's Settings, on this or another Hangar."
+kit_hint = "Only if the backup was made with the recovery kit."
+submit = "Restore project"
+
+[project.backup]
+title = "Project backup"
+download = "Download project backup"
+hint = "One file with every service: each one's data (its newest tested backup, or one made now for those that have none), configuration, variables and the links between them. Restore it from New project → From a backup, on this or another Hangar."
+preparing = "Preparing the project backup…"
+failed = "The project backup failed: {error}"
+flash = "Preparing the project backup. The link shows here once it is ready."
+
+[project.backup.error]
+empty = "The project has no services to back up."
+not_running = "{service} has no backup yet and must be running to make one now."
+
+[project.restore.error]
+invalid = "The file has a service with an invalid configuration."
+file = "This file is not a Hangar project backup (or it is incomplete)."
+format = "This project backup was made by a newer Hangar. Update this server and try again."
+wrong_key = "The kit you sent does not open this backup. Use the kit of the Hangar where it was made."
+corrupt = "The file {file} of the backup is corrupted (it does not match the manifest)."
+method = "{service} cannot be restored here: this server backs it up another way (the template is not the same)."
+
+[projrestore]
+running = "Restoring the project from {file}…"
+ok = "Project restored from the backup of {project}."
+failed = "Restoring the backup of {project} failed."
+cleanup_removed = "The services it created were removed. Delete this project or try again."
+cleanup_kept = "Not every service it created could be removed: check them and delete the project."
+domains_off = "Domains left off, so the copy takes no traffic from the original: {domains}. Add them to the service when this copy should answer for them."
+public_off = "Addresses that were public and are internal now: {endpoints}."
+no_login = "Database users created without a password (set one for the app to log in): {roles}."
+not_started = "Did not start (their data is back): {services}."
+unlinked = "Links to projects that do not exist on this server: {projects}."
+no_git = "Git services without a credential (a private repository needs one): {services}."
+
+[projrestore.step]
+verify = "Checking the file…"
+restore = "Restoring the data of {service}…"
+start = "Starting {service}…"
+
+[backup.project]
+readme_sealed = """
+Backup of project {project} (Hangar)
+
+Everything in the project in one file: each service with its data and
+configuration.
+
+- {manifest}: what each file is, with its size and SHA-256.
+- {config}.age: the project's configuration (links to other projects).
+- services/<service>/: one service, laid out as its own download (README,
+  data, users and service.json.age).
+
+The .age files are encrypted with age: only the recovery kit opens them.
+
+To restore on a Hangar (this or another): New project → From a backup, with
+this file and the kit. It becomes a new project; domains come back off. To
+restore one service by hand, follow the README in its folder.
+"""
+readme_plain = """
+Backup of project {project} (Hangar)
+
+Everything in the project in one file: each service with its data and
+configuration.
+
+- {manifest}: what each file is, with its size and SHA-256.
+- {config}: the project's configuration (links to other projects).
+- services/<service>/: one service, laid out as its own download (README,
+  data, users and service.json).
+
+To restore on a Hangar (this or another): New project → From a backup, with
+this file. It becomes a new project; domains come back off. To restore one
+service by hand, follow the README in its folder.
+
+This file is NOT encrypted and holds all of the project's data and
+passwords: keep it safe.
+"""

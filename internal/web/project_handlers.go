@@ -85,6 +85,9 @@ func (h *handlers) projectPage(w http.ResponseWriter, r *http.Request) {
 	case "compose":
 		cd.Flash = i18n.T(r.Context(), "flash.compose")
 	}
+	if rs, ok := h.backups.LatestProjectRestore(r.Context(), p.ID); ok {
+		cd.Restore = projectRestoreView(r.Context(), rs, time.Now())
+	}
 	render(w, r, status, views.ProjectCanvas(cd, nil))
 }
 
@@ -146,6 +149,15 @@ func (h *handlers) renderProjectPage(w http.ResponseWriter, r *http.Request, sta
 	d := views.ProjectData{
 		CSRF: pr.CSRFToken, Slug: p.Slug, Name: p.Name, CanCreate: pr.Role >= auth.RoleAdmin, Error: errMsg,
 		SudoActive: pr.SudoFor(auth.SudoStrict, time.Now()), SudoCritical: pr.SudoFor(auth.SudoCritical, time.Now()), CredOpen: credOpen, Flash: credFlash(r),
+	}
+	if r.URL.Query().Get("ok") == "project-backup" {
+		d.Flash = i18n.T(r.Context(), "project.backup.flash")
+	}
+	if d.CanCreate {
+		d.Backup = h.projectBackupView(r.Context(), p.ID)
+	}
+	if rs, ok := h.backups.LatestProjectRestore(r.Context(), p.ID); ok {
+		d.Restore = projectRestoreView(r.Context(), rs, time.Now())
 	}
 	if creds, err := h.projects.ListGitCredentials(r.Context()); err == nil {
 		var own []projects.GitCredential

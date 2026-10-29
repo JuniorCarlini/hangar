@@ -94,6 +94,12 @@ func lockGate(l *lockdown.Lock, next http.Handler) http.Handler {
 
 func limitBody(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// An upload route bounds its body itself (Policy.Upload): a
+		// project backup is as large as the project's data.
+		if uploadRoutes[r.Method+" "+r.URL.Path] {
+			next.ServeHTTP(w, r)
+			return
+		}
 		r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 		next.ServeHTTP(w, r)
 	})

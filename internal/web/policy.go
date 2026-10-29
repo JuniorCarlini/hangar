@@ -31,6 +31,16 @@ type Policy struct {
 	// AuditByHandler means the handler itself writes a more detailed audit
 	// record (e.g. login), so the router does not write a duplicate.
 	AuditByHandler bool
+	// Upload marks a route whose body is a large file the handler streams
+	// to disk with its own limit (uploadRoutes): the global body cap does
+	// not apply, and the CSRF token comes in the URL ("?csrf="), since
+	// reading it from the form would read the whole file first.
+	Upload bool
+}
+
+// uploadRoutes are the only routes that may take an Upload policy.
+var uploadRoutes = map[string]bool{
+	"POST " + projectRestorePath: true,
 }
 
 // authenticator finds the Principal from the cookie token.
@@ -88,6 +98,10 @@ func (rt *Router) Handle(pattern string, h http.Handler, p Policy) {
 	}
 	if err := checkPolicy(method, p); err != nil {
 		rt.errs = append(rt.errs, fmt.Errorf("route %q: %w", pattern, err))
+		return
+	}
+	if p.Upload && (!uploadRoutes[pattern] || p.Public) {
+		rt.errs = append(rt.errs, fmt.Errorf("route %q: only the routes in uploadRoutes take uploads, with a session", pattern))
 		return
 	}
 	rt.routes = append(rt.routes, RouteInfo{Pattern: pattern, Method: method, Policy: p})
@@ -194,7 +208,7 @@ func (rt *Router) enforce(method, pattern string, p Policy, h http.Handler) http
 			}
 			// Besides cross-origin blocking (CrossOriginProtection), every
 			// authenticated write carries the session's CSRF token.
-			if isUnsafe(method) && !auth.EqualCSRF(csrfFromRequest(r), principal.CSRFToken) {
+			if isUnsafe(method) && !auth.EqualCSRF(csrfFromRequest(r, p.Upload), principal.CSRFToken) {
 				rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "invalid_csrf"})
 				http.Error(w, i18n.T(r.Context(), "error.csrf"), http.StatusForbidden)
 				return
@@ -262,9 +276,13 @@ func wantsHTML(r *http.Request) bool {
 	return strings.Contains(r.Header.Get("Accept"), "text/html")
 }
 
-func csrfFromRequest(r *http.Request) string {
+func csrfFromRequest(r *http.Request, upload bool) string {
 	if v := r.Header.Get("X-CSRF-Token"); v != "" {
 		return v
+	}
+	if upload {
+		// The body is left for the handler to stream (Policy.Upload).
+		return r.URL.Query().Get("csrf")
 	}
 	return r.PostFormValue("csrf")
 }

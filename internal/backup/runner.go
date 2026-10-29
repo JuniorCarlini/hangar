@@ -95,6 +95,7 @@ func (m *Manager) push(j job) error {
 func (m *Manager) Run(ctx context.Context) {
 	_ = m.q.FailRunningBackupRuns(ctx, dbq.FailRunningBackupRunsParams{Error: nullStr("interrupted: the panel stopped"), FinishedAt: nullInt(m.now().Unix())})
 	_ = m.q.FailRunningRestores(ctx, dbq.FailRunningRestoresParams{Error: nullStr("interrupted: the panel stopped"), FinishedAt: nullInt(m.now().Unix())})
+	_ = m.q.FailRunningProjectRestores(ctx, dbq.FailRunningProjectRestoresParams{Error: nullStr("interrupted: the panel stopped"), FinishedAt: nullInt(m.now().Unix())})
 	m.cleanStaging()
 	m.unpauseLeftovers(ctx)
 

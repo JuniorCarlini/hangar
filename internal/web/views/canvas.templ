@@ -23,6 +23,8 @@ type CanvasData struct {
 	Flash       string
 	Pending     []string // services with changes waiting for a deploy
 	New         *NewServiceData // the new-service dialog (nil without permission)
+	// Restore is the restore that made this project (its banner).
+	Restore *ProjectRestoreView
 }
 
 // CanvasNode is a service card.
@@ -130,6 +132,7 @@ templ ProjectCanvas(d CanvasData, s *ServiceData) {
 			@projectActions(d.Project, d.CanCreate, "canvas")
 		}
 		@errorAlert(d.Error)
+		@projectRestoreBanner(d.Restore)
 		<div class="canvas-area dots">
 			<div class="canvas-scroll">
 				if len(d.Nodes) == 0 {

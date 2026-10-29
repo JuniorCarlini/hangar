@@ -386,6 +386,10 @@ func (m *Manager) sendFile(ctx context.Context, ts []target, key, folder string,
 
 // fetch opens key from the first destination that has it.
 func (m *Manager) fetch(ctx context.Context, key string) (io.ReadCloser, s3.ObjectInfo, error) {
+	// A project restore reads its files from the uploaded backup.
+	if src := localFrom(ctx); src != nil {
+		return src.get(key)
+	}
 	ts, err := m.targets(ctx)
 	if err != nil {
 		return nil, s3.ObjectInfo{}, err

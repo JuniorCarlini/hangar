@@ -5,6 +5,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/web/views"
@@ -15,6 +16,9 @@ import (
 func (h *handlers) navFor(r *http.Request, p *auth.Principal) views.Nav {
 	n := views.Nav{Email: p.Email, Name: p.Name, Theme: p.Theme, Locale: p.Locale, IsOwner: p.Role >= auth.RoleOwner, Path: "/", CSRF: p.CSRFToken, Role: p.Role.String(), CanCreate: p.Role >= auth.RoleAdmin}
 	n.NewProject.Open = r.URL.Query().Get("new") == "1"
+	// Back from confirming the password for "A partir de um backup".
+	n.NewProject.Backup = n.NewProject.Open && r.URL.Query().Get("from") == "backup"
+	n.SudoCritical = p.SudoFor(auth.SudoCritical, time.Now())
 	n.ModKey = "Ctrl "
 	if ua := r.UserAgent(); strings.Contains(ua, "Macintosh") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad") {
 		n.ModKey = "⌘"

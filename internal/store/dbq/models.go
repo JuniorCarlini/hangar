@@ -359,6 +359,20 @@ type ProjectLink struct {
 	CreatedAt int64
 }
 
+type ProjectRestore struct {
+	ID         string
+	ProjectID  string
+	Source     string
+	FileName   string
+	Status     string
+	Step       string
+	Error      sql.NullString
+	NotesJson  string
+	CreatedBy  sql.NullString
+	StartedAt  int64
+	FinishedAt sql.NullInt64
+}
+
 type RecoveryCode struct {
 	ID       int64
 	UserID   string

@@ -1,6 +1,9 @@
 package views
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ServiceRow is a service on the project page.
 type ServiceRow struct {
@@ -29,6 +32,132 @@ type ProjectData struct {
 	GitCreds    []GitCredRow
 	ServerCreds int
 	CredOpen    bool
+	// Backup is the project's backup being prepared or ready to fetch;
+	// Restore, the restore that made this project.
+	Backup  *DownloadView
+	Restore *ProjectRestoreView
+}
+
+// ProjectRestoreView is the banner of a project made by a restore.
+type ProjectRestoreView struct {
+	Running bool
+	OK      bool
+	Step    string
+	Source  string
+	File    string
+	Error   string
+	Cleanup string
+	// What was left for the owner to decide.
+	Domains    []string
+	Public     []string
+	Unlinked   []string
+	NoGit      []string
+	NoLogin    []string
+	NotStarted []string
+}
+
+// projectRestoreBanner shows a restore into this project: refreshing
+// itself while it runs, then what it left to decide (the domains it left
+// off above all).
+templ projectRestoreBanner(v *ProjectRestoreView) {
+	if v != nil {
+		<section id="project-restore" data-live if v.Running { data-refresh="5" }>
+			if v.Running {
+				<div class="tuc-alert is-info" role="status">
+					<span class="tuc-spinner" aria-hidden="true"></span>
+					<div class="tuc-alert__body">
+						<p class="font-semibold">{ t(ctx, "projrestore.running", "file", v.File) }</p>
+						if v.Step != "" {
+							<p class="text-[13px] text-muted">{ v.Step }</p>
+						}
+						@projectRestoreNotes(v)
+					</div>
+				</div>
+			} else if v.OK {
+				<div class="tuc-alert is-success" role="status">
+					@Icon("circle-check", "size-4")
+					<div class="tuc-alert__body">
+						<p class="font-semibold">{ t(ctx, "projrestore.ok", "project", v.Source) }</p>
+						@projectRestoreNotes(v)
+					</div>
+				</div>
+			} else {
+				<div class="tuc-alert is-danger" role="alert">
+					@Icon("triangle-alert", "size-4")
+					<div class="tuc-alert__body">
+						<p class="font-semibold">{ t(ctx, "projrestore.failed", "project", v.Source) }</p>
+						<p class="font-mono text-xs break-words">{ v.Error }</p>
+						if v.Cleanup != "" {
+							<p class="text-[13px]">{ v.Cleanup }</p>
+						}
+					</div>
+				</div>
+			}
+		</section>
+	}
+}
+
+templ projectRestoreNotes(v *ProjectRestoreView) {
+	if len(v.Domains) > 0 {
+		<p class="text-[13px]">{ t(ctx, "projrestore.domains_off", "domains", strings.Join(v.Domains, ", ")) }</p>
+	}
+	if len(v.Public) > 0 {
+		<p class="text-[13px]">{ t(ctx, "projrestore.public_off", "endpoints", strings.Join(v.Public, ", ")) }</p>
+	}
+	if len(v.NoLogin) > 0 {
+		<p class="text-[13px] text-warning">{ t(ctx, "projrestore.no_login", "roles", strings.Join(v.NoLogin, "; ")) }</p>
+	}
+	if len(v.NotStarted) > 0 {
+		<p class="text-[13px] text-warning">{ t(ctx, "projrestore.not_started", "services", strings.Join(v.NotStarted, "; ")) }</p>
+	}
+	if len(v.Unlinked) > 0 {
+		<p class="text-[13px]">{ t(ctx, "projrestore.unlinked", "projects", strings.Join(v.Unlinked, ", ")) }</p>
+	}
+	if len(v.NoGit) > 0 {
+		<p class="text-[13px]">{ t(ctx, "projrestore.no_git", "services", strings.Join(v.NoGit, ", ")) }</p>
+	}
+}
+
+// projectBackup is "Baixar backup do projeto": every service, its data
+// and its configuration, in one file; the card refreshes itself while
+// the file is prepared.
+templ projectBackup(d ProjectData) {
+	<section class={ cardClass } id="project-backup" data-live if d.Backup != nil && !d.Backup.Ready && d.Backup.Error == "" { data-refresh="5" }>
+		@cardHead(t(ctx, "project.backup.title")) {
+			if d.SudoCritical {
+				<form class="inline-flex" method="post" action={ templ.SafeURL("/p/" + d.Slug + "/backup") }>
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<button class="tuc-btn is-outline is-sm" type="submit" disabled?={ d.Backup != nil && !d.Backup.Ready && d.Backup.Error == "" }>
+						@Icon("download", "size-3.5")
+						{ t(ctx, "project.backup.download") }
+					</button>
+				</form>
+			} else {
+				@sudoButton(t(ctx, "project.backup.download"))
+			}
+		}
+		<div class={ cardBodyClass }>
+			<p class="m-0 text-[13px] text-muted">{ t(ctx, "project.backup.hint") }</p>
+			if dl := d.Backup; dl != nil {
+				if dl.Error != "" {
+					@errorAlert(t(ctx, "project.backup.failed", "error", dl.Error))
+				} else if !dl.Ready {
+					<span class="flex items-center gap-2 text-[13px] text-muted">
+						<span class="tuc-spinner" aria-hidden="true"></span>
+						{ t(ctx, "project.backup.preparing") }
+					</span>
+				} else if d.SudoCritical {
+					<div class="flex flex-wrap items-center gap-3">
+						<a class="tuc-btn is-success" href={ templ.SafeURL("/backups/download/" + dl.Token) }>
+							@Icon("download", "size-3.5")
+							{ t(ctx, "svcbackup.download_ready", "size", dl.Size) }
+						</a>
+						<span class="tuc-hint">{ t(ctx, "svcbackup.download_expires", "when", dl.Expires) }</span>
+					</div>
+				}
+			}
+		</div>
+	</section>
 }
 
 // Place is where a new service lands on the canvas and the service a line
@@ -141,8 +270,12 @@ templ ProjectSettings(d ProjectData) {
 				@errorAlert(d.Error)
 			}
 			@toast("success", d.Flash)
+			@projectRestoreBanner(d.Restore)
 			@projectLinks(d)
 			@projectGitCreds(d)
+			if d.CanCreate {
+				@projectBackup(d)
+			}
 			if d.CanCreate {
 				@dangerZone(t(ctx, "project.danger.title"), t(ctx, "project.danger.hint")) {
 					<button type="button" class="tuc-btn is-outline text-danger" data-tuc-modal={ deleteProjectModal(d.SudoCritical) } disabled?={ len(d.Services) > 0 }>

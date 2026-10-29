@@ -318,6 +318,11 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST "+svc+"/backups/policy", h.setBackupPolicy, Policy{Role: auth.RoleAdmin, Audit: "backup.policy.set", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backups/run", h.runBackupNow, Policy{Role: auth.RoleOperator, Audit: "backup.run.request"})
 	rt.HandleFunc("POST "+svc+"/backups/restore", h.restoreBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "backup.restore.start", AuditByHandler: true})
+	// A whole project: every service's data and configuration in one file,
+	// and that file restored as a new project (never over one that exists).
+	// Same hands as a service's download and restore.
+	rt.HandleFunc("POST /p/{project}/backup", h.downloadProjectBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "project.backup.download", AuditByHandler: true})
+	rt.HandleFunc("POST "+projectRestorePath, h.restoreProject, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "project.restore.start", AuditByHandler: true, Upload: true})
 
 	rt.HandleFunc("GET /_pista", h.pistaPage, viewer)
 
