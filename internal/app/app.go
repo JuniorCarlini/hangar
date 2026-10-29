@@ -524,9 +524,10 @@ func monitor(a *alerts.Service, pm *projects.Manager, mc *metrics.Collector) *al
 }
 
 // NewBackups builds the backup engine (docs/09). Panel backups work without
-// Docker; database backups say Docker is missing.
+// Docker; database backups say Docker is missing. Every stateful service
+// created from a template gets the default daily routine.
 func NewBackups(core *Core, pm *projects.Manager, cfg config.Config, version string, log *slog.Logger) (*backup.Manager, error) {
-	return backup.New(core.Store.DB, core.Box, pm, core.Audit, log, backup.Options{
+	m, err := backup.New(core.Store.DB, core.Box, pm, core.Audit, log, backup.Options{
 		StagingDir:            filepath.Join(cfg.DataDir, "backups", "staging"),
 		AllowPrivateEndpoints: cfg.Backup.AllowPrivateEndpoints,
 		DBPath:                filepath.Join(cfg.DataDir, "hangar.db"),
@@ -535,6 +536,11 @@ func NewBackups(core *Core, pm *projects.Manager, cfg config.Config, version str
 		CertsDir:              filepath.Join(cfg.DataDir, "edge", "data"),
 		Version:               version,
 	})
+	if err != nil {
+		return nil, err
+	}
+	pm.SetTemplateCreated(m.DefaultRoutines)
+	return m, nil
 }
 
 // startEdge brings Caddy up with the domains in the database and starts the

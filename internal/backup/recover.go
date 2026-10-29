@@ -17,9 +17,10 @@ import (
 // Disaster recovery (docs/09 "Recuperação de desastre"): after `hangard
 // restore` put the panel database and master key back on a new server,
 // RecoverAll recreates the networks, brings every PostgreSQL back from its
-// newest backup (to a minute with WAL, else the newest pg_dump), the
-// volumes of every other service with backups from their newest copy, and
-// deploys the remaining services.
+// newest backup (to a minute with WAL, else the newest pg_dump), every
+// service with a template's recipe from its newest backup, the volumes of
+// every other service that has them from their newest copy, and deploys
+// the remaining services.
 
 // RecoverStep reports progress (a message key and its arguments).
 type RecoverStep func(key string, args ...any)
@@ -55,7 +56,7 @@ func (m *Manager) RecoverAll(ctx context.Context, ids []age.Identity, at time.Ti
 			continue
 		}
 		switch m.projects.BackupMethod(ctx, dbq.Service{ID: s.ID, Template: s.Template}) {
-		case projects.BackupPGDump:
+		case projects.BackupPGDump, projects.BackupRecipe:
 			tr("recover.database", "service", label)
 		case projects.BackupVolume:
 			tr("recover.volumes", "service", label)
@@ -84,7 +85,8 @@ func (m *Manager) RecoverAll(ctx context.Context, ids []age.Identity, at time.Ti
 // RecoverService brings one service back on a server where it has no
 // data yet: a fresh deploy, then, for a PostgreSQL, point-in-time from
 // base + WAL when the bucket has them, else the newest pg_dump before at;
-// for a service backed up as volumes, the newest copy before at.
+// for a recipe's service, its newest backup before at; for a service
+// backed up as volumes, the newest copy before at.
 func (m *Manager) RecoverService(ctx context.Context, a Actor, projectSlug, serviceSlug string, at time.Time, ids []age.Identity) error {
 	s, err := m.ref(ctx, projectSlug, serviceSlug)
 	if err != nil {
@@ -95,12 +97,15 @@ func (m *Manager) RecoverService(ctx context.Context, a Actor, projectSlug, serv
 	if err := m.deployAndWait(ctx, a, s, "restore"); err != nil {
 		return err
 	}
-	if s.Method == projects.BackupVolume {
+	switch s.Method {
+	case projects.BackupVolume:
 		// Read again: the deploy created the volumes.
 		if s, err = m.ref(ctx, projectSlug, serviceSlug); err != nil {
 			return err
 		}
 		return m.recoverVolumes(ctx, a, s, at, ids)
+	case projects.BackupRecipe:
+		return m.recoverRecipe(ctx, s, at, ids)
 	}
 	objs, err := m.list(ctx, archive.WALPrefix(s.Project, s.Service))
 	if err != nil {

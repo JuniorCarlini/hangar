@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -24,8 +25,9 @@ const DownloadTTL = 5 * time.Minute
 
 var randRead = rand.Read
 
-// download is an encrypted backup (a dump and the roles of its server, or
-// a copy of volumes) waiting to be fetched once as one bundle
+// download is an encrypted backup of a whole service (a dump and the
+// roles of its server, a recipe's backup or a copy of volumes, and the
+// service's configuration) waiting to be fetched once as one bundle
 // (archive.WriteBundle).
 type download struct {
 	Token     string
@@ -42,7 +44,7 @@ type download struct {
 	Expires   time.Time
 	Started   time.Time
 	// Open: the simple mode's server holds the key, so the files go out
-	// decrypted (a copy of volumes: encrypted only while it waits here).
+	// decrypted (encrypted only while they wait here).
 	Open bool
 }
 
@@ -62,10 +64,13 @@ type Download struct {
 	Expires  time.Time
 }
 
-// PrepareDownload makes an encrypted, tested dump for the browser (docs/09
-// "Baixar backup agora"): pg_dump, test restore, encrypted to the kit's
-// public keys. It runs in the background (a big database takes longer than
-// a request may last); PendingDownload shows it until it is ready.
+// PrepareDownload makes a tested backup of the whole service for the
+// browser (docs/09 "Baixar backup"): its data with its users and
+// passwords, made the way the service is always backed up, and its
+// configuration (service.json), in one file with a README. Everything is
+// encrypted to the kit's public keys, or decrypted when fetched in the
+// simple mode. It runs in the background (a big database takes longer
+// than a request may last); PendingDownload shows it until it is ready.
 func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, serviceSlug string) error {
 	s, err := m.ref(ctx, projectSlug, serviceSlug)
 	if err != nil {
@@ -74,7 +79,7 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 	if _, err := m.recipients(ctx); err != nil {
 		return err
 	}
-	if s.Method == projects.BackupPGDump && !m.running(ctx, s) {
+	if s.online() && !m.running(ctx, s) {
 		return ErrNotRunning
 	}
 	b := make([]byte, 32)
@@ -82,14 +87,11 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 		return err
 	}
 	base := archive.BundleName(s.Project, s.Service, m.now())
-	readme := BundleReadme(ctx, base, s.DBName, true)
-	open := false
-	if s.Method == projects.BackupVolume {
-		// The copy is made here, then sent: the services are paused only
-		// for the copy, not for as long as the browser takes.
-		open = m.Mode(ctx) == ModeSimple
-		readme = VolumesReadme(ctx, base, s.label(), volumeList(s), !open)
-	}
+	// The backup is made here, then sent: a copy of volumes holds the
+	// services only for the copy, not for as long as the browser takes.
+	// A PostgreSQL in the simple mode streams instead (DownloadPlain).
+	open := m.Mode(ctx) == ModeSimple && s.Method != projects.BackupPGDump
+	readme := m.readmeFor(ctx, s, base, !open)
 	d := &download{
 		Token: hex.EncodeToString(b), UserID: a.UserID, ServiceID: s.ID, Label: s.label(),
 		FileName: base + archive.ExtBundle, Base: base, Readme: readme, Open: open,
@@ -145,27 +147,90 @@ func (m *Manager) PrepareDownload(ctx context.Context, a Actor, projectSlug, ser
 	return nil
 }
 
+// readmeFor is the README of a download of s.
+func (m *Manager) readmeFor(ctx context.Context, s svcRef, base string, sealed bool) string {
+	var text string
+	switch s.Method {
+	case projects.BackupVolume:
+		text = VolumesReadme(ctx, base, s.label(), volumeList(s), sealed)
+	case projects.BackupRecipe:
+		text = RecipeReadme(ctx, base, s.label(), s.Template, s.Recipe, sealed)
+	default:
+		text = BundleReadme(ctx, base, s.DBName, sealed)
+	}
+	return text + ServiceReadme(ctx, sealed)
+}
+
 // prepareFiles makes the tested, encrypted files of a download in the
-// staging dir: the roles and the dump of a database, or a copy of the
-// volumes (kept consistent as the policy says).
-func (m *Manager) prepareFiles(ctx context.Context, s svcRef, base string) ([]dlFile, map[string]any, error) {
-	if s.Method == projects.BackupVolume {
-		v, err := m.archiveVolumes(ctx, s, m.consistency(ctx, s))
+// staging dir: the roles and the dump of a PostgreSQL, a recipe's backup
+// or a copy of the volumes (held the way Hangar picks), then the service's
+// configuration.
+func (m *Manager) prepareFiles(ctx context.Context, s svcRef, base string) (files []dlFile, summary map[string]any, err error) {
+	defer func() {
+		if err != nil {
+			for _, f := range files {
+				_ = os.Remove(f.Path)
+			}
+			files = nil
+		}
+	}()
+	switch s.Method {
+	case projects.BackupVolume:
+		v, err := m.archiveVolumes(ctx, s, s.hold())
 		if err != nil {
 			return nil, nil, err
 		}
 		_ = v.file.f.Close()
-		return []dlFile{{Name: base + archive.ExtVolumes, Path: v.file.f.Name()}},
-			map[string]any{"files": v.check.Files, "bytes": v.check.Bytes, "pause_ms": v.check.PauseMS}, nil
+		files = []dlFile{{Name: base + archive.ExtVolumes, Path: v.file.f.Name()}}
+		summary = map[string]any{"files": v.check.Files, "bytes": v.check.Bytes, "pause_ms": v.check.PauseMS, "mode": v.check.Mode}
+	case projects.BackupRecipe:
+		sf, check, err := m.archiveRecipe(ctx, s)
+		if err != nil {
+			return nil, nil, err
+		}
+		_ = sf.f.Close()
+		files = []dlFile{{Name: base + "." + s.Recipe.FileExt() + ".zst.age", Path: sf.f.Name()}}
+		summary = map[string]any{"counts": check.Restored}
+	default:
+		dd, err := m.dumpAndVerify(ctx, s)
+		if err != nil {
+			return nil, nil, err
+		}
+		_ = dd.dump.f.Close()
+		_ = dd.roles.f.Close()
+		files = []dlFile{{Name: base + archive.ExtRoles, Path: dd.roles.f.Name()}, {Name: base + archive.ExtDump, Path: dd.dump.f.Name()}}
+		summary = map[string]any{"rows": dd.check.Rows, "tables": dd.check.Tables}
 	}
-	dd, err := m.dumpAndVerify(ctx, s)
+	cfg, err := m.serviceJSON(ctx, s)
 	if err != nil {
-		return nil, nil, err
+		return files, nil, err
 	}
-	_ = dd.dump.f.Close()
-	_ = dd.roles.f.Close()
-	return []dlFile{{Name: base + archive.ExtRoles, Path: dd.roles.f.Name()}, {Name: base + archive.ExtDump, Path: dd.dump.f.Name()}},
-		map[string]any{"rows": dd.check.Rows, "tables": dd.check.Tables}, nil
+	rcpts, err := m.recipients(ctx)
+	if err != nil {
+		return files, nil, err
+	}
+	sf, err := m.sealBytes(rcpts, "service-*.age", cfg)
+	if err != nil {
+		return files, nil, err
+	}
+	_ = sf.f.Close()
+	return append(files, dlFile{Name: ServiceFile + ".age", Path: sf.f.Name()}), summary, nil
+}
+
+// ServiceFile is the service's configuration in a download.
+const ServiceFile = "service.json"
+
+// serviceJSON is s's configuration as ServiceFile holds it.
+func (m *Manager) serviceJSON(ctx context.Context, s svcRef) ([]byte, error) {
+	snap, err := m.projects.Snapshot(ctx, s.Project, s.Service)
+	if err != nil {
+		return nil, err
+	}
+	b, err := json.MarshalIndent(snap, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(b, '\n'), nil
 }
 
 // PendingDownload is the user's prepared (or preparing) download of a

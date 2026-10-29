@@ -26,6 +26,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/node"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
+	"github.com/JuniorCarlini/hangar/internal/templates"
 )
 
 // Run triggers.
@@ -49,25 +50,54 @@ type svcRef struct {
 	Volume   string // full Docker name of the data volume
 	DBUser   string
 	DBName   string
-	// Method is how it is backed up: projects.BackupPGDump or
-	// projects.BackupVolume.
+	// Method is how it is backed up: projects.BackupPGDump,
+	// projects.BackupRecipe or projects.BackupVolume. Hangar picks it,
+	// never the user (projects.BackupMethod).
 	Method string
-	// Vols are the volumes it owns (BackupVolume).
+	// Template is the catalog template it was made from ("" for none).
+	Template string
+	// Recipe is its template's native backup (BackupRecipe).
+	Recipe *templates.Recipe
+	// Vols are the volumes it owns (BackupVolume and BackupRecipe).
 	Vols []projects.OwnedVolume
+	// Stop: a copy of its volumes is taken with it stopped (a database),
+	// not paused.
+	Stop bool
 }
 
-// kind is the kind of its full backups: a dump or a copy of its volumes.
+// kind is the kind of its full backups: a dump, a recipe's backup or a
+// copy of its volumes.
 func (s svcRef) kind() string {
-	if s.Method == projects.BackupVolume {
+	switch s.Method {
+	case projects.BackupVolume:
 		return archive.KindVolume
+	case projects.BackupRecipe:
+		return archive.KindRecipe
 	}
 	return archive.KindDump
 }
 
+// online reports whether its backup is taken from the running server (a
+// dump), which then must be running; a copy of volumes is not.
+func (s svcRef) online() bool { return s.Method != projects.BackupVolume }
+
+// hold is how a copy of its volumes is kept consistent: stopped for a
+// database (the only way that is safe for any of them), paused for the
+// rest. Never a user's choice.
+func (s svcRef) hold() string {
+	if s.Stop {
+		return ConsistencyStop
+	}
+	return ConsistencyPause
+}
+
 // meta is the object metadata of a service backup.
 func (s svcRef) meta(kind string) map[string]string {
-	if kind == archive.KindVolume {
+	switch kind {
+	case archive.KindVolume:
 		return map[string]string{"hangar-kind": kind, "hangar-service": s.label(), "hangar-image": s.Image}
+	case archive.KindRecipe:
+		return map[string]string{"hangar-kind": kind, "hangar-service": s.label(), "hangar-image": s.Image, "hangar-template": s.Template}
 	}
 	return map[string]string{
 		"hangar-kind": kind, "hangar-service": s.label(), "hangar-image": s.Image,

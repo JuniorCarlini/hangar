@@ -128,11 +128,12 @@ func TestDownloadPlainBundle(t *testing.T) {
 		names = append(names, ext)
 		got[ext] = string(body)
 	}
-	if !slices.Equal(names, []string{".txt", ".roles.sql", ".roles-restore.sql", ".dump"}) {
+	if !slices.Equal(names, []string{".txt", ".roles.sql", ".roles-restore.sql", ".json", ".dump"}) {
 		t.Fatalf("bundle: %q", names)
 	}
 	if got[".roles.sql"] != appRolesSQL || got[".dump"] != string(f.n.dumpData) ||
-		!strings.Contains(got[".roles-restore.sql"], "CREATE ROLE app_rw") || !strings.Contains(got[".txt"], "pg_restore") {
+		!strings.Contains(got[".roles-restore.sql"], "CREATE ROLE app_rw") || !strings.Contains(got[".txt"], "pg_restore") ||
+		!strings.Contains(got[".json"], `"POSTGRES_PASSWORD"`) || !strings.Contains(got[".txt"], ServiceFile) {
 		t.Fatalf("bundle contents: %q", got)
 	}
 }

@@ -72,6 +72,9 @@ type BackupServiceRow struct {
 	Size     string
 	Tested   bool
 	HasRun   bool
+	// Covered: a routine backs it up by itself; without one it shows as
+	// not backed up, with a way to create it.
+	Covered bool
 }
 
 // BackupRunRow is one backup in the history.
@@ -481,7 +484,13 @@ templ backupServiceRow(s BackupServiceRow, link bool) {
 				</span>
 			}
 		</td>
-		<td class="text-muted">{ s.Schedule }</td>
+		<td class="text-muted">
+			if link && !s.Covered {
+				<span class="tuc-badge is-warning">{ t(ctx, "backups.services.none") }</span>
+			} else {
+				{ s.Schedule }
+			}
+		</td>
 		<td>
 			if s.HasRun {
 				<span class={ badgeTone(s.LastTone) }>{ s.Last }</span>
@@ -490,7 +499,12 @@ templ backupServiceRow(s BackupServiceRow, link bool) {
 			}
 		</td>
 		<td class="tuc-table__actions">
-			if link {
+			if link && !s.Covered {
+				<a class="tuc-btn is-outline is-sm" href={ templ.SafeURL(s.Href) }>
+					@Icon("plus", "size-3.5")
+					{ t(ctx, "backups.services.create") }
+				</a>
+			} else if link {
 				<a class="tuc-btn is-ghost is-icon is-sm" href={ templ.SafeURL(s.Href) } aria-label={ t(ctx, "backups.services.open") } title={ t(ctx, "backups.services.open") }>
 					@Icon("chevron-right", "size-4")
 				</a>

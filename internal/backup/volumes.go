@@ -26,16 +26,19 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/volumes"
 )
 
-// Backups of volumes (docs/09): for services that are not PostgreSQL, a
-// copy of the files of the volumes they own, Hangar disks included (a
-// disk is a Docker volume bound into its image). The copy is GNU tar run
-// in a throwaway container that mounts the volumes read-only, so owners,
-// permissions, symlinks, hard links, ACLs and user.* attributes come out
-// as they are, without the panel (which runs unprivileged) reading them.
+// Backups of volumes (docs/09): for services without a dump of their own
+// (pg_dump or a template's recipe), a copy of the files of the volumes
+// they own, Hangar disks included (a disk is a Docker volume bound into
+// its image). The copy is GNU tar run in a throwaway container that mounts
+// the volumes read-only, so owners, permissions, symlinks, hard links,
+// ACLs and user.* attributes come out as they are, without the panel
+// (which runs unprivileged) reading them.
 //
-// The services that write to the volumes are paused for the copy by
-// default (the policy's consistency): their processes freeze, nothing is
-// written, and they go on where they were once the tar ends.
+// The services that write to the volumes are held for the copy, the way
+// Hangar picks (svcRef.hold): a database is stopped (it shuts down
+// cleanly, so its files are whole) and started again; anything else is
+// paused (its processes freeze, nothing is written) and goes on where it
+// was once the tar ends.
 //
 // The tar streams through this process, which encrypts it (zstd, then
 // age) into the staging dir and, at the same time, feeds it to a second
@@ -119,11 +122,11 @@ type VolumeCheck struct {
 	// Bytes is the size of the files' contents.
 	Bytes   int64                `json:"bytes"`
 	Volumes []archive.VolumeStat `json:"volumes"`
-	// Mode is how it was kept consistent (a Consistency); "" when no
-	// service using the volumes was running.
+	// Mode is how it was kept consistent (ConsistencyPause or
+	// ConsistencyStop); "" when no service using the volumes was running.
 	Mode string `json:"mode"`
 	// Paused are the services paused (or stopped) for the copy, and for
-	// how long.
+	// how long, from the pause (or the stop) to their going on again.
 	Paused  []string `json:"paused,omitempty"`
 	PauseMS int64    `json:"pause_ms,omitempty"`
 	// TarBytes is the size of the tar before compression.
@@ -375,7 +378,8 @@ func (m *Manager) copyVolumes(ctx context.Context, s svcRef, mode string, sink i
 	}
 
 	// Both helpers are up: from here to the end of the tar the services
-	// wait, so that span is all the pause lasts.
+	// wait, so that span is all the pause (or the stop) lasts.
+	start := m.now()
 	held, resume, err := m.hold(ctx, s, mode)
 	if err != nil {
 		return c, stopAll(err)
@@ -386,7 +390,6 @@ func (m *Manager) copyVolumes(ctx context.Context, s svcRef, mode string, sink i
 	} else if mode == ConsistencyLive {
 		c.Mode = mode
 	}
-	start := m.now()
 	timer := time.AfterFunc(maxPause, func() {
 		if len(held) > 0 {
 			resume()
@@ -598,12 +601,6 @@ func (m *Manager) archiveVolumes(ctx context.Context, s svcRef, mode string) (*c
 	return out, nil
 }
 
-// consistency is the policy's choice for s (pause without one).
-func (m *Manager) consistency(ctx context.Context, s svcRef) string {
-	p, _ := m.ServicePolicy(ctx, s.ID)
-	return p.Consistency
-}
-
 // volumeWarning is sizeWarning for a copy of volumes: it also flags a
 // copy that lost more than half of the files.
 func volumeWarning(prev dbq.BackupRun, size, files int64) string {
@@ -618,8 +615,8 @@ func volumeWarning(prev dbq.BackupRun, size, files int64) string {
 }
 
 // backupVolume is a full backup of s's volumes: copy (kept consistent as
-// mode says, "" for the policy's), test, encrypt, upload to every
-// destination, check each copy.
+// mode says, "" for the way Hangar picks for s), test, encrypt, upload to
+// every destination, check each copy.
 func (m *Manager) backupVolume(ctx context.Context, a Actor, s svcRef, trigger, mode string) (string, error) {
 	unlock := m.lock(s.label())
 	defer unlock()
@@ -628,7 +625,7 @@ func (m *Manager) backupVolume(ctx context.Context, a Actor, s svcRef, trigger, 
 		return "", err
 	}
 	if mode == "" {
-		mode = m.consistency(ctx, s)
+		mode = s.hold()
 	}
 	class := m.class(ctx, s.label(), archive.KindVolume, trigger)
 	runID, err := m.startRun(ctx, a, s.ID, s.label(), archive.KindVolume, trigger, class)
@@ -664,8 +661,11 @@ func (m *Manager) backupVolume(ctx context.Context, a Actor, s svcRef, trigger, 
 
 // backupService runs the full backup s's method calls for.
 func (m *Manager) backupService(ctx context.Context, a Actor, s svcRef, trigger string) (string, error) {
-	if s.Method == projects.BackupVolume {
+	switch s.Method {
+	case projects.BackupVolume:
 		return m.backupVolume(ctx, a, s, trigger, "")
+	case projects.BackupRecipe:
+		return m.backupRecipe(ctx, a, s, trigger)
 	}
 	return m.backupDump(ctx, a, s, trigger)
 }

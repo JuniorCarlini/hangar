@@ -19,6 +19,9 @@ const (
 	// tar holding a folder per volume), for services that are not
 	// PostgreSQL: VolumesKey.
 	KindVolume = "volume"
+	// KindRecipe is the whole service as its template's own dump writes
+	// it (templates.Recipe): data, users, passwords, permissions.
+	KindRecipe = "recipe"
 )
 
 // Retention classes. Each has its own folder so the bucket's lifecycle
@@ -63,6 +66,8 @@ const (
 	// ExtVolumesTar is that tar once decrypted (zstd comes off with the
 	// encryption: Open decompresses).
 	ExtVolumesTar = ".volumes.tar"
+	// ExtRecipe is what a template's recipe dumped, zstd-compressed.
+	ExtRecipe = ".native.zst.age"
 )
 
 // RolesKey names the roles saved with the dump dumpKey: the same folder
@@ -90,9 +95,15 @@ func VolumesKey(class, project, service string, t time.Time) string {
 	return classFolder[class] + "/" + project + "/" + service + "/" + t.UTC().Format(TimeFormat) + ExtVolumes
 }
 
+// RecipeKey names the backup a template's recipe made of a service. It
+// lives next to the dumps (the same folders, retention and lock).
+func RecipeKey(class, project, service string, t time.Time) string {
+	return classFolder[class] + "/" + project + "/" + service + "/" + t.UTC().Format(TimeFormat) + ExtRecipe
+}
+
 // IsPoint reports whether kind is a backup a whole service is restored
 // from (the restore form's choices).
-func IsPoint(kind string) bool { return kind == KindDump || kind == KindVolume }
+func IsPoint(kind string) bool { return kind == KindDump || kind == KindVolume || kind == KindRecipe }
 
 // LimitsFor are the Open limits for the object key (or local file name).
 // Volumes hold files of any kind, such as preallocated, mostly-zero
@@ -151,6 +162,7 @@ var (
 	tsPart     = `[0-9]{8}T[0-9]{6}Z`
 	dumpKeyRE  = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.dump\.age$`)
 	rolesKeyRE = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.roles\.sql\.age$`)
+	recipeRE   = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.native\.zst\.age$`)
 	volKeyRE   = regexp.MustCompile(`^(diario|semanal|mensal)/(` + slugPart + `)/(` + slugPart + `)/(` + tsPart + `)\.volumes\.tar\.zst\.age$`)
 	baseKeyRE  = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/base/(` + tsPart + `)_([0-9A-F]{24})\.tar\.zst\.age$`)
 	walKeyRE   = regexp.MustCompile(`^wal/(` + slugPart + `)/(` + slugPart + `)/seg/(` + WALNamePattern + `)\.zst\.age$`)
@@ -181,6 +193,10 @@ func ParseKey(key string) (Object, bool) {
 	if m := volKeyRE.FindStringSubmatch(key); m != nil {
 		t, err := time.Parse(TimeFormat, m[4])
 		return Object{Key: key, Kind: KindVolume, Class: folderClass[m[1]], Project: m[2], Service: m[3], Time: t}, err == nil
+	}
+	if m := recipeRE.FindStringSubmatch(key); m != nil {
+		t, err := time.Parse(TimeFormat, m[4])
+		return Object{Key: key, Kind: KindRecipe, Class: folderClass[m[1]], Project: m[2], Service: m[3], Time: t}, err == nil
 	}
 	if m := baseKeyRE.FindStringSubmatch(key); m != nil {
 		t, err := time.Parse(TimeFormat, m[3])

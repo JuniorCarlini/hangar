@@ -74,7 +74,10 @@ func (l *Local) RunTask(ctx context.Context, spec node.TaskSpec, stdin io.Reader
 	}
 	id := res.ID
 	defer func() {
-		_, _ = l.c.ContainerRemove(context.WithoutCancel(ctx), id, client.ContainerRemoveOptions{Force: true})
+		// RemoveVolumes takes the anonymous volumes the image's VOLUME
+		// lines made (a database image's data folder in a test restore);
+		// named volumes are never removed by it.
+		_, _ = l.c.ContainerRemove(context.WithoutCancel(ctx), id, client.ContainerRemoveOptions{Force: true, RemoveVolumes: true})
 	}()
 	att, err := l.c.ContainerAttach(ctx, id, client.ContainerAttachOptions{Stream: true, Stdin: stdin != nil, Stdout: true, Stderr: true})
 	if err != nil {

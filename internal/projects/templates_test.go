@@ -198,22 +198,57 @@ func TestPortsAndFirewall(t *testing.T) {
 	}
 }
 
-func TestBackupDownloadOnlyForPostgres(t *testing.T) {
+// Every service that keeps data is backed up, whole, by the method that
+// fits it; one without volumes has nothing to back up.
+func TestBackupMethodIsAutomatic(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	f.service(t)
-	if _, err := f.m.CreateFromTemplate(ctx, f.who, "lab", "postgres", "db", nil); err != nil {
-		t.Fatal(err)
+	for _, tpl := range []struct{ id, name string }{{"postgres", "db"}, {"mariadb", "maria"}, {"rustfs", "s3"}, {"adminer", "adm"}, {"redis-cache", "cache"}} {
+		if _, err := f.m.CreateFromTemplate(ctx, f.who, "lab", tpl.id, tpl.name, nil); err != nil {
+			t.Fatal(err)
+		}
 	}
 	f.m.Wait()
-	// The download itself is the backup package's (DownloadPlain).
-	for slug, want := range map[string]bool{"db": true, "web": false} {
+	for slug, want := range map[string]struct {
+		method string
+		db     bool
+	}{
+		"db": {BackupPGDump, true}, "maria": {BackupRecipe, true}, "cache": {BackupRecipe, true},
+		"s3": {BackupVolume, false}, "adm": {"", false}, "web": {"", false},
+	} {
 		_, s, err := f.m.GetService(ctx, "lab", slug)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := f.m.CanDownloadBackup(s.Template); got != want {
-			t.Errorf("%s: CanDownloadBackup = %v, want %v", slug, got, want)
+		if got := f.m.BackupMethod(ctx, s); got != want.method {
+			t.Errorf("%s: BackupMethod = %q, want %q", slug, got, want.method)
+		}
+		if got := f.m.IsDatabase(s); got != want.db {
+			t.Errorf("%s: IsDatabase = %v, want %v", slug, got, want.db)
+		}
+		if _, ok := f.m.BackupRecipe(s); ok != (want.method == BackupRecipe) {
+			t.Errorf("%s: recipe %v", slug, ok)
+		}
+	}
+	// A plain image with a volume is copied.
+	if err := f.m.AddServiceVolume(ctx, f.who, "lab", "web", "data", "/data"); err != nil {
+		t.Fatal(err)
+	}
+	_, web, _ := f.m.GetService(ctx, "lab", "web")
+	if got := f.m.BackupMethod(ctx, web); got != BackupVolume {
+		t.Errorf("web with a volume: %q", got)
+	}
+}
+
+func TestDatabaseImage(t *testing.T) {
+	for image, want := range map[string]bool{
+		"mysql:8.4": true, "docker.io/library/mariadb:12": true, "bitnami/mongodb:8": true, "mongo@sha256:abc": true,
+		"ghcr.io/x/postgres:18": true, "valkey/valkey:9": true, "rabbitmq:4-management": true,
+		"nginx:1.31": false, "ghcr.io/acme/shop:1": false, "rustfs/rustfs:1": false, "louislam/uptime-kuma:2": false,
+	} {
+		if got := DatabaseImage(image); got != want {
+			t.Errorf("%s: %v, want %v", image, got, want)
 		}
 	}
 }

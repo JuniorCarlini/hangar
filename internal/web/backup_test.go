@@ -249,3 +249,34 @@ func TestServiceBackupsTabOffersDownloadWithoutDestination(t *testing.T) {
 		}
 	}
 }
+
+// Every service that keeps data is on the backups page; one without a
+// routine shows as not backed up, with a way to create the routine.
+func TestBackupsPageListsServicesWithoutBackup(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	a := projects.Actor{UserID: "usr_x"}
+	if _, err := e.pm.CreateProject(ctx, a, "lab", "Lab"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tpl := range []struct{ id, name string }{{"mariadb", "maria"}, {"adminer", "adm"}} {
+		if _, err := e.pm.CreateFromTemplate(ctx, a, "lab", tpl.id, tpl.name, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.pm.Wait()
+	c, _ := e.session(t, auth.RoleAdmin)
+	body := e.do(req{method: "GET", target: "/backups", cookies: []*http.Cookie{c}}).Body.String()
+	if !strings.Contains(body, "lab/maria") || !strings.Contains(body, "sem backup") || !strings.Contains(body, "Criar rotina") ||
+		!strings.Contains(body, `href="/p/lab/s/maria?tab=backups"`) {
+		t.Fatal("the database without a routine must show as not backed up")
+	}
+	if strings.Contains(body, "lab/adm") {
+		t.Error("a service that keeps no data is not listed")
+	}
+	// The service's tab says how Hangar backs it up; nothing to choose.
+	tab := e.do(req{method: "GET", target: "/p/lab/s/maria?tab=backups", cookies: []*http.Cookie{c}}).Body.String()
+	if strings.Contains(tab, `name="consistency"`) {
+		t.Error("the routine must not offer a way to copy")
+	}
+}

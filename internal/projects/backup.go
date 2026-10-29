@@ -16,47 +16,101 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/templates"
 )
 
-// CanDownloadBackup reports whether the service's template is backed up
-// with pg_dump (BackupPGDump).
-func (m *Manager) CanDownloadBackup(template string) bool {
-	t, ok := m.catalog().Get(template)
-	return ok && t.Backup == templates.BackupPGDump
-}
-
-// How a service is backed up (template.toml backup).
+// How a service is backed up (docs/09). It is never a user's choice:
+// Hangar picks it from the template and the service, and every service
+// that keeps data gets one, as a whole (every byte, users and passwords).
 const (
 	// BackupPGDump: pg_dump and the server's roles, tested in a
 	// throwaway PostgreSQL; WAL for any minute.
 	BackupPGDump = templates.BackupPGDump
-	// BackupVolume: a copy of the files of the volumes the service owns.
+	// BackupRecipe: the template's own dump and restore commands
+	// (templates.Recipe), tested in a throwaway instance.
+	BackupRecipe = templates.BackupRecipe
+	// BackupVolume: a copy of the files of the volumes the service owns,
+	// with the service stopped (a database) or paused (anything else).
 	BackupVolume = templates.BackupVolume
 )
 
-// BackupMethod says how a service is backed up: BackupPGDump, BackupVolume
-// or "" (no backup). A template opts in with backup = "pg_dump" or
-// "volume"; a template without it gets none, since a database must not be
-// copied file by file while it runs (it needs its own dump method). A
-// service made from an image or a Git repository is backed up as volumes
-// when it owns any. A volume it mounts from another service is the
-// other's to back up.
+// BackupMethod says how a service is backed up: BackupPGDump or
+// BackupRecipe when its template declares one, else BackupVolume when it
+// owns volumes (a template's or not), else "" (nothing to back up). A
+// volume it mounts from another service is the other's to back up.
 func (m *Manager) BackupMethod(ctx context.Context, s dbq.Service) string {
-	if s.Template != "" {
-		t, ok := m.catalog().Get(s.Template)
-		if !ok {
-			return ""
-		}
+	if t, ok := m.serviceTemplate(s); ok {
 		switch t.Backup {
-		case BackupPGDump:
-			return BackupPGDump
-		case BackupVolume:
-		default:
-			return ""
+		case BackupPGDump, BackupRecipe:
+			return t.Backup
 		}
 	}
 	if m.ownsVolumes(ctx, s.ID) {
 		return BackupVolume
 	}
 	return ""
+}
+
+func (m *Manager) serviceTemplate(s dbq.Service) (*templates.Template, bool) {
+	if s.Template == "" {
+		return nil, false
+	}
+	return m.catalog().Get(s.Template)
+}
+
+// BackupRecipe returns the native recipe of a BackupRecipe service.
+func (m *Manager) BackupRecipe(s dbq.Service) (*templates.Recipe, bool) {
+	t, ok := m.serviceTemplate(s)
+	if !ok || t.Backup != BackupRecipe || t.Recipe == nil {
+		return nil, false
+	}
+	return t.Recipe, true
+}
+
+// databaseImages are images of databases and brokers, by repository name
+// (the last path element, no tag): copied file by file, they are only
+// safe with the server stopped, since a running one keeps pages in memory
+// and writes files in an order of its own.
+var databaseImages = []string{
+	"mysql", "mariadb", "percona", "percona-server", "mongo", "mongodb", "mongodb-community-server",
+	"redis", "redis-stack", "redis-stack-server", "valkey", "keydb", "dragonfly", "postgres", "postgis",
+	"timescaledb", "timescaledb-ha", "pgvector", "cockroach", "yugabyte", "clickhouse-server",
+	"elasticsearch", "opensearch", "influxdb", "questdb", "neo4j", "cassandra", "scylla", "couchdb",
+	"couchbase", "arangodb", "rethinkdb", "surrealdb", "etcd", "rabbitmq", "nats", "kafka", "memgraph",
+	"typesense", "qdrant", "weaviate", "milvus", "firebird", "mssql-server", "oracle-free", "db2",
+}
+
+// IsDatabase reports whether a service is a database (its template's
+// category, or a known database image): a copy of its volumes is taken
+// with it stopped, never paused.
+func (m *Manager) IsDatabase(s dbq.Service) bool {
+	if t, ok := m.serviceTemplate(s); ok && t.Category == "database" {
+		return true
+	}
+	return DatabaseImage(s.Image)
+}
+
+// DatabaseImage reports whether image is a known database's.
+func DatabaseImage(image string) bool {
+	name := image
+	if i := strings.Index(name, "@"); i >= 0 {
+		name = name[:i]
+	}
+	if i := strings.LastIndex(name, "/"); i >= 0 {
+		name = name[i+1:]
+	}
+	if i := strings.Index(name, ":"); i >= 0 {
+		name = name[:i]
+	}
+	return slices.Contains(databaseImages, strings.ToLower(name))
+}
+
+// SetTemplateCreated sets what runs right after services are created from
+// a template (the catalog, or a compose file's database), before their
+// first deploy: the backups give each stateful one its daily routine.
+func (m *Manager) SetTemplateCreated(fn func(context.Context, Actor, []dbq.Service)) { m.created = fn }
+
+func (m *Manager) templateCreated(ctx context.Context, a Actor, svcs []dbq.Service) {
+	if m.created != nil && len(svcs) > 0 {
+		m.created(ctx, a, svcs)
+	}
 }
 
 func (m *Manager) ownsVolumes(ctx context.Context, serviceID string) bool {

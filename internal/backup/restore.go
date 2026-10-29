@@ -160,8 +160,9 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 		probe = plan.Base.Key
 	case ModeDump:
 		o, ok := archive.ParseKey(req.Key)
-		// The mode is "a backup file": a dump or, for a service backed
-		// up as volumes, a copy of them (the key says which).
+		// The mode is "a backup file": a dump, a recipe's backup or a
+		// copy of the volumes, as the service is backed up (the key says
+		// which).
 		if !ok || o.Kind != s.kind() || o.Project != s.Project || o.Service != s.Service {
 			return "", i18n.E("backup.error.point")
 		}
@@ -267,8 +268,11 @@ func (m *Manager) step(ctx context.Context, id, step string) {
 
 // runRestore runs with the service's restore lock held (StartRestore).
 func (m *Manager) runRestore(ctx context.Context, a Actor, id string, s svcRef, req RestoreRequest) (err error) {
-	if s.Method == projects.BackupVolume {
+	switch s.Method {
+	case projects.BackupVolume:
 		return m.runVolumeRestore(ctx, a, id, s, req)
+	case projects.BackupRecipe:
+		return m.runRecipeRestore(ctx, a, id, s, req)
 	}
 	if req.Destination == DestOverwrite {
 		// docs/09: overwriting first backs up the current state.

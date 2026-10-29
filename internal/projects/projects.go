@@ -88,6 +88,9 @@ type Manager struct {
 	busy sync.Map
 	// notifier hears about failed deploys (SetDeployNotifier).
 	notifier DeployNotifier
+	// created hears about services just created from a template
+	// (SetTemplateCreated).
+	created func(context.Context, Actor, []dbq.Service)
 	// repos caches what each Git credential can list (github_repos.go).
 	reposMu sync.Mutex
 	repos   map[string]cachedRepos

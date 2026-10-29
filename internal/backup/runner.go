@@ -7,7 +7,6 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/node"
-	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -70,9 +69,9 @@ func (m *Manager) Enqueue(ctx context.Context, a Actor, projectSlug, serviceSlug
 	if err != nil {
 		return err
 	}
-	// A stopped service's volumes are copied as they are; a database
-	// must run for pg_dump.
-	if s.Method == projects.BackupPGDump && !m.running(ctx, s) {
+	// A stopped service's volumes are copied as they are; a dump (pg_dump
+	// or a recipe's) needs the server running.
+	if s.online() && !m.running(ctx, s) {
 		return ErrNotRunning
 	}
 	jobs := []job{{actor: a, trigger: TriggerManual, kind: s.kind(), service: s.ID}}
@@ -187,7 +186,7 @@ func (m *Manager) schedule(ctx context.Context) {
 			continue
 		}
 		s, err := m.refByID(ctx, p.ServiceID.String)
-		if err != nil || (s.Method == projects.BackupPGDump && !m.running(ctx, s)) {
+		if err != nil || (s.online() && !m.running(ctx, s)) {
 			continue
 		}
 		if due {

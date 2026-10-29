@@ -78,6 +78,9 @@ func (f *fakeNode) volumeTask(spec node.TaskSpec, stdin io.Reader, stdout io.Wri
 		e, b := countTar(in)
 		_, err := fmt.Fprintf(stdout, "HANGAR-RESTORED entries=%d bytes=%d\n", e, b)
 		return err
+	case wipeScript:
+		f.event("wipe " + strings.Join(names, ","))
+		return nil
 	}
 	return fmt.Errorf("unexpected volume script")
 }
@@ -168,9 +171,9 @@ func (f *fixture) volumeService(t *testing.T) svcRef {
 	return s
 }
 
-// Which services are backed up how: templates opt in, PostgreSQL keeps
-// pg_dump, a database without a method gets nothing, and a service of its
-// own (image or Git) is backed up as volumes once it owns one.
+// Which services are backed up how: PostgreSQL keeps pg_dump, a template
+// with a recipe uses it, and anything else that owns a volume (a template
+// or a service of its own, image or Git) is backed up as volumes.
 func TestBackupMethod(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
@@ -193,7 +196,7 @@ func TestBackupMethod(t *testing.T) {
 		}
 		return f.pm.BackupMethod(ctx, s)
 	}
-	for slug, want := range map[string]string{"db": projects.BackupPGDump, "s3": projects.BackupVolume, "maria": "", "app": ""} {
+	for slug, want := range map[string]string{"db": projects.BackupPGDump, "s3": projects.BackupVolume, "maria": projects.BackupRecipe, "app": ""} {
 		if got := method(slug); got != want {
 			t.Errorf("%s: %q, want %q", slug, got, want)
 		}
@@ -276,10 +279,8 @@ func TestVolumeBackupRefusesACopyThatDoesNotAddUp(t *testing.T) {
 	if ev := f.n.eventList(); slices.ContainsFunc(ev, func(e string) bool { return strings.HasPrefix(e, "pause") }) {
 		t.Fatalf("live paused: %v", ev)
 	}
-	// Every pause was undone, whatever happened.
-	if err := f.m.SetServicePolicy(ctx, f.who, "lab", "files", PolicyInput{Enabled: true, EveryHours: 24, AtMinute: 180, Consistency: ConsistencyStop}); err != nil {
-		t.Fatal(err)
-	}
+	// A database is stopped for the copy and started again, by itself.
+	s.Stop = true
 	f.n.events = nil
 	f.n.sourceExtra = 0
 	if _, err := f.m.backupVolume(ctx, f.who, s, TriggerManual, ""); err != nil {
@@ -290,15 +291,11 @@ func TestVolumeBackupRefusesACopyThatDoesNotAddUp(t *testing.T) {
 	}
 }
 
-// The consistency is a choice of the routine; WAL is PostgreSQL's alone.
+// How a copy is taken is never in the routine; WAL is PostgreSQL's alone.
 func TestVolumePolicy(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	f.volumeService(t)
-	var ie *i18n.Error
-	if err := f.m.SetServicePolicy(ctx, f.who, "lab", "files", PolicyInput{Enabled: true, EveryHours: 24, Consistency: "snapshot"}); !errors.As(err, &ie) || ie.Key != "backup.error.consistency" {
-		t.Fatalf("unknown consistency: %v", err)
-	}
 	if err := f.m.SetServicePolicy(ctx, f.who, "lab", "files", PolicyInput{Enabled: true, EveryHours: 24, WAL: true}); !errors.Is(err, ErrUnsupported) {
 		t.Fatalf("WAL on volumes: %v", err)
 	}
@@ -307,7 +304,7 @@ func TestVolumePolicy(t *testing.T) {
 	}
 	s, _ := f.m.ref(ctx, "lab", "files")
 	p, ok := f.m.ServicePolicy(ctx, s.ID)
-	if !ok || p.Consistency != ConsistencyPause || p.EveryHours != 6 {
+	if !ok || p.EveryHours != 6 {
 		t.Fatalf("policy: %+v", p)
 	}
 	// Due: the scheduler queues a copy of the volumes.
@@ -508,7 +505,7 @@ func TestVolumeDownload(t *testing.T) {
 			base = b
 		}
 	}
-	if len(files) != 2 || base == "" || !bytes.Contains(files[ReadmeName], []byte("hangar-cofre decrypt")) {
+	if len(files) != 3 || base == "" || files[ServiceFile+".age"] == nil || !bytes.Contains(files[ReadmeName], []byte("hangar-cofre decrypt")) {
 		t.Fatalf("kit bundle: %v", slices.Collect(mapsKeys(files)))
 	}
 	plain, err := archive.Open(bytes.NewReader(files[base+archive.ExtVolumes]), []age.Identity{f.id}, archive.VolumeLimits)
@@ -528,7 +525,7 @@ func TestVolumeDownload(t *testing.T) {
 			tarName = name
 		}
 	}
-	if tarName == "" || !bytes.Equal(files[tarName], f.n.volTar) || !bytes.Contains(files[ReadmeName], []byte("NÃO está cifrado")) && !bytes.Contains(files[ReadmeName], []byte("NOT encrypted")) {
+	if tarName == "" || !bytes.Equal(files[tarName], f.n.volTar) || !bytes.Contains(files[ServiceFile], []byte(`"service": "files"`)) || !bytes.Contains(files[ReadmeName], []byte("NÃO está cifrado")) && !bytes.Contains(files[ReadmeName], []byte("NOT encrypted")) {
 		t.Fatalf("simple bundle: %v", slices.Collect(mapsKeys(files)))
 	}
 }

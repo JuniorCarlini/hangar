@@ -114,6 +114,7 @@ func (m *Manager) CreateFromTemplateWith(ctx context.Context, a Actor, projectSl
 		}
 	}
 	m.ensureSharedVolumes(ctx, p, out)
+	m.templateCreated(ctx, a, out)
 	// A template that is born public (n8n, Uptime Kuma) shows its link right
 	// away: the edge routes it now (to the "updating" page until the deploy
 	// ends), not at the next unrelated reload, even if a deploy fails.

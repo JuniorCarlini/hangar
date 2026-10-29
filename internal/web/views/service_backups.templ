@@ -18,10 +18,10 @@ type ServiceBackups struct {
 	AtTime       string // "03:00"
 	WAL          bool
 	WALSupported bool
-	// Volumes: the service is backed up as a copy of its volumes (not
-	// pg_dump); Consistency is how the copy is taken.
+	// Volumes: the service is backed up as a copy of its volumes; Method
+	// says how Hangar backs it up (svcbackup.method.*), never a choice.
 	Volumes      bool
-	Consistency  string
+	Method       string
 	NextRun      string
 	WALState     string
 	WALTone      string
@@ -74,10 +74,6 @@ type RestoreRow struct {
 }
 
 var everyHours = []int{24, 12, 6, 1}
-
-// consistencies are the ways a copy of volumes is kept consistent
-// (backup.Consistencies), the default first.
-var consistencies = []string{"pause", "stop", "live"}
 
 templ tabBackups(d ServiceData) {
 	if !d.Backups.Supported {
@@ -204,6 +200,9 @@ templ svcBackupRoutines(d ServiceData) {
 		}
 		if !d.Backups.Enabled {
 			@emptyState("clock", t(ctx, "svcbackup.routines_empty"))
+			if d.Backups.Method != "" {
+				<p class="m-0 px-4 pb-3 text-center text-xs text-muted">{ t(ctx, "svcbackup.method."+d.Backups.Method) }</p>
+			}
 		} else {
 			<div class="flex flex-wrap items-center gap-3 px-4 py-3">
 				<span class="inline-flex size-9 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-muted">
@@ -214,8 +213,8 @@ templ svcBackupRoutines(d ServiceData) {
 					if d.Backups.NextRun != "" {
 						<span class="text-xs text-muted">{ t(ctx, "svcbackup.next", "when", d.Backups.NextRun) }</span>
 					}
-					if d.Backups.Volumes {
-						<span class="text-xs text-muted">{ t(ctx, "svcbackup.consistency."+d.Backups.Consistency) }</span>
+					if d.Backups.Method != "" {
+						<span class="text-xs text-muted">{ t(ctx, "svcbackup.method."+d.Backups.Method) }</span>
 					}
 				</div>
 				if d.CanAdmin {
@@ -229,9 +228,6 @@ templ svcBackupRoutines(d ServiceData) {
 							<input type="hidden" name="at" value={ d.Backups.AtTime }/>
 							if d.Backups.WAL {
 								<input type="hidden" name="wal" value="1"/>
-							}
-							if d.Backups.Volumes {
-								<input type="hidden" name="consistency" value={ d.Backups.Consistency }/>
 							}
 							<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "svcbackup.routine_remove") } aria-label={ t(ctx, "svcbackup.routine_remove") }>
 								@Icon("trash", "size-3.5")
@@ -310,18 +306,9 @@ templ svcRoutineDialog(d ServiceData) {
 						<span>{ t(ctx, "svcbackup.wal") }</span>
 					</label>
 				}
-				if d.Backups.Volumes {
-					// How the copy of the volumes stays consistent: pause
-					// (the default), stop or live.
-					<fieldset class="tuc-choices">
-						<legend class="tuc-label">{ t(ctx, "svcbackup.consistency.label") }</legend>
-						for _, c := range consistencies {
-							<label class="tuc-choice">
-								<input type="radio" class="tuc-radio" name="consistency" value={ c } checked?={ c == d.Backups.Consistency }/>
-								<span>{ t(ctx, "svcbackup.consistency."+c) } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.consistency_hint."+c) }</span></span>
-							</label>
-						}
-					</fieldset>
+				if d.Backups.Method != "" {
+					// How it is backed up is Hangar's choice: said, not asked.
+					<p class="tuc-hint">{ t(ctx, "svcbackup.method."+d.Backups.Method) }</p>
 				}
 				<div class="flex justify-end gap-2">
 					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
@@ -382,7 +369,7 @@ templ svcBackupActions(d ServiceData) {
 	// state too: it is the way out for a database nobody has set up yet.
 	if d.CanAdmin {
 		if d.SudoCritical {
-			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit, d.Backups.Volumes) }>
+			<form class="inline-flex" method="post" action={ templ.SafeURL(d.base() + "/backup") } title={ downloadHint(ctx, d.Backups.HasKit, d.Backups.Method) }>
 				<input type="hidden" name="csrf" value={ d.CSRF }/>
 				<button class="tuc-btn is-outline is-sm" type="submit">
 					@Icon("download", "size-3.5")
@@ -395,14 +382,19 @@ templ svcBackupActions(d ServiceData) {
 	}
 }
 
-// downloadHint says what the download does: an encrypted dump behind a
-// signed link once a kit exists, the plain dump before. A copy of volumes
-// is always made first and offered as a link.
-func downloadHint(ctx context.Context, kit, volumes bool) string {
+// downloadHint says what the download does: the whole service, its data
+// and its configuration, in one .zip. A PostgreSQL streams its plain dump
+// before a kit exists; everything else is made first and offered as a
+// link, encrypted once a kit exists.
+func downloadHint(ctx context.Context, kit bool, method string) string {
 	switch {
-	case volumes && kit:
+	case method == "recipe" && kit:
+		return t(ctx, "svcbackup.download_hint_recipe")
+	case method == "recipe":
+		return t(ctx, "backup.hint_recipe")
+	case method != "pg_dump" && kit:
 		return t(ctx, "svcbackup.download_hint_volumes")
-	case volumes:
+	case method != "pg_dump":
 		return t(ctx, "backup.hint_volumes")
 	case kit:
 		return t(ctx, "svcbackup.download_hint")

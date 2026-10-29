@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -150,7 +151,7 @@ func alertText(ctx context.Context, a backup.Alert) string {
 
 // backupRow is one line of the services table.
 func (h *handlers) backupRow(ctx context.Context, s backup.Row, now time.Time, href string) views.BackupServiceRow {
-	row := views.BackupServiceRow{Label: s.Label, Href: href, Schedule: scheduleText(ctx, s.Policy, s.HasPolicy)}
+	row := views.BackupServiceRow{Label: s.Label, Href: href, Schedule: scheduleText(ctx, s.Policy, s.HasPolicy), Covered: s.Covered()}
 	if s.Last != nil {
 		row.HasRun = true
 		row.Last = ago(ctx, s.Last.Started.Format(time.RFC3339Nano), now)
@@ -223,8 +224,16 @@ func runRow(ctx context.Context, r backup.Run) views.BackupRunRow {
 	if r.Kind == archive.KindVolume && r.Verified {
 		row.Checked = i18n.T(ctx, "backups.history.files", "n", r.Files)
 		if r.PauseMS > 0 {
-			row.Checked += " · " + i18n.T(ctx, "backups.history.paused", "seconds", fmt.Sprintf("%.1f", float64(r.PauseMS)/1000))
+			secs := fmt.Sprintf("%.1f", float64(r.PauseMS)/1000)
+			if r.Held == backup.ConsistencyStop {
+				row.Checked += " · " + i18n.T(ctx, "backups.history.stopped", "seconds", secs)
+			} else {
+				row.Checked += " · " + i18n.T(ctx, "backups.history.paused", "seconds", secs)
+			}
 		}
+	}
+	if r.Kind == archive.KindRecipe && r.Verified {
+		row.Checked = countsText(ctx, r.Counts)
 	}
 	row.Status, row.Tone = i18n.T(ctx, "backups.run_status."+r.Status), map[string]string{"ok": "success", "failed": "danger", "running": "info"}[r.Status]
 	if r.Warning != "" {
@@ -240,6 +249,24 @@ func runRow(ctx context.Context, r backup.Run) views.BackupRunRow {
 	}
 	row.Uploads = strings.Join(names, " · ")
 	return row
+}
+
+// countNames are the counts of a recipe's verify the UI names; others
+// show as they come ("name=n").
+var countNames = []string{"databases", "tables", "rows", "users", "roles", "collections", "documents", "keys"}
+
+// countsText says what a recipe's test restore found: "3 tabelas · 1.500
+// linhas · 2 usuários".
+func countsText(ctx context.Context, counts []backup.Count) string {
+	parts := make([]string, 0, len(counts))
+	for _, c := range counts {
+		if slices.Contains(countNames, c.Name) {
+			parts = append(parts, i18n.T(ctx, "backups.count."+c.Name, "n", c.N))
+		} else {
+			parts = append(parts, c.Name+"="+strconv.FormatInt(c.N, 10))
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 func (h *handlers) backupsDone(w http.ResponseWriter, r *http.Request, ok string, err error) {
@@ -346,7 +373,7 @@ func (h *handlers) deleteTarget(w http.ResponseWriter, r *http.Request) {
 func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service) views.ServiceBackups {
 	ctx := r.Context()
 	method := h.projects.BackupMethod(ctx, s)
-	b := views.ServiceBackups{Supported: method != "", Volumes: method == projects.BackupVolume}
+	b := views.ServiceBackups{Supported: method != "", Volumes: method == projects.BackupVolume, Method: methodKey(method, h.projects.IsDatabase(s))}
 	if !b.Supported {
 		return b
 	}
@@ -364,8 +391,7 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 	if b.Enabled {
 		b.NextRun = pol.NextRun.Format(backupTime)
 	}
-	b.WALSupported = !b.Volumes
-	b.Consistency = pol.Consistency
+	b.WALSupported = method == projects.BackupPGDump
 	if b.WAL {
 		b.WALState, b.WALTone = walText(ctx, h.backups.ServiceWAL(ctx, s.ID), now)
 	}
@@ -417,6 +443,8 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 				}
 			} else if o, ok := archive.ParseKey(x.Point); ok && o.Kind == archive.KindVolume {
 				row.What = i18n.T(ctx, "svcbackup.restore_from_volumes")
+			} else if ok && o.Kind == archive.KindRecipe {
+				row.What = i18n.T(ctx, "svcbackup.restore_from_recipe")
 			} else {
 				row.What = i18n.T(ctx, "svcbackup.restore_from_dump")
 			}
@@ -457,6 +485,21 @@ func (h *handlers) serviceBackups(r *http.Request, p dbq.Project, s dbq.Service)
 	return b
 }
 
+// methodKey names how a service is backed up, for the UI
+// (svcbackup.method.*): Hangar picks it, the tab only says which.
+func methodKey(method string, database bool) string {
+	switch method {
+	case projects.BackupVolume:
+		if database {
+			return "volume_stop"
+		}
+		return "volume_pause"
+	case projects.BackupPGDump, projects.BackupRecipe:
+		return method
+	}
+	return ""
+}
+
 // defaultRestoreName is "<service>-restaurado", shortened to stay a valid
 // service name.
 func defaultRestoreName(slug string) string {
@@ -468,7 +511,7 @@ func defaultRestoreName(slug string) string {
 }
 
 func (h *handlers) setBackupPolicy(w http.ResponseWriter, r *http.Request) {
-	in := backup.PolicyInput{Enabled: r.PostFormValue("enabled") == "1", WAL: r.PostFormValue("wal") == "1", Consistency: r.PostFormValue("consistency")}
+	in := backup.PolicyInput{Enabled: r.PostFormValue("enabled") == "1", WAL: r.PostFormValue("wal") == "1"}
 	var err error
 	if in.EveryHours, err = strconv.Atoi(r.PostFormValue("every_hours")); err == nil {
 		var at time.Time
@@ -577,9 +620,10 @@ func parseMoment(v, offset string) (time.Time, error) {
 	return time.Time{}, errors.New("invalid moment")
 }
 
-// downloadBackup is "Baixar backup agora". With a recovery kit, the dump is
-// tested and encrypted in the background and offered as a single-use link
-// (docs/09); before a kit exists, it streams the plain dump as before.
+// downloadBackup is "Baixar backup": the whole service in one .zip, its
+// data with its users and its configuration (docs/09). It is made, tested
+// and encrypted in the background and offered as a single-use link; a
+// PostgreSQL in the simple mode streams the plain dump instead.
 func (h *handlers) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	p, s, err := h.projects.GetService(r.Context(), r.PathValue("project"), r.PathValue("service"))
 	if err != nil {
@@ -588,10 +632,10 @@ func (h *handlers) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	switch h.projects.BackupMethod(r.Context(), s) {
 	case projects.BackupPGDump:
-	case projects.BackupVolume:
-		// A copy of volumes is made first (the services pause only for
-		// the copy), then fetched once: decrypted in the simple mode,
-		// as it is with the kit.
+	case projects.BackupVolume, projects.BackupRecipe:
+		// The backup is made first (a copy of volumes holds the services
+		// only for the copy), then fetched once: decrypted in the simple
+		// mode, as it is with the kit.
 		if err := h.backups.PrepareDownload(r.Context(), actor(r), p.Slug, s.Slug); err != nil {
 			code, msg := userError(r, err)
 			h.renderService(w, r, serviceView{status: code, errMsg: msg})

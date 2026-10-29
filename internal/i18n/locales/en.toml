@@ -880,11 +880,70 @@ copy = "Copy {ref}"
 
 
 [backup]
-hint = "Makes a pg_dump now, with the database users, and downloads it in the browser as a .zip."
+hint = "Makes a pg_dump now, with the database users, and downloads it in the browser as a .zip, with the service's configuration."
 download = "Download backup"
-hint_volumes = "Copies the service's volumes (paused for the copy), tests the copy and offers a .zip to download once."
+hint_volumes = "Copies the service's volumes (a database stopped, anything else paused, only for the copy), tests the copy and offers a .zip with everything and the configuration, to download once."
+hint_recipe = "Makes the database's full backup (data, users and passwords), tests it in a throwaway database and offers a .zip with everything and the configuration, to download once."
 
 [backup.bundle]
+readme_recipe_sealed = """
+Hangar backup: {base}
+
+A full backup of {service} (template {template}), made by the database's own
+tool: all the data and the users, with their passwords (hashes only) and
+permissions. Before it left the server, it was restored into a throwaway
+database and checked.
+
+- {file}.zst.age: the backup, compressed (zstd) and encrypted with age.
+
+1. Decrypt, on your computer, with the recovery kit:
+
+     hangar-cofre decrypt {base}.zip
+
+   It writes {file}. Without hangar-cofre:
+     age -d -i hangar-kit.txt {file}.zst.age | zstd -d -o {file}
+
+2. Restore into an empty database of the same image (with the environment
+   variables of service.json), running inside its container:
+
+     {restore} < {file}
+
+Keep this file like any backup: without the kit nobody can open it.
+"""
+readme_recipe_plain = """
+Hangar backup: {base}
+
+A full backup of {service} (template {template}), made by the database's own
+tool: all the data and the users, with their passwords (hashes only) and
+permissions. Before it left the server, it was restored into a throwaway
+database and checked.
+
+- {file}: the backup.
+
+Restore into an empty database of the same image (with the environment
+variables of service.json), running inside its container:
+
+  {restore} < {file}
+
+This file is NOT encrypted and holds all the data and the password hashes:
+keep it safe.
+"""
+readme_service_sealed = """
+
+Also in this .zip:
+
+- {file}.age: the service's configuration (image or repository, command,
+  ports, domains, volumes and sizes, resources, healthcheck and the variables
+  with their values), encrypted with age. hangar-cofre decrypt writes {file}.
+"""
+readme_service_plain = """
+
+Also in this .zip:
+
+- {file}: the service's configuration (image or repository, command, ports,
+  domains, volumes and sizes, resources, healthcheck and the variables with
+  their values, passwords included).
+"""
 readme_volumes_sealed = """
 Hangar backup: {base}
 
@@ -1024,7 +1083,6 @@ no_base = "There is no base before that moment. Choose a later moment or a pg_du
 point = "Choose the restore point and destination."
 unsupported = "This service has no backup to download."
 not_running = "The service must be running to make the backup."
-consistency = "Choose how to copy the volumes: pausing, stopping or with the service running."
 no_room = "There is no room on the server to prepare the copy: it needs {need}, {free} is free."
 disk_full = "The copy stopped so as not to fill the server's disk ({free} free)."
 pause_long = "The copy went past {minutes} minutes with the service paused and was stopped (the service is back). Copy with the service running, or at a quieter time."
@@ -2163,6 +2221,8 @@ panel = "Hangar panel"
 off = "off"
 every = { one = "every {n} h, from {at}", other = "every {n} h, from {at}" }
 failed_at = "failed {when}"
+none = "no backup"
+create = "Create routine"
 
 [backups.wal]
 waiting = "waiting"
@@ -2179,13 +2239,25 @@ result = "Result"
 counts = "{tables} tables, {rows} rows"
 files = { one = "1 file", other = "{n} files" }
 paused = "paused {seconds} s"
+stopped = "down for {seconds} s"
 download = "Download"
+
+[backups.count]
+databases = { one = "1 database", other = "{n} databases" }
+tables = { one = "1 table", other = "{n} tables" }
+rows = { one = "1 row", other = "{n} rows" }
+users = { one = "1 user", other = "{n} users" }
+roles = { one = "1 role", other = "{n} roles" }
+collections = { one = "1 collection", other = "{n} collections" }
+documents = { one = "1 document", other = "{n} documents" }
+keys = { one = "1 key", other = "{n} keys" }
 
 [backups.kind]
 pg_dump = "pg_dump"
 pg_base = "WAL base"
 panel = "panel"
 volume = "volumes"
+recipe = "full"
 
 [backups.trigger]
 schedule = "scheduled"
@@ -2352,14 +2424,14 @@ routine_daily = "Every day at {at}"
 routine_text = { one = "Every hour, from {at}", other = "Every {n} hours, from {at}" }
 routines = "Backup routines"
 routine_add = "Add routine"
-routines_empty = "No routine: backups only happen when you click Back up."
+routines_empty = "No automatic backup: this service keeps data and is only copied when you click Back up. Add a routine."
 routine_edit = "Edit routine"
 routine_remove = "Remove routine"
 routine_title = "Backup routine"
-routine_hint = "The day's first backup runs at this time; the others follow the interval."
+routine_hint = "The day's first backup runs at this time; the others follow the interval. A backup is always of the whole service, made the right way for it: new services that keep data start with a daily routine at 03:00."
 title = "Backups"
 not_ready_simple = "To turn it on, add a destination in Backups."
-unsupported = "This service has no backups: it owns no volumes, or it is a database whose template has no safe way to copy it yet."
+unsupported = "This service keeps no data (it owns no volumes): there is nothing to copy."
 every_hint = "Time of the day's first backup."
 not_ready = "To turn it on, confirm the recovery kit and pick a destination in Backups."
 open_backups = "Open Backups"
@@ -2375,9 +2447,10 @@ wal_title = "Point-in-time recovery"
 window = "You can go back to any moment between {from} and {to}."
 window_none = "There is no base to go back to a minute yet. One is taken right after WAL starts working."
 last_base = "Last base: {when}"
-download_hint = "Makes a pg_dump now, with the database users, encrypted with your key (.zip). The link lasts 5 minutes."
+download_hint = "Makes a pg_dump now, with the database users and the service's configuration, encrypted with your key (.zip). The link lasts 5 minutes."
+download_hint_recipe = "Makes the database's full backup (data, users and passwords), tests it and encrypts it with your key, with the service's configuration (.zip). The link lasts 5 minutes."
 download_preparing = "Preparing: dump, test and encryption…"
-download_hint_volumes = "Copies the service's volumes (paused for the copy), tests and encrypts the copy with your key (.zip). The link is valid for 5 minutes."
+download_hint_volumes = "Copies the service's volumes (a database stopped, anything else paused, only for the copy), tests and encrypts the copy with your key, with the service's configuration (.zip). The link is valid for 5 minutes."
 download_preparing_volumes = "Preparing: copy of the volumes, test and encryption…"
 download_ready = "Download ({size})"
 download_expires = "The link is valid until {when} and works once."
@@ -2406,12 +2479,19 @@ restores = "Restores"
 restore_to = "to {when}"
 restore_from_dump = "from a pg_dump"
 restore_from_volumes = "from a copy of the volumes"
+restore_from_recipe = "from a full backup"
 restore_from_service = "from {service}"
 restore_failed = "The restore started at {when} into {service} failed. Nothing was restored."
 restore_saved_roles = "Database users recreated as in the original: {roles}."
 restore_roles = "Roles created without a password: {roles}. Set their passwords so the app can connect."
 restore_removed = "The new service {service} was removed. The original was not changed."
 restore_kept = "The new service {service} could not be removed; delete it in its settings. The original was not changed."
+
+[svcbackup.method]
+pg_dump = "Full backup: pg_dump with the database users, tested in a throwaway PostgreSQL, without stopping the service."
+recipe = "Full backup: data, users and passwords through the database's own tool, tested in a throwaway database, without stopping the service."
+volume_stop = "Full backup: a copy of the volumes with the database stopped only for the copy (the only safe way without a tool of its own)."
+volume_pause = "Full backup: a copy of the volumes with the service paused only for the copy."
 
 [svcbackup.step]
 queued = "queued"
@@ -2428,17 +2508,6 @@ copy = "emptying the volumes and copying the files"
 start = "starting the service again"
 rollback = "the restore failed: putting the volumes back as they were"
 done = "done"
-
-[svcbackup.consistency]
-label = "During the copy"
-pause = "Pause the service during the copy"
-stop = "Stop the service and start it again"
-live = "Copy with the service running"
-
-[svcbackup.consistency_hint]
-pause = "Recommended. Freezes the service only while copying (seconds for 1 GB); no file comes out half written."
-stop = "The app shuts down cleanly before the copy. It is down during the copy."
-live = "No pause, but a file written during the copy may come out incomplete."
 
 [flash.backups]
 mode = "Backup security saved."

@@ -62,6 +62,16 @@ type fakeNode struct {
 	events      []string
 	verifyLies  bool  // the test of the copy reports another count
 	sourceExtra int64 // the volumes held this many more entries
+	// A template's recipe (fakeRecipe): what its dump writes, what its
+	// verify prints on the service and in the test instance, what the
+	// test instance and the restore received, and the test's spec.
+	recipeData    []byte
+	recipeVerify  string
+	recipeCheck   string
+	recipeTestIn  []byte
+	recipeIn      []byte
+	recipeSpec    node.TaskSpec
+	recipeDumpErr error
 }
 
 // bootstrapOnly is pg_dumpall --roles-only of a server with only its
@@ -134,6 +144,24 @@ func (f *fakeNode) ExecIO(_ context.Context, _, _ string, cmd []string, stdin io
 	defer f.mu.Unlock()
 	full := strings.Join(cmd, " ")
 	f.execs = append(f.execs, full)
+	switch cmd[0] {
+	case "fake-dump":
+		if _, err := w.Write(f.recipeData); err != nil {
+			return err
+		}
+		return f.recipeDumpErr
+	case "fake-verify":
+		_, err := io.WriteString(w, f.recipeVerify)
+		return err
+	case "fake-ready":
+		return nil
+	case "fake-restore":
+		f.recipeIn = in
+		f.events = append(f.events, "recipe-restore")
+		err := f.restoreErr
+		f.restoreErr = nil
+		return err
+	}
 	switch {
 	case strings.Contains(full, "pg_dumpall"):
 		_, err := io.WriteString(w, f.rolesSQL)
@@ -196,6 +224,9 @@ func (f *fakeNode) RunTask(_ context.Context, spec node.TaskSpec, stdin io.Reade
 	if spec.Image == VolumeHelperImage {
 		return f.volumeTask(spec, stdin, stdout)
 	}
+	if len(spec.Cmd) == 3 && strings.Contains(spec.Cmd[2], "'fake-serve'") {
+		return f.recipeTask(spec, stdin, stdout)
+	}
 	var in []byte
 	if stdin != nil {
 		in, _ = io.ReadAll(stdin)
@@ -206,6 +237,24 @@ func (f *fakeNode) RunTask(_ context.Context, spec node.TaskSpec, stdin io.Reade
 	f.mu.Unlock()
 	if out == "" {
 		return io.ErrUnexpectedEOF
+	}
+	_, err := io.WriteString(stdout, out)
+	return err
+}
+
+// recipeTask is the throwaway instance of a recipe's test: ready first,
+// then the backup on stdin, then what the instance holds.
+func (f *fakeNode) recipeTask(spec node.TaskSpec, stdin io.Reader, stdout io.Writer) error {
+	if _, err := io.WriteString(stdout, "HANGAR-READY\n"); err != nil {
+		return err
+	}
+	in, _ := io.ReadAll(stdin)
+	f.mu.Lock()
+	f.recipeTestIn, f.recipeSpec = in, spec
+	out := f.recipeCheck
+	f.mu.Unlock()
+	if out == "" {
+		return errors.New("fake-restore exited with 1: ERROR 1064 near 'IDENTIFIED BY PASSWORD '*0123456789ABCDEF0123456789ABCDEF01234567''")
 	}
 	_, err := io.WriteString(stdout, out)
 	return err

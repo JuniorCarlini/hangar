@@ -59,9 +59,14 @@ type Run struct {
 	Tables    int64
 	Rows      int64
 	// Files and PauseMS describe a copy of volumes: the entries it holds
-	// and how long the services were paused (or stopped) for it.
-	Files    int64
-	PauseMS  int64
+	// and how long the services were held for it; Held says how
+	// (ConsistencyPause or ConsistencyStop).
+	Files   int64
+	PauseMS int64
+	Held    string
+	// Counts are what a recipe's test restore found (tables, rows,
+	// users...).
+	Counts   []Count
 	Warning  string
 	Error    string
 	Uploads  []upload
@@ -78,12 +83,17 @@ func toRun(r dbq.BackupRun) Run {
 	if r.FinishedAt.Valid {
 		out.Finished = time.Unix(r.FinishedAt.Int64, 0)
 	}
-	if r.Kind == archive.KindVolume {
+	switch r.Kind {
+	case archive.KindVolume:
 		var c VolumeCheck
 		if json.Unmarshal([]byte(r.CheckJson), &c) == nil {
-			out.Files, out.PauseMS = c.Files, c.PauseMS
+			out.Files, out.PauseMS, out.Held = c.Files, c.PauseMS, c.Mode
 		}
-	} else {
+	case archive.KindRecipe:
+		if c := recipeCheckOf(r); c != nil {
+			out.Counts = c.Counts()
+		}
+	default:
 		var c Check
 		if json.Unmarshal([]byte(r.CheckJson), &c) == nil {
 			out.Tables, out.Rows = c.Tables, c.Rows
@@ -123,6 +133,10 @@ func (w WALState) Lagging(now time.Time) bool {
 	return w.Pending > 0 && !w.OldestPending.IsZero() && now.Sub(w.OldestPending) > WALLagMax
 }
 
+// Covered reports whether the row's service is backed up by itself: a
+// routine is on.
+func (r Row) Covered() bool { return r.HasPolicy && r.Policy.Enabled }
+
 // Row is one line of the backups table.
 type Row struct {
 	Project   string
@@ -132,7 +146,8 @@ type Row struct {
 	Running   bool
 	Policy    Policy
 	HasPolicy bool
-	// Kind is the kind of its full backups: a dump or a copy of volumes.
+	// Kind is the kind of its full backups: a dump, a recipe's backup or a
+	// copy of volumes.
 	Kind     string
 	Last     *Run // newest full backup (or panel) run
 	LastOK   *Run
@@ -205,10 +220,14 @@ func (m *Manager) Overview(ctx context.Context) (Overview, error) {
 		}
 		return all[i].Slug < all[j].Slug
 	})
+	// Every service that keeps data is listed, with a routine or not: the
+	// ones without one show as not backed up.
 	for _, s := range all {
 		kind := archive.KindDump
 		switch m.projects.BackupMethod(ctx, dbq.Service{ID: s.ID, Template: s.Template}) {
 		case projects.BackupPGDump:
+		case projects.BackupRecipe:
+			kind = archive.KindRecipe
 		case projects.BackupVolume:
 			kind = archive.KindVolume
 		default:

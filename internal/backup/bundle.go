@@ -16,6 +16,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
+	"github.com/JuniorCarlini/hangar/internal/templates"
 )
 
 // A downloaded database backup is one .zip (archive.WriteBundle) that
@@ -42,6 +43,29 @@ func BundleReadme(ctx context.Context, base, db string, sealed bool) string {
 		text = i18n.T(ctx, "backup.bundle.readme_sealed", "base", base, "db", db)
 	}
 	return strings.TrimLeft(text, "\n")
+}
+
+// RecipeReadme is the README of a bundle with the backup a template's
+// recipe made of service: what it holds and the commands that put it back.
+func RecipeReadme(ctx context.Context, base, service, template string, r *templates.Recipe, sealed bool) string {
+	ext, restore := "backup", ""
+	if r != nil {
+		ext, restore = r.FileExt(), shellJoin(r.Restore)
+	}
+	args := []any{"base", base, "service", service, "template", template, "file", base + "." + ext, "restore", restore}
+	text := i18n.T(ctx, "backup.bundle.readme_recipe_plain", args...)
+	if sealed {
+		text = i18n.T(ctx, "backup.bundle.readme_recipe_sealed", args...)
+	}
+	return strings.TrimLeft(text, "\n")
+}
+
+// ServiceReadme is the part of every README about service.json.
+func ServiceReadme(ctx context.Context, sealed bool) string {
+	if sealed {
+		return i18n.T(ctx, "backup.bundle.readme_service_sealed", "file", ServiceFile)
+	}
+	return i18n.T(ctx, "backup.bundle.readme_service_plain", "file", ServiceFile)
 }
 
 // VolumesReadme is the README of a bundle with a copy of the volumes of
@@ -94,6 +118,10 @@ func (m *Manager) DownloadPlain(ctx context.Context, a Actor, projectSlug, servi
 	if err != nil {
 		return err
 	}
+	cfg, err := m.serviceJSON(ctx, s)
+	if err != nil {
+		return err
+	}
 	base := archive.BundleName(s.Project, s.Service, m.now())
 	pr, pw := io.Pipe()
 	go func() {
@@ -101,9 +129,10 @@ func (m *Manager) DownloadPlain(ctx context.Context, a Actor, projectSlug, servi
 	}()
 	defer func() { _ = pr.Close() }()
 	return archive.WriteBundle(w, m.now(),
-		archive.TextFile(ReadmeName, BundleReadme(ctx, base, s.DBName, false)),
+		archive.TextFile(ReadmeName, m.readmeFor(ctx, s, base, false)),
 		archive.BundleFile{Name: base + ExtRolesSQL, Body: strings.NewReader(string(rolesSQL)), Text: true},
 		archive.BundleFile{Name: base + ExtRolesRestore, Body: strings.NewReader(string(restore)), Text: true},
+		archive.BundleFile{Name: ServiceFile, Body: strings.NewReader(string(cfg)), Text: true},
 		archive.BundleFile{Name: base + extDumpPlain, Body: pr})
 }
 
@@ -138,8 +167,8 @@ func (m *Manager) runBundle(ctx context.Context, runID string) (dbq.BackupRun, t
 // files go as they are. ok is false when the run has no saved roles: the
 // caller sends the backup the way it did before.
 func (m *Manager) OpenRunBundle(ctx context.Context, a Actor, runID string, open bool) (io.ReadCloser, string, bool, error) {
-	if r, err := m.q.GetBackupRun(ctx, runID); err == nil && r.Kind == archive.KindVolume {
-		return m.volumeRunBundle(ctx, a, r, open)
+	if r, err := m.q.GetBackupRun(ctx, runID); err == nil && (r.Kind == archive.KindVolume || r.Kind == archive.KindRecipe) {
+		return m.fileRunBundle(ctx, a, r, open)
 	}
 	r, t, ok, err := m.runBundle(ctx, runID)
 	if err != nil || !ok {
@@ -227,10 +256,10 @@ func (m *Manager) OpenRunBundle(ctx context.Context, a Actor, runID string, open
 	return pr, base + archive.ExtBundle, true, nil
 }
 
-// volumeRunBundle streams an older copy of volumes as one bundle with its
-// README: the plain tar in the simple mode (open), else the .age file as
-// it is.
-func (m *Manager) volumeRunBundle(ctx context.Context, a Actor, r dbq.BackupRun, open bool) (io.ReadCloser, string, bool, error) {
+// fileRunBundle streams an older copy of volumes, or a recipe's backup, as
+// one bundle with its README: decrypted in the simple mode (open), else
+// the .age file as it is.
+func (m *Manager) fileRunBundle(ctx context.Context, a Actor, r dbq.BackupRun, open bool) (io.ReadCloser, string, bool, error) {
 	if r.ObjectKey == "" || r.Status != "ok" {
 		return nil, "", true, projects.ErrNotFound
 	}
@@ -249,18 +278,34 @@ func (m *Manager) volumeRunBundle(ctx context.Context, a Actor, r dbq.BackupRun,
 		return nil, "", true, err
 	}
 	base := archive.BundleName(o.Project, o.Service, o.Time)
-	man, _ := archive.ParseVolumeMeta(info.Metadata["hangar-volumes"])
-	readme := VolumesReadme(ctx, base, r.Label, strings.Join(man.Names(), ", "), !open)
-	file := archive.BundleFile{Name: base + archive.ExtVolumes, Body: rc}
+	var readme, sealedName, plainName string
+	if r.Kind == archive.KindRecipe {
+		tpl := info.Metadata["hangar-template"]
+		var recipe *templates.Recipe
+		if t, ok := m.projects.Template(tpl); ok {
+			recipe = t.Recipe
+		}
+		readme = RecipeReadme(ctx, base, r.Label, tpl, recipe, !open)
+		ext := "backup"
+		if recipe != nil {
+			ext = recipe.FileExt()
+		}
+		sealedName, plainName = base+"."+ext+".zst.age", base+"."+ext
+	} else {
+		man, _ := archive.ParseVolumeMeta(info.Metadata["hangar-volumes"])
+		readme = VolumesReadme(ctx, base, r.Label, strings.Join(man.Names(), ", "), !open)
+		sealedName, plainName = base+archive.ExtVolumes, base+archive.ExtVolumesTar
+	}
+	file := archive.BundleFile{Name: sealedName, Body: rc}
 	closers := []io.Closer{rc}
 	if open {
-		plain, err := archive.Open(rc, ids, archive.VolumeLimits)
+		plain, err := archive.Open(rc, ids, archive.LimitsFor(r.ObjectKey))
 		if err != nil {
 			_ = rc.Close()
 			return nil, "", true, err
 		}
 		closers = append(closers, plain)
-		file = archive.BundleFile{Name: base + archive.ExtVolumesTar, Body: plain}
+		file = archive.BundleFile{Name: plainName, Body: plain}
 	}
 	m.record(ctx, a, "backup.download", "backup_run", r.ID, audit.OK, map[string]any{"label": r.Label, "kind": r.Kind, "encrypted": !open})
 	pr, pw := io.Pipe()

@@ -362,7 +362,7 @@ func (v *Vault) List(ctx context.Context) ([]Entry, error) {
 			continue
 		}
 		switch o.Kind {
-		case archive.KindDump, archive.KindVolume: // a backup of the whole service
+		case archive.KindDump, archive.KindVolume, archive.KindRecipe: // a backup of the whole service
 			e := get(o.Project + "/" + o.Service)
 			e.Dumps++
 			if l.LastModified.After(e.Latest) {

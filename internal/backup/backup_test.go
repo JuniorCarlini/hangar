@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/backup/s3"
+	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
@@ -431,8 +433,16 @@ func TestDownloadIsEncryptedAndSingleUse(t *testing.T) {
 			}
 			got, _ := io.ReadAll(plain)
 			want := f.n.dumpData
-			if strings.HasSuffix(zf.Name, archive.ExtRoles) {
+			switch {
+			case strings.HasSuffix(zf.Name, archive.ExtRoles):
 				want = []byte(f.n.rolesSQL)
+			case zf.Name == ServiceFile+".age":
+				// The service's configuration, values included.
+				var snap projects.ServiceSnapshot
+				if err := json.Unmarshal(got, &snap); err != nil || snap.Service != "db" || snap.Template != "postgres" || len(snap.Env) == 0 || len(snap.Vols) == 0 {
+					t.Errorf("service.json: %v %s", err, got)
+				}
+				want = got
 			}
 			if !bytes.Equal(got, want) {
 				t.Errorf("%s opens to something else", zf.Name)
@@ -443,7 +453,7 @@ func TestDownloadIsEncryptedAndSingleUse(t *testing.T) {
 			}
 		}
 	}
-	if len(names) != 3 || names[0] != ReadmeName || !strings.HasSuffix(names[1], archive.ExtRoles) || !strings.HasSuffix(names[2], archive.ExtDump) {
+	if len(names) != 4 || names[0] != ReadmeName || !strings.HasSuffix(names[1], archive.ExtRoles) || !strings.HasSuffix(names[2], archive.ExtDump) || names[3] != ServiceFile+".age" {
 		t.Fatalf("bundle: %v", names)
 	}
 	if staged, _ := os.ReadDir(f.m.opt.StagingDir); len(staged) != 0 {

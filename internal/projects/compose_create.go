@@ -336,6 +336,7 @@ func (m *Manager) CreateFromCompose(ctx context.Context, a Actor, projectSlug st
 		return out, err
 	}
 	m.ensureSharedVolumes(ctx, p, out)
+	m.templateCreated(ctx, a, out[:len(dbs)])
 	// Databases first: the apps' first deploy resolves references to them.
 	for _, s := range out {
 		if _, err := m.Deploy(ctx, a, p.Slug, s.Slug, "create"); err != nil {

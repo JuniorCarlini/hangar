@@ -880,11 +880,70 @@ copy = "Copiar {ref}"
 
 
 [backup]
-hint = "Gera um pg_dump na hora, com os usuários do banco, e baixa pelo navegador num .zip."
+hint = "Gera na hora um pg_dump com os usuários do banco e baixa pelo navegador num .zip, com a configuração do serviço."
 download = "Baixar backup"
-hint_volumes = "Copia os volumes do serviço (pausado durante a cópia), testa e oferece um .zip para baixar uma vez."
+hint_volumes = "Copia os volumes do serviço (banco parado, ou serviço pausado, só durante a cópia), testa e oferece um .zip com tudo e a configuração, para baixar uma vez."
+hint_recipe = "Gera o backup completo do banco (dados, usuários e senhas), testa num banco descartável e oferece um .zip com tudo e a configuração, para baixar uma vez."
 
 [backup.bundle]
+readme_recipe_sealed = """
+Backup do Hangar: {base}
+
+Backup completo de {service} (template {template}), feito pela ferramenta do
+próprio banco: todos os dados e os usuários, com as senhas (só o hash) e as
+permissões. Antes de sair do servidor, ele foi restaurado num banco
+descartável e conferido.
+
+- {file}.zst.age: o backup, comprimido (zstd) e cifrado com age.
+
+1. Decifrar, no seu computador, com o kit de recuperação:
+
+     hangar-cofre decrypt {base}.zip
+
+   Gera {file}. Sem o hangar-cofre:
+     age -d -i hangar-kit.txt {file}.zst.age | zstd -d -o {file}
+
+2. Restaurar num banco vazio da mesma imagem (as mesmas variáveis de
+   ambiente do service.json), rodando dentro do contêiner dele:
+
+     {restore} < {file}
+
+Guarde este arquivo como qualquer backup: sem o kit, ninguém abre.
+"""
+readme_recipe_plain = """
+Backup do Hangar: {base}
+
+Backup completo de {service} (template {template}), feito pela ferramenta do
+próprio banco: todos os dados e os usuários, com as senhas (só o hash) e as
+permissões. Antes de sair do servidor, ele foi restaurado num banco
+descartável e conferido.
+
+- {file}: o backup.
+
+Restaurar num banco vazio da mesma imagem (as mesmas variáveis de ambiente
+do service.json), rodando dentro do contêiner dele:
+
+  {restore} < {file}
+
+Este arquivo NÃO está cifrado e tem todos os dados e os hashes das senhas:
+guarde-o com cuidado.
+"""
+readme_service_sealed = """
+
+Também neste .zip:
+
+- {file}.age: a configuração do serviço (imagem ou repositório, comando,
+  portas, domínios, volumes e tamanhos, recursos, healthcheck e as variáveis
+  com os valores), cifrada com age. O hangar-cofre decrypt gera {file}.
+"""
+readme_service_plain = """
+
+Também neste .zip:
+
+- {file}: a configuração do serviço (imagem ou repositório, comando, portas,
+  domínios, volumes e tamanhos, recursos, healthcheck e as variáveis com os
+  valores, inclusive senhas).
+"""
 readme_volumes_sealed = """
 Backup do Hangar: {base}
 
@@ -1021,7 +1080,6 @@ no_base = "Não há base anterior a esse momento. Escolha um momento mais recent
 point = "Escolha o ponto e o destino da restauração."
 unsupported = "Este serviço não tem backup para baixar."
 not_running = "O serviço precisa estar rodando para gerar o backup."
-consistency = "Escolha como copiar os volumes: pausando, parando ou com o serviço rodando."
 no_room = "Não há espaço no servidor para preparar a cópia: precisa de {need}, há {free} livres."
 disk_full = "A cópia parou para não encher o disco do servidor ({free} livres)."
 pause_long = "A cópia passou de {minutes} minutos com o serviço pausado e foi interrompida (o serviço voltou). Use a cópia com o serviço rodando ou um horário mais calmo."
@@ -2160,6 +2218,8 @@ panel = "Painel Hangar"
 off = "desligado"
 every = { one = "a cada {n} h, desde {at}", other = "a cada {n} h, desde {at}" }
 failed_at = "falhou {when}"
+none = "sem backup"
+create = "Criar rotina"
 
 [backups.wal]
 waiting = "aguardando"
@@ -2176,13 +2236,25 @@ result = "Resultado"
 counts = "{tables} tabelas, {rows} linhas"
 files = { one = "1 arquivo", other = "{n} arquivos" }
 paused = "pausa de {seconds} s"
+stopped = "fora do ar por {seconds} s"
 download = "Baixar"
+
+[backups.count]
+databases = { one = "1 banco", other = "{n} bancos" }
+tables = { one = "1 tabela", other = "{n} tabelas" }
+rows = { one = "1 linha", other = "{n} linhas" }
+users = { one = "1 usuário", other = "{n} usuários" }
+roles = { one = "1 papel", other = "{n} papéis" }
+collections = { one = "1 coleção", other = "{n} coleções" }
+documents = { one = "1 documento", other = "{n} documentos" }
+keys = { one = "1 chave", other = "{n} chaves" }
 
 [backups.kind]
 pg_dump = "pg_dump"
 pg_base = "base do WAL"
 panel = "painel"
 volume = "volumes"
+recipe = "completo"
 
 [backups.trigger]
 schedule = "agendado"
@@ -2350,14 +2422,14 @@ routine_daily = "Todo dia às {at}"
 routine_text = { one = "A cada hora, a partir das {at}", other = "A cada {n} horas, a partir das {at}" }
 routines = "Rotinas de backup"
 routine_add = "Adicionar rotina"
-routines_empty = "Nenhuma rotina: o backup só acontece quando você clica em Fazer backup."
+routines_empty = "Sem backup automático: este serviço guarda dados e só é copiado quando você clica em Fazer backup. Adicione uma rotina."
 routine_edit = "Editar rotina"
 routine_remove = "Remover rotina"
 routine_title = "Rotina de backup"
-routine_hint = "O primeiro backup do dia sai nesse horário; os outros seguem o intervalo."
+routine_hint = "O primeiro backup do dia sai nesse horário; os outros seguem o intervalo. O backup é sempre do serviço inteiro, do jeito certo para ele: serviços novos que guardam dados já nascem com uma rotina diária às 03:00."
 title = "Backups"
 not_ready_simple = "Para ligar, cadastre um destino em Backups."
-unsupported = "Este serviço não tem backup: ele não tem volumes próprios, ou é um banco cujo template ainda não tem um jeito seguro de copiá-lo."
+unsupported = "Este serviço não guarda dados (não tem volumes próprios): não há o que copiar."
 every_hint = "Horário do primeiro backup do dia."
 not_ready = "Para ligar, confirme o kit de recuperação e escolha um destino em Backups."
 open_backups = "Abrir Backups"
@@ -2373,9 +2445,10 @@ wal_title = "Recuperação até o minuto"
 window = "Dá para voltar a qualquer momento entre {from} e {to}."
 window_none = "Ainda não há base para voltar a um minuto. Ela é feita logo depois que o WAL começa a funcionar."
 last_base = "Última base: {when}"
-download_hint = "Gera um pg_dump na hora, com os usuários do banco, cifrado com a sua chave (.zip). O link vale 5 minutos."
+download_hint = "Gera um pg_dump na hora, com os usuários do banco e a configuração do serviço, cifrado com a sua chave (.zip). O link vale 5 minutos."
+download_hint_recipe = "Gera o backup completo do banco (dados, usuários e senhas), testa e cifra com a sua chave, com a configuração do serviço (.zip). O link vale 5 minutos."
 download_preparing = "Preparando: dump, teste e cifra…"
-download_hint_volumes = "Copia os volumes do serviço (pausado durante a cópia), testa e cifra com a sua chave (.zip). O link vale 5 minutos."
+download_hint_volumes = "Copia os volumes do serviço (banco parado, ou serviço pausado, só durante a cópia), testa e cifra com a sua chave, com a configuração do serviço (.zip). O link vale 5 minutos."
 download_preparing_volumes = "Preparando: cópia dos volumes, teste e cifra…"
 download_ready = "Baixar ({size})"
 download_expires = "O link vale até {when} e funciona uma vez."
@@ -2404,12 +2477,19 @@ restores = "Restaurações"
 restore_to = "até {when}"
 restore_from_dump = "de um pg_dump"
 restore_from_volumes = "de uma cópia dos volumes"
+restore_from_recipe = "de um backup completo"
 restore_from_service = "de {service}"
 restore_failed = "A restauração iniciada em {when} para {service} falhou. Nada foi restaurado."
 restore_saved_roles = "Usuários do banco recriados como no original: {roles}."
 restore_roles = "Papéis criados sem senha: {roles}. Defina as senhas para o app conectar."
 restore_removed = "O serviço novo {service} foi removido. O original não foi alterado."
 restore_kept = "Não deu para remover o serviço novo {service}; apague-o nas configurações dele. O original não foi alterado."
+
+[svcbackup.method]
+pg_dump = "Backup completo: pg_dump com os usuários do banco, testado num PostgreSQL descartável, sem parar o serviço."
+recipe = "Backup completo: dados, usuários e senhas pela ferramenta do próprio banco, testado num banco descartável, sem parar o serviço."
+volume_stop = "Backup completo: cópia dos volumes com o banco parado só durante a cópia (é o único jeito seguro sem ferramenta própria)."
+volume_pause = "Backup completo: cópia dos volumes com o serviço pausado só durante a cópia."
 
 [svcbackup.step]
 queued = "na fila"
@@ -2426,17 +2506,6 @@ copy = "esvaziando os volumes e copiando os arquivos"
 start = "subindo o serviço de novo"
 rollback = "a restauração falhou: voltando os volumes como estavam"
 done = "concluído"
-
-[svcbackup.consistency]
-label = "Durante a cópia"
-pause = "Pausar o serviço durante a cópia"
-stop = "Parar o serviço e subir de novo"
-live = "Copiar com o serviço rodando"
-
-[svcbackup.consistency_hint]
-pause = "Recomendado. Congela o serviço só enquanto copia (segundos para 1 GB); nenhum arquivo sai pela metade."
-stop = "O app desliga com calma antes de copiar. Fica fora do ar durante a cópia."
-live = "Sem pausa, mas um arquivo gravado durante a cópia pode sair incompleto."
 
 [flash.backups]
 mode = "Segurança dos backups salva."
