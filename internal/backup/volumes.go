@@ -64,7 +64,12 @@ import (
 // with ACL and extended-attribute support, findutils, bash. It runs as
 // root inside the container (to read and restore every owner), with no
 // network and only the default capabilities.
-const VolumeHelperImage = "debian:13-slim"
+//
+// It is pinned by digest (the multi-arch index of the tag beside it): it
+// runs as root with every volume writable and is pulled on each run, so a
+// retagged or compromised upstream image must not reach it silently. To
+// update: docker buildx imagetools inspect debian:13-slim.
+const VolumeHelperImage = "debian:13-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4"
 
 // tarFlags are the options both ends agree on: the POSIX format (pax
 // records carry ACLs and attributes), owners as numbers (the container's

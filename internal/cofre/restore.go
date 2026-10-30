@@ -24,7 +24,10 @@ import (
 )
 
 // DefaultImage is used when a backup does not say which image made it.
-const DefaultImage = "postgres:18-alpine"
+// It receives the decrypted dump, so it is pinned by digest (the
+// multi-arch index of the tag beside it). To update: docker buildx
+// imagetools inspect postgres:18-alpine.
+const DefaultImage = "postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5"
 
 // dataMount is where the template mounts the data volume (PGDATA lives
 // under it, as set by the image).

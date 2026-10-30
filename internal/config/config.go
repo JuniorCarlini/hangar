@@ -106,8 +106,10 @@ type Auth struct {
 // here via -ldflags (see cmd/hangard), so DNS-01 works out of the box; a plain
 // "go build" leaves the stock Caddy, which cannot do DNS-01 until a custom
 // image is built (deploy/caddy/Dockerfile). It is a var so the binary can set
-// the baked image before the config loads.
-var DefaultEdgeImage = "caddy:2.11-alpine"
+// the baked image before the config loads. The stock fallback is pinned by
+// digest too (the multi-arch index of the tag beside it; update with
+// docker buildx imagetools inspect caddy:2.11-alpine).
+var DefaultEdgeImage = "caddy:2.11-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5"
 
 // IsStockCaddyImage reports whether image is the official Caddy image, under
 // any tag or registry prefix ("caddy", "caddy:2.11", "library/caddy:latest",
