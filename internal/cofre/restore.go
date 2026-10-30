@@ -79,9 +79,34 @@ func ParseService(s string) (string, string, error) {
 	return "", "", fmt.Errorf("service %q: use project/service", s)
 }
 
+// hardened are the docker run flags of every container hangar-cofre puts
+// a backup in. The data and the configuration come from the app, which
+// owns its database's superuser (COPY ... TO PROGRAM, functions that run
+// during a restore): whatever it planted runs inside the container, so the
+// container gets only the capabilities the image's entrypoint needs to
+// hand the data directory to the postgres user, no privilege escalation
+// and a bound on processes. While a backup is restored the container also
+// has no network at all (restoreFlags); only the finished database is
+// published, on 127.0.0.1.
+var hardened = []string{
+	"--cap-drop", "ALL",
+	"--cap-add", "CHOWN", "--cap-add", "DAC_OVERRIDE", "--cap-add", "FOWNER",
+	"--cap-add", "SETUID", "--cap-add", "SETGID",
+	"--security-opt", "no-new-privileges",
+	"--pids-limit", "512",
+}
+
+// restoreFlags are hardened plus no network: what a container gets while
+// the backup's own commands and functions may run in it.
+func restoreFlags() []string {
+	return append([]string{"--network", "none"}, hardened...)
+}
+
 // RestoreLocal brings a backup up in the local Docker: point-in-time from
 // a base backup and WAL when there is one (unless Dump), else the newest
-// pg_dump. The container listens only on 127.0.0.1.
+// pg_dump. The backup is restored with no network (the app's settings
+// that run commands neutralized for a point in time); only then, when Port
+// is set, the database is started again listening on 127.0.0.1:Port.
 func (v *Vault) RestoreLocal(ctx context.Context, o RestoreOptions) (Restored, error) {
 	if len(v.ids) == 0 {
 		return Restored{}, errors.New("no recovery kit loaded")
@@ -199,14 +224,17 @@ func (v *Vault) restorePITR(ctx context.Context, o RestoreOptions, plan archive.
 	}
 	v.tr("cofre.staging", "base", plan.Base.Key, "wal", len(plan.WAL))
 	pr, pw := io.Pipe()
-	go func() { _ = pw.CloseWithError(archive.WriteRecoveryTar(pw, plan, v.opener(ctx), v.ids)) }()
-	err = v.Docker(ctx, pr, nil, "run", "--rm", "-i", "--network", "none", "-v", r.Volume+":"+dataMount, "--entrypoint", "sh", r.Image, "-c", archive.StageScript)
+	go func() { _ = pw.CloseWithError(archive.WriteLocalRecoveryTar(pw, plan, v.opener(ctx), v.ids)) }()
+	stage := append(append([]string{"run", "--rm", "-i"}, restoreFlags()...), "-v", r.Volume+":"+dataMount, "--entrypoint", "sh", r.Image, "-c", archive.StageScript)
+	err = v.Docker(ctx, pr, nil, stage...)
 	_ = pr.CloseWithError(err)
 	if err != nil {
 		return r, err
 	}
-	if err := v.Docker(ctx, nil, nil, "run", "-d", "--name", r.Container, "--label", "hangar.cofre=true",
-		"-v", r.Volume+":"+dataMount, "-p", "127.0.0.1:"+strconv.Itoa(o.Port)+":5432", r.Image); err != nil {
+	// Recovery replays the WAL with no network: a command the app's
+	// configuration still managed to run would reach nothing.
+	run := append(append([]string{"run", "-d", "--name", r.Container, "--label", "hangar.cofre=true"}, restoreFlags()...), "-v", r.Volume+":"+dataMount, r.Image)
+	if err := v.Docker(ctx, nil, nil, run...); err != nil {
 		return r, err
 	}
 	v.tr("cofre.recovering")
@@ -214,7 +242,28 @@ func (v *Vault) restorePITR(ctx context.Context, o RestoreOptions, plan archive.
 		return r, err
 	}
 	_ = v.Docker(ctx, nil, nil, "exec", r.Container, "sh", "-c", `rm -rf "$PGDATA/`+archive.RestoreWALDir+`" "$PGDATA.before-restore"`)
-	return r, nil
+	return r, v.publish(ctx, r, nil)
+}
+
+// publish starts the restored database again, on the same volume, now
+// listening on 127.0.0.1:r.Port, once nothing of the backup is being
+// restored any more. With no port it stays as it is, with no network.
+func (v *Vault) publish(ctx context.Context, r Restored, env []string) error {
+	if r.Port <= 0 {
+		return nil
+	}
+	if err := v.Docker(ctx, nil, nil, "stop", "-t", "60", r.Container); err != nil {
+		return err
+	}
+	if err := v.Docker(ctx, nil, nil, "rm", r.Container); err != nil {
+		return err
+	}
+	args := append([]string{"run", "-d", "--name", r.Container, "--label", "hangar.cofre=true"}, hardened...)
+	args = append(append(args, env...), "-v", r.Volume+":"+dataMount, "-p", "127.0.0.1:"+strconv.Itoa(r.Port)+":5432", r.Image)
+	if err := v.Docker(ctx, nil, nil, args...); err != nil {
+		return err
+	}
+	return v.waitSQL(ctx, r, "select 1", "1", 5*time.Minute)
 }
 
 // startDump starts a fresh PostgreSQL and restores a pg_dump into it, as
@@ -238,19 +287,18 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 		return Restored{}, err
 	}
 	r := Restored{
-		Mode: "dump", Key: key, Container: name, Port: port, Password: randSuffix() + randSuffix(),
+		Mode: "dump", Key: key, Container: name, Volume: name, Port: port, Password: randSuffix() + randSuffix(),
 		Image: img, User: metaOr(meta, "hangar-db-user", "postgres"), DB: metaOr(meta, "hangar-db-name", "postgres"),
 	}
-	args := []string{
-		"run", "-d", "--name", name, "--label", "hangar.cofre=true",
-		"-e", "POSTGRES_USER=" + r.User, "-e", "POSTGRES_DB=" + r.DB, "-e", "POSTGRES_PASSWORD=" + r.Password,
+	if err := v.Docker(ctx, nil, nil, "volume", "create", "--label", "hangar.cofre=true", r.Volume); err != nil {
+		return Restored{}, err
 	}
-	if port > 0 {
-		args = append(args, "-p", "127.0.0.1:"+strconv.Itoa(port)+":5432")
-	} else {
-		args = append(args, "--network", "none")
-	}
-	if err := v.Docker(ctx, nil, nil, append(args, r.Image)...); err != nil {
+	env := []string{"-e", "POSTGRES_USER=" + r.User, "-e", "POSTGRES_DB=" + r.DB, "-e", "POSTGRES_PASSWORD=" + r.Password}
+	// The dump is restored as the superuser (owners, roles, the database's
+	// settings need it), so its functions run with the superuser's
+	// power while it loads: no network until it is in.
+	args := append(append([]string{"run", "-d", "--name", name, "--label", "hangar.cofre=true"}, restoreFlags()...), env...)
+	if err := v.Docker(ctx, nil, nil, append(args, "-v", r.Volume+":"+dataMount, r.Image)...); err != nil {
 		return r, err
 	}
 	// The image's first start runs a temporary server on the socket only;
@@ -287,7 +335,7 @@ func (v *Vault) startDump(ctx context.Context, key, name string, port int) (Rest
 			return r, fmt.Errorf("apply the database settings: %w", err)
 		}
 	}
-	return r, nil
+	return r, v.publish(ctx, r, env)
 }
 
 // isNotFound reports an object or file that does not exist.

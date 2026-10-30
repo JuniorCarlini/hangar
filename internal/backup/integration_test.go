@@ -188,6 +188,11 @@ func TestPostgresBackupAndPointInTimeRestore(t *testing.T) {
 	if !e.m.archivingActive(ctx, s) {
 		t.Fatal("archive_mode should be on after the redeploy")
 	}
+	// SEC-006: the app owns the superuser and can make PostgreSQL run a
+	// command when a recovery ends. The base backup carries it; on the
+	// operator's computer it must not run (checked in step 7).
+	e.psql(t, ctx, "db", "alter system set recovery_end_command = 'touch hangar-sec-006'")
+	e.psql(t, ctx, "db", "select pg_reload_conf()")
 	if _, err := e.m.backupBase(ctx, e.who, s, TriggerWALStart); err != nil {
 		t.Fatalf("base backup: %v", err)
 	}
@@ -332,6 +337,13 @@ func TestPostgresBackupAndPointInTimeRestore(t *testing.T) {
 	}
 	if got := strings.TrimSpace(out.String()); lr.Mode != "pitr" || got != "1500" {
 		t.Fatalf("restore-local (%s) has %s orders, want 1500", lr.Mode, got)
+	}
+	out.Reset()
+	if err := cofre.DockerCLI(ctx, nil, &out, "exec", lr.Container, "sh", "-c", `if [ -e "$PGDATA/hangar-sec-006" ]; then echo ran; else echo neutralized; fi`); err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(out.String()); got != "neutralized" {
+		t.Fatalf("the app's recovery_end_command ran on the operator's computer: %s", got)
 	}
 }
 

