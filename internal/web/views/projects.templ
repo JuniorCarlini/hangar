@@ -429,10 +429,14 @@ type ServiceData struct {
 	// service name, for the connector's "variable B".
 	ConnectOffers []ConnectOffer
 	// EnvText is the .env file as written, for the editor (secrets as
-	// "KEY=••••" below admin); EnvCopy, the same with references resolved
-	// (admins only), for the editor's copy button.
-	EnvText     string
-	EnvCopy     string
+	// "KEY=••••", which saving keeps, unless EnvRevealed); EnvCopy, the same
+	// with references resolved, only on a reveal, for the editor's copy
+	// button.
+	EnvText string
+	EnvCopy string
+	// EnvRevealed: this response follows an admin's sudo reveal of every
+	// value; the .env editor opens with them.
+	EnvRevealed bool
 	EnvSuggest  *EnvSuggest // nil when the repository suggests nothing new
 	Domains     DomainsSection
 	CanBackup   bool
@@ -489,7 +493,9 @@ type DomainsSection struct {
 	// DynamicElsewhere names the service that already takes customer domains.
 	DynamicElsewhere string
 	CheckPath        string
-	CheckSecret      string // only right after a sudo reveal
+	CheckSecret      string // only right after a sudo reveal or a rotation
+	// HasCheckSecret: the viewer may reveal the secret (admin, dynamic on).
+	HasCheckSecret bool
 	// RequireTXT: new customer domains need the _hangar.<domain> TXT.
 	RequireTXT bool
 	// EntryHost is the address customers point their domains at.

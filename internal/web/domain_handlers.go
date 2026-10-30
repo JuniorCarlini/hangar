@@ -179,6 +179,22 @@ const (
 	asksPerPage = 50
 )
 
+// revealCheckSecret shows the dynamic domains' signing secret once, in this
+// response (sudo, audited as secret.reveal).
+func (h *handlers) revealCheckSecret(w http.ResponseWriter, r *http.Request) {
+	s, ok := h.withService(w, r)
+	if !ok {
+		return
+	}
+	v, err := h.projects.RevealCheckSecret(r.Context(), actor(r), s.ID)
+	if err != nil {
+		code, msg := userError(r, err)
+		h.renderService(w, r, serviceView{status: code, errMsg: msg})
+		return
+	}
+	h.renderService(w, r, serviceView{status: http.StatusOK, checkSecret: v, flash: i18n.T(r.Context(), "service.env.revealed")})
+}
+
 func (h *handlers) domainsPage(w http.ResponseWriter, r *http.Request) {
 	flash := ""
 	switch r.URL.Query().Get("ok") {

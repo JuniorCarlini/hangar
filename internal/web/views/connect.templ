@@ -31,6 +31,9 @@ type ConnectFormData struct {
 	Groups  []ConnectGroup
 	Vars    []string // the app's variables, to pick one by hand
 	Error   string
+	// CanSecrets: admins connect secret values; below admin a secret row
+	// is shown but cannot be ticked (the server refuses it, SEC-015).
+	CanSecrets bool
 }
 
 // connectField names a row's fields: "db|HOST" ticks it and
@@ -69,7 +72,11 @@ templ ConnectForm(d ConnectFormData) {
 							for _, r := range g.Rows {
 								<tr>
 									<td>
-										<input type="checkbox" class="tuc-check" name="key" value={ connectField(g.Target, r.Key) } checked?={ r.Checked } aria-label={ t(ctx, "connect.use_named", "key", g.Target+" · "+r.Key) }/>
+										if r.Secret && !d.CanSecrets {
+											<input type="checkbox" class="tuc-check" disabled title={ t(ctx, "connect.secret_admin") } aria-label={ t(ctx, "connect.secret_admin") }/>
+										} else {
+											<input type="checkbox" class="tuc-check" name="key" value={ connectField(g.Target, r.Key) } checked?={ r.Checked } aria-label={ t(ctx, "connect.use_named", "key", g.Target+" · "+r.Key) }/>
+										}
 									</td>
 									<td class="font-mono text-[13px] whitespace-nowrap">
 										<span class="inline-flex items-center gap-1.5">

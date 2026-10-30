@@ -2,10 +2,12 @@ package web
 
 import (
 	"context"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -121,45 +123,125 @@ func TestAdminCreatesProjectAndService(t *testing.T) {
 	}
 }
 
-// Admins see every value in the Variables tab (the .env editor holds the
-// whole file); below admin a secret never reaches the HTML, on any tab, and
-// the reveal route still asks for sudo.
-func TestSecretOnlyForAdmins(t *testing.T) {
-	eo := newEnv(t)
-	eo.labService(t)
-	op, _ := eo.session(t, auth.RoleOperator)
-	for _, tab := range []string{"", "?tab=variables", "?tab=overview", "?tab=network", "?tab=deploys", "?tab=connection", "?tab=settings"} {
-		if strings.Contains(eo.do(req{method: "GET", target: "/p/lab/s/web" + tab, cookies: []*http.Cookie{op}}).Body.String(), "valor-super-secreto-42") {
-			t.Fatalf("an operator got the secret in the HTML of %q", tab)
+// SEC-004: a secret never reaches a page by just opening it, for any role,
+// admins included, on any tab; it shows only in the response to a reveal,
+// which asks for sudo and leaves a secret.reveal record (one key, or every
+// value for the .env editor).
+func TestSecretsMaskedUntilRevealed(t *testing.T) {
+	e := newEnv(t)
+	webID := e.labService(t)
+	ctx := context.Background()
+	db, err := e.pm.CreateService(ctx, projects.Actor{UserID: "usr_x"}, "lab", projects.ServiceInput{Slug: "db", Image: "postgres:18-alpine", Port: 5432})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.pm.Wait()
+	if err := e.pm.SetEnv(ctx, projects.Actor{UserID: "usr_x"}, db.ID, "POSTGRES_PASSWORD", "senha-do-banco-77", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.pm.SetEnv(ctx, projects.Actor{UserID: "usr_x"}, webID, "DATABASE_URL", "postgres://app:${{db.POSTGRES_PASSWORD}}@db/app", false); err != nil {
+		t.Fatal(err)
+	}
+	secrets := []string{"valor-super-secreto-42", "senha-do-banco-77"}
+	leaks := func(body string) string {
+		for _, s := range secrets {
+			if strings.Contains(body, s) {
+				return s
+			}
+		}
+		return ""
+	}
+	c, p := e.session(t, auth.RoleAdmin)
+	for _, tab := range []string{"", "?tab=variables", "?tab=overview", "?tab=network", "?tab=settings", "?tab=backups"} {
+		page := e.do(req{method: "GET", target: "/p/lab/s/web" + tab, cookies: []*http.Cookie{c}})
+		if s := leaks(page.Body.String()); s != "" {
+			t.Fatalf("an admin got %q in the HTML of %q without revealing it", s, tab)
+		}
+		if page.Header().Get("Cache-Control") != "no-store" {
+			t.Error("a service page must not be cached")
 		}
 	}
-	e := newEnv(t)
-	e.labService(t)
-	c, p := e.session(t, auth.RoleAdmin)
-	page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{c}})
-	if !strings.Contains(page.Body.String(), "valor-super-secreto-42") {
-		t.Fatal("an admin does not see the secret's value")
-	}
-	if page.Header().Get("Cache-Control") != "no-store" {
-		t.Error("a page with secrets must not be cached")
+	frag := e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{c}, header: map[string]string{"X-Hangar-Fragment": "panel"}})
+	if s := leaks(frag.Body.String()); s != "" {
+		t.Fatalf("the drawer fragment carried %q", s)
 	}
 
-	rec := e.do(req{method: "POST", target: "/p/lab/s/web/env/reveal", form: url.Values{"csrf": {p.CSRFToken}, "key": {"SECRET_KEY"}}, cookies: []*http.Cookie{c}})
-	if rec.Code != http.StatusForbidden || strings.Contains(rec.Body.String(), "valor-super-secreto-42") {
-		t.Fatalf("reveal without sudo: status %d", rec.Code)
+	for _, form := range []url.Values{{"key": {"SECRET_KEY"}}, {"all": {"1"}}} {
+		form.Set("csrf", p.CSRFToken)
+		rec := e.do(req{method: "POST", target: "/p/lab/s/web/env/reveal", form: form, cookies: []*http.Cookie{c}})
+		if rec.Code != http.StatusForbidden || leaks(rec.Body.String()) != "" {
+			t.Fatalf("reveal %v without sudo: status %d", form, rec.Code)
+		}
 	}
+	before := countAudit(t, e, "secret.reveal")
 
 	e.now = e.now.Add(30 * time.Second)
-	rec = e.do(req{method: "POST", target: "/sudo", form: url.Values{"csrf": {p.CSRFToken}, "code": {e.code(t)}, "next": {"/p/lab/s/web"}}, cookies: []*http.Cookie{c}})
-	sudoCookie := cookie(rec, sessionCookie)
-	sp, _ := e.svc.Authenticate(context.Background(), sudoCookie.Value)
+	rec := e.do(req{method: "POST", target: "/sudo", form: url.Values{"csrf": {p.CSRFToken}, "code": {e.code(t)}, "next": {"/p/lab/s/web"}}, cookies: []*http.Cookie{c}})
+	sc := cookie(rec, sessionCookie)
+	sp, _ := e.svc.Authenticate(ctx, sc.Value)
 
-	rec = e.do(req{method: "POST", target: "/p/lab/s/web/env/reveal", form: url.Values{"csrf": {sp.CSRFToken}, "key": {"SECRET_KEY"}}, cookies: []*http.Cookie{sudoCookie}})
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "valor-super-secreto-42") {
-		t.Fatalf("reveal with sudo: status %d", rec.Code)
+	rec = e.do(req{method: "POST", target: "/p/lab/s/web/env/reveal", form: url.Values{"csrf": {sp.CSRFToken}, "key": {"SECRET_KEY"}}, cookies: []*http.Cookie{sc}})
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "valor-super-secreto-42") || strings.Contains(rec.Body.String(), "senha-do-banco-77") {
+		t.Fatalf("reveal one key with sudo: status %d", rec.Code)
 	}
 	if rec.Header().Get("Cache-Control") != "no-store" {
 		t.Error("a page with a revealed secret must not be cached")
+	}
+	rec = e.do(req{method: "POST", target: "/p/lab/s/web/env/reveal", form: url.Values{"csrf": {sp.CSRFToken}, "all": {"1"}}, cookies: []*http.Cookie{sc}})
+	body := rec.Body.String()
+	if rec.Code != http.StatusOK || !strings.Contains(body, "SECRET_KEY=valor-super-secreto-42") || !strings.Contains(body, "senha-do-banco-77") {
+		t.Fatalf("reveal all to edit: status %d", rec.Code)
+	}
+	if !strings.Contains(body, `id="env-bulk" aria-labelledby="env-bulk-title" data-open="true"`) {
+		t.Error("revealing to edit must open the .env editor")
+	}
+	if n := countAudit(t, e, "secret.reveal"); n != before+2 {
+		t.Errorf("secret.reveal records: %d, want %d", n, before+2)
+	}
+	// The next plain visit is masked again.
+	if s := leaks(e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{sc}}).Body.String()); s != "" {
+		t.Fatalf("%q stayed on the page after the reveal", s)
+	}
+}
+
+var envEditorRE = regexp.MustCompile(`(?s)id="bulk-env"[^>]*>(.*?)</textarea>`)
+
+// SEC-004: the .env editor loads secrets as "KEY=••••" and saving that text
+// keeps each secret as it is, for an admin who did not reveal and for an
+// operator; a line written anew replaces the value.
+func TestEnvEditorRoundTripKeepsSecrets(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleOperator} {
+		e := newEnv(t)
+		id := e.labService(t)
+		c, p := e.session(t, role)
+		page := e.do(req{method: "GET", target: "/p/lab/s/web?tab=variables", cookies: []*http.Cookie{c}}).Body.String()
+		m := envEditorRE.FindStringSubmatch(page)
+		if m == nil {
+			t.Fatalf("%s: no .env editor", role)
+		}
+		text := html.UnescapeString(m[1])
+		if strings.Contains(text, "valor-super-secreto-42") || !strings.Contains(text, "SECRET_KEY="+projects.HiddenValue) {
+			t.Fatalf("%s: editor text %q", role, text)
+		}
+		rec := e.do(req{method: "POST", target: "/p/lab/s/web/env/bulk", form: url.Values{"csrf": {p.CSRFToken}, "mode": {"replace"}, "env": {text + "NOVA=1\n"}}, cookies: []*http.Cookie{c}})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("%s: save: %d %s", role, rec.Code, rec.Body)
+		}
+		vals, _ := e.pm.ListEnvValues(context.Background(), id)
+		got := map[string]string{}
+		for _, v := range vals {
+			got[v.Key] = v.Value
+		}
+		if got["SECRET_KEY"] != "valor-super-secreto-42" || got["NOVA"] != "1" {
+			t.Fatalf("%s: after the round trip: %v", role, got)
+		}
+		rec = e.do(req{method: "POST", target: "/p/lab/s/web/env/bulk", form: url.Values{"csrf": {p.CSRFToken}, "mode": {"replace"}, "env": {"SECRET_KEY=outro-valor-123\nNOVA=1\n"}}, cookies: []*http.Cookie{c}})
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("%s: replace: %d", role, rec.Code)
+		}
+		if v, _ := e.pm.RevealEnv(context.Background(), projects.Actor{}, id, "SECRET_KEY"); v != "outro-valor-123" {
+			t.Errorf("%s: a line written anew must replace the secret, got %q", role, v)
+		}
 	}
 }
 

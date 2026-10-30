@@ -21,6 +21,21 @@ servidor pelo botão **Atualização** do painel.
   opcional para operadores e leitores, mas **donos e admins sem 2FA caem na
   tela de cadastro no próximo acesso** (só ela e "Sair" abrem até cadastrar).
   O primeiro acesso não tem mais "pular" a 2FA.
+- **Segredos mascarados para todos, admin incluído**: a aba Variáveis, o
+  editor `.env`, os botões de copiar e o segredo dos domínios dinâmicos só
+  mostram valores secretos depois de "Revelar" (um valor) ou "Revelar para
+  editar" (todos), com sudo e registro na auditoria. Salvar o `.env` com
+  `CHAVE=••••` mantém o valor. Abaixo de admin, os comentários do `.env`
+  aparecem como `# ••••` e são mantidos ao salvar.
+- **Abaixo de admin, nada de referência a segredo**: uma variável não pode
+  mais apontar para um valor secreto (`${{db.PASSWORD}}`, nem embutido numa
+  URL ou por uma cadeia), nem para um projeto que a pessoa não vê.
+- **Logs**: o `HANGAR_DOMAIN_CHECK_SECRET` e as variáveis com nome de segredo
+  passam a ser mascarados no log de deploy, e os logs ao vivo mascaram os
+  mesmos valores.
+- **Projetos conectados**: quem só vê alguns projetos não vê mais os nomes
+  dos outros no canvas, em "Projetos conectados", em "Usado por" nem no
+  conector.
 
 ## [0.5.37] - 2026-10-29
 

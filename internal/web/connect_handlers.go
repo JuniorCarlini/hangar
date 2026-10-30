@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/JuniorCarlini/hangar/internal/auth"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
@@ -19,7 +20,13 @@ import (
 func (h *handlers) connectForm(w http.ResponseWriter, r *http.Request) {
 	pr := PrincipalFrom(r.Context())
 	project, from, target := r.PathValue("project"), r.PathValue("service"), r.URL.Query().Get("to")
-	d := views.ConnectFormData{CSRF: pr.CSRFToken, Project: project, From: from}
+	d := views.ConnectFormData{CSRF: pr.CSRFToken, Project: project, From: from, CanSecrets: pr.Role >= auth.RoleAdmin}
+	// A service of a connected project the viewer cannot open is not
+	// listed, nor shown by name (SEC-014).
+	if other, _, ok := strings.Cut(target, "."); ok && !pr.CanSeeProject(other) {
+		http.NotFound(w, r)
+		return
+	}
 	targets := []string{target}
 	if target == "" {
 		p, s, err := h.projects.GetService(r.Context(), project, from)

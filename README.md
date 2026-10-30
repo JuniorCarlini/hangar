@@ -11,7 +11,8 @@ O Hangar nasceu para tirar um SaaS multi-loja do Easypanel, onde isso só saía
 com gambiarra no Traefik, e hoje hospeda qualquer projeto do operador (sites,
 APIs, bots), cada um isolado no seu projeto. Segurança vem fechada por padrão:
 o painel não escuta na internet, 2FA é obrigatória para donos e admins (e,
-por padrão, para toda a equipe) e toda ação fica numa auditoria encadeada.
+por padrão, para toda a equipe), segredos aparecem mascarados até alguém
+revelá-los com sudo, e toda ação fica numa auditoria encadeada.
 
 > Versão atual: **v0.5.37**. Projeto em desenvolvimento ativo: use, teste e
 > reporte, mas leia as [notas de cada versão](CHANGELOG.md) antes de atualizar.

@@ -10,9 +10,17 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
-// HiddenValue stands for a secret the .env editor was not given (below
-// admin): "KEY=••••". Saving it keeps the variable's value as it is.
+// HiddenValue stands for a secret the .env editor was not given (no
+// reveal): "KEY=••••". Saving it keeps the variable's value as it is.
 const HiddenValue = "••••"
+
+// HiddenComment stands for a comment line of the .env shown below admin
+// (SEC-024): people write passwords, URLs and notes there that the
+// variables' "secret" mark never covers. Saving it keeps the comment that
+// sat at that place (the n-th hidden comment is the n-th comment).
+const HiddenComment = "# " + HiddenValue
+
+func isComment(line string) bool { return strings.HasPrefix(strings.TrimSpace(line), "#") }
 
 func envFileAD(serviceID string) string { return "services|" + serviceID + "|env_file" }
 
@@ -23,6 +31,12 @@ func envFileAD(serviceID string) string { return "services|" + serviceID + "|env
 // Without withSecrets a secret's value is HiddenValue. keys are the
 // variables in the order the file shows them.
 func (m *Manager) EnvText(ctx context.Context, serviceID string, withSecrets bool) (text string, keys []string, err error) {
+	return m.EnvTextFor(ctx, serviceID, withSecrets, true)
+}
+
+// EnvTextFor is EnvText where, without withComments, every comment line
+// shows as HiddenComment (below admin, SEC-024).
+func (m *Manager) EnvTextFor(ctx context.Context, serviceID string, withSecrets, withComments bool) (text string, keys []string, err error) {
 	vars, err := m.ListEnvValues(ctx, serviceID)
 	if err != nil {
 		return "", nil, err
@@ -41,6 +55,9 @@ func (m *Manager) EnvText(ctx context.Context, serviceID string, withSecrets boo
 		for _, line := range envLines(strings.TrimRight(stored, "\n")) {
 			kv, skip, ok := parseEnvLine(line)
 			if skip || !ok {
+				if !withComments && isComment(line) {
+					line = HiddenComment
+				}
 				out = append(out, line)
 				continue
 			}
@@ -107,10 +124,15 @@ func (m *Manager) unhide(ctx context.Context, serviceID, text string) (string, e
 	for _, v := range vars {
 		cur[v.Key] = v.Value
 	}
-	// The line as it was written (quotes and all), while its value holds.
+	// The line as it was written (quotes and all), while its value holds;
+	// and the comments, in order, for the hidden ones.
 	written := map[string]string{}
+	var comments []string
 	if stored, err := m.storedEnvFile(ctx, serviceID); err == nil {
 		for _, line := range envLines(stored) {
+			if isComment(line) {
+				comments = append(comments, line)
+			}
 			if kv, skip, ok := parseEnvLine(line); !skip && ok && kv.Value == cur[kv.Key] {
 				written[kv.Key] = line
 			}
@@ -118,7 +140,17 @@ func (m *Manager) unhide(ctx context.Context, serviceID, text string) (string, e
 	}
 	lines := envLines(text)
 	out := lines[:0]
+	hidden := 0
 	for _, line := range lines {
+		if strings.TrimSpace(line) == HiddenComment {
+			// The comment that was at this place; one more than the file
+			// had (a pasted placeholder) is dropped.
+			if hidden < len(comments) {
+				out = append(out, comments[hidden])
+			}
+			hidden++
+			continue
+		}
 		kv, skip, ok := parseEnvLine(line)
 		if skip || !ok || kv.Value != HiddenValue {
 			out = append(out, line)

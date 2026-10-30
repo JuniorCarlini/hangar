@@ -324,9 +324,26 @@ só o branch configurado.
 
 **Segurança:**
 - Valores secretos cifrados (XChaCha20-Poly1305) e **nunca** enviados ao
-  navegador, nem escondidos no HTML. "Revelar" é uma requisição separada 🔒,
-  auditada, e o valor some da tela após 30 s.
-- Editar um secreto = escrever um valor novo; o antigo não é mostrado.
+  navegador, nem escondidos no HTML, **para ninguém, admin incluído**.
+  "Revelar" (um valor) e "Revelar para editar" (todos, no editor `.env`) são
+  requisições separadas, Admin + sudo (`SudoCritical`), cada uma com uma
+  linha `secret.reveal` na auditoria; o valor só existe naquela resposta.
+  O mesmo vale para o segredo dos domínios dinâmicos e para os botões de
+  copiar: uma referência que passa por um segredo
+  (`${{db.DATABASE_URL}}` leva a senha) não é resolvida na página.
+- O editor `.env` carrega cada segredo como `CHAVE=••••`; salvar mantém o
+  valor como está. Editar um secreto = escrever a linha com um valor novo
+  (ou revelar para editar). Abaixo de admin, os comentários do arquivo
+  também aparecem como `# ••••` (guardam senhas e anotações) e voltam
+  intactos, cada um no seu lugar, ao salvar.
+- Abaixo de admin, ninguém aponta uma variável para um valor secreto
+  (`${{db.PASSWORD}}`, direto, embutido numa URL ou por uma cadeia de
+  referências) nem para um projeto que não vê: o deploy entregaria o
+  segredo a um container que a pessoa controla. Quem conecta segredos é o
+  admin; a referência dele continua quando outra pessoa salva o `.env`.
+- Logs de deploy e logs ao vivo mascaram os valores secretos (marcados ou
+  com nome de segredo), o que veio de referência e o
+  `HANGAR_DOMAIN_CHECK_SECRET`.
 - Importar `.env`: o conteúdo é lido no servidor e nada é salvo antes da sua
   confirmação na prévia.
 - Referências `${{...}}` evitam copiar senhas entre serviços.

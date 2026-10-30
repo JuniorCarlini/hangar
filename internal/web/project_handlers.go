@@ -27,7 +27,10 @@ import (
 
 func actor(r *http.Request) projects.Actor {
 	p := PrincipalFrom(r.Context())
-	return projects.Actor{UserID: p.UserID, IP: clientIP(r), Sudo: p.SudoFor(auth.SudoStrict, time.Now())}
+	return projects.Actor{
+		UserID: p.UserID, IP: clientIP(r), Sudo: p.SudoFor(auth.SudoStrict, time.Now()),
+		Restricted: p.Role < auth.RoleAdmin, SeesProject: p.CanSeeProject,
+	}
 }
 
 // userError turns an error into a status and a message in the user's
@@ -172,14 +175,19 @@ func (h *handlers) renderProjectPage(w http.ResponseWriter, r *http.Request, sta
 		}
 		d.GitCreds = gitCredRows(r.Context(), own)
 	}
+	// A user limited to some projects does not learn the names of the
+	// others (SEC-014): only the connected ones they may open, and no list
+	// of projects to connect (that is an admin's action anyway).
 	linked := map[string]bool{p.Slug: true}
 	if ls, err := h.projects.LinkedProjects(r.Context(), p.ID); err == nil {
 		for _, l := range ls {
-			d.Linked = append(d.Linked, l.Slug)
 			linked[l.Slug] = true
+			if pr.CanSeeProject(l.Slug) {
+				d.Linked = append(d.Linked, l.Slug)
+			}
 		}
 	}
-	if all, err := h.projects.ListProjects(r.Context()); err == nil {
+	if all, err := h.projects.ListProjects(r.Context()); err == nil && d.CanCreate {
 		for _, o := range all {
 			if !linked[o.Slug] {
 				d.Linkable = append(d.Linkable, o.Slug)
@@ -275,12 +283,14 @@ type serviceView struct {
 	errMsg, flash string
 	revealKey     string
 	revealValue   string
-	checkSecret   string
-	exportKey     string
-	exportValue   string
-	gitToken      string            // the clone token, right after a sudo reveal
-	hook          *projects.Webhook // webhook URL token and secret, right after rotate or reveal
-	status        int
+	// revealAll: this response follows an audited sudo reveal of every
+	// value (the .env editor's "Reveal to edit"); only then do secrets reach
+	// the page (SEC-004).
+	revealAll   bool
+	checkSecret string
+	gitToken    string            // the clone token, right after a sudo reveal
+	hook        *projects.Webhook // webhook URL token and secret, right after rotate or reveal
+	status      int
 }
 
 // The deploy history pages by keyset (docs/20); each row carries its
@@ -357,7 +367,7 @@ func clientsOpen(r *http.Request) bool {
 		return true
 	}
 	if r.Method == http.MethodPost {
-		for _, p := range []string{"/domains/dynamic", "/domains/txt", "/domains/secret/rotate"} {
+		for _, p := range []string{"/domains/dynamic", "/domains/txt", "/domains/secret/rotate", "/domains/secret/reveal"} {
 			if strings.HasSuffix(r.URL.Path, p) {
 				return true
 			}
@@ -420,6 +430,11 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.StartupDefault = int(node.DefaultHealthTimeout.Minutes())
 	d.StartupMax = int(projects.MaxStartupGrace.Minutes())
 	if deps, err := h.projects.Dependents(r.Context(), p.Slug, s.Slug); err == nil {
+		// Who uses it from a connected project the viewer cannot open stays
+		// unnamed (SEC-014).
+		deps = slices.DeleteFunc(deps, func(dep projects.Dependent) bool {
+			return dep.Project != "" && !pr.CanSeeProject(dep.Project)
+		})
 		d.UsedBy = dependentsLabel(r, deps)
 		for _, dep := range deps {
 			name := dep.Service
@@ -432,19 +447,26 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		}
 	}
 	d.ConnectOffers = h.connectOffers(r, p, s.Slug)
-	// Admins see every value, in the table and in the .env editor; the
-	// table follows the order of the .env file.
-	if text, _, err := h.projects.EnvText(r.Context(), s.ID, d.CanAdmin); err == nil {
+	// Secret values are masked for everyone, admins included (SEC-004): the
+	// table shows "••••" and the .env editor "KEY=••••", which saving keeps
+	// as it is. They reach the page only in the response to a reveal (sudo,
+	// audited): one key, or every value to edit the file. The table follows
+	// the order of the .env file.
+	withSecrets := v.revealAll && d.CanAdmin
+	d.EnvRevealed = withSecrets
+	// Below admin the .env's comments are masked too (SEC-024): saving
+	// keeps them.
+	if text, _, err := h.projects.EnvTextFor(r.Context(), s.ID, withSecrets, d.CanAdmin); err == nil {
 		d.EnvText = text
 	}
-	if d.CanAdmin {
+	if withSecrets {
 		if text, err := h.projects.ResolvedEnvText(r.Context(), p, s.ID); err == nil {
 			d.EnvCopy = text
 		}
 	}
-	if env, err := h.projects.EnvInFileOrder(r.Context(), s.ID, d.CanAdmin); err == nil {
+	if env, err := h.projects.EnvInFileOrder(r.Context(), s.ID, withSecrets); err == nil {
 		for _, e := range env {
-			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret}
+			row := views.EnvRow{Key: e.Key, Value: e.Value, Secret: e.Secret, Revealed: withSecrets && e.Secret}
 			if e.Key == v.revealKey {
 				row.Value, row.Revealed = v.revealValue, true
 			}
@@ -472,13 +494,9 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 		RequireTXT:  s.DomainRequireTxt == 1,
 		ClientsOpen: clientsOpen(r),
 	}
-	// Admins see the app's signing secret as it is (it reaches the app's
-	// environment anyway); a rotation just put the new one in v.
-	if d.Domains.Dynamic && d.CanAdmin && d.Domains.CheckSecret == "" {
-		if secret, err := h.projects.CheckSecret(r.Context(), s.ID); err == nil {
-			d.Domains.CheckSecret = secret
-		}
-	}
+	// The app's signing secret shows only right after a rotation or a
+	// reveal (both sudo, audited), like any other secret (SEC-004).
+	d.Domains.HasCheckSecret = d.Domains.Dynamic && d.CanAdmin
 	if d.Domains.Dynamic && d.Domains.EdgeEnabled {
 		d.Domains.EntryHost = h.entryHost()
 	}
@@ -490,23 +508,23 @@ func (h *handlers) renderService(w http.ResponseWriter, r *http.Request, v servi
 	d.FixedPort = s.Template != ""
 	d.Maintenance = s.Maintenance == 1
 	d.ServerHint = i18n.T(r.Context(), "port.ssh_target")
-	// What the copy buttons give. Admins get every value with references
-	// resolved; below admin, only plain values that are not secret.
-	if d.CanAdmin {
-		env := make(map[string]string, len(d.Env))
-		for _, e := range d.Env {
+	// What the copy buttons give: the value with references resolved, so it
+	// works pasted anywhere. Without a reveal, never a secret: a secret
+	// variable has no copy, and a reference that resolves through a secret
+	// (a DATABASE_URL carries the password) neither.
+	env := make(map[string]string, len(d.Env))
+	for _, e := range d.Env {
+		if !e.Secret || e.Revealed {
 			env[e.Key] = e.Value
 		}
-		resolved := h.projects.ResolvedValues(r.Context(), p, env)
-		for i := range d.Env {
-			d.Env[i].Copy = resolved[d.Env[i].Key]
-		}
-	} else {
-		for i, e := range d.Env {
-			if !e.Secret && !strings.Contains(e.Value, "${{") {
-				d.Env[i].Copy = e.Value
-			}
-		}
+	}
+	resolve := h.projects.ResolvedPublicValues
+	if withSecrets {
+		resolve = h.projects.ResolvedValues
+	}
+	resolved := resolve(r.Context(), p, env)
+	for i := range d.Env {
+		d.Env[i].Copy = resolved[d.Env[i].Key]
 	}
 	if ports, err := h.projects.ListPorts(r.Context(), s.ID); err == nil {
 		for _, pt := range ports {
@@ -785,11 +803,22 @@ func (h *handlers) deleteEnv(w http.ResponseWriter, r *http.Request) {
 	redirectLocal(w, r, h.serviceBase(r)+"?ok=env-deleted")
 }
 
-// revealEnv shows the secret once, in this response (it never lands in a URL
-// or a cache: the page has Cache-Control: no-store).
+// revealEnv shows a secret once, in this response (it never lands in a URL
+// or a cache: the page has Cache-Control: no-store). "all=1" reveals every
+// value and opens the .env editor with them, to edit the file whole; each
+// reveal is one secret.reveal record in the audit log.
 func (h *handlers) revealEnv(w http.ResponseWriter, r *http.Request) {
 	s, ok := h.withService(w, r)
 	if !ok {
+		return
+	}
+	if r.PostFormValue("all") == "1" {
+		if err := h.projects.RevealAllEnv(r.Context(), actor(r), s.ID); err != nil {
+			code, msg := userError(r, err)
+			h.renderService(w, r, serviceView{status: code, errMsg: msg})
+			return
+		}
+		h.renderService(w, r, serviceView{status: http.StatusOK, revealAll: true, flash: i18n.T(r.Context(), "service.env.revealed_all")})
 		return
 	}
 	key := r.PostFormValue("key")
@@ -898,8 +927,17 @@ func (h *handlers) serviceLogs(w http.ResponseWriter, r *http.Request) {
 			_ = send("event: mark\ndata: " + markJSON(mk) + "\n\n")
 		}
 	}
+	// The secrets the panel never shows (SEC-013, SEC-015) are masked here
+	// too, for every role: an app that prints its environment would
+	// otherwise hand them to whoever reads its logs.
+	mask, merr := h.projects.LogMasker(ctx, r.PathValue("project"), r.PathValue("service"))
+	if merr != nil {
+		loggerFrom(ctx).Warn("log mask", "error", merr)
+		_ = send("event: end\ndata: unavailable\n\n")
+		return
+	}
 	err := h.projects.Logs(ctx, r.PathValue("project"), r.PathValue("service"), opt, func(ln node.LogLine) error {
-		text := ansiRE.ReplaceAllString(ln.Text, "")
+		text := mask(ansiRE.ReplaceAllString(ln.Text, ""))
 		if len(text) > logLineMax {
 			text = text[:logLineMax] + " …"
 		}

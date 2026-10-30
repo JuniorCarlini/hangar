@@ -490,9 +490,11 @@ func (m *Manager) RevealWebhook(ctx context.Context, a Actor, serviceID string) 
 // --- the build ---------------------------------------------------------------
 
 // deployMask lists what must never appear in the deploy log: secret
-// variables (as stored and after references are resolved), any value that
-// came from a reference (they usually carry passwords), the clone token and
-// the webhook secret.
+// variables (marked secret or named like one, as stored and after
+// references are resolved), any value that came from a reference (they
+// usually carry passwords), the dynamic domains' signing secret
+// (HANGAR_DOMAIN_CHECK_SECRET, SEC-013: it lets anyone forge the app's
+// answers to the edge), the clone token and the webhook secret.
 func (m *Manager) deployMask(ctx context.Context, s dbq.Service, g dbq.ServiceGit, raw, resolved map[string]string) (*masker, error) {
 	rows, err := m.q.ListEnv(ctx, s.ID)
 	if err != nil {
@@ -500,10 +502,12 @@ func (m *Manager) deployMask(ctx context.Context, s dbq.Service, g dbq.ServiceGi
 	}
 	var vals []string
 	for _, r := range rows {
-		if r.Secret == 1 {
+		if r.Secret == 1 || LooksSecret(r.Key) {
 			vals = append(vals, raw[r.Key], resolved[r.Key])
 		}
 	}
+	// Added by the panel (envFor), never a row of its own.
+	vals = append(vals, raw[CheckSecretEnv], resolved[CheckSecretEnv])
 	for k, v := range resolved {
 		if raw[k] != v {
 			vals = append(vals, v)
@@ -524,6 +528,35 @@ func (m *Manager) deployMask(ctx context.Context, s dbq.Service, g dbq.ServiceGi
 		vals = append(vals, secret)
 	}
 	return newMasker(vals...), nil
+}
+
+// LogMasker hides, in the service's live logs, what deployMask hides in
+// its deploy log: an app that prints its environment must not hand a
+// viewer the secrets the panel itself never shows them. It masks the
+// values as they are now; nil means nothing to mask.
+func (m *Manager) LogMasker(ctx context.Context, projectSlug, serviceSlug string) (func(string) string, error) {
+	p, s, err := m.GetService(ctx, projectSlug, serviceSlug)
+	if err != nil {
+		return nil, err
+	}
+	raw, _, err := m.envFor(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := m.resolveRefs(ctx, p, raw)
+	if err != nil {
+		// A broken reference: mask what resolves, and the raw values.
+		resolved = m.ResolvedValues(ctx, p, raw)
+	}
+	g, _, err := m.gitRow(ctx, s.ID)
+	if err != nil {
+		return nil, err
+	}
+	mk, err := m.deployMask(ctx, s, g, raw, resolved)
+	if err != nil {
+		return nil, err
+	}
+	return mk.apply, nil
 }
 
 // buildFromGit clones the branch into a fresh workspace, builds it with

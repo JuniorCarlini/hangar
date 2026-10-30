@@ -154,7 +154,7 @@ func (h *handlers) revealExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.renderService(w, r, serviceView{
-		status: http.StatusOK, exportKey: key, exportValue: v,
+		status: http.StatusOK, revealKey: key, revealValue: v,
 		flash: i18n.T(r.Context(), "service.env.revealed"),
 	})
 }

@@ -409,6 +409,11 @@ title = "Deploys"
 last = { one = "the latest", other = "last {n}" }
 
 [service.env]
+revealed_all = "Values revealed on this screen to edit the .env; the view was recorded in the audit log."
+reveal = "Reveal value"
+reveal_named = "Reveal the value of {name}"
+reveal_all = "Reveal to edit"
+masked_hint = "Secrets show as ••••. Saving keeps each one as it is; to change one, replace the whole line or reveal the values."
 copy_hint = "Copies the file with the real values (connections resolved), ready to paste outside Hangar."
 empty_value = "empty"
 file_hint = "This is the whole file: what you remove here is removed from the service. Lines such as DB_HOST=${{postgres.HOST}} are connections."
@@ -474,6 +479,8 @@ deploy_running = "A deploy is already running for this service."
 busy = "Something is already running on this service. Wait for it to finish."
 
 [env.error]
+secret_reference = "Only an admin can point a variable at a secret value ({ref}): the deploy would put the secret into a container you control. Ask an admin to make the connection."
+reference_hidden = "Reference to a project you cannot access: {ref}."
 key = "Invalid variable name: letters, digits and _ (cannot start with a digit)."
 too_large = "Value larger than {max} KB."
 null_byte = "Value contains a null character."
@@ -823,6 +830,7 @@ edge_apply = "Saved, but Caddy rejected the configuration: {error}"
 hour_cap = "The hourly limit goes from {min} to {max}."
 
 [domain.dynamic]
+secret_reveal = "Reveal the secret"
 explain = "The app confirms each domain before the certificate."
 elsewhere = "Already on for {service}."
 other_project = "another project"
@@ -3272,6 +3280,7 @@ idle = "Logs you out after 30 minutes idle."
 level = "Pick one of the three levels."
 
 [connect]
+secret_admin = "Secret value: only an admin connects it."
 use_suggestions = "Use suggestions"
 cross_hint = "Next to each value, write the {from} variable that receives it. Only what is certain comes filled; an empty row is left out."
 add_to_env = "Add to .env"

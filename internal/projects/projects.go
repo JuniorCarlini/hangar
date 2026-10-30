@@ -149,6 +149,13 @@ type Actor struct {
 	// a creation put something on the internet by itself (a template born
 	// public); without it, everything is born internal.
 	Sudo bool
+	// Restricted: below admin. Such a person never sees a secret, so they
+	// may not write a reference that resolves through one either (SEC-015,
+	// checkRefsFor).
+	Restricted bool
+	// SeesProject reports whether the person may reach a project (nil: every
+	// project). A reference into a project they cannot see is refused.
+	SeesProject func(slug string) bool
 }
 
 func (m *Manager) record(ctx context.Context, a Actor, action, targetType, targetID string, outcome audit.Outcome, summary map[string]any) {
@@ -862,8 +869,8 @@ func (m *Manager) ListEnv(ctx context.Context, serviceID string) ([]EnvVar, erro
 	return out, nil
 }
 
-// ListEnvValues is ListEnv with the secrets' values too: the panel shows
-// every value to admins, so the .env editor holds the whole file.
+// ListEnvValues is ListEnv with the secrets' values too: for the deploy,
+// backups and a sudo reveal; pages get ListEnv.
 func (m *Manager) ListEnvValues(ctx context.Context, serviceID string) ([]EnvVar, error) {
 	rows, err := m.q.ListEnv(ctx, serviceID)
 	if err != nil {
@@ -939,6 +946,20 @@ func (m *Manager) SetEnv(ctx context.Context, a Actor, serviceID, key, value str
 	if strings.ContainsRune(value, 0) {
 		return i18n.E("env.error.null_byte")
 	}
+	old, hadOld := "", false
+	if cur, err := m.q.GetEnv(ctx, dbq.GetEnvParams{ServiceID: serviceID, Key: key}); err == nil {
+		if plain, err := m.box.Open(cur.ValueEnc, envAD(serviceID, key)); err == nil {
+			old, hadOld = string(plain), true
+		}
+	}
+	// Only what changes is judged: a reference an admin wrote stays when
+	// someone else saves the .env around it.
+	if !hadOld || old != value {
+		if err := m.checkRefsFor(ctx, a, serviceID, value); err != nil {
+			m.record(ctx, a, "service.env.set", "service", serviceID, audit.Denied, map[string]any{"key": key, "reason": "reference_not_allowed"})
+			return err
+		}
+	}
 	sealed, err := m.box.Seal([]byte(value), envAD(serviceID, key))
 	if err != nil {
 		return err
@@ -946,12 +967,6 @@ func (m *Manager) SetEnv(ctx context.Context, a Actor, serviceID, key, value str
 	sec := int64(0)
 	if secret {
 		sec = 1
-	}
-	old, hadOld := "", false
-	if cur, err := m.q.GetEnv(ctx, dbq.GetEnvParams{ServiceID: serviceID, Key: key}); err == nil {
-		if plain, err := m.box.Open(cur.ValueEnc, envAD(serviceID, key)); err == nil {
-			old, hadOld = string(plain), true
-		}
 	}
 	if err := m.q.UpsertEnv(ctx, dbq.UpsertEnvParams{ServiceID: serviceID, Key: key, ValueEnc: sealed, Secret: sec, UpdatedAt: m.now().Unix()}); err != nil {
 		return err
@@ -994,6 +1009,18 @@ func (m *Manager) SetEnvBulk(ctx context.Context, a Actor, serviceID, text strin
 	}
 	if len(vars) > 200 {
 		return 0, i18n.E("env.error.bulk_too_many", "max", 200)
+	}
+	// A reference the actor may not write refuses the whole file before
+	// anything is written (checkRefsFor; SetEnv checks again one by one).
+	for _, x := range vars {
+		if cur, err := m.q.GetEnv(ctx, dbq.GetEnvParams{ServiceID: serviceID, Key: x.Key}); err == nil {
+			if plain, err := m.box.Open(cur.ValueEnc, envAD(serviceID, x.Key)); err == nil && string(plain) == x.Value {
+				continue
+			}
+		}
+		if err := m.checkRefsFor(ctx, a, serviceID, x.Value); err != nil {
+			return 0, err
+		}
 	}
 	changed := 0
 	for _, x := range vars {
@@ -1044,6 +1071,24 @@ func (m *Manager) RevealEnv(ctx context.Context, a Actor, serviceID, key string)
 	}
 	m.record(ctx, a, "secret.reveal", "service", serviceID, audit.OK, map[string]any{"key": key})
 	return string(plain), nil
+}
+
+// RevealAllEnv records that every secret variable of the service is about
+// to be shown (the .env editor's "reveal to edit"; the route requires sudo):
+// one audit record naming the keys, never the values.
+func (m *Manager) RevealAllEnv(ctx context.Context, a Actor, serviceID string) error {
+	rows, err := m.q.ListEnv(ctx, serviceID)
+	if err != nil {
+		return err
+	}
+	var keys []string
+	for _, r := range rows {
+		if r.Secret == 1 {
+			keys = append(keys, r.Key)
+		}
+	}
+	m.record(ctx, a, "secret.reveal", "service", serviceID, audit.OK, map[string]any{"all": true, "keys": keys})
+	return nil
 }
 
 // PendingChanges reports whether the variables changed since the last live

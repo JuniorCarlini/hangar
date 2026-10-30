@@ -49,11 +49,16 @@ type refLookup struct {
 	p      dbq.Project
 	linked map[string]bool
 	cache  map[string]refTarget
+	// hitSecret is set when a resolution read a secret value on its way
+	// (the key itself, or any key a chain of references went through).
+	// Callers reset it before each resolution they want to judge.
+	hitSecret bool
 }
 
 type refTarget struct {
 	vals    map[string]string
-	problem RefProblem // set when the service itself cannot be reached
+	secret  map[string]bool // keys whose value is secret
+	problem RefProblem      // set when the service itself cannot be reached
 }
 
 func (m *Manager) newRefLookup(p dbq.Project) *refLookup {
@@ -104,7 +109,7 @@ func (l *refLookup) load(ctx context.Context, projectSlug, serviceSlug string) (
 	if err != nil {
 		return refTarget{}, err
 	}
-	vals := map[string]string{}
+	vals, secret := map[string]string{}, map[string]bool{}
 	rows, err := m.q.ListEnv(ctx, s.ID)
 	if err != nil {
 		return refTarget{}, err
@@ -115,6 +120,7 @@ func (l *refLookup) load(ctx context.Context, projectSlug, serviceSlug string) (
 			return refTarget{}, err
 		}
 		vals[r.Key] = string(plain)
+		secret[r.Key] = r.Secret == 1 || LooksSecret(r.Key)
 	}
 	exps, err := m.q.ListExports(ctx, s.ID)
 	if err != nil {
@@ -126,6 +132,7 @@ func (l *refLookup) load(ctx context.Context, projectSlug, serviceSlug string) (
 			return refTarget{}, err
 		}
 		vals[r.Key] = string(plain)
+		secret[r.Key] = r.Secret == 1 || LooksSecret(r.Key)
 	}
 	// Every service is reachable on the project's network: HOST and PORT
 	// are there even when it declares nothing (a service made by hand).
@@ -136,7 +143,7 @@ func (l *refLookup) load(ctx context.Context, projectSlug, serviceSlug string) (
 	if _, ok := vals["PORT"]; !ok && port != "" {
 		vals["PORT"] = port
 	}
-	return refTarget{vals: vals}, nil
+	return refTarget{vals: vals, secret: secret}, nil
 }
 
 // resolve finds the value of one reference; problem says why there is none.
@@ -162,6 +169,9 @@ func (l *refLookup) resolveIn(ctx context.Context, project, service, key string,
 	v, ok := t.vals[key]
 	if !ok {
 		return "", RefNoKey, nil
+	}
+	if t.secret[key] {
+		l.hitSecret = true
 	}
 	if !refRE.MatchString(v) {
 		return v, "", nil
@@ -298,12 +308,27 @@ func (m *Manager) BrokenRefs(ctx context.Context, p dbq.Project) ([]BrokenRef, e
 
 // ResolvedValues is what each variable is worth once its references are
 // resolved, for the panel's copy buttons: pasting it elsewhere has to work.
-// A variable whose reference cannot be resolved is left out.
+// A variable whose reference cannot be resolved is left out. It reads
+// secrets: only a response that reveals them (sudo, audited) may use it;
+// pages use ResolvedPublicValues.
 func (m *Manager) ResolvedValues(ctx context.Context, p dbq.Project, env map[string]string) map[string]string {
+	return m.resolvedValues(ctx, p, env, true)
+}
+
+// ResolvedPublicValues is ResolvedValues without anything that reads a
+// secret on the way: a reference that resolves through a secret value
+// (${{db.DATABASE_URL}} carries the password) is left out, so a page never
+// holds a secret its viewer did not reveal.
+func (m *Manager) ResolvedPublicValues(ctx context.Context, p dbq.Project, env map[string]string) map[string]string {
+	return m.resolvedValues(ctx, p, env, false)
+}
+
+func (m *Manager) resolvedValues(ctx context.Context, p dbq.Project, env map[string]string, secrets bool) map[string]string {
 	l := m.newRefLookup(p)
 	out := make(map[string]string, len(env))
 	for key, val := range env {
 		ok := true
+		l.hitSecret = false
 		v := refRE.ReplaceAllStringFunc(val, func(ref string) string {
 			g := refRE.FindStringSubmatch(ref)
 			got, problem, err := l.resolve(ctx, g[1], g[2], g[3])
@@ -313,9 +338,47 @@ func (m *Manager) ResolvedValues(ctx context.Context, p dbq.Project, env map[str
 			}
 			return got
 		})
-		if ok {
+		if ok && (secrets || !l.hitSecret) {
 			out[key] = v
 		}
 	}
 	return out
+}
+
+// checkRefsFor refuses the references in value that the actor may not
+// write (SEC-015). Below admin (Actor.Restricted) nobody sees a secret, so
+// nobody may point a variable at one either: the deploy would put the value
+// into a container they steer (an app that logs its environment, or a URL
+// they chose: X=https://host/?p=${{db.PASSWORD}}). That covers a reference
+// that resolves through a secret anywhere along its chain, and any
+// reference into a project the actor cannot see. A reference that does not
+// resolve (yet) is left for the deploy to report. Admins, who can reveal
+// the value anyway, connect secrets.
+
+func (m *Manager) checkRefsFor(ctx context.Context, a Actor, serviceID, value string) error {
+	if !a.Restricted || !refRE.MatchString(value) {
+		return nil
+	}
+	s, err := m.q.GetServiceByID(ctx, serviceID)
+	if err != nil {
+		return err
+	}
+	p, err := m.q.GetProjectByID(ctx, s.ProjectID)
+	if err != nil {
+		return err
+	}
+	l := m.newRefLookup(p)
+	for _, g := range refRE.FindAllStringSubmatch(value, -1) {
+		if g[1] != "" && g[1] != p.Slug && a.SeesProject != nil && !a.SeesProject(g[1]) {
+			return i18n.E("env.error.reference_hidden", "ref", g[0])
+		}
+		l.hitSecret = false
+		if _, _, err := l.resolve(ctx, g[1], g[2], g[3]); err != nil {
+			return err
+		}
+		if l.hitSecret {
+			return i18n.E("env.error.secret_reference", "ref", g[0])
+		}
+	}
+	return nil
 }

@@ -289,6 +289,13 @@ func (m *Manager) Connect(ctx context.Context, a Actor, projectSlug, fromSlug, t
 		}
 		vars[mp.Var] = true
 	}
+	// Below admin, a secret may not be connected (checkRefsFor): refuse
+	// before setting anything.
+	for _, mp := range maps {
+		if err := m.checkRefsFor(ctx, a, from.ID, "${{"+target+"."+mp.Key+"}}"); err != nil {
+			return 0, err
+		}
+	}
 	set := 0
 	for _, mp := range maps {
 		ref := "${{" + target + "." + mp.Key + "}}"

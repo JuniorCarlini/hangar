@@ -172,8 +172,8 @@ templ tabVariables(d ServiceData) {
 								} else if isRef(v.Value) {
 									<span class="tuc-badge is-info ref-badge">ref</span>
 									<span class="ref-text">{ v.Value }</span>
-								} else if v.Secret && v.Value == "" {
-									<span class="text-muted">••••••••••••</span>
+								} else if v.Secret && !v.Revealed {
+									<span class="text-muted" data-secret-mask>••••••••••••</span>
 								} else if v.Value == "" {
 									<span class="font-sans text-xs text-subtle">{ t(ctx, "service.env.empty_value") }</span>
 								} else {
@@ -181,7 +181,12 @@ templ tabVariables(d ServiceData) {
 								}
 							</td>
 							<td>
-								@valueTail(ctx, svc, broken == "", v.Key, v.Copy)
+								<span class="flex items-center justify-end gap-1">
+									if v.Secret && !v.Revealed && d.CanAdmin {
+										@revealButton(d, v.Key)
+									}
+									@valueTail(ctx, svc, broken == "", v.Key, v.Copy)
+								</span>
 							</td>
 						</tr>
 					}
@@ -212,7 +217,7 @@ templ tabVariables(d ServiceData) {
 		}
 		// Almost the whole screen, like the terminal: the file reads as code
 		// (envimport.js colors it and numbers its lines as you type).
-		<dialog class="tuc-modal is-full env-modal" id="env-bulk" aria-labelledby="env-bulk-title">
+		<dialog class="tuc-modal is-full env-modal" id="env-bulk" aria-labelledby="env-bulk-title" data-open={ fmt.Sprint(d.EnvRevealed) }>
 			<div class="tuc-modal__panel">
 				<div class="tuc-modal__header">
 					<h2 class="tuc-modal__title" id="env-bulk-title">{ t(ctx, "service.env.bulk") }</h2>
@@ -236,8 +241,22 @@ templ tabVariables(d ServiceData) {
 							}
 						</div>
 					}
+					if !d.EnvRevealed && hasSecret(d.Env) {
+						@notice("info", "eye-off", t(ctx, "service.env.masked_hint"))
+					}
 					<div class="flex items-center justify-between gap-2">
 						<label class="tuc-label" for="bulk-env">{ t(ctx, "service.env.bulk_label") }</label>
+						<span class="grow"></span>
+						if d.CanAdmin && !d.EnvRevealed && hasSecret(d.Env) {
+							if d.SudoCritical {
+								<button type="submit" class="tuc-btn is-ghost is-sm" form="env-reveal-all">
+									@Icon("eye", "size-3.5")
+									{ t(ctx, "service.env.reveal_all") }
+								</button>
+							} else {
+								@sudoButton(t(ctx, "service.env.reveal_all"))
+							}
+						}
 						<button type="button" class="tuc-btn is-ghost is-sm" data-env-copy data-copied={ t(ctx, "common.copied") } title={ t(ctx, "service.env.copy_hint") }>
 							@Icon("copy", "size-3.5")
 							<span data-env-copy-label>{ t(ctx, "service.env.copy") }</span>
@@ -271,8 +290,42 @@ templ tabVariables(d ServiceData) {
 						</button>
 					</div>
 				</form>
+				if d.CanAdmin && d.SudoCritical && !d.EnvRevealed {
+					<form id="env-reveal-all" method="post" action={ templ.SafeURL(d.base() + "/env/reveal") } hidden>
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<input type="hidden" name="all" value="1"/>
+					</form>
+				}
 			</div>
 		</dialog>
+	}
+}
+
+// hasSecret reports whether any variable is a secret (masked until a reveal).
+func hasSecret(env []EnvRow) bool {
+	for _, e := range env {
+		if e.Secret {
+			return true
+		}
+	}
+	return false
+}
+
+// revealButton shows one secret value (sudo, audited): the form when the
+// confirmation is fresh, else the identity check first.
+templ revealButton(d ServiceData, key string) {
+	if d.SudoCritical {
+		<form method="post" action={ templ.SafeURL(d.base() + "/env/reveal") } class="inline-flex">
+			<input type="hidden" name="csrf" value={ d.CSRF }/>
+			<input type="hidden" name="key" value={ key }/>
+			<button type="submit" class="tuc-btn is-ghost is-icon is-sm shrink-0" aria-label={ t(ctx, "service.env.reveal_named", "name", key) } title={ t(ctx, "service.env.reveal") }>
+				@Icon("eye", "size-3.5")
+			</button>
+		</form>
+	} else {
+		<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "service.env.reveal_named", "name", key) } title={ t(ctx, "service.env.reveal") }>
+			@Icon("eye", "size-3.5")
+		</button>
 	}
 }
 
@@ -398,6 +451,10 @@ templ connectorPanel(d ServiceData, i int, g []ConnectOffer) {
 											value={ o.Var }
 										}
 										placeholder={ o.Var }
+										if o.Secret && !d.CanAdmin {
+											disabled
+											title={ t(ctx, "connect.secret_admin") }
+										}
 										pattern="[A-Za-z_][A-Za-z0-9_]{0,127}"
 										autocomplete="off"
 										aria-label={ t(ctx, "connect.var_for", "key", g[0].Service+" · "+o.Key) }
@@ -1044,16 +1101,33 @@ templ clientsDialog(d ServiceData) {
 									@Icon("copy", "size-3.5")
 								</button>
 							</div>
-							// Admins see the secret as it is, ready to copy into the
-							// app's local setup; others only see the variable's name.
+							// The secret shows only right after a rotation or a reveal
+							// (sudo, audited), ready to copy into the app's local
+							// setup; otherwise masked, with the variable's name.
 							<div class="flex items-center gap-3 px-3 py-2.5">
 								<span class="w-20 shrink-0 text-[13px] text-muted">{ t(ctx, "domain.clients.secret") }</span>
 								<span class="flex min-w-0 grow flex-col">
 									if d.Domains.CheckSecret != "" {
 										<code class="font-mono text-xs break-all select-all">{ d.Domains.CheckSecret }</code>
+									} else if d.Domains.HasCheckSecret {
+										<span class="font-mono text-xs text-muted">••••••••••••</span>
 									}
 									<code class="font-mono text-[11px] text-subtle break-all">HANGAR_DOMAIN_CHECK_SECRET</code>
 								</span>
+								if d.Domains.CheckSecret == "" && d.Domains.HasCheckSecret {
+									if d.SudoCritical {
+										<form method="post" action={ templ.SafeURL(d.base() + "/domains/secret/reveal") } class="inline-flex">
+											<input type="hidden" name="csrf" value={ d.CSRF }/>
+											<button type="submit" class="tuc-btn is-ghost is-icon is-sm shrink-0" aria-label={ t(ctx, "domain.dynamic.secret_reveal") } title={ t(ctx, "domain.dynamic.secret_reveal") }>
+												@Icon("eye", "size-3.5")
+											</button>
+										</form>
+									} else {
+										<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-tuc-modal="#sudo-dialog" aria-label={ t(ctx, "domain.dynamic.secret_reveal") } title={ t(ctx, "domain.dynamic.secret_reveal") }>
+											@Icon("eye", "size-3.5")
+										</button>
+									}
+								}
 								if d.Domains.CheckSecret != "" {
 									<button type="button" class="tuc-btn is-ghost is-icon is-sm shrink-0" data-copy={ d.Domains.CheckSecret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "domain.dynamic.secret_copy") } title={ t(ctx, "domain.dynamic.secret_copy") }>
 										@Icon("copy", "size-3.5")

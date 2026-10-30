@@ -409,6 +409,11 @@ title = "Deploys"
 last = { one = "o último", other = "últimos {n}" }
 
 [service.env]
+revealed_all = "Valores revelados nesta tela para editar o .env; a visualização ficou registrada na auditoria."
+reveal = "Revelar valor"
+reveal_named = "Revelar o valor de {name}"
+reveal_all = "Revelar para editar"
+masked_hint = "Os segredos aparecem como ••••. Salvar mantém cada um como está; para mudar um, troque a linha inteira ou revele os valores."
 copy_hint = "Copia o arquivo com os valores de verdade (conexões resolvidas), pronto para colar fora do Hangar."
 empty_value = "vazia"
 file_hint = "Este é o arquivo inteiro: o que você apagar aqui é apagado no serviço. Linhas como DB_HOST=${{postgres.HOST}} são conexões."
@@ -474,6 +479,8 @@ deploy_running = "Já há um deploy em andamento para este serviço."
 busy = "Já tem uma ação em andamento neste serviço. Aguarde ela terminar."
 
 [env.error]
+secret_reference = "Só um admin pode apontar uma variável para um valor secreto ({ref}): o deploy colocaria o segredo num container que você controla. Peça a um admin para fazer a conexão."
+reference_hidden = "Referência a um projeto que você não acessa: {ref}."
 key = "Nome de variável inválido: letras, números e _ (não pode começar com número)."
 too_large = "Valor maior que {max} KB."
 null_byte = "Valor com caractere nulo."
@@ -823,6 +830,7 @@ edge_apply = "Salvo, mas o Caddy recusou a configuração: {error}"
 hour_cap = "O limite por hora vai de {min} a {max}."
 
 [domain.dynamic]
+secret_reveal = "Revelar o segredo"
 explain = "A app confirma cada domínio antes do certificado."
 elsewhere = "Já ligado em {service}."
 other_project = "outro projeto"
@@ -3270,6 +3278,7 @@ idle = "Sai sozinho depois de 30 minutos parado."
 level = "Escolha um dos três níveis."
 
 [connect]
+secret_admin = "Valor secreto: só um admin conecta."
 use_suggestions = "Usar sugestões"
 cross_hint = "Escreva, ao lado de cada valor, a variável de {from} que o recebe. Só vem preenchido o que é certeza; linha vazia fica de fora."
 add_to_env = "Adicionar ao .env"

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { createProject, hasDocker, newSlug } from './helpers';
+import { createProject, hasDocker, loginAsOwner, newSlug, recoveryCode } from './helpers';
 
 // Flows that start real containers. They skip themselves when the panel
 // has no Docker (e.g. a CI runner without it); the teardown removes what
@@ -74,6 +74,36 @@ test.describe('com Docker', () => {
     await page.waitForTimeout(2500); // past the canvas's first refresh
     await expect(drawer).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/p/${slug}/s/cache\\?tab=variables$`));
+  });
+
+  test('segredos ficam mascarados até revelar com confirmação de identidade', async ({ page }) => {
+    // Confirming identity replaces the session: sign in on a session of its
+    // own, so the shared one of the other tests stays valid.
+    await page.context().clearCookies();
+    await loginAsOwner(page);
+    await page.goto(`/p/${slug}/s/cache?tab=variables`);
+    const drawer = page.locator('dialog#svc-panel');
+    const row = drawer.getByRole('row', { name: /REDIS_PASSWORD/ });
+    await expect(row.locator('[data-secret-mask]')).toBeVisible();
+    // The .env editor holds the secret as a placeholder that saving keeps.
+    await drawer.getByRole('button', { name: '.env', exact: true }).click();
+    const modal = page.locator('dialog#env-bulk');
+    await expect(modal).toBeVisible();
+    expect(await modal.locator('#bulk-env').inputValue()).toContain('REDIS_PASSWORD=••••');
+    await modal.getByRole('button', { name: 'Cancelar' }).click();
+
+    // Revealing asks who you are first (sudo), then shows the value once.
+    await row.getByRole('button', { name: 'Revelar o valor de REDIS_PASSWORD' }).click();
+    const sudo = page.locator('dialog#sudo-dialog');
+    await expect(sudo).toBeVisible();
+    await sudo.locator('#sudo-code').fill(recoveryCode());
+    await sudo.getByRole('button', { name: 'Confirmar' }).click();
+    await drawer.getByRole('row', { name: /REDIS_PASSWORD/ }).getByRole('button', { name: 'Revelar o valor de REDIS_PASSWORD' }).click();
+    await expect(page.getByText('Valor revelado nesta tela')).toBeVisible();
+    await expect(drawer.getByRole('row', { name: /REDIS_PASSWORD/ }).locator('[data-secret-mask]')).toHaveCount(0);
+    // A plain visit masks it again.
+    await page.goto(`/p/${slug}/s/cache?tab=variables`);
+    await expect(drawer.getByRole('row', { name: /REDIS_PASSWORD/ }).locator('[data-secret-mask]')).toBeVisible();
   });
 
   test('gráfico do serviço mostra a barra apontada por cima da gaveta', async ({ page }) => {

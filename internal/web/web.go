@@ -175,6 +175,9 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET "+svc+"/connect", h.connectForm, Policy{Role: auth.RoleOperator})
 	rt.HandleFunc("POST "+svc+"/connect", h.connect, Policy{Role: auth.RoleOperator, Audit: "service.connect", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/env/offer", h.setOffered, Policy{Role: auth.RoleAdmin, Audit: "service.env.offer", AuditByHandler: true})
+	// Secret values are masked on every page, admins included; they show
+	// only in the response to a reveal, which asks for sudo and is audited
+	// (one key, or "all" for the .env editor).
 	rt.HandleFunc("POST "+svc+"/env/reveal", h.revealEnv, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/delete", h.deleteService, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.delete", AuditByHandler: true})
 
@@ -194,6 +197,7 @@ func routes(rt *Router, h *handlers) {
 	// issues nothing, but it calls the app, so it is an admin's tool).
 	rt.HandleFunc("POST "+svc+"/domains/txt", h.domainTXT, Policy{Role: auth.RoleAdmin, Audit: "domain.txt", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/domains/secret/rotate", h.rotateCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "domain.dynamic.rotate_secret", AuditByHandler: true})
+	rt.HandleFunc("POST "+svc+"/domains/secret/reveal", h.revealCheckSecret, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/exports/reveal", h.revealExport, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "secret.reveal", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/backup", h.downloadBackup, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoCritical, Audit: "service.backup.download", AuditByHandler: true})
 	rt.HandleFunc("POST "+svc+"/ports", h.addPort, Policy{Role: auth.RoleAdmin, Sudo: auth.SudoStrict, Audit: "port.open", AuditByHandler: true})

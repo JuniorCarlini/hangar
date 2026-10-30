@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/JuniorCarlini/hangar/internal/auth"
+
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
@@ -42,6 +44,7 @@ func (h *handlers) buildCanvas(r *http.Request, p dbq.Project, selected string) 
 	if err != nil {
 		return views.CanvasData{}, err
 	}
+	g = visibleGraph(g, PrincipalFrom(ctx))
 	d := views.CanvasData{Project: p.Slug, ProjectName: p.Name}
 	type box struct{ x, y, w, h int }
 	pos := map[string]box{}
@@ -217,6 +220,40 @@ func (h *handlers) buildCanvas(r *http.Request, p dbq.Project, selected string) 
 	}
 	d.Width, d.Height = maxX+cvMargin, maxY+cvMargin+40
 	return d, nil
+}
+
+// visibleGraph drops from the canvas what a user limited to some projects
+// may not see (SEC-014): the services of a connected project outside their
+// list, the lines to them and the project's name in the "connected" group.
+// The router already answers 404 for those projects; the canvas must not
+// name them either.
+func visibleGraph(g projects.Graph, pr *auth.Principal) projects.Graph {
+	if pr == nil || !pr.Limited() {
+		return g
+	}
+	hidden := map[string]bool{}
+	nodes := g.Nodes[:0:0]
+	for _, n := range g.Nodes {
+		if n.External && !pr.CanSeeProject(n.Project) {
+			hidden[n.ID] = true
+			continue
+		}
+		nodes = append(nodes, n)
+	}
+	edges := g.Edges[:0:0]
+	for _, e := range g.Edges {
+		if !hidden[e.To] && !hidden[e.From] {
+			edges = append(edges, e)
+		}
+	}
+	linked := g.Linked[:0:0]
+	for _, l := range g.Linked {
+		if pr.CanSeeProject(l.Slug) {
+			linked = append(linked, l)
+		}
+	}
+	g.Nodes, g.Edges, g.Linked = nodes, edges, linked
+	return g
 }
 
 func linkedLabel(l []projects.GraphLinked) string {
