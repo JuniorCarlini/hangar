@@ -798,8 +798,8 @@ func checkVolumesFit(t svcRef, man archive.VolumeManifest) error {
 // the services that use them stop, each volume in the copy is emptied
 // and filled from it (a volume of t not in the copy is left alone), the
 // result is counted against the copy, and the services start again. The
-// copy is checked entry by entry (archive.ScanVolumes) as it streams in;
-// a bad one stops the restore.
+// copy is checked entry by entry (archive.ScanVolumesTo) as it streams in,
+// before the entry reaches the tar program; a bad one stops the restore.
 func (m *Manager) restoreVolumes(ctx context.Context, a Actor, id string, t svcRef, key string, ids []age.Identity) (changed bool, err error) {
 	n, tk, err := m.tasker()
 	if err != nil {
@@ -856,30 +856,25 @@ func (m *Manager) restoreVolumes(ctx context.Context, a Actor, id string, t svcR
 	}
 	cctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	scanR, scanW := io.Pipe()
+	// The tar program reads only what the scanner passed: each entry's
+	// header reaches it once the entry was checked (archive.ScanVolumesTo),
+	// so a refused entry is never extracted, and the copy may hold no more
+	// than it declares (the disks were sized from that).
+	inR, inW := io.Pipe()
 	scanDone := make(chan scanned, 1)
 	go func() {
-		got, err := archive.ScanVolumes(scanR, names, archive.VolumeTarLimits)
-		_ = scanR.CloseWithError(err)
+		got, err := archive.ScanVolumesTo(plain, archive.VolumeScan{Names: names, Limits: archive.VolumeTarLimits, Declared: &man, Out: inW})
+		_ = inW.CloseWithError(err)
 		if err != nil {
 			// A bad entry stops the extraction now, not at the end.
 			cancel()
 		}
 		scanDone <- scanned{got, err}
 	}()
-	inR, inW := io.Pipe()
-	fed := make(chan struct{})
-	go func() {
-		defer close(fed)
-		_, err := io.Copy(io.MultiWriter(inW, scanW), plain)
-		_ = scanW.CloseWithError(err)
-		_ = inW.CloseWithError(err)
-	}()
 	var out strings.Builder
 	terr := tk.RunTask(cctx, volumeSpec(t, volumeRestoreScript, false, names, nil), inR, &limitWriter{w: &out, n: 4 << 10})
 	_ = inR.CloseWithError(errors.Join(terr, errTaskEnded))
 	sc := <-scanDone
-	<-fed
 	switch {
 	case sc.err != nil && !errors.Is(sc.err, errTaskEnded):
 		return true, fmt.Errorf("the copy was refused: %w", sc.err)

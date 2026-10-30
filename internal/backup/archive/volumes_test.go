@@ -102,3 +102,88 @@ func TestScanVolumes(t *testing.T) {
 		t.Errorf("entries limit: %v", err)
 	}
 }
+
+// entriesOf lists the entries a tar program would extract from b, up to
+// the point where the stream ends.
+func entriesOf(b []byte) []string {
+	var out []string
+	tr := tar.NewReader(bytes.NewReader(b))
+	for {
+		h, err := tr.Next()
+		if err != nil {
+			return out
+		}
+		out = append(out, h.Name)
+	}
+}
+
+// SEC-017: what the extraction reads passes the scanner first. A good copy
+// goes through byte for byte; the header of a refused entry never reaches
+// the extraction (nor anything after it), so nothing of it is written.
+func TestScanVolumesToGatesTheExtraction(t *testing.T) {
+	names := []string{"data", "uploads"}
+	good := volTar(t, dir("data/"), reg("data/a", 5000), &tar.Header{Name: "data/l", Typeflag: tar.TypeSymlink, Linkname: "a"}, dir("uploads/"))
+	var out bytes.Buffer
+	m, err := ScanVolumesTo(bytes.NewReader(good), VolumeScan{Names: names, Limits: VolumeTarLimits, Out: &out})
+	if err != nil || m.Entries != 4 {
+		t.Fatalf("good copy: %+v %v", m, err)
+	}
+	if !bytes.Equal(out.Bytes(), good) {
+		t.Fatal("a good copy must reach the extraction unchanged")
+	}
+
+	cases := map[string][]byte{
+		"dot dot":   volTar(t, dir("data/"), reg("data/a", 10), reg("data/../evil", 10), reg("data/after", 1)),
+		"device":    volTar(t, dir("data/"), reg("data/a", 10), &tar.Header{Name: "data/null", Typeflag: tar.TypeChar}, reg("data/after", 1)),
+		"elsewhere": volTar(t, dir("data/"), reg("data/a", 10), dir("etc/"), reg("data/after", 1)),
+		// A hard link resolved through a symlink extracted before it
+		// would reach outside the volume.
+		"hard link beneath a symlink": volTar(t, dir("data/"), reg("data/a", 10),
+			&tar.Header{Name: "data/l", Typeflag: tar.TypeSymlink, Linkname: "/"},
+			&tar.Header{Name: "data/h", Typeflag: tar.TypeLink, Linkname: "data/l/etc/shadow"}, reg("data/after", 1)),
+	}
+	for name, b := range cases {
+		out.Reset()
+		if _, err := ScanVolumesTo(bytes.NewReader(b), VolumeScan{Names: names, Limits: VolumeTarLimits, Out: &out}); err == nil {
+			t.Errorf("%s: accepted", name)
+			continue
+		}
+		for _, e := range entriesOf(out.Bytes()) {
+			if e != "data/" && e != "data/a" && e != "data/l" {
+				t.Errorf("%s: %q reached the extraction", name, e)
+			}
+		}
+	}
+}
+
+// SEC-018: a copy may hold no more than its metadata declares (the
+// target's disks were checked against that); more is refused as it
+// streams, before the extra entry reaches the extraction.
+func TestScanVolumesToDeclared(t *testing.T) {
+	names := []string{"data"}
+	b := volTar(t, dir("data/"), reg("data/a", 5000), reg("data/b", 5000))
+	exact, err := ScanVolumes(bytes.NewReader(b), names, VolumeTarLimits)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ScanVolumesTo(bytes.NewReader(b), VolumeScan{Names: names, Limits: VolumeTarLimits, Declared: &exact}); err != nil {
+		t.Fatalf("what it declares: %v", err)
+	}
+	for name, edit := range map[string]func(*VolumeStat){
+		"entries": func(v *VolumeStat) { v.Entries-- },
+		"bytes":   func(v *VolumeStat) { v.Bytes-- },
+		"need":    func(v *VolumeStat) { v.Need -= 4096 },
+		"volume":  func(v *VolumeStat) { v.Name = "other" },
+	} {
+		d := VolumeManifest{Volumes: []VolumeStat{exact.Volumes[0]}}
+		edit(&d.Volumes[0])
+		var out bytes.Buffer
+		_, err := ScanVolumesTo(bytes.NewReader(b), VolumeScan{Names: names, Limits: VolumeTarLimits, Declared: &d, Out: &out})
+		if !errors.Is(err, ErrTooLarge) {
+			t.Errorf("%s: %v", name, err)
+		}
+		if got := entriesOf(out.Bytes()); len(got) == 3 {
+			t.Errorf("%s: every entry reached the extraction", name)
+		}
+	}
+}
