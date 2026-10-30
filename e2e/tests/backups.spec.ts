@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { expect, test } from '@playwright/test';
 
-import { OWNER_EMAIL, OWNER_PASSWORD } from '../constants.mjs';
+import { loginAsOwner, recoveryCode } from './helpers';
 
 // Backups (docs/09). None of these needs Docker: the kit is generated and
 // confirmed entirely in the browser, and the panel only ever sees the
@@ -28,14 +28,10 @@ test.describe('kit', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('kit gerado no navegador: baixar, registrar e confirmar com o arquivo', async ({ page }) => {
-    await page.goto('/login');
-    await page.locator('#email').fill(OWNER_EMAIL);
-    await page.locator('#password').fill(OWNER_PASSWORD);
-    await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page).toHaveURL('/');
+    await loginAsOwner(page);
     await page.goto('/backups/kit');
     // Keys and destinations ask to confirm it's you first.
-    await page.locator('#sudo-code').fill(OWNER_PASSWORD);
+    await page.locator('#sudo-code').fill(recoveryCode());
     await page.getByRole('button', { name: 'Confirmar' }).click();
     await expect(page).toHaveURL('/backups/kit');
 

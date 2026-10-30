@@ -58,6 +58,7 @@ new_project = "Novo projeto"
 update = "Atualizar Hangar"
 
 [error]
+enroll_required = "Cadastre a verificação em duas etapas para continuar."
 internal = "Erro interno. Tente de novo."
 unauthenticated = "Não autenticado."
 forbidden = "Sem permissão."
@@ -83,7 +84,6 @@ bad_credentials = "E-mail ou senha incorretos, ou conta bloqueada."
 rate_limited = "Muitas tentativas. Tente de novo em {min} min."
 locked = "Conta bloqueada por tentativas erradas até {time}."
 busy = "Muitas tentativas de login no momento. Tente em instantes."
-no_totp = "Esta conta ainda não tem 2FA. Configure no servidor com: hangard user totp -email {email}"
 form_expired = "O formulário expirou. Tente entrar de novo."
 expired = "A etapa de verificação expirou. Entre de novo."
 
@@ -112,7 +112,7 @@ password_hint = "Pelo menos {min} caracteres. Não há \"esqueci a senha\": guar
 confirm = "Repita a senha"
 twofa = "Proteger com verificação em duas etapas"
 twofa_hint = "Logo depois de criar a conta, você escaneia um QR code no app autenticador. Pode ligar ou desligar depois em Minha conta."
-twofa_required = "Este servidor exige verificação em duas etapas: você vai configurá-la logo depois de criar a conta."
+twofa_required = "Donos sempre usam verificação em duas etapas: logo depois de criar a conta, você escaneia um QR code no app autenticador. O painel só abre depois disso."
 submit = "Criar conta e entrar"
 
 [setup.error]
@@ -143,6 +143,8 @@ title = "Não foi possível abrir"
 text = "O pedido não pôde ser atendido."
 
 [team]
+twofa_pending = "pendente"
+twofa_pending_hint = "Esta conta precisa de 2FA e ainda não cadastrou: cadastra logo depois de entrar."
 page_title = "Equipe · Hangar"
 title = "Equipe"
 subtitle = "Quem usa este painel e o que cada pessoa pode fazer"
@@ -663,7 +665,7 @@ created = "Usuário {email} criado com papel {role}."
 unlocked = "Conta {email} desbloqueada."
 flag_no_2fa = "cria o usuário sem 2FA (ele pode ativar depois em Minha conta)"
 no_2fa = "Sem 2FA: o login pede só a senha, e o painel mostra um aviso até a 2FA ser ativada em Minha conta."
-no_2fa_required = "Atenção: este servidor exige 2FA (require_2fa); este usuário só entra depois de rodar: hangard user totp -email ..."
+no_2fa_required = "Se o painel exige 2FA desta conta (sempre para donos e admins), ela cadastra o segundo fator logo depois de entrar."
 password_reset = "Senha de {email} trocada. A conta foi desbloqueada e as sessões abertas, encerradas."
 totp_off = "2FA desligada para {email}. As sessões abertas foram encerradas."
 
@@ -1184,7 +1186,7 @@ disable_password = "Sua senha atual"
 disable_hint = "Sem 2FA, o login pede só a senha."
 disable = "Desativar 2FA"
 disabled = "2FA desativada."
-required = "Este servidor exige 2FA para todas as contas (require_2fa no hangar.toml)."
+required = "A 2FA é obrigatória para esta conta e não pode ser desativada aqui (perdeu o celular? no servidor: hangard user totp-off)."
 
 [account.totp.error]
 password = "Senha incorreta."
@@ -1866,6 +1868,7 @@ down = "O serviço ficou fora do ar: a versão anterior não voltou."
 none = "Não havia versão anterior no ar."
 
 [alert.action]
+security_require_2fa = "mudou a exigência de 2FA da equipe"
 service_volume_limit = "limitou ou aumentou o tamanho de um disco"
 service_volume_unlimit = "removeu o limite de tamanho de um disco"
 service_image_change = "trocou a versão da imagem de um serviço"
@@ -3501,3 +3504,29 @@ desligados. Para restaurar um serviço à mão, siga o README da pasta dele.
 Este arquivo NÃO está cifrado e tem todos os dados e senhas do projeto:
 guarde-o com cuidado.
 """
+
+[enroll]
+page_title = "Verificação em duas etapas · Hangar"
+title = "Ative a verificação em duas etapas"
+subtitle = "Contas de {role} precisam de um segundo fator para usar o painel. Leva um minuto: escaneie o QR code no app autenticador e confirme."
+why = "A partir desta versão, o Hangar exige 2FA de donos e admins (e de todos, quando a equipe pede). Enquanto não ativar, o painel só abre esta tela."
+logout = "Sair"
+done_title = "Verificação em duas etapas ativada"
+continue = "Abrir o painel"
+
+[team.twofa]
+title = "Segurança"
+on = "2FA exigida"
+off = "2FA opcional"
+require = "Exigir 2FA de todos"
+require_hint = "Ligado, operadores e leitores também precisam de um segundo fator: quem não tem cadastra logo depois de entrar."
+admins_always = "Donos e admins sempre precisam de 2FA, com esta opção ligada ou não."
+turn_on = "Exigir de todos"
+turn_off = "Deixar opcional"
+required_on = "2FA agora é exigida de todos."
+required_off = "2FA agora é opcional para operadores e leitores."
+
+[confirm.require_2fa_off]
+title = "Deixar a 2FA opcional?"
+text = "Operadores e leitores poderão entrar só com a senha: uma senha vazada passa a bastar. Donos e admins continuam precisando de 2FA."
+ok = "Deixar opcional"

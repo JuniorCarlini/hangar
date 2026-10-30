@@ -12,6 +12,16 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Segurança
+
+- **2FA obrigatória para donos e admins**, e para toda a equipe por padrão.
+  "Exigir 2FA de todos" virou opção do painel em **Equipe → Segurança**
+  (ligada num painel novo; desligar pede sudo e confirmação, e fica na
+  auditoria). Ao atualizar, um painel com `require_2fa = false` mantém a 2FA
+  opcional para operadores e leitores, mas **donos e admins sem 2FA caem na
+  tela de cadastro no próximo acesso** (só ela e "Sair" abrem até cadastrar).
+  O primeiro acesso não tem mais "pular" a 2FA.
+
 ## [0.5.37] - 2026-10-29
 
 ### Mudado

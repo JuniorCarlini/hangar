@@ -94,6 +94,12 @@ func Open(ctx context.Context, cfg config.Config, log *slog.Logger) (*Core, erro
 		_ = st.Close()
 		return nil, err
 	}
+	// "Require 2FA of everyone" is decided once, before anything can create
+	// an account: on for a new panel, hangar.toml's value for an upgrade.
+	if err := svc.SeedRequire2FA(ctx); err != nil {
+		_ = st.Close()
+		return nil, fmt.Errorf("2FA setting: %w", err)
+	}
 	// Security events in the audit log become alerts. Without Start (the
 	// command line) they are delivered before the command returns.
 	notifier := alerts.New(st.DB, box, al, log, alerts.Options{TelegramAPI: cfg.Alerts.TelegramAPI})

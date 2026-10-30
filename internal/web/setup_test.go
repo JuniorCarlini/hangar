@@ -54,15 +54,16 @@ func TestFirstVisitCreatesTheOwner(t *testing.T) {
 	}
 	form.Set("confirm", testPassword)
 	rec = e.postSetup(form)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account#totp" {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != enrollPath {
 		t.Fatalf("setup: status %d, location %q, body %s", rec.Code, rec.Header().Get("Location"), rec.Body)
 	}
 	session := cookie(rec, sessionCookie)
 	if session == nil || !session.Secure || !session.HttpOnly {
 		t.Fatalf("session cookie: %+v", session)
 	}
-	if rec = e.do(req{method: "GET", target: "/account", cookies: []*http.Cookie{session}}); rec.Code != http.StatusOK {
-		t.Fatalf("account after setup: status %d", rec.Code)
+	if rec = e.do(req{method: "GET", target: enrollPath, cookies: []*http.Cookie{session}}); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), `src="data:image/png;base64,`) {
+		t.Fatalf("enrollment after setup: status %d", rec.Code)
 	}
 
 	// Done once, the page is gone for everyone.
@@ -78,11 +79,29 @@ func TestFirstVisitCreatesTheOwner(t *testing.T) {
 	}
 }
 
-func TestSetupWithoutTwoFactorGoesHome(t *testing.T) {
+// The owner cannot skip the second factor: whatever the form says, the
+// setup ends on the enrollment page and the panel stays closed until a
+// factor is on.
+func TestSetupCannotSkipTwoFactor(t *testing.T) {
 	e := newSetupEnv(t)
-	rec := e.postSetup(url.Values{"email": {testEmail}, "password": {testPassword}, "confirm": {testPassword}})
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+	rec := e.postSetup(url.Values{"email": {testEmail}, "password": {testPassword}, "confirm": {testPassword}, "twofa": {"0"}})
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != enrollPath {
 		t.Fatalf("setup without 2FA: status %d, location %q", rec.Code, rec.Header().Get("Location"))
+	}
+	session := cookie(rec, sessionCookie)
+	for _, target := range []string{"/", "/account", "/team", "/backups"} {
+		rec := e.do(req{method: "GET", target: target, cookies: []*http.Cookie{session}, header: map[string]string{"Accept": "text/html"}})
+		if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != enrollPath {
+			t.Errorf("%s before enrolling: %d %q", target, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+	p, _ := e.svc.Authenticate(context.Background(), session.Value)
+	if p == nil || !p.MustEnroll {
+		t.Fatalf("principal: %+v", p)
+	}
+	rec = e.do(req{method: "POST", target: "/projects", form: url.Values{"csrf": {p.CSRFToken}, "slug": {"lab"}}, cookies: []*http.Cookie{session}})
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("a write before enrolling: %d", rec.Code)
 	}
 }
 

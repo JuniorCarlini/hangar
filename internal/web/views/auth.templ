@@ -189,9 +189,103 @@ templ Sudo(errMsg, next, csrf string) {
 type SetupForm struct {
 	Email       string
 	TwoFA       bool
-	Required    bool // the server demands 2FA (require_2fa)
+	Required    bool // always true: the owner must enroll a second factor
 	MinLen      int
 	MinutesLeft int // until the setup window closes
+}
+
+// EnrollData feeds the page where an account that must have a second
+// factor enrolls one before reaching anything else.
+type EnrollData struct {
+	CSRF  string
+	Email string
+	Role  string
+	Error string
+	// A fresh secret, its otpauth link and QR code (PNG data URI).
+	Secret string
+	URI    string
+	QR     string
+}
+
+// Enroll is the mandatory 2FA enrollment page: the only page a session
+// without the second factor it needs reaches, besides leaving.
+templ Enroll(d EnrollData) {
+	@layout(t(ctx, "enroll.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<div class="flex w-full max-w-[560px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7">
+				@brand(d.Email)
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "enroll.title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "enroll.subtitle", "role", t(ctx, "role."+d.Role)) }</p>
+				</div>
+				@errorAlert(d.Error)
+				<div class="flex flex-wrap items-start gap-5">
+					if d.QR != "" {
+						<img class="size-[164px] rounded-sm bg-white p-2.5" src={ d.QR } alt={ t(ctx, "account.totp.qr_alt") } width="164" height="164"/>
+					}
+					<form method="post" action="/account/totp/enable" class="flex flex-[1_1_240px] flex-col gap-3" autocomplete="off">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<input type="hidden" name="secret" value={ d.Secret }/>
+						<p class="m-0 text-[13px]">1. { t(ctx, "account.totp.step_scan") }</p>
+						<div class="flex flex-col gap-1">
+							<span class="tuc-label">{ t(ctx, "account.totp.manual") }</span>
+							<span class="flex items-center gap-1.5">
+								<code class="rounded-sm border border-border bg-surface-2 px-2 py-1 font-mono text-[13px] break-all select-all">{ d.Secret }</code>
+								<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-copy={ d.Secret } data-copied={ t(ctx, "common.copied") } aria-label={ t(ctx, "export.copy") }>
+									@Icon("copy", "size-3.5")
+								</button>
+							</span>
+						</div>
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="totp-code">2. { t(ctx, "account.totp.step_code") }</label>
+							<input class="tuc-input w-40 text-center font-mono text-lg tracking-[.3em]" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required autofocus/>
+						</div>
+						<div class="flex flex-col gap-1.5">
+							<label class="tuc-label" for="totp-password">3. { t(ctx, "account.totp.step_password") }</label>
+							<input class="tuc-input" id="totp-password" name="password" type="password" autocomplete="current-password" required/>
+						</div>
+						<button class="tuc-btn is-primary is-block" type="submit">
+							@Icon("shield-check", "size-4")
+							{ t(ctx, "account.totp.enable") }
+						</button>
+					</form>
+				</div>
+				@notice("info", "info", t(ctx, "enroll.why"))
+				<form method="post" action="/logout" class="flex justify-center">
+					<input type="hidden" name="csrf" value={ d.CSRF }/>
+					<button class="tuc-btn is-ghost is-sm" type="submit">
+						@Icon("log-out", "size-3.5")
+						{ t(ctx, "enroll.logout") }
+					</button>
+				</form>
+			</div>
+		</main>
+	}
+}
+
+// EnrollDone shows the recovery codes once, right after the mandatory
+// enrollment; the panel opens from the next page on.
+templ EnrollDone(codes []string) {
+	@layout(t(ctx, "enroll.page_title")) {
+		<main class="dots flex min-h-screen items-center justify-center px-4 py-6">
+			<div class="flex w-full max-w-[560px] flex-col gap-[18px] rounded-md border border-border bg-surface p-7">
+				@brand("")
+				<div>
+					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "enroll.done_title") }</h1>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "account.totp.recovery_intro") }</p>
+				</div>
+				<div class="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-1 font-mono text-[13px]">
+					for _, c := range codes {
+						<span class="rounded-sm border border-border bg-surface-2 px-2.5 py-2 break-all select-all">{ c }</span>
+					}
+				</div>
+				<a class="tuc-btn is-primary is-block" href="/">
+					@Icon("arrow-right", "size-4")
+					{ t(ctx, "enroll.continue") }
+				</a>
+			</div>
+		</main>
+	}
 }
 
 // Setup is the first-run page: the owner account, created from the browser
@@ -220,20 +314,12 @@ templ Setup(f SetupForm, errMsg string) {
 					<label class="tuc-label" for="confirm">{ t(ctx, "setup.confirm") }</label>
 					<input class="tuc-input" id="confirm" name="confirm" type="password" autocomplete="new-password" minlength={ f.MinLen } maxlength="256" required data-tuc-reveal/>
 				</div>
-				if f.Required {
-					<div class="tuc-alert is-info" role="note">
-						@Icon("shield-check", "size-4")
-						<div class="tuc-alert__body"><p>{ t(ctx, "setup.twofa_required") }</p></div>
-					</div>
-				} else {
-					<div class="flex flex-col gap-1">
-						<label class="tuc-choice">
-							<input type="checkbox" class="tuc-check" name="twofa" value="1" checked?={ f.TwoFA }/>
-							<span>{ t(ctx, "setup.twofa") }</span>
-						</label>
-						<p class="tuc-hint">{ t(ctx, "setup.twofa_hint") }</p>
-					</div>
-				}
+				// The owner always enrolls a second factor right after: the
+				// panel stays closed until then (no "skip").
+				<div class="tuc-alert is-info" role="note">
+					@Icon("shield-check", "size-4")
+					<div class="tuc-alert__body"><p>{ t(ctx, "setup.twofa_required") }</p></div>
+				</div>
 				<button class="tuc-btn is-primary is-block" type="submit">
 					@Icon("arrow-right", "size-4")
 					{ t(ctx, "setup.submit") }

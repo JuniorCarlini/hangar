@@ -84,6 +84,10 @@ func newEnv(t *testing.T, opts ...func(*auth.Options)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// As app.Open does: a new panel requires 2FA of everyone.
+	if err := e.svc.SeedRequire2FA(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	// The tests below were written for the strictest level, where every
 	// sensitive action asks again; the lower levels have their own tests.
 	if err := e.svc.SetLevel(context.Background(), "", auth.LevelStrict, auth.Client{}); err != nil {

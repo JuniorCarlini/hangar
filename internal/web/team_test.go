@@ -14,10 +14,11 @@ import (
 )
 
 // limitedSession creates two projects and an operator who only sees "lab",
-// signed in with a password (the env does not require 2FA).
+// signed in with a password (the team's "require 2FA of everyone" is off).
 func (e *env) limitedSession(t *testing.T) *http.Cookie {
 	t.Helper()
 	ctx := context.Background()
+	e.optional2FA(t)
 	for _, slug := range []string{"lab", "loja"} {
 		if _, err := e.pm.CreateProject(ctx, projects.Actor{UserID: "usr_x"}, slug, slug); err != nil {
 			t.Fatal(err)
@@ -67,6 +68,15 @@ func TestLimitedUserSeesOnlyTheirProjects(t *testing.T) {
 	rec := e.do(req{method: "POST", target: "/p/loja/tidy", form: url.Values{}, cookies: []*http.Cookie{c}})
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("write to another project: %d", rec.Code)
+	}
+}
+
+// optional2FA turns the team's "require 2FA of everyone" off, so operators
+// and viewers may sign in with a password alone.
+func (e *env) optional2FA(t *testing.T) {
+	t.Helper()
+	if err := e.svc.SetRequire2FA(context.Background(), "", false, auth.Client{}); err != nil {
+		t.Fatal(err)
 	}
 }
 

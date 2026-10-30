@@ -150,9 +150,11 @@ func (h *handlers) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) setupForm(r *http.Request, until time.Time) views.SetupForm {
+	// The owner always needs a second factor: the setup ends on the
+	// enrollment page, with no way around it.
 	return views.SetupForm{
 		Email: strings.TrimSpace(r.PostFormValue("email")), TwoFA: true,
-		Required: h.auth.Require2FA(), MinLen: auth.MinPasswordLen,
+		Required: true, MinLen: auth.MinPasswordLen,
 		MinutesLeft: max(1, int(time.Until(until).Minutes()+0.999)),
 	}
 }
@@ -194,7 +196,6 @@ func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	valid := validLoginToken(r)
 	form := withLoginToken(w, r)
 	f := h.setupForm(r, until)
-	f.TwoFA = f.Required || r.PostFormValue("twofa") == "1"
 	if !valid {
 		render(w, form, http.StatusForbidden, views.Setup(f, i18n.T(r.Context(), "login.error.form_expired")))
 		return
@@ -211,12 +212,9 @@ func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		setCookie(w, sessionCookie, token, auth.SessionMax)
-		if f.TwoFA {
-			// Straight to the 2FA card of "My account", where the QR code is.
-			http.Redirect(w, r, "/account#totp", http.StatusSeeOther)
-			return
-		}
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		// Straight to the enrollment page: the panel stays closed to this
+		// session until a second factor is on (the router's gate).
+		http.Redirect(w, r, enrollPath, http.StatusSeeOther)
 	case errors.Is(err, auth.ErrSetupClosed):
 		st, _ := h.auth.Setup(r.Context())
 		h.setupClosed(w, r, st)
@@ -264,8 +262,6 @@ func (h *handlers) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		render(w, form, http.StatusTooManyRequests, views.Login(email, i18n.T(r.Context(), "login.error.rate_limited", "min", rl.Minutes()), ""))
 	case errors.Is(err, auth.ErrBusy):
 		render(w, form, http.StatusServiceUnavailable, views.Login(email, i18n.T(r.Context(), "login.error.busy"), ""))
-	case errors.Is(err, auth.ErrNoTOTP):
-		render(w, form, http.StatusUnauthorized, views.Login(email, i18n.T(r.Context(), "login.error.no_totp", "email", email), ""))
 	case errors.As(err, &locked):
 		// Only the right password gets here, so saying the account is
 		// locked reveals nothing to someone guessing.

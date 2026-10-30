@@ -159,12 +159,26 @@ var limitedRoutes = map[string]bool{
 	"POST /logout":                       true,
 	"POST /sudo":                         true,
 	"GET /account":                       true,
+	"GET " + enrollPath:                  true,
 	"POST /account/sessions/end":         true,
 	"POST /account/totp/enable":          true,
 	"POST /account/totp/disable":         true,
 	"POST /account/preferences":          true,
 	"GET /templates/{template}/logo.svg": true,
 	"GET /_pista":                        true,
+}
+
+// enrollPath is the page where an account that must have a second factor
+// enrolls one.
+const enrollPath = "/account/2fa"
+
+// enrollRoutes are the only routes a session that must enroll a second
+// factor (Principal.MustEnroll) reaches: the enrollment page, turning the
+// factor on, and leaving.
+var enrollRoutes = map[string]bool{
+	"GET " + enrollPath:         true,
+	"POST /account/totp/enable": true,
+	"POST /logout":              true,
 }
 
 // limitedAllows reports whether a user limited to some projects may use the
@@ -195,6 +209,18 @@ func (rt *Router) enforce(method, pattern string, p Policy, h http.Handler) http
 					return
 				}
 				http.Error(w, i18n.T(r.Context(), "error.unauthenticated"), http.StatusUnauthorized)
+				return
+			case principal.MustEnroll && !enrollRoutes[pattern]:
+				// The account must have a second factor and has none: nothing
+				// but enrolling one (or leaving) until it does.
+				if method == http.MethodGet && wantsHTML(r) {
+					http.Redirect(w, r, enrollPath, http.StatusSeeOther)
+					return
+				}
+				if isUnsafe(method) {
+					rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "2fa_enrollment_required"})
+				}
+				http.Error(w, i18n.T(r.Context(), "error.enroll_required"), http.StatusForbidden)
 				return
 			case principal.Role < p.Role:
 				rt.record(r, p, principal, audit.Denied, map[string]any{"reason": "insufficient_role"})

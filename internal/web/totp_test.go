@@ -12,11 +12,13 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/auth"
 )
 
-// An account without 2FA signs in with the password, sees the banner on every
+// Where 2FA is optional (an operator, with the team's setting off), an
+// account without it signs in with the password, sees the banner on every
 // page and can turn 2FA on from "My account" without being logged out.
 func TestOptionalTOTPThroughTheWeb(t *testing.T) {
 	e := newEnv(t)
-	if _, err := e.svc.CreateUser(context.Background(), testEmail, testPassword, auth.RoleOwner); err != nil {
+	e.optional2FA(t)
+	if _, err := e.svc.CreateUser(context.Background(), testEmail, testPassword, auth.RoleOperator); err != nil {
 		t.Fatal(err)
 	}
 	rec := e.do(req{method: "POST", target: "/login", form: url.Values{"email": {testEmail}, "password": {testPassword}}})

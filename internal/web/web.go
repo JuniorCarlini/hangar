@@ -330,6 +330,9 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("GET /_pista", h.pistaPage, viewer)
 
 	rt.HandleFunc("GET /account", h.accountPage, viewer)
+	// Enrolling the second factor an account must have: the only page a
+	// session without it reaches (see enrollRoutes).
+	rt.HandleFunc("GET "+enrollPath, h.enrollPage, viewer)
 	rt.HandleFunc("POST /account/sessions/end", h.endSession, Policy{Role: auth.RoleViewer, Audit: "auth.session.end", AuditByHandler: true})
 	rt.HandleFunc("POST /account/totp/enable", h.enableTOTP, Policy{Role: auth.RoleViewer, Audit: "auth.totp.enable", AuditByHandler: true})
 	rt.HandleFunc("POST /account/totp/disable", h.disableTOTP, Policy{Role: auth.RoleViewer, Audit: "auth.totp.disable", AuditByHandler: true})
@@ -345,6 +348,11 @@ func routes(rt *Router, h *handlers) {
 	rt.HandleFunc("POST /team/invites/{id}/cancel", h.teamCancelInvite, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.invite.cancel", AuditByHandler: true})
 	rt.HandleFunc("POST /team/users/{id}", h.teamUpdate, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.update", AuditByHandler: true})
 	rt.HandleFunc("POST /team/users/{id}/delete", h.teamRemove, Policy{Role: auth.RoleOwner, Sudo: auth.SudoCritical, Audit: "user.remove", AuditByHandler: true})
+	// "Require 2FA of everyone": turning it on only raises the bar; turning
+	// it off lowers it for the whole team, so it asks at every level (like
+	// lowering the security level) and behind a red confirmation.
+	rt.HandleFunc("POST /team/2fa/require", h.teamRequire2FA, Policy{Role: auth.RoleOwner, Audit: "security.require_2fa", AuditByHandler: true})
+	rt.HandleFunc("POST /team/2fa/optional", h.teamOptional2FA, Policy{Role: auth.RoleOwner, Sudo: auth.SudoAlways, Audit: "security.require_2fa", AuditByHandler: true})
 	rt.HandleFunc("GET /update", h.updatePage, Policy{Role: auth.RoleOwner})
 	rt.HandleFunc("POST /update/check", h.updateCheck, Policy{Role: auth.RoleOwner, Audit: "system.update.check"})
 	rt.HandleFunc("POST /update", h.updateApply, Policy{Role: auth.RoleOwner, Sudo: auth.SudoStrict, Audit: "system.update.request"})

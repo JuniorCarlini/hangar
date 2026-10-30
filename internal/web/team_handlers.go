@@ -20,6 +20,10 @@ func (h *handlers) teamPage(w http.ResponseWriter, r *http.Request) {
 		flash = i18n.T(r.Context(), "team.removed")
 	case "cancelled":
 		flash = i18n.T(r.Context(), "team.cancelled")
+	case "2fa-required":
+		flash = i18n.T(r.Context(), "team.twofa.required_on")
+	case "2fa-optional":
+		flash = i18n.T(r.Context(), "team.twofa.required_off")
 	}
 	h.renderTeam(w, r, http.StatusOK, views.TeamData{Flash: flash})
 }
@@ -28,6 +32,7 @@ func (h *handlers) renderTeam(w http.ResponseWriter, r *http.Request, status int
 	ctx := r.Context()
 	p := PrincipalFrom(ctx)
 	d.CSRF, d.SudoActive = p.CSRFToken, p.SudoFor(auth.SudoCritical, time.Now())
+	d.Require2FA, d.SudoAlways = h.auth.Require2FA(ctx), p.SudoFor(auth.SudoAlways, time.Now())
 	members, invites, err := h.auth.Team(ctx)
 	if err != nil {
 		loggerFrom(ctx).Error("team", "error", err)
@@ -36,6 +41,7 @@ func (h *handlers) renderTeam(w http.ResponseWriter, r *http.Request, status int
 		row := views.TeamMember{
 			ID: m.ID, Email: m.Email, Name: m.Name, Role: m.Access.Role.String(), AllProjects: m.Access.AllProjects,
 			Projects: m.Access.Projects, HasTOTP: m.HasTOTP, Locked: m.Locked, Self: m.ID == p.UserID,
+			TwoFAPending: !m.HasTOTP && h.auth.RequiredFor(ctx, m.Access.Role),
 		}
 		if !m.LastSeen.IsZero() {
 			row.LastSeen = m.LastSeen.Local().Format("02/01 15:04")
@@ -57,6 +63,33 @@ func (h *handlers) renderTeam(w http.ResponseWriter, r *http.Request, status int
 		}
 	}
 	render(w, r, status, views.Team(d))
+}
+
+// teamRequire2FA makes every account need a second factor; the ones
+// without it enroll at their next page.
+func (h *handlers) teamRequire2FA(w http.ResponseWriter, r *http.Request) {
+	h.setRequire2FA(w, r, true)
+}
+
+// teamOptional2FA lets operators and viewers sign in without a second
+// factor (owners and admins always need one). The route asks for sudo at
+// every level, and the page asks for a red confirmation first.
+func (h *handlers) teamOptional2FA(w http.ResponseWriter, r *http.Request) {
+	h.setRequire2FA(w, r, false)
+}
+
+func (h *handlers) setRequire2FA(w http.ResponseWriter, r *http.Request, on bool) {
+	p := PrincipalFrom(r.Context())
+	if err := h.auth.SetRequire2FA(r.Context(), p.UserID, on, client(r)); err != nil {
+		loggerFrom(r.Context()).Error("require 2FA", "error", err)
+		h.renderTeam(w, r, http.StatusInternalServerError, views.TeamData{Error: i18n.T(r.Context(), "error.internal")})
+		return
+	}
+	ok := "2fa-optional"
+	if on {
+		ok = "2fa-required"
+	}
+	http.Redirect(w, r, "/team?ok="+ok+"#security", http.StatusSeeOther)
 }
 
 // accessFromForm reads the role and project pickers.
@@ -133,7 +166,7 @@ func (h *handlers) inviteForm(r *http.Request, inv auth.Invite) views.InviteForm
 	return views.InviteForm{
 		Token: r.PathValue("token"), Email: inv.Email, Role: inv.Access.Role.String(),
 		AllProjects: inv.Access.AllProjects, Projects: inv.Access.Projects, TwoFA: true,
-		Required: h.auth.Require2FA(), MinLen: auth.MinPasswordLen,
+		Required: h.auth.RequiredFor(r.Context(), inv.Access.Role), MinLen: auth.MinPasswordLen,
 	}
 }
 
@@ -183,6 +216,10 @@ func (h *handlers) inviteSubmit(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		setCookie(w, sessionCookie, sess, auth.SessionMax)
+		if f.Required {
+			http.Redirect(w, r, enrollPath, http.StatusSeeOther)
+			return
+		}
 		if f.TwoFA {
 			http.Redirect(w, r, "/account#totp", http.StatusSeeOther)
 			return

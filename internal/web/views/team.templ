@@ -17,9 +17,12 @@ type TeamMember struct {
 	AllProjects bool
 	Projects    []string
 	HasTOTP     bool
-	Locked      bool
-	LastSeen    string // "" = never
-	Self        bool
+	// TwoFAPending: the account must have 2FA and has none yet; it enrolls
+	// at its next page.
+	TwoFAPending bool
+	Locked       bool
+	LastSeen     string // "" = never
+	Self         bool
 }
 
 // TeamProject is a project in the access pickers.
@@ -51,6 +54,10 @@ type TeamData struct {
 	Flash      string
 	// InviteOpen reopens the invite dialog with Error.
 	InviteOpen bool
+	// Require2FA is "require 2FA of everyone"; SudoAlways, whether it may be
+	// turned off right now (it asks for the password at every level).
+	Require2FA bool
+	SudoAlways bool
 }
 
 func roleBadge(role string) string {
@@ -145,6 +152,8 @@ templ Team(d TeamData) {
 									<td>
 										if m.HasTOTP {
 											<span class="tuc-badge is-success">{ t(ctx, "team.twofa_on") }</span>
+										} else if m.TwoFAPending {
+											<span class="tuc-badge is-warning" title={ t(ctx, "team.twofa_pending_hint") }>{ t(ctx, "team.twofa_pending") }</span>
 										} else {
 											<span class="text-muted">—</span>
 										}
@@ -221,8 +230,9 @@ templ Team(d TeamData) {
 					</div>
 				</section>
 			}
+			@teamSecurityCard(d)
 		}
-		@sudoModal(d.CSRF, "/team", d.SudoActive)
+		@sudoModal(d.CSRF, "/team", d.SudoActive && d.SudoAlways)
 		if d.SudoActive {
 			@teamInviteDialog(d)
 			for _, m := range d.Members {
@@ -485,4 +495,49 @@ templ InviteInvalid() {
 			</div>
 		</main>
 	}
+}
+
+// teamSecurityCard is the team's "Security" card: whether every account
+// (operators and viewers too) must have a second factor. Turning it off
+// asks for the password at every level and a red confirmation.
+templ teamSecurityCard(d TeamData) {
+	<section class={ cardClass } id="security">
+		@cardHead(t(ctx, "team.twofa.title")) {
+			if d.Require2FA {
+				<span class="tuc-badge is-success">{ t(ctx, "team.twofa.on") }</span>
+			} else {
+				<span class="tuc-badge is-warning">{ t(ctx, "team.twofa.off") }</span>
+			}
+		}
+		<div class={ cardBodyClass }>
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div class="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+					<b class="text-sm font-semibold">{ t(ctx, "team.twofa.require") }</b>
+					<span class="text-[13px] text-muted">{ t(ctx, "team.twofa.require_hint") }</span>
+				</div>
+				if d.Require2FA {
+					if d.SudoAlways {
+						<form data-confirm={ t(ctx, "confirm.require_2fa_off.title") } data-confirm-text={ t(ctx, "confirm.require_2fa_off.text") } data-confirm-ok={ t(ctx, "confirm.require_2fa_off.ok") } data-tone="danger" method="post" action="/team/2fa/optional">
+							<input type="hidden" name="csrf" value={ d.CSRF }/>
+							<button class="tuc-btn is-outline text-danger" type="submit">
+								@Icon("shield-off", "size-3.5")
+								{ t(ctx, "team.twofa.turn_off") }
+							</button>
+						</form>
+					} else {
+						@sudoButton(t(ctx, "team.twofa.turn_off"))
+					}
+				} else {
+					<form method="post" action="/team/2fa/require">
+						<input type="hidden" name="csrf" value={ d.CSRF }/>
+						<button class="tuc-btn is-primary" type="submit">
+							@Icon("shield-check", "size-3.5")
+							{ t(ctx, "team.twofa.turn_on") }
+						</button>
+					</form>
+				}
+			</div>
+			@notice("info", "info", t(ctx, "team.twofa.admins_always"))
+		</div>
+	</section>
 }

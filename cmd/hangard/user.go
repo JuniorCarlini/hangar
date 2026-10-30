@@ -66,7 +66,9 @@ func userCmd(ctx context.Context, args []string, stdout, stderr io.Writer, log *
 		}
 		fmt.Fprintln(stdout, "\n"+tr("cli.user.created", "email", *email, "role", r.String()))
 		if *no2FA {
-			if cfg.Auth.Require2FA {
+			// The panel's setting decides (owners and admins always need
+			// 2FA): such an account enrolls right after signing in.
+			if core.Auth.RequiredFor(ctx, r) {
 				fmt.Fprintln(stdout, tr("cli.user.no_2fa_required"))
 			} else {
 				fmt.Fprintln(stdout, tr("cli.user.no_2fa"))
@@ -87,9 +89,7 @@ func userCmd(ctx context.Context, args []string, stdout, stderr io.Writer, log *
 			return err
 		}
 		fmt.Fprintln(stdout, tr("cli.user.totp_off", "email", *email))
-		if cfg.Auth.Require2FA {
-			fmt.Fprintln(stdout, tr("cli.user.no_2fa_required"))
-		}
+		fmt.Fprintln(stdout, tr("cli.user.no_2fa_required"))
 		return nil
 
 	case "password":

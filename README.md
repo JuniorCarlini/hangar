@@ -10,8 +10,8 @@ certificado ser emitido.
 O Hangar nasceu para tirar um SaaS multi-loja do Easypanel, onde isso só saía
 com gambiarra no Traefik, e hoje hospeda qualquer projeto do operador (sites,
 APIs, bots), cada um isolado no seu projeto. Segurança vem fechada por padrão:
-o painel não escuta na internet, 2FA é exigida e toda ação fica numa
-auditoria encadeada.
+o painel não escuta na internet, 2FA é obrigatória para donos e admins (e,
+por padrão, para toda a equipe) e toda ação fica numa auditoria encadeada.
 
 > Versão atual: **v0.5.37**. Projeto em desenvolvimento ativo: use, teste e
 > reporte, mas leia as [notas de cada versão](CHANGELOG.md) antes de atualizar.
@@ -139,7 +139,9 @@ public` no `hangar.toml` depois. Para usar o seu domínio no painel:
 
 Prefere o terminal? `sudo -u hangar hangard user create -config
 /etc/hangar/hangar.toml -email voce@exemplo.com` cria o dono com o QR code
-da 2FA no terminal, e também fecha a tela de primeiro acesso.
+da 2FA no terminal, e também fecha a tela de primeiro acesso. Pela tela de
+primeiro acesso, o painel só abre depois que o dono cadastra a 2FA (não há
+"pular").
 
 Depois de entrar:
 
@@ -205,7 +207,7 @@ public = true                                   # painel com HTTPS pelo Caddy (e
 # public_host = "painel.exemplo.com"            # padrão: hangar.<ip>.sslip.io
 
 [auth]
-require_2fa = false   # true: ninguém entra sem 2FA
+require_2fa = true    # só o valor inicial numa atualização; depois vale Equipe → Segurança
 
 [update]
 repo       = "JuniorCarlini/hangar"

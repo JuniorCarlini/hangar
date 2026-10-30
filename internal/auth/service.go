@@ -121,14 +121,19 @@ type Service struct {
 	// level caches the panel's security level ("" = not read yet).
 	levelMu sync.Mutex
 	level   Level
+	// twoFA caches "require 2FA of everyone" (nil = not read yet).
+	twoFAMu sync.Mutex
+	twoFA   *bool
 }
 
 // Options tunes the Service (tests use cheap argon and a fixed clock).
 type Options struct {
 	Argon Argon2Params
 	Now   func() time.Time
-	// Require2FA refuses login to accounts without 2FA. Off, 2FA is per
-	// account (like Easypanel): whoever turned it on is asked for the code.
+	// Require2FA is hangar.toml's [auth] require_2fa: the first value of the
+	// panel's "require 2FA of everyone" setting on a panel upgraded with
+	// accounts already in it (a new panel starts with it on). After that
+	// the setting in the database wins (Team → Security).
 	Require2FA bool
 	// FirstRunSetup lets the owner be created from the browser while there
 	// is no user, for SetupWindow after start. Off, only the command line
@@ -307,8 +312,9 @@ type Client struct {
 
 // Login checks the password. For an account with 2FA it returns the
 // pending-step token (valid for 5 min and only good for submitting the code)
-// and complete=false; for an account without 2FA (allowed when Require2FA is
-// off) it returns the active session token and complete=true.
+// and complete=false; for an account without 2FA it returns the active
+// session token and complete=true. When the account must have 2FA
+// (RequiredFor), that session can only enroll a factor (Principal.MustEnroll).
 func (s *Service) Login(ctx context.Context, email, password string, c Client) (token string, complete bool, err error) {
 	token, complete, err = s.login(ctx, email, password, c)
 	return token, complete, err
@@ -357,15 +363,14 @@ func (s *Service) login(ctx context.Context, email, password string, c Client) (
 		s.fail(ctx, c, u.ID, "wrong_password", ipKey, emailKey)
 		return "", false, ErrInvalidCredentials
 	}
-	if len(u.TotpSecretEnc) == 0 {
-		if s.require2FA {
-			s.record(ctx, audit.Entry{
-				ActorID: u.ID, IP: c.IP, Action: "auth.login.password", Outcome: audit.Denied,
-				Summary: map[string]any{"reason": "totp_not_configured"},
-			})
-			return "", false, ErrNoTOTP
+	if !hasSecondFactor(len(u.TotpSecretEnc) > 0) {
+		// No 2FA on this account: the password alone opens the session. If
+		// the account must have one, that session only reaches the
+		// enrollment page until it does (the router's gate).
+		summary := map[string]any{"second_factor": "none"}
+		if role, err := ParseRole(u.Role); err == nil && s.RequiredFor(ctx, role) {
+			summary["enroll_required"] = true
 		}
-		// No 2FA on this account: the password alone opens the session.
 		if err := s.q.ResetLoginFailures(ctx, u.ID); err != nil {
 			return "", false, err
 		}
@@ -377,7 +382,7 @@ func (s *Service) login(ctx context.Context, email, password string, c Client) (
 		}
 		s.record(ctx, audit.Entry{
 			ActorID: u.ID, IP: c.IP, UserAgent: c.UserAgent, Action: "auth.login.ok", Outcome: audit.OK,
-			Summary: map[string]any{"second_factor": "none"},
+			Summary: summary,
 		})
 		return token, true, nil
 	}
@@ -555,6 +560,7 @@ func (s *Service) authenticate(ctx context.Context, token string, touch bool) (*
 		AllProjects: sess.AllProjects == 1 || role >= RoleAdmin,
 		Level:       s.Level(ctx),
 	}
+	p.MustEnroll = !hasSecondFactor(p.HasTOTP) && s.RequiredFor(ctx, role)
 	if !p.AllProjects {
 		slugs, err := s.q.UserProjectSlugs(ctx, sess.UserID)
 		if err != nil {
@@ -685,7 +691,7 @@ func (s *Service) DisableTOTP(ctx context.Context, p *Principal, password, code 
 		return err
 	}
 	defer s.limits.end(key)
-	if s.require2FA {
+	if s.RequiredFor(ctx, p.Role) {
 		return ErrTOTPRequired
 	}
 	if err := s.checkPassword(ctx, p.UserID, password); err != nil {
@@ -748,7 +754,8 @@ func (s *Service) ResetPassword(ctx context.Context, email, password string) err
 }
 
 // ResetTOTP turns 2FA off from the server's command line (lost phone, or
-// 2FA not wanted while require_2fa is off). It closes every session.
+// 2FA not wanted where it is optional). It closes every session; an account
+// that must have 2FA enrolls a new factor at its next login.
 func (s *Service) ResetTOTP(ctx context.Context, email string) error {
 	id, err := s.UserIDByEmail(ctx, email)
 	if err != nil {
@@ -852,9 +859,6 @@ func deviceOf(ua string) string {
 	}
 	return "?"
 }
-
-// Require2FA reports whether every account must have 2FA.
-func (s *Service) Require2FA() bool { return s.require2FA }
 
 // SetName stores the display name shown in the account menu.
 func (s *Service) SetName(ctx context.Context, userID, name string, c Client) error {

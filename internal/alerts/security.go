@@ -55,6 +55,7 @@ var SensitiveActions = []string{
 	"user.update",
 	"user.remove",
 	"security.level",
+	"security.require_2fa",
 }
 
 // SecurityKinds are the alerts that cannot be turned off.

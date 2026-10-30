@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { OWNER_EMAIL, OWNER_PASSWORD } from '../constants.mjs';
-import { openAccountMenu } from './helpers';
+import { openAccountMenu, recoveryCode } from './helpers';
 
 // "Trancar painel" ends every session, the saved one included, so this file
 // runs last (the name sorts after the others) and the panel stays locked
@@ -36,6 +36,9 @@ test('trancar o painel derruba a sessão e só o servidor entra', async ({ page 
   await page.locator('#email').fill(OWNER_EMAIL);
   await page.locator('#password').fill(OWNER_PASSWORD);
   await page.getByRole('button', { name: 'Continuar' }).click();
+  await expect(page).toHaveURL('/login/2fa');
+  await page.locator('#code').fill(recoveryCode());
+  await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page).toHaveURL('/');
   await expect(page.getByText(/Painel trancado: só responde pelo próprio servidor/)).toBeVisible();
   await page.goto('/alerts');

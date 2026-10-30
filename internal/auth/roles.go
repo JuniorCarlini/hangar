@@ -65,6 +65,10 @@ type Principal struct {
 	// HasTOTP tells whether the account has 2FA. Without it, sudo asks for
 	// the password and the panel shows a banner asking to turn 2FA on.
 	HasTOTP bool
+	// MustEnroll: the account must have a second factor (RequiredFor) and
+	// has none. The session only reaches the enrollment page and logout
+	// until it enrolls one.
+	MustEnroll bool
 	// SessionToken is the cookie's clear-text token, needed to rotate the
 	// session on sudo and logout. It is never stored or logged.
 	SessionToken string

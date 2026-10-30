@@ -58,6 +58,7 @@ new_project = "New project"
 update = "Update Hangar"
 
 [error]
+enroll_required = "Set up two-step verification to continue."
 internal = "Internal error. Please try again."
 unauthenticated = "Not authenticated."
 forbidden = "Not allowed."
@@ -83,7 +84,6 @@ bad_credentials = "Wrong e-mail or password, or the account is locked."
 rate_limited = "Too many attempts. Try again in {min} min."
 locked = "Account locked after too many failed attempts until {time}."
 busy = "Too many login attempts right now. Try again shortly."
-no_totp = "This account has no 2FA yet. Set it up on the server with: hangard user totp -email {email}"
 form_expired = "The form expired. Please sign in again."
 expired = "The verification step expired. Please log in again."
 
@@ -112,7 +112,7 @@ password_hint = "At least {min} characters. There is no \"forgot password\": kee
 confirm = "Repeat the password"
 twofa = "Protect with two-step verification"
 twofa_hint = "Right after creating the account, you scan a QR code with your authenticator app. You can turn it on or off later in My account."
-twofa_required = "This server requires two-step verification: you will set it up right after creating the account."
+twofa_required = "Owners always use two-step verification: right after creating the account you scan a QR code in your authenticator app. The panel opens only after that."
 submit = "Create account and sign in"
 
 [setup.error]
@@ -143,6 +143,8 @@ title = "Could not open"
 text = "The request could not be served."
 
 [team]
+twofa_pending = "pending"
+twofa_pending_hint = "This account needs 2FA and has not set it up yet: it does right after signing in."
 page_title = "Team · Hangar"
 title = "Team"
 subtitle = "Who uses this panel and what each person may do"
@@ -663,7 +665,7 @@ created = "User {email} created with role {role}."
 unlocked = "Account {email} unlocked."
 flag_no_2fa = "create the user without 2FA (they can turn it on later in My account)"
 no_2fa = "No 2FA: signing in asks only for the password, and the panel shows a banner until 2FA is turned on in My account."
-no_2fa_required = "Warning: this server requires 2FA (require_2fa); this user can only sign in after running: hangard user totp -email ..."
+no_2fa_required = "If the panel requires 2FA for this account (always for owners and admins), it sets up the second factor right after signing in."
 password_reset = "Password for {email} changed. The account was unlocked and its open sessions ended."
 totp_off = "2FA turned off for {email}. Open sessions were closed."
 
@@ -1187,7 +1189,7 @@ disable_password = "Your current password"
 disable_hint = "Without 2FA, signing in asks only for the password."
 disable = "Turn off 2FA"
 disabled = "2FA is off."
-required = "This server requires 2FA on every account (require_2fa in hangar.toml)."
+required = "2FA is mandatory for this account and cannot be turned off here (lost your phone? on the server: hangard user totp-off)."
 
 [account.totp.error]
 password = "Wrong password."
@@ -1869,6 +1871,7 @@ down = "The service is down: the previous version did not come back."
 none = "There was no previous version live."
 
 [alert.action]
+security_require_2fa = "changed the team's 2FA requirement"
 service_volume_limit = "limited or increased the size of a disk"
 service_volume_unlimit = "removed the size limit of a disk"
 service_image_change = "changed the image version of a service"
@@ -3505,3 +3508,29 @@ service by hand, follow the README in its folder.
 This file is NOT encrypted and holds all of the project's data and
 passwords: keep it safe.
 """
+
+[enroll]
+page_title = "Two-step verification · Hangar"
+title = "Turn on two-step verification"
+subtitle = "Accounts with the {role} role need a second factor to use the panel. It takes a minute: scan the QR code in your authenticator app and confirm."
+why = "Starting with this version, Hangar requires 2FA from owners and admins (and from everyone, when the team asks for it). Until you turn it on, the panel only opens this screen."
+logout = "Sign out"
+done_title = "Two-step verification is on"
+continue = "Open the panel"
+
+[team.twofa]
+title = "Security"
+on = "2FA required"
+off = "2FA optional"
+require = "Require 2FA from everyone"
+require_hint = "On, operators and viewers need a second factor too: whoever has none sets it up right after signing in."
+admins_always = "Owners and admins always need 2FA, whether this is on or not."
+turn_on = "Require from everyone"
+turn_off = "Make it optional"
+required_on = "2FA is now required from everyone."
+required_off = "2FA is now optional for operators and viewers."
+
+[confirm.require_2fa_off]
+title = "Make 2FA optional?"
+text = "Operators and viewers will be able to sign in with just their password: a leaked password becomes enough. Owners and admins still need 2FA."
+ok = "Make it optional"

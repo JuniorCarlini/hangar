@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { OWNER_EMAIL, OWNER_PASSWORD } from '../constants.mjs';
+import { loginAsOwner } from './helpers';
 
 // Updates page and public status links (Etapa 11). None of it needs Docker.
 
@@ -34,11 +34,7 @@ test.describe('links de status', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('criar, abrir sem login e revogar', async ({ page, browser }) => {
-    await page.goto('/login');
-    await page.locator('#email').fill(OWNER_EMAIL);
-    await page.locator('#password').fill(OWNER_PASSWORD);
-    await page.getByRole('button', { name: 'Continuar' }).click();
-    await expect(page).toHaveURL('/');
+    await loginAsOwner(page);
 
     await page.getByRole('navigation', { name: 'Navegação' }).getByRole('link', { name: 'Links de status' }).click();
     await expect(page).toHaveURL('/status-links');

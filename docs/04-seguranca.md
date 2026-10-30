@@ -4,7 +4,7 @@
 
 | Ameaça | Exemplo | Controles |
 |---|---|---|
-| Invasão do painel | Força bruta, senha vazada, sessão roubada | 2FA (obrigatório em produção com `require_2fa`), passkeys, rate limit, lockout, sessão curta, painel só por HTTPS (ou modo bunker) |
+| Invasão do painel | Força bruta, senha vazada, sessão roubada | 2FA (obrigatória para donos e admins; para todos por padrão), passkeys (planejadas), rate limit, lockout, sessão curta, painel só por HTTPS (ou modo bunker) |
 | Abuso de domínio dinâmico | Esgotar rate limit da Let's Encrypt, phishing | `ask` com autorização da app, limites, fail-closed ([03](03-dominios-customizados-tls.md)) |
 | Container comprometido escapando | RCE na aplicação → host | Hardening de container, sem docker.sock, redes isoladas ([05](05-isolamento-e-recursos.md)) |
 | Movimento lateral entre projetos | App A acessa Postgres do projeto B | Rede por projeto (serviço com domínio também: o Caddy é que entra na rede do projeto); conexão entre projetos só quando você liga; senhas fortes geradas |
@@ -41,14 +41,22 @@ servidos localmente, e o Editor do Tucano, que grava `style` em atributo, não
 - **Senha**: mínimo 14 caracteres, verificada contra lista de senhas vazadas
   (lista local, k-anonymity opcional), hash **argon2id** (m=64 MiB, t=3, p=2,
   ajustável).
-- **2FA**: TOTP com códigos de recuperação (10, de uso único). Como no
-  Easypanel, cada conta liga ou desliga em "Minha conta"; quem está sem 2FA
-  entra só com a senha, vê um aviso fixo no topo de todas as telas, e as
-  ações perigosas pedem a senha de novo em vez do código. Com
-  `[auth] require_2fa = true` no `hangar.toml` (o instalador escreve
-  `false`), o painel recusa login de conta sem 2FA e impede desligar. No servidor,
+- **2FA**: TOTP com códigos de recuperação (10, de uso único).
+  **Obrigatória para donos e admins, sempre.** "Exigir 2FA de todos"
+  (operadores e leitores também) é uma opção do painel em **Equipe →
+  Segurança**, ligada num painel novo; desligar pede sudo em qualquer nível,
+  confirmação vermelha e fica na auditoria (`security.require_2fa`, que
+  também vira alerta). Conta que precisa de 2FA e não tem entra com a senha
+  e cai na tela de cadastro (`/account/2fa`): qualquer outra tela volta para
+  ela, toda escrita é recusada e auditada, só sair é permitido; cadastrou, o
+  painel abre. O primeiro acesso termina nessa tela, sem "pular". Onde a 2FA
+  é opcional, quem está sem ela vê um aviso fixo no topo e as ações
+  perigosas pedem a senha de novo. O `[auth] require_2fa` do `hangar.toml`
+  só vale como valor inicial da opção para um painel que já tinha contas
+  (atualização); depois, vale a opção do painel. No servidor,
   `hangard user totp-off -email ...` desliga a 2FA de uma conta (celular
-  perdido), encerrando as sessões dela.
+  perdido), encerrando as sessões dela; se a conta precisa de 2FA, ela
+  cadastra uma nova no próximo login.
 - **Passkeys (WebAuthn)**: recomendadas; podem substituir senha+TOTP.
 - **Rate limit**: 5 tentativas/15 min por IP e por usuário; depois, atraso
   exponencial. 20 falhas por usuário em 24 h → conta bloqueada por 15 min,

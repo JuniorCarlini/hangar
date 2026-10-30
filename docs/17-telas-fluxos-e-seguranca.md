@@ -108,7 +108,7 @@ Permissão por projeto (pós-MVP): um operador pode ver só o projeto "minhaloja
 | Controle | Como |
 |---|---|
 | Senha | ≥ 14 caracteres, checada contra lista de senhas vazadas, hash argon2id |
-| 2FA | **Obrigatório**. TOTP ou passkey (WebAuthn). Sem 2FA a conta não entra |
+| 2FA | **Obrigatória** para donos e admins; para todos enquanto "Exigir 2FA de todos" (Equipe → Segurança) estiver ligada, o padrão. TOTP (passkey planejada). Sem 2FA a conta só alcança a tela de cadastro |
 | Passkey | Recomendada: imune a phishing (vinculada ao domínio) |
 | Força bruta | 5 tentativas / 15 min por IP e por usuário → atraso crescente → bloqueio após 20 |
 | Enumeração | Mesma resposta e mesmo tempo para usuário inexistente |

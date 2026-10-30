@@ -32,7 +32,7 @@ func (h *handlers) renderAccount(w http.ResponseWriter, r *http.Request, status 
 	d := views.AccountData{
 		CSRF: p.CSRFToken, Email: p.Email, Name: p.Name, Role: p.Role.String(),
 		Locale: p.Locale, Theme: p.Theme, Flash: flash, Error: errMsg,
-		TOTP:     views.TOTPSection{On: p.HasTOTP || len(recovery) > 0, Required: h.auth.Require2FA(), Recovery: recovery},
+		TOTP:     views.TOTPSection{On: p.HasTOTP || len(recovery) > 0, Required: h.auth.RequiredFor(r.Context(), p.Role), Recovery: recovery},
 		Security: h.securityCard(r),
 	}
 	if list, err := h.auth.ListSessions(r.Context(), p); err == nil {
@@ -43,20 +43,43 @@ func (h *handlers) renderAccount(w http.ResponseWriter, r *http.Request, status 
 		}
 	}
 	if !d.TOTP.On {
-		// A fresh secret on every visit; it is only stored once a code from
-		// the app proves it was scanned.
-		secret, err := auth.NewTOTPSecret()
-		if err != nil {
-			loggerFrom(r.Context()).Error("totp secret", "error", err)
-		} else {
-			d.TOTP.Secret = secret
-			d.TOTP.URI = auth.TOTPURI("Hangar", p.Email, secret)
-			if code, err := qr.Encode(d.TOTP.URI, qr.M); err == nil {
-				d.TOTP.QR = "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())
-			}
-		}
+		d.TOTP.Secret, d.TOTP.URI, d.TOTP.QR = newTOTPSetup(r, p.Email)
 	}
 	render(w, r, status, views.Account(d))
+}
+
+// newTOTPSetup makes a fresh secret, its otpauth link and its QR code (PNG
+// data URI). A fresh secret on every visit: it is only stored once a code
+// from the app proves it was scanned.
+func newTOTPSetup(r *http.Request, email string) (secret, uri, qrURI string) {
+	secret, err := auth.NewTOTPSecret()
+	if err != nil {
+		loggerFrom(r.Context()).Error("totp secret", "error", err)
+		return "", "", ""
+	}
+	uri = auth.TOTPURI("Hangar", email, secret)
+	if code, err := qr.Encode(uri, qr.M); err == nil {
+		qrURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())
+	}
+	return secret, uri, qrURI
+}
+
+// enrollPage is where an account that must have a second factor and has
+// none lands after signing in (the router sends every other page here).
+// Anyone else is sent to the 2FA card of "My account".
+func (h *handlers) enrollPage(w http.ResponseWriter, r *http.Request) {
+	h.renderEnroll(w, r, http.StatusOK, "")
+}
+
+func (h *handlers) renderEnroll(w http.ResponseWriter, r *http.Request, status int, errMsg string) {
+	p := PrincipalFrom(r.Context())
+	if !p.MustEnroll {
+		http.Redirect(w, r, "/account#totp", http.StatusSeeOther)
+		return
+	}
+	d := views.EnrollData{CSRF: p.CSRFToken, Email: p.Email, Role: p.Role.String(), Error: errMsg}
+	d.Secret, d.URI, d.QR = newTOTPSetup(r, p.Email)
+	render(w, r, status, views.Enroll(d))
 }
 
 func (h *handlers) enableTOTP(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +94,17 @@ func (h *handlers) enableTOTP(w http.ResponseWriter, r *http.Request) {
 		case !errors.Is(err, auth.ErrInvalidCode):
 			msg = i18n.Message(i18n.Locale(r.Context()), err)
 		}
+		if p.MustEnroll {
+			h.renderEnroll(w, r, http.StatusUnprocessableEntity, msg)
+			return
+		}
 		h.renderAccount(w, r, http.StatusUnprocessableEntity, "", msg, nil)
+		return
+	}
+	if p.MustEnroll {
+		// The panel opens from the next request on; the recovery codes are
+		// shown once, here.
+		render(w, r, http.StatusOK, views.EnrollDone(codes))
 		return
 	}
 	// This response already reflects 2FA on: no banner, and the codes shown once.

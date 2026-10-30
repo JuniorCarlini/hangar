@@ -49,6 +49,9 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := svc.SeedRequire2FA(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	return &fixture{svc: svc, clock: c, st: st}
 }
 
@@ -440,22 +443,120 @@ func TestSecondFactorFailuresLock(t *testing.T) {
 	}
 }
 
-func TestLoginRequiresTOTPWhenConfigured(t *testing.T) {
+// An account that must have 2FA and has none is no longer turned away (that
+// needed a shell on the server): the password opens a session that can only
+// enroll a factor.
+func TestLoginWithoutRequiredTOTPMustEnroll(t *testing.T) {
 	f := newFixture(t)
-	f.svc.require2FA = true
 	ctx := context.Background()
+	if !f.svc.Require2FA(ctx) {
+		t.Fatal("a new panel must require 2FA of everyone")
+	}
 	if _, err := f.svc.CreateUser(ctx, "sem2fa@hangar.dev", goodPassword, RoleViewer); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.svc.Login(ctx, "sem2fa@hangar.dev", goodPassword, cli); !errors.Is(err, ErrNoTOTP) {
-		t.Fatalf("login without 2FA should be refused, got %v", err)
+	token, complete, err := f.svc.Login(ctx, "sem2fa@hangar.dev", goodPassword, cli)
+	if err != nil || !complete {
+		t.Fatalf("login without 2FA: %v %v", complete, err)
+	}
+	p, _ := f.svc.Authenticate(ctx, token)
+	if p == nil || !p.MustEnroll {
+		t.Fatalf("the session must be limited to enrolling: %+v", p)
+	}
+	if n := f.countAudit(t, "auth.login.ok"); n != 1 {
+		t.Fatalf("%d login records", n)
+	}
+}
+
+// Owners and admins always need a second factor; the setting only decides
+// for operators and viewers. It is the database's, seeded once.
+func TestRequire2FASetting(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	if err := f.svc.SetRequire2FA(ctx, "usr_owner", false, cli); err != nil {
+		t.Fatal(err)
+	}
+	if f.svc.Require2FA(ctx) {
+		t.Fatal("setting off")
+	}
+	for role, want := range map[Role]bool{RoleOwner: true, RoleAdmin: true, RoleOperator: false, RoleViewer: false} {
+		if got := f.svc.RequiredFor(ctx, role); got != want {
+			t.Errorf("%s: required %v, want %v", role, got, want)
+		}
+	}
+	if n := f.countAudit(t, "security.require_2fa"); n != 1 {
+		t.Errorf("%d audit records for the change", n)
+	}
+	if _, err := f.svc.CreateUser(ctx, "op@hangar.dev", goodPassword, RoleOperator); err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := f.svc.Login(ctx, "op@hangar.dev", goodPassword, cli)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := f.svc.Authenticate(ctx, token); p == nil || p.MustEnroll {
+		t.Fatal("with the setting off an operator signs in with the password alone")
+	}
+	// Turning it on reaches the sessions already open.
+	if err := f.svc.SetRequire2FA(ctx, "usr_owner", true, cli); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := f.svc.Authenticate(ctx, token); p == nil || !p.MustEnroll {
+		t.Fatal("an open session must be sent to enroll once 2FA is required")
+	}
+}
+
+// A panel upgraded with accounts in it takes hangar.toml's value once; a new
+// one starts with 2FA required. The row is never rewritten after that.
+func TestRequire2FASeed(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(context.Background(), filepath.Join(dir, "h.db"), filepath.Join(dir, "b"),
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	box, _ := secrets.NewBox(bytes.Repeat([]byte{9}, 32))
+	// An install from before the setting: accounts, no row.
+	old, err := NewService(st.DB, box, audit.New(st.DB), Options{Argon: cheap})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := old.CreateUser(ctx, "admin@hangar.dev", goodPassword, RoleAdmin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB.Exec(`DELETE FROM settings WHERE key = ?`, require2FAKey); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := NewService(st.DB, box, audit.New(st.DB), Options{Argon: cheap, Require2FA: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upgraded.Require2FA(ctx) {
+		t.Error("an upgrade keeps hangar.toml's require_2fa = false for operators and viewers")
+	}
+	if !upgraded.RequiredFor(ctx, RoleAdmin) {
+		t.Error("an upgraded admin must still need 2FA")
+	}
+	// hangar.toml changing later does not override the panel's setting.
+	again, err := NewService(st.DB, box, audit.New(st.DB), Options{Argon: cheap, Require2FA: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Require2FA(ctx) {
+		t.Error("the setting in the database wins over hangar.toml")
 	}
 }
 
 func TestOptionalTOTP(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	if _, err := f.svc.CreateUser(ctx, "sem2fa@hangar.dev", goodPassword, RoleAdmin); err != nil {
+	// Optional only below admin, with the team's setting off.
+	if err := f.svc.SetRequire2FA(ctx, "", false, cli); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.CreateUser(ctx, "sem2fa@hangar.dev", goodPassword, RoleOperator); err != nil {
 		t.Fatal(err)
 	}
 	token, complete, err := f.svc.Login(ctx, "sem2fa@hangar.dev", goodPassword, cli)
@@ -533,9 +634,19 @@ func TestOptionalTOTP(t *testing.T) {
 		t.Fatalf("after turning 2FA off: %v %v", complete, err)
 	}
 
-	f.svc.require2FA = true
+	if err := f.svc.SetRequire2FA(ctx, "", true, cli); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.svc.DisableTOTP(ctx, p, goodPassword, code, cli); !errors.Is(err, ErrTOTPRequired) {
 		t.Errorf("require_2fa forbids turning it off: %v", err)
+	}
+	// An admin can never turn it off, whatever the setting.
+	if err := f.svc.SetRequire2FA(ctx, "", false, cli); err != nil {
+		t.Fatal(err)
+	}
+	admin := &Principal{UserID: p.UserID, Role: RoleAdmin, SessionToken: p.SessionToken}
+	if err := f.svc.DisableTOTP(ctx, admin, goodPassword, code, cli); !errors.Is(err, ErrTOTPRequired) {
+		t.Errorf("an admin turning 2FA off: %v", err)
 	}
 }
 

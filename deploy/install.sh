@@ -240,10 +240,12 @@ repo = "${REPO}"
 ${TOKEN_LINE}
 
 [auth]
-# Com false (padrão), o 2FA é opcional por conta: cada um liga em "Minha
-# conta" (o primeiro acesso já oferece) e quem não ligou vê um aviso no topo.
-# Com true, ninguém entra sem 2FA.
-require_2fa = false
+# A 2FA é obrigatória para donos e admins, sempre. "Exigir 2FA de todos"
+# (operadores e leitores também) é uma opção do painel, em Equipe →
+# Segurança, ligada num painel novo. Esta linha só vale como valor inicial
+# para um painel que já tinha contas antes de a opção existir; depois, manda
+# a opção do painel.
+require_2fa = true
 
 # Proxy de borda (Caddy) nas portas 80 e 443: HTTPS automático no painel,
 # nos serviços e nos domínios dos clientes (docs/03). O instalador liga

@@ -95,9 +95,11 @@ type Backup struct {
 
 // Auth configures login.
 type Auth struct {
-	// Require2FA refuses login to accounts without 2FA. Off, 2FA is optional
-	// per account (like Easypanel) and accounts without it see a banner
-	// asking to turn it on. Turn it on in production.
+	// Require2FA seeds the panel's "require 2FA of everyone" setting once,
+	// on the first start of a panel that already had accounts (an upgrade);
+	// a new panel starts with it on, and from then on the setting in the
+	// database (Team → Security) wins. Owners and admins need 2FA whatever
+	// it says.
 	Require2FA bool `toml:"require_2fa"`
 }
 

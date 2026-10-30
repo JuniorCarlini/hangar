@@ -76,7 +76,9 @@ func (s *Service) PrepareSetup(ctx context.Context) (time.Time, error) {
 }
 
 // CreateOwner creates the first account (owner) from the setup page and
-// opens its session, with the same attempt limits as the login.
+// opens its session, with the same attempt limits as the login. An owner
+// always needs a second factor, so that session can only enroll one
+// (Principal.MustEnroll) before using the panel.
 func (s *Service) CreateOwner(ctx context.Context, email, password string, c Client) (string, error) {
 	ipKey := "ip:" + c.IP
 	if err := s.checkLimits(ipKey, "setup"); err != nil {
@@ -114,7 +116,7 @@ func (s *Service) CreateOwner(ctx context.Context, email, password string, c Cli
 	}
 	s.record(ctx, audit.Entry{
 		ActorID: id, IP: c.IP, UserAgent: c.UserAgent, Action: "auth.login.ok", Outcome: audit.OK,
-		Summary: map[string]any{"second_factor": "none", "via": "setup"},
+		Summary: map[string]any{"second_factor": "none", "via": "setup", "enroll_required": true},
 	})
 	return token, nil
 }
