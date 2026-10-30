@@ -6,6 +6,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -340,10 +341,17 @@ func TestDumpWithAppRolesRestoresIntoNewService(t *testing.T) {
 	if err := root.Put(ctx, old, bytes.NewReader(raw), int64(len(raw)), s3.PutOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	rid, err = e.m.StartRestore(ctx, e.who, RestoreRequest{
+	// Planted by hand, it has no record nor MAC (SEC-005): refused until
+	// the owner accepts a backup the panel cannot confirm.
+	velho := RestoreRequest{
 		Project: e.project, Service: "db", Mode: ModeDump, Key: old, Destination: DestNew, NewService: "db-velho",
 		Identities: []age.Identity{e.id},
-	})
+	}
+	if _, err := e.m.StartRestore(ctx, e.who, velho); !errors.Is(err, errUnverified) {
+		t.Fatalf("an object the panel did not make: %v", err)
+	}
+	velho.AllowUnverified = true
+	rid, err = e.m.StartRestore(ctx, e.who, velho)
 	if err != nil {
 		t.Fatal(err)
 	}
