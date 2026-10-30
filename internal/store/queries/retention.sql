@@ -26,6 +26,14 @@ WHERE (tls_ask_log.hostname, tls_ask_log.decision, tls_ask_log.hour) IN (
     LIMIT sqlc.arg(lim)
 );
 
+-- name: PruneTLSApprovals :execrows
+-- An approval not renewed within the approval retention is forgotten: the
+-- name counts as new again (and against the hourly cap) if it comes back.
+DELETE FROM tls_approvals
+WHERE tls_approvals.hostname IN (
+    SELECT a.hostname FROM tls_approvals a WHERE a.last_hour < sqlc.arg(before) LIMIT sqlc.arg(lim)
+);
+
 -- name: PruneAlertRows :execrows
 -- Alerts whose last occurrence is past retention. A server alert still
 -- firing (the newest row of its key, not resolved) is kept: it is the

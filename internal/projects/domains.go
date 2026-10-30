@@ -479,8 +479,8 @@ func (m *Manager) DomainActivity(ctx context.Context, decision string, req keyse
 	}
 	hour := m.now().Unix() / 3600
 	act := DomainActivity{Recent: recent, Older: page.Older, Newer: page.Newer, Blocked: blocked, HourCap: m.HourCap(ctx)}
-	act.Certified, _ = m.q.CountAllowedHosts(ctx)
-	act.NewThisHour, _ = m.q.CountNewAllowsSince(ctx, hour)
+	act.Certified, _ = m.q.CountApprovedHosts(ctx)
+	act.NewThisHour, _ = m.q.CountNewApprovalsSince(ctx, hour)
 	if v, err := m.q.CountDeniedSince(ctx, hour-23); err == nil {
 		act.DeniedToday = toInt64(v)
 	}

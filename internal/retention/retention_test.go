@@ -106,6 +106,20 @@ func TestDeniedAsksGoAfterAWeekApprovalsStay(t *testing.T) {
 	}
 }
 
+func TestApprovalsFollowTheAllowRetention(t *testing.T) {
+	j := newJanitor(t)
+	hour := now.Unix() / 3600
+	j.exec(t, `INSERT INTO tls_approvals (hostname, first_hour, last_hour) VALUES ('gone.example', ?, ?), ('renewed.example', ?, ?)`,
+		hour-400*24, hour-180*24-1, hour-400*24, hour-30*24)
+	j.run(t)
+	if n := j.count(t, `SELECT count(*) FROM tls_approvals WHERE hostname = 'renewed.example'`); n != 1 {
+		t.Fatal("an approval renewed within 180 days must stay")
+	}
+	if n := j.count(t, `SELECT count(*) FROM tls_approvals`); n != 1 {
+		t.Fatalf("%d approvals left, want 1", n)
+	}
+}
+
 func TestAlertsKeepWhatIsStillFiring(t *testing.T) {
 	j := newJanitor(t)
 	put := func(key, category string, resolved int, last int64) {

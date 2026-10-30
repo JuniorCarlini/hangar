@@ -293,8 +293,11 @@ O que está no ar:
   nega sem cache.
 - HTTP na porta 80 redireciona para HTTPS (308) em qualquer host, inclusive
   domínios de cliente, e responde os desafios HTTP-01.
-- Retenção do `tls_ask_log`: negações 30 dias, aprovações 180 dias (servem
-  para isentar renovações do teto).
+- Retenção do `tls_ask_log`: negações 7 dias, aprovações 180 dias. O teto
+  por hora e a isenção das renovações leem `tls_approvals` (uma linha por
+  domínio aprovado, 180 dias desde a última renovação), nunca o log: um log
+  cheio de nomes inventados não desliga o teto. O teto vale também para
+  pedidos simultâneos (a vaga é reservada até a decisão sair).
 - Projetos com nome `edge` ou `hangar` são recusados (colidiriam com a rede e
   os containers do próprio Hangar).
 

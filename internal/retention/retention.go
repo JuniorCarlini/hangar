@@ -126,11 +126,21 @@ func (j *Janitor) rules() []rule {
 		{"metrics", j.pruneMetrics},
 		{"tls_ask_log", func(ctx context.Context, now time.Time) (int64, error) {
 			hour := now.Unix() / 3600
-			return j.drain(ctx, func(lim int64) (int64, error) {
+			allowBefore := hour - int64(p.AskAllowed/time.Hour)
+			n, err := j.drain(ctx, func(lim int64) (int64, error) {
 				return j.q.PruneTLSAsks(ctx, dbq.PruneTLSAsksParams{
-					DenyBefore: hour - int64(p.AskDenied/time.Hour), AllowBefore: hour - int64(p.AskAllowed/time.Hour), Lim: lim,
+					DenyBefore: hour - int64(p.AskDenied/time.Hour), AllowBefore: allowBefore, Lim: lim,
 				})
 			})
+			if err != nil {
+				return n, err
+			}
+			// The approvals the hourly cap reads (tls_approvals) follow the
+			// same 180 days, counted from the last renewal.
+			m, err := j.drain(ctx, func(lim int64) (int64, error) {
+				return j.q.PruneTLSApprovals(ctx, dbq.PruneTLSApprovalsParams{Before: allowBefore, Lim: lim})
+			})
+			return n + m, err
 		}},
 		{"alerts", func(ctx context.Context, now time.Time) (int64, error) {
 			return j.drain(ctx, func(lim int64) (int64, error) {

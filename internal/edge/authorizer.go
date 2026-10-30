@@ -50,9 +50,22 @@ const (
 	cacheDenyTTL  = 5 * time.Minute
 	appTimeout    = 2 * time.Second
 	// maxAskRows caps tls_ask_log; above it, only the counters of rows that
-	// already exist keep growing (docs/20).
+	// already exist keep growing (docs/20). The cap on new certificates
+	// does not read this log (it reads tls_approvals), so a full log never
+	// switches it off.
 	maxAskRows = 50_000
+	// askRowsRecheck is how long the "log is full" answer is reused, so a
+	// flood of handshakes does not run count(*) on every one.
+	askRowsRecheck = 30 * time.Second
+	// maxCached bounds the decision cache: random names cannot grow it
+	// past this, the least recently used entry goes first.
+	maxCached = 10_000
 )
+
+// InvalidHostLabel is the hostname every syntactically invalid name is
+// logged under: one aggregated row per hour, so made-up SNIs cannot add
+// rows to the log.
+const InvalidHostLabel = ""
 
 // AppResolver finds where to reach the dynamic-domain service: "ip:port" on a
 // network the panel can reach.
@@ -81,15 +94,18 @@ type Authorizer struct {
 	// cached "no such name" (replaceable in tests).
 	LookupTXT func(ctx context.Context, name string) ([]string, error)
 
-	mu    sync.Mutex
-	cache map[string]cached
-}
+	cache *decisionCache
 
-type cached struct {
-	allow   bool
-	reason  string
-	via     Path
-	expires time.Time
+	// capMu serializes the hourly cap check with the approval it allows;
+	// inflight counts new hosts that passed the cap and are still being
+	// decided (the app call), so concurrent handshakes cannot all slip
+	// under the same count.
+	capMu    sync.Mutex
+	inflight int
+
+	rowsMu      sync.Mutex
+	rowsFull    bool
+	rowsChecked time.Time
 }
 
 // NewAuthorizer creates the authorizer.
@@ -103,16 +119,12 @@ func NewAuthorizer(db *sql.DB, box *secrets.Box, resolver AppResolver) *Authoriz
 			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 		},
 		LookupTXT: newFreshTXT().Lookup,
-		cache:     map[string]cached{},
+		cache:     newDecisionCache(maxCached),
 	}
 }
 
 // Forget drops cached decisions (after a domain or the blocklist changes).
-func (a *Authorizer) Forget() {
-	a.mu.Lock()
-	a.cache = map[string]cached{}
-	a.mu.Unlock()
-}
+func (a *Authorizer) Forget() { a.cache.clear() }
 
 var labelRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
@@ -183,18 +195,23 @@ func wildcardFor(host string) string {
 func (a *Authorizer) Decide(ctx context.Context, hostname string) (bool, string) {
 	host, ok := NormalizeHostname(hostname)
 	if !ok {
-		a.log(ctx, truncate(strings.ToLower(hostname), 253), false, ReasonInvalid)
+		// Never logged under the name it came with: anyone can send any
+		// SNI, and one row per made-up name would fill the log.
+		a.log(ctx, InvalidHostLabel, false, ReasonInvalid)
 		return false, ReasonInvalid
 	}
 	allow, reason, cache, via := a.decide(ctx, host)
+	if allow {
+		// Keeps the approval fresh (renewals) for every path, fixed domains
+		// and cache hits included; the capped paths already recorded it.
+		_ = a.recordApproval(ctx, host)
+	}
 	if cache {
 		ttl := cacheDenyTTL
 		if allow {
 			ttl = cacheAllowTTL
 		}
-		a.mu.Lock()
-		a.cache[host] = cached{allow: allow, reason: reason, via: via, expires: a.now().Add(ttl)}
-		a.mu.Unlock()
+		a.cache.put(host, cached{allow: allow, reason: reason, via: via, expires: a.now().Add(ttl)})
 	}
 	a.logVia(ctx, host, allow, reason, via)
 	return allow, reason
@@ -212,10 +229,7 @@ func (a *Authorizer) decide(ctx context.Context, host string) (bool, string, boo
 		return false, ReasonBlocked, true, ""
 	}
 
-	a.mu.Lock()
-	c, hit := a.cache[host]
-	a.mu.Unlock()
-	if hit && a.now().Before(c.expires) {
+	if c, hit := a.cache.get(host, a.now()); hit {
 		return c.allow, c.reason, false, c.via
 	}
 
@@ -234,8 +248,13 @@ func (a *Authorizer) decide(ctx context.Context, host string) (bool, string, boo
 			if via == PathElsewhere {
 				return false, ReasonDNSMismatch, false, via
 			}
-			if why := a.limitNew(ctx, host); why != "" {
+			why, done := a.limitNew(ctx, host)
+			defer done()
+			if why != "" {
 				return false, why, false, via
+			}
+			if err := a.recordApproval(ctx, host); err != nil {
+				return false, ReasonInternalFail, false, via
 			}
 			return true, ReasonWildcard, true, via
 		} else if !errors.Is(err, sql.ErrNoRows) {
@@ -266,7 +285,9 @@ func (a *Authorizer) decide(ctx context.Context, host string) (bool, string, boo
 			return false, ReasonTXTMissing, false, via
 		}
 	}
-	if why := a.limitNew(ctx, host); why != "" {
+	why, done := a.limitNew(ctx, host)
+	defer done()
+	if why != "" {
 		return false, why, false, via
 	}
 
@@ -279,6 +300,9 @@ func (a *Authorizer) decide(ctx context.Context, host string) (bool, string, boo
 	}
 	if !allowed {
 		return false, ReasonAppDenied, true, via
+	}
+	if err := a.recordApproval(ctx, host); err != nil {
+		return false, ReasonInternalFail, false, via
 	}
 	return true, ReasonAppAllowed, true, via
 }
@@ -299,22 +323,44 @@ func (a *Authorizer) maxNew(ctx context.Context) int {
 
 // limitNew caps hostnames approved for the first time in the current hour.
 // A host approved before never counts: renewals and returning visitors pass.
-func (a *Authorizer) limitNew(ctx context.Context, host string) string {
-	seen, err := a.q.WasAllowed(ctx, host)
+// The count comes from tls_approvals, which only approvals write, so no
+// amount of denied or invalid handshakes can switch the cap off. A host
+// that passes holds a slot until done is called; the caller records the
+// approval before that, so the slot turns into a row without a gap where
+// another handshake could take it.
+func (a *Authorizer) limitNew(ctx context.Context, host string) (string, func()) {
+	seen, err := a.q.WasApproved(ctx, host)
 	if err != nil {
-		return ReasonInternalFail
+		return ReasonInternalFail, func() {}
 	}
 	if seen > 0 {
-		return ""
+		return "", func() {}
 	}
-	n, err := a.q.CountNewAllowsSince(ctx, a.now().Unix()/3600)
+	limit := a.maxNew(ctx)
+	a.capMu.Lock()
+	defer a.capMu.Unlock()
+	n, err := a.q.CountNewApprovalsSince(ctx, a.now().Unix()/3600)
 	if err != nil {
-		return ReasonInternalFail
+		return ReasonInternalFail, func() {}
 	}
-	if int(n) >= a.maxNew(ctx) {
-		return ReasonRateLimited
+	if int(n)+a.inflight >= limit {
+		return ReasonRateLimited, func() {}
 	}
-	return ""
+	a.inflight++
+	var once sync.Once
+	return "", func() {
+		once.Do(func() {
+			a.capMu.Lock()
+			a.inflight--
+			a.capMu.Unlock()
+		})
+	}
+}
+
+// recordApproval stores that host was approved this hour: the first time
+// it counts against the hourly cap, later ones keep it exempt (renewals).
+func (a *Authorizer) recordApproval(ctx context.Context, host string) error {
+	return a.q.RecordApproval(context.WithoutCancel(ctx), dbq.RecordApprovalParams{Hostname: host, Hour: a.now().Unix() / 3600})
 }
 
 // pathOf reports how host reaches this server: directly (it resolves to
@@ -379,7 +425,7 @@ func (a *Authorizer) ownsTXT(ctx context.Context, svc dbq.DynamicServiceRow, hos
 // ownsNew is ownsTXT for a host never approved before; one approved before
 // passes.
 func (a *Authorizer) ownsNew(ctx context.Context, svc dbq.DynamicServiceRow, host string) (bool, error) {
-	seen, err := a.q.WasAllowed(ctx, host)
+	seen, err := a.q.WasApproved(ctx, host)
 	if err != nil {
 		return false, err
 	}
@@ -468,18 +514,38 @@ func (a *Authorizer) log(ctx context.Context, host string, allow bool, reason st
 	a.logVia(ctx, host, allow, reason, "")
 }
 
+// logVia aggregates a decision into tls_ask_log. At the row ceiling only
+// rows that already exist keep counting; the log is for the operator to
+// read, nothing that decides a certificate depends on it.
 func (a *Authorizer) logVia(ctx context.Context, host string, allow bool, reason string, via Path) {
-	if n, err := a.q.CountAskRows(ctx); err == nil && n >= maxAskRows {
-		return
-	}
+	ctx = context.WithoutCancel(ctx)
 	decision := "deny"
 	if allow {
 		decision = "allow"
 	}
 	now := a.now().Unix()
-	_ = a.q.LogAsk(context.WithoutCancel(ctx), dbq.LogAskParams{
+	if a.logFull(ctx) {
+		_ = a.q.BumpAsk(ctx, dbq.BumpAskParams{
+			Reason: reason, LastAt: now, Via: string(via), Hostname: host, Decision: decision, Hour: now / 3600,
+		})
+		return
+	}
+	_ = a.q.LogAsk(ctx, dbq.LogAskParams{
 		Hostname: host, Decision: decision, Reason: reason, Hour: now / 3600, LastAt: now, Via: string(via),
 	})
+}
+
+// logFull reports whether tls_ask_log reached maxAskRows, counting at most
+// once every askRowsRecheck.
+func (a *Authorizer) logFull(ctx context.Context) bool {
+	a.rowsMu.Lock()
+	defer a.rowsMu.Unlock()
+	if now := a.now(); a.rowsChecked.IsZero() || now.Sub(a.rowsChecked) >= askRowsRecheck || now.Before(a.rowsChecked) {
+		n, err := a.q.CountAskRows(ctx)
+		a.rowsFull = err != nil || n >= maxAskRows
+		a.rowsChecked = now
+	}
+	return a.rowsFull
 }
 
 func truncate(s string, n int) string {

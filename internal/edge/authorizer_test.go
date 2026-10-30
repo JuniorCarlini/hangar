@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/hmac"
+	"database/sql"
 	"io"
 	"log/slog"
 	"net/http"
@@ -63,6 +64,7 @@ type fixture struct {
 	a   *Authorizer
 	app *fakeApp
 	q   *dbq.Queries
+	db  *sql.DB
 }
 
 func newFixture(t *testing.T, dynamic bool) *fixture {
@@ -107,7 +109,7 @@ func newFixture(t *testing.T, dynamic bool) *fixture {
 		}
 	}
 	a := NewAuthorizer(st.DB, box, fixedResolver{addr: strings.TrimPrefix(srv.URL, "http://")})
-	return &fixture{a: a, app: app, q: q}
+	return &fixture{a: a, app: app, q: q, db: st.DB}
 }
 
 func TestNormalizeHostname(t *testing.T) {

@@ -358,6 +358,28 @@ func (q *Queries) PruneResolvedFindings(ctx context.Context, arg PruneResolvedFi
 	return result.RowsAffected()
 }
 
+const pruneTLSApprovals = `-- name: PruneTLSApprovals :execrows
+DELETE FROM tls_approvals
+WHERE tls_approvals.hostname IN (
+    SELECT a.hostname FROM tls_approvals a WHERE a.last_hour < ?1 LIMIT ?2
+)
+`
+
+type PruneTLSApprovalsParams struct {
+	Before int64
+	Lim    int64
+}
+
+// An approval not renewed within the approval retention is forgotten: the
+// name counts as new again (and against the hourly cap) if it comes back.
+func (q *Queries) PruneTLSApprovals(ctx context.Context, arg PruneTLSApprovalsParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneTLSApprovals, arg.Before, arg.Lim)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const pruneTLSAsks = `-- name: PruneTLSAsks :execrows
 DELETE FROM tls_ask_log
 WHERE (tls_ask_log.hostname, tls_ask_log.decision, tls_ask_log.hour) IN (

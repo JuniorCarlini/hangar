@@ -32,12 +32,39 @@ func (q *Queries) BlockHostname(ctx context.Context, arg BlockHostnameParams) er
 	return err
 }
 
-const countAllowedHosts = `-- name: CountAllowedHosts :one
-SELECT count(DISTINCT hostname) FROM tls_ask_log WHERE decision = 'allow'
+const bumpAsk = `-- name: BumpAsk :exec
+UPDATE tls_ask_log SET count = count + 1, reason = ?, last_at = ?, via = ?
+WHERE hostname = ? AND decision = ? AND hour = ?
 `
 
-func (q *Queries) CountAllowedHosts(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countAllowedHosts)
+type BumpAskParams struct {
+	Reason   string
+	LastAt   int64
+	Via      string
+	Hostname string
+	Decision string
+	Hour     int64
+}
+
+// The counter of a row that already exists (the log is at its ceiling).
+func (q *Queries) BumpAsk(ctx context.Context, arg BumpAskParams) error {
+	_, err := q.db.ExecContext(ctx, bumpAsk,
+		arg.Reason,
+		arg.LastAt,
+		arg.Via,
+		arg.Hostname,
+		arg.Decision,
+		arg.Hour,
+	)
+	return err
+}
+
+const countApprovedHosts = `-- name: CountApprovedHosts :one
+SELECT count(*) FROM tls_approvals
+`
+
+func (q *Queries) CountApprovedHosts(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countApprovedHosts)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -87,14 +114,13 @@ func (q *Queries) CountDomainsOnEndpoint(ctx context.Context, endpointID sql.Nul
 	return count, err
 }
 
-const countNewAllowsSince = `-- name: CountNewAllowsSince :one
-SELECT count(*) FROM tls_ask_log a
-WHERE a.decision = 'allow' AND a.hour >= ?1
-  AND NOT EXISTS (SELECT 1 FROM tls_ask_log b WHERE b.hostname = a.hostname AND b.decision = 'allow' AND b.hour < ?1)
+const countNewApprovalsSince = `-- name: CountNewApprovalsSince :one
+SELECT count(*) FROM tls_approvals WHERE first_hour >= ?
 `
 
-func (q *Queries) CountNewAllowsSince(ctx context.Context, sinceHour int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countNewAllowsSince, sinceHour)
+// Hostnames approved for the first time since an hour (the hourly cap).
+func (q *Queries) CountNewApprovalsSince(ctx context.Context, firstHour int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countNewApprovalsSince, firstHour)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -489,6 +515,21 @@ func (q *Queries) RecentAsks(ctx context.Context, limit int64) ([]TlsAskLog, err
 	return items, nil
 }
 
+const recordApproval = `-- name: RecordApproval :exec
+INSERT INTO tls_approvals (hostname, first_hour, last_hour) VALUES (?1, ?2, ?2)
+ON CONFLICT (hostname) DO UPDATE SET last_hour = max(tls_approvals.last_hour, excluded.last_hour)
+`
+
+type RecordApprovalParams struct {
+	Hostname string
+	Hour     int64
+}
+
+func (q *Queries) RecordApproval(ctx context.Context, arg RecordApprovalParams) error {
+	_, err := q.db.ExecContext(ctx, recordApproval, arg.Hostname, arg.Hour)
+	return err
+}
+
 const setDomainRequireTXT = `-- name: SetDomainRequireTXT :exec
 UPDATE services SET domain_require_txt = ?, updated_at = ? WHERE id = ?
 `
@@ -567,12 +608,12 @@ func (q *Queries) UpsertEdgeSettings(ctx context.Context, arg UpsertEdgeSettings
 	return err
 }
 
-const wasAllowed = `-- name: WasAllowed :one
-SELECT count(*) FROM tls_ask_log WHERE hostname = ? AND decision = 'allow'
+const wasApproved = `-- name: WasApproved :one
+SELECT count(*) FROM tls_approvals WHERE hostname = ?
 `
 
-func (q *Queries) WasAllowed(ctx context.Context, hostname string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, wasAllowed, hostname)
+func (q *Queries) WasApproved(ctx context.Context, hostname string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, wasApproved, hostname)
 	var count int64
 	err := row.Scan(&count)
 	return count, err

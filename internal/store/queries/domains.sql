@@ -57,10 +57,9 @@ ON CONFLICT (hostname, decision, hour) DO UPDATE SET count = count + 1, reason =
 -- name: SetDomainRequireTXT :exec
 UPDATE services SET domain_require_txt = ?, updated_at = ? WHERE id = ?;
 
--- name: CountNewAllowsSince :one
-SELECT count(*) FROM tls_ask_log a
-WHERE a.decision = 'allow' AND a.hour >= sqlc.arg(since_hour)
-  AND NOT EXISTS (SELECT 1 FROM tls_ask_log b WHERE b.hostname = a.hostname AND b.decision = 'allow' AND b.hour < sqlc.arg(since_hour));
+-- name: CountNewApprovalsSince :one
+-- Hostnames approved for the first time since an hour (the hourly cap).
+SELECT count(*) FROM tls_approvals WHERE first_hour >= ?;
 
 -- name: RecentAsks :many
 SELECT * FROM tls_ask_log ORDER BY last_at DESC LIMIT ?;
@@ -68,11 +67,20 @@ SELECT * FROM tls_ask_log ORDER BY last_at DESC LIMIT ?;
 -- name: CountAskRows :one
 SELECT count(*) FROM tls_ask_log;
 
--- name: WasAllowed :one
-SELECT count(*) FROM tls_ask_log WHERE hostname = ? AND decision = 'allow';
+-- name: WasApproved :one
+SELECT count(*) FROM tls_approvals WHERE hostname = ?;
 
--- name: CountAllowedHosts :one
-SELECT count(DISTINCT hostname) FROM tls_ask_log WHERE decision = 'allow';
+-- name: RecordApproval :exec
+INSERT INTO tls_approvals (hostname, first_hour, last_hour) VALUES (sqlc.arg(hostname), sqlc.arg(hour), sqlc.arg(hour))
+ON CONFLICT (hostname) DO UPDATE SET last_hour = max(tls_approvals.last_hour, excluded.last_hour);
+
+-- name: CountApprovedHosts :one
+SELECT count(*) FROM tls_approvals;
+
+-- name: BumpAsk :exec
+-- The counter of a row that already exists (the log is at its ceiling).
+UPDATE tls_ask_log SET count = count + 1, reason = ?, last_at = ?, via = ?
+WHERE hostname = ? AND decision = ? AND hour = ?;
 
 -- name: CountDeniedSince :one
 SELECT coalesce(sum(count), 0) FROM tls_ask_log WHERE decision = 'deny' AND hour >= ?;

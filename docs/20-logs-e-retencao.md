@@ -39,6 +39,7 @@ de variação, e a primeira vez 5–10 min depois do boot). Os valores ficam em
 | Métricas de 1 h | `metrics` (1h) | 90 dias | 90 dias | Faixa de 90 d do gráfico | Gráfico |
 | Decisões TLS negadas | `tls_ask_log` | 30 dias | **7 dias** | Ruído: uma semana basta para ver um ataque e bloquear | `/domains`, paginada |
 | Decisões TLS aprovadas | `tls_ask_log` | 180 dias | 180 dias | Domínio aprovado renova sem contar no teto por hora; 2× a vida de um certificado (90 d) | `/domains`, paginada |
+| Domínios aprovados (teto por hora) | `tls_approvals` | — | 180 dias desde a última renovação | Uma linha por domínio aprovado; é o que o teto de certificados novos conta, separado do log | Contadores de `/domains` |
 | Alertas | `alerts` | 90 dias (por criação) | **90 dias pela última ocorrência**; o alerta de servidor ainda disparando fica até 1 ano | Histórico de incidentes como PagerDuty/Grafana OnCall | `/alerts`, paginada |
 | Entregas de alerta | `alert_deliveries` | 30 dias | 30 dias | Diagnóstico de canal | `/alerts?f=deliveries`, paginada |
 | Deploys | `deployments` | **sem limite** | **100 por serviço**, log só nos 20 mais novos; `running` e `live` nunca saem | Heroku/Render/Vercel guardam um histórico dessa ordem; o rollback usa os 5 últimos | Aba do serviço, paginada |
@@ -92,9 +93,14 @@ de variação, e a primeira vez 5–10 min depois do boot). Os valores ficam em
 1. **Agregação no lugar de linha por evento.** Eventos repetidos viram um
    contador:
    - `tls_ask_log`: uma linha por **(domínio, decisão, hora)** com
-     `contagem`. Mil tentativas do mesmo domínio falso viram uma linha.
-     Teto de 50 mil linhas; acima disso, só as negações novas entram e
-     dispara alerta.
+     `contagem`. Mil tentativas do mesmo domínio falso viram uma linha, e
+     todo nome com formato inválido cai numa única linha por hora (sem o
+     nome que veio). Teto de 50 mil linhas; acima disso, só as linhas que
+     já existem continuam contando. O teto de certificados novos por hora
+     não lê esse log, e sim `tls_approvals` (só aprovações entram lá), então
+     encher o log não desliga o teto.
+   - Cache de decisões do `ask` na memória: no máximo 10 mil nomes, sai o
+     usado há mais tempo (LRU), cada um com validade de 1 h ou 5 min.
    - Falhas de login: as 5 primeiras por IP numa janela de 15 min são
      auditadas uma a uma; depois disso, uma linha agregada por IP e janela
      (`login.fail.agregado`, com contagem).

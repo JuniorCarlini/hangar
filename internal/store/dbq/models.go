@@ -527,6 +527,12 @@ type StatusLink struct {
 	AccessToday    int64
 }
 
+type TlsApproval struct {
+	Hostname  string
+	FirstHour int64
+	LastHour  int64
+}
+
 type TlsAskLog struct {
 	Hostname string
 	Decision string
