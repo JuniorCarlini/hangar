@@ -358,11 +358,15 @@ func lockUntil(t target, folder string, now time.Time) time.Time {
 }
 
 // sendFile uploads the staged file to every destination and checks each
-// copy (size and SHA-256 recorded in its metadata).
+// copy (size and SHA-256 recorded in its metadata). The metadata carries
+// the panel's MAC over the key, the size and itself (objectauth.go).
 func (m *Manager) sendFile(ctx context.Context, ts []target, key, folder string, f s3.File, size int64, sha string, meta map[string]string) ([]upload, error) {
 	md := map[string]string{"hangar-sha256": sha}
 	for k, v := range meta {
 		md[k] = v
+	}
+	if err := m.signMeta(ctx, key, size, md); err != nil {
+		return nil, err
 	}
 	var ups []upload
 	var errs []error
@@ -384,12 +388,25 @@ func (m *Manager) sendFile(ctx context.Context, ts []target, key, folder string,
 	return ups, errors.Join(errs...)
 }
 
-// fetch opens key from the first destination that has it.
+// fetch opens key from the first destination that has it, for a restore:
+// only once this panel vouched for it and its bytes were proven
+// (objectauth.go).
 func (m *Manager) fetch(ctx context.Context, key string) (io.ReadCloser, s3.ObjectInfo, error) {
 	// A project restore reads its files from the uploaded backup.
 	if src := localFrom(ctx); src != nil {
 		return src.get(key)
 	}
+	rc, info, err := m.fetchRaw(ctx, key)
+	if err != nil {
+		return nil, info, err
+	}
+	rc, err = m.verified(ctx, key, rc, info)
+	return rc, info, err
+}
+
+// fetchRaw opens key from the first destination that has it, as it is: for
+// a download, which hands the file over without using it.
+func (m *Manager) fetchRaw(ctx context.Context, key string) (io.ReadCloser, s3.ObjectInfo, error) {
 	ts, err := m.targets(ctx)
 	if err != nil {
 		return nil, s3.ObjectInfo{}, err

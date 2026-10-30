@@ -42,6 +42,11 @@ type RestoreRequest struct {
 	Destination      string
 	NewService       string // DestNew
 	Confirm          string // DestOverwrite: the service name, typed
+	// AllowUnverified accepts backups this panel cannot vouch for (made
+	// by another server, or older than the check with no record left):
+	// the owner confirmed it in the form (objectauth.go). A backup that
+	// contradicts its record is refused anyway.
+	AllowUnverified bool
 	// Identities are the private keys from the kit. They live only in
 	// memory, only for this restore (docs/09).
 	Identities []age.Identity
@@ -133,6 +138,9 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 	if err != nil {
 		return "", err
 	}
+	if req.AllowUnverified {
+		ctx = withUnverified(ctx)
+	}
 	req.Identities = m.withServerIdentity(ctx, req.Identities)
 	if len(req.Identities) == 0 {
 		return "", i18n.E("backup.error.kit")
@@ -215,7 +223,7 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 	}
 	m.record(ctx, a, "backup.restore.start", "service", s.ID, outcomeOf(nil), map[string]any{
 		"service": s.label(), "mode": req.Mode, "point": point, "destination": req.Destination,
-		"new_service": req.NewService, "private_key_used": true, "restore": id,
+		"new_service": req.NewService, "private_key_used": true, "restore": id, "unverified_ok": req.AllowUnverified,
 	})
 	started = true
 	m.wg.Add(1)
@@ -242,14 +250,19 @@ func (m *Manager) StartRestore(ctx context.Context, a Actor, req RestoreRequest)
 	return id, nil
 }
 
-// keyOpens reads only the age header of key: a wrong kit fails here, in
-// the form, instead of minutes into the restore.
+// keyOpens reads only the age header of key: a wrong kit, or a backup
+// this panel cannot vouch for (from its metadata; the bytes are proven
+// during the restore), fails here, in the form, instead of minutes into
+// the restore.
 func (m *Manager) keyOpens(ctx context.Context, key string, ids []age.Identity) error {
-	rc, _, err := m.fetch(ctx, key)
+	rc, info, err := m.fetchRaw(ctx, key)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = rc.Close() }()
+	if _, err := m.authenticate(ctx, key, info); err != nil {
+		return err
+	}
 	if _, err := age.Decrypt(rc, ids...); err != nil {
 		var nm *age.NoIdentityMatchError
 		if errors.As(err, &nm) {
@@ -462,6 +475,11 @@ func (m *Manager) restoreDump(ctx context.Context, id string, t svcRef, key stri
 		return done, err
 	}
 	m.step(ctx, id, "restore")
+	// Nothing is touched for a dump this panel cannot vouch for; its
+	// bytes are proven when each read downloads it.
+	if err := m.checkObject(ctx, key); err != nil {
+		return done, err
+	}
 	if err := m.waitReady(ctx, t, 5*time.Minute); err != nil {
 		return done, err
 	}

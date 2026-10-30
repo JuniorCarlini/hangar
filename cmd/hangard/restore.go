@@ -48,6 +48,7 @@ func restoreCmd(ctx context.Context, args []string, stdin io.Reader, stdout, std
 	identity := fs.String("identity", "", tr("cli.restore.flag_identity"))
 	at := fs.String("at", "", tr("cli.restore.flag_at"))
 	force := fs.Bool("force", false, tr("cli.restore.flag_force"))
+	unverified := fs.Bool("allow-unverified", false, tr("cli.restore.flag_unverified"))
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -87,7 +88,7 @@ func restoreCmd(ctx context.Context, args []string, stdin io.Reader, stdout, std
 		return err
 	}
 	if databases {
-		return restoreDatabases(ctx, cfg, ids, when, stdout, log)
+		return restoreDatabases(ctx, cfg, ids, when, backup.RecoverOptions{AllowUnverified: *unverified}, stdout, log)
 	}
 
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, update.ReadyFile)); err == nil {
@@ -191,7 +192,7 @@ func chownLike(ref string, paths ...string) {
 
 // restoreDatabases runs RecoverAll with the restored panel database: the
 // destinations and their credentials come back with it.
-func restoreDatabases(ctx context.Context, cfg config.Config, ids []age.Identity, at time.Time, stdout io.Writer, log *slog.Logger) error {
+func restoreDatabases(ctx context.Context, cfg config.Config, ids []age.Identity, at time.Time, opt backup.RecoverOptions, stdout io.Writer, log *slog.Logger) error {
 	if _, err := os.Stat(filepath.Join(cfg.DataDir, update.ReadyFile)); err == nil {
 		return i18n.E("cli.restore.panel_running")
 	}
@@ -211,7 +212,7 @@ func restoreDatabases(ctx context.Context, cfg config.Config, ids []age.Identity
 	if err != nil {
 		return err
 	}
-	err = bm.RecoverAll(ctx, ids, at, func(key string, args ...any) { fmt.Fprintln(stdout, tr(key, args...)) })
+	err = bm.RecoverAll(ctx, ids, at, func(key string, args ...any) { fmt.Fprintln(stdout, tr(key, args...)) }, opt)
 	if err != nil {
 		return i18n.E("cli.restore.databases_failed", "error", err)
 	}

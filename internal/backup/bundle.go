@@ -273,7 +273,7 @@ func (m *Manager) fileRunBundle(ctx context.Context, a Actor, r dbq.BackupRun, o
 			return nil, "", true, i18n.E("backup.error.kit")
 		}
 	}
-	rc, info, err := m.fetch(ctx, r.ObjectKey)
+	rc, info, err := m.fetchRaw(ctx, r.ObjectKey)
 	if err != nil {
 		return nil, "", true, err
 	}
@@ -344,12 +344,17 @@ func (m *Manager) loadRoles(ctx context.Context, key string, ids []age.Identity)
 	}
 	var errs []error
 	for _, t := range ts {
-		rc, _, err := t.store.Get(ctx, t.Prefix+rk)
+		rc, info, err := t.store.Get(ctx, t.Prefix+rk)
 		if err != nil {
 			if !s3.IsNotFound(err) {
 				errs = append(errs, err)
 			}
 			continue
+		}
+		// The roles are recreated as the superuser: they must be the
+		// panel's own, as the dump is.
+		if rc, err = m.verified(ctx, rk, rc, info); err != nil {
+			return g, false, err
 		}
 		return readRoles(rc, ids)
 	}

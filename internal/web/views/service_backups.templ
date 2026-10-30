@@ -559,6 +559,10 @@ templ svcBackupRestore(d ServiceData) {
 						</div>
 					</div>
 				}
+				<label class="tuc-choice">
+					<input type="checkbox" class="tuc-check" name="allow_unverified" value="1"/>
+					<span>{ t(ctx, "svcbackup.allow_unverified") } <span class="tuc-choice__hint">{ t(ctx, "svcbackup.allow_unverified_hint") }</span></span>
+				</label>
 				<div class="flex justify-end gap-2">
 					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
 					<button class="tuc-btn is-danger" type="submit">

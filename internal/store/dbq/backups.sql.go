@@ -393,6 +393,38 @@ func (q *Queries) GetBackupRun(ctx context.Context, id string) (BackupRun, error
 	return i, err
 }
 
+const getBackupRunByObject = `-- name: GetBackupRunByObject :one
+SELECT id, service_id, label, kind, "trigger", class, status, object_key, size_bytes, sha256, verified, check_json, uploads_json, warning, error, created_by, started_at, finished_at FROM backup_runs WHERE object_key = ? AND sha256 != '' ORDER BY started_at DESC LIMIT 1
+`
+
+// The run that made an object, with the size and SHA-256 it recorded: a
+// restore believes the object only if it matches (SEC-005).
+func (q *Queries) GetBackupRunByObject(ctx context.Context, objectKey string) (BackupRun, error) {
+	row := q.db.QueryRowContext(ctx, getBackupRunByObject, objectKey)
+	var i BackupRun
+	err := row.Scan(
+		&i.ID,
+		&i.ServiceID,
+		&i.Label,
+		&i.Kind,
+		&i.Trigger,
+		&i.Class,
+		&i.Status,
+		&i.ObjectKey,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.Verified,
+		&i.CheckJson,
+		&i.UploadsJson,
+		&i.Warning,
+		&i.Error,
+		&i.CreatedBy,
+		&i.StartedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
 const getBackupServerKey = `-- name: GetBackupServerKey :one
 SELECT identity_enc FROM backup_server_key WHERE id = 'server'
 `

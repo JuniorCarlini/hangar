@@ -197,6 +197,10 @@ configuração" nem "só os dados".
   usuários salvos vem no mesmo `.zip` (passando pelo painel, sem decifrar no
   modo com kit); um dump antigo, sem eles, vem como antes (link assinado de
   curta duração).
+- O backup do **painel** (chave mestra + banco inteiro) só o **dono** baixa,
+  em qualquer modo: decifrado no modo simples ou como link assinado com o
+  kit. Para um admin a resposta é "não encontrado" e a auditoria registra
+  `denied` com o motivo `owner_only`.
 
 ## Volumes de apps
 
@@ -556,6 +560,25 @@ Serviço ▸ Backups ▸ [Restaurar] 🔒
   referência do app. Sobrescrever direto faz um backup do estado atual antes.
 - Arquivos restaurados passam por limites de tamanho e de proporção de
   compressão, e por checagem de caminhos (`..` ou absolutos são rejeitados).
+  Numa cópia de volumes cada entrada é conferida **antes** de chegar ao
+  `tar` (nem o cabeçalho de uma entrada recusada é extraído), hard links não
+  passam por baixo de um symlink, e a cópia não pode ter mais entradas,
+  bytes ou disco do que o metadado dela declara.
+- **Autenticidade.** O age dá sigilo, não autenticidade (a chave pública não
+  é segredo): quem escreve no bucket poderia selar um dump próprio ou copiar
+  um backup antigo para um nome mais novo. Por isso o painel só restaura o
+  que ele mesmo garante: o registro do backup (`backup_runs`, tamanho e
+  SHA-256) ou o `hangar-mac` do metadado, um HMAC-SHA256 da chave do objeto,
+  do tamanho e de todo metadado `hangar-*`, com uma chave derivada (HKDF) da
+  chave do próprio servidor, que fica selada no banco do painel e volta com
+  `hangard restore`. O arquivo é baixado para o staging e o SHA-256 conferido
+  antes de qualquer byte ir para o banco ou volume. Um objeto que contradiz
+  o registro é sempre recusado; um que o painel não consegue confirmar
+  (outro servidor, ou antigo sem registro) só com **"Aceitar backups que o
+  painel não consegue confirmar"** marcado no formulário (ou
+  `hangard restore databases -allow-unverified`). A recuperação de desastre
+  pula, com aviso no log, o backup mais novo que não consegue confirmar e
+  usa o anterior.
 
 ### Recuperação de desastre (VPS perdida)
 
@@ -599,7 +622,9 @@ com perda de dados de no máximo ~1 minuto no Postgres.
 | Backup corrompido sem ninguém saber | Teste de restauração antes do envio + checksum + simulado mensal |
 | Backup parou de rodar | Alerta se não houver sucesso em 26 h ou se o WAL atrasar |
 | Perda da chave | Duas chaves (sua + reserva), kit em papel, confirmação obrigatória |
-| Arquivo malicioso na restauração | Limites de tamanho/compressão, checagem de caminhos |
+| Arquivo malicioso na restauração | Limites de tamanho/compressão, checagem de caminhos antes da extração |
+| Backup forjado ou reapresentado no bucket | Registro do backup ou HMAC do painel no metadado, SHA-256 conferido antes de usar |
+| App comprometido planta comandos no Postgres (`ALTER SYSTEM`) | `hangar-cofre restore-local` neutraliza no fim do `postgresql.auto.conf` (`archive_mode`, `*_command`, bibliotecas pré-carregadas, JIT) e restaura sem rede, sem capacidades extras, com `no-new-privileges`; só o banco pronto é publicado em 127.0.0.1 |
 
 ## Como ficou na implementação (Etapa 9)
 

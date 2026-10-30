@@ -997,7 +997,7 @@ func (m *Manager) recoverVolumes(ctx context.Context, a Actor, s svcRef, at time
 		return err
 	}
 	for _, p := range points { // newest first
-		if o, ok := archive.ParseKey(p.Key); ok && o.Kind == archive.KindVolume && !p.LastModified.After(at) {
+		if o, ok := archive.ParseKey(p.Key); ok && o.Kind == archive.KindVolume && !p.LastModified.After(at) && m.vouched(ctx, p.Key) {
 			_, err := m.restoreVolumes(ctx, a, "", s, p.Key, ids)
 			return err
 		}

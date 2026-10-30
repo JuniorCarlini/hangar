@@ -643,7 +643,7 @@ func (h *handlers) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		Project: r.PathValue("project"), Service: r.PathValue("service"), Mode: r.PostFormValue("mode"),
 		Key: r.PostFormValue("key"), Destination: r.PostFormValue("destination"),
 		NewService: strings.TrimSpace(r.PostFormValue("new_service")), Confirm: r.PostFormValue("confirm"),
-		Identities: archive.Identities(keys),
+		Identities: archive.Identities(keys), AllowUnverified: r.PostFormValue("allow_unverified") == "1",
 	}
 	if req.Mode == backup.ModePITR {
 		if req.At, err = parseMoment(r.PostFormValue("at"), r.PostFormValue("tz_offset")); err != nil {

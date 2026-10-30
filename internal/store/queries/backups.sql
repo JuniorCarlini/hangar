@@ -68,6 +68,11 @@ WHERE id = ?;
 -- name: GetBackupRun :one
 SELECT * FROM backup_runs WHERE id = ?;
 
+-- name: GetBackupRunByObject :one
+-- The run that made an object, with the size and SHA-256 it recorded: a
+-- restore believes the object only if it matches (SEC-005).
+SELECT * FROM backup_runs WHERE object_key = ? AND sha256 != '' ORDER BY started_at DESC LIMIT 1;
+
 -- name: ListServiceBackupRuns :many
 SELECT * FROM backup_runs WHERE service_id = ? ORDER BY started_at DESC LIMIT ?;
 

@@ -25,8 +25,30 @@ import (
 // RecoverStep reports progress (a message key and its arguments).
 type RecoverStep func(key string, args ...any)
 
+// vouched reports whether the panel vouches for the object at key
+// (objectauth.go). Recovery picks the newest backup it vouches for: one
+// planted under a newer name (forged, or an old one copied) is skipped
+// and logged instead of restored or of stopping the recovery.
+func (m *Manager) vouched(ctx context.Context, key string) bool {
+	err := m.checkObject(ctx, key)
+	if err != nil {
+		m.log.Warn("recovery skips a backup it cannot verify", "key", key, "error", err)
+	}
+	return err == nil
+}
+
+// RecoverOptions change how RecoverAll trusts the destinations.
+type RecoverOptions struct {
+	// AllowUnverified also restores backups this panel cannot vouch for
+	// (hangard restore databases -allow-unverified).
+	AllowUnverified bool
+}
+
 // RecoverAll rebuilds every project on this server from the backups.
-func (m *Manager) RecoverAll(ctx context.Context, ids []age.Identity, at time.Time, tr RecoverStep) error {
+func (m *Manager) RecoverAll(ctx context.Context, ids []age.Identity, at time.Time, tr RecoverStep, opt RecoverOptions) error {
+	if opt.AllowUnverified {
+		ctx = withUnverified(ctx)
+	}
 	n, _, err := m.tasker()
 	if err != nil {
 		return err
@@ -119,7 +141,7 @@ func (m *Manager) RecoverService(ctx context.Context, a Actor, projectSlug, serv
 		return err
 	}
 	for _, d := range dumps { // newest first
-		if o, ok := archive.ParseKey(d.Key); ok && o.Kind == archive.KindDump && !d.LastModified.After(at) {
+		if o, ok := archive.ParseKey(d.Key); ok && o.Kind == archive.KindDump && !d.LastModified.After(at) && m.vouched(ctx, d.Key) {
 			// The roles it had to create (no password) are logged by
 			// prepareRoles.
 			_, err := m.restoreDump(ctx, "", s, d.Key, ids)

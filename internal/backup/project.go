@@ -401,7 +401,8 @@ func (m *Manager) stageLatest(ctx context.Context, r svcRef, open bool, meta *Ma
 // file the server's key opens is encrypted again to the current keys with
 // the kit (it may have been made before the kit, for the server alone).
 func (m *Manager) stageObject(ctx context.Context, key string, open bool, want string) (string, map[string]string, error) {
-	rc, info, err := m.fetch(ctx, key)
+	// It is checked against want below; the download hands it over.
+	rc, info, err := m.fetchRaw(ctx, key)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %w", errUnusable, err)
 	}

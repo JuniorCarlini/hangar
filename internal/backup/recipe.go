@@ -504,7 +504,7 @@ func (m *Manager) recoverRecipe(ctx context.Context, s svcRef, at time.Time, ids
 		return err
 	}
 	for _, p := range points { // newest first
-		if o, ok := archive.ParseKey(p.Key); ok && o.Kind == archive.KindRecipe && !p.LastModified.After(at) {
+		if o, ok := archive.ParseKey(p.Key); ok && o.Kind == archive.KindRecipe && !p.LastModified.After(at) && m.vouched(ctx, p.Key) {
 			return m.restoreRecipe(ctx, "", s, p.Key, ids)
 		}
 	}
