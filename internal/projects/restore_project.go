@@ -10,6 +10,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
@@ -89,7 +90,8 @@ func badSnapshot(format string, args ...any) error {
 
 // checkSnapshots validates the services of a project backup the way their
 // creation would: a file that arrives from a browser goes through the same
-// bounds as a form, whatever it claims.
+// bounds as a form, whatever it claims. The repository source and the
+// deploy settings come out normalized, as the forms store them.
 func checkSnapshots(snaps []ServiceSnapshot) error {
 	if len(snaps) == 0 {
 		return badSnapshot("no services")
@@ -119,7 +121,7 @@ func checkSnapshots(snaps []ServiceSnapshot) error {
 			return badSnapshot("%s: memory", s.Service)
 		case s.Res.NanoCPUs < 5e7 || s.Res.NanoCPUs > 64e9:
 			return badSnapshot("%s: cpus", s.Service)
-		case s.Res.Pids < 0 || s.Res.StopGraceS < 0 || s.Res.StopGraceS > int64(node.MaxStopGrace.Seconds()):
+		case s.Res.Pids < 1 || s.Res.Pids > MaxPids || s.Res.StopGraceS < 0 || s.Res.StopGraceS > int64(node.MaxStopGrace.Seconds()):
 			return badSnapshot("%s: limits", s.Service)
 		case s.Deploy != nil && (s.Deploy.StartupGraceS < 0 || s.Deploy.StartupGraceS > int64(MaxStartupGrace.Seconds())):
 			return badSnapshot("%s: startup grace", s.Service)
@@ -159,10 +161,49 @@ func checkSnapshots(snaps []ServiceSnapshot) error {
 				return badSnapshot("%s: endpoint port", s.Service)
 			}
 		}
-		if s.Git != nil && s.Git.URL == "" {
-			return badSnapshot("%s: git source", s.Service)
+		if s.Git != nil {
+			// The same checks as a Git service made by hand: a URL the
+			// SSRF-safe transport accepts, a branch, paths inside the
+			// repository.
+			g := GitSourceInput{URL: s.Git.URL, Branch: s.Git.Branch, Subdir: s.Git.Subdir, Dockerfile: s.Git.Dockerfile}
+			if err := g.normalize(); err != nil {
+				return badSnapshot("%s: git source", s.Service)
+			}
+			s.Git.URL, s.Git.Branch, s.Git.Subdir, s.Git.Dockerfile = g.URL, g.Branch, g.Subdir, g.Dockerfile
+		}
+		if d := s.Deploy; d != nil {
+			if err := checkSnapshotDeploy(d); err != nil {
+				return badSnapshot("%s: deploy settings: %v", s.Service, err)
+			}
 		}
 	}
+	return nil
+}
+
+// checkSnapshotDeploy puts a backup's deploy settings through the bounds
+// of the form (SetDeploySettings) and leaves them as the form stores them.
+func checkSnapshotDeploy(d *SnapshotDeploy) error {
+	for _, raw := range []*json.RawMessage{&d.Predeploy, &d.Validate} {
+		if len(*raw) == 0 {
+			continue
+		}
+		var cmd []string
+		if err := json.Unmarshal(*raw, &cmd); err != nil {
+			return err
+		}
+		if err := checkCommand(cmd); err != nil {
+			return err
+		}
+		*raw = json.RawMessage(commandJSON(cmd))
+	}
+	if d.ValidateTimeoutS < 0 || d.StartupGraceS < 0 {
+		return errors.New("negative duration")
+	}
+	path, timeout, grace, err := checkDeploySettings(d.HealthPath, time.Duration(d.ValidateTimeoutS)*time.Second, time.Duration(d.StartupGraceS)*time.Second)
+	if err != nil {
+		return err
+	}
+	d.HealthPath, d.ValidateTimeoutS, d.StartupGraceS = path, int64(timeout/time.Second), int64(grace/time.Second)
 	return nil
 }
 

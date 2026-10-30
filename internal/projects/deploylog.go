@@ -240,32 +240,63 @@ func (m *Manager) SetDeploySettings(ctx context.Context, a Actor, serviceID stri
 	if err != nil {
 		return i18n.E("deploy.error.command")
 	}
-	timeout := in.ValidateTimeout
-	if timeout == 0 {
-		timeout = DefaultValidateTimeout
-	}
-	if timeout < MinValidateTimeout || timeout > MaxValidateTimeout {
-		return i18n.E("deploy.error.validate_timeout", "max", int(MaxValidateTimeout.Minutes()))
-	}
-	if in.StartupGrace != 0 && (in.StartupGrace < MinStartupGrace || in.StartupGrace > MaxStartupGrace) {
-		return i18n.E("deploy.error.startup_grace", "min", int(MinStartupGrace.Minutes()), "max", int(MaxStartupGrace.Minutes()))
-	}
-	grace := int64(in.StartupGrace / time.Second)
-	path := strings.TrimSpace(in.HealthPath)
-	if path != "" && (!strings.HasPrefix(path, "/") || len(path) > 200 || strings.ContainsAny(path, " \t\r\n#")) {
-		return i18n.E("deploy.error.health_path")
+	path, timeout, grace, err := checkDeploySettings(in.HealthPath, in.ValidateTimeout, in.StartupGrace)
+	if err != nil {
+		return err
 	}
 	if err := m.q.SetServiceDeploySettings(ctx, dbq.SetServiceDeploySettingsParams{
 		PredeployJson: commandJSON(cmd), HealthPath: path,
 		ValidateJson: commandJSON(validate), ValidateTimeoutS: int64(timeout / time.Second),
-		StartupGraceS: grace, UpdatedAt: m.now().Unix(), ID: serviceID,
+		StartupGraceS: int64(grace / time.Second), UpdatedAt: m.now().Unix(), ID: serviceID,
 	}); err != nil {
 		return err
 	}
 	m.record(ctx, a, "service.deploy_settings", "service", serviceID, audit.OK, map[string]any{
 		"predeploy": cmd, "health_path": path, "validate": validate, "validate_timeout_s": int(timeout / time.Second),
-		"startup_grace_s": grace,
+		"startup_grace_s": int64(grace / time.Second),
 	})
+	return nil
+}
+
+// checkDeploySettings applies the bounds of the deploy settings: the
+// validation timeout (zero: the default), the startup grace (zero: the
+// node's default) and the health path. Every way in goes through it: the
+// form and a project restore, whose file comes from a browser.
+//
+// The health path is appended to "http://<container address>" by the
+// deploy: anything but a plain absolute path ("@169.254.169.254/...",
+// "//host/...") could send the check to another host.
+func checkDeploySettings(healthPath string, timeout, grace time.Duration) (string, time.Duration, time.Duration, error) {
+	if timeout == 0 {
+		timeout = DefaultValidateTimeout
+	}
+	if timeout < MinValidateTimeout || timeout > MaxValidateTimeout {
+		return "", 0, 0, i18n.E("deploy.error.validate_timeout", "max", int(MaxValidateTimeout.Minutes()))
+	}
+	if grace != 0 && (grace < MinStartupGrace || grace > MaxStartupGrace) {
+		return "", 0, 0, i18n.E("deploy.error.startup_grace", "min", int(MinStartupGrace.Minutes()), "max", int(MaxStartupGrace.Minutes()))
+	}
+	path := strings.TrimSpace(healthPath)
+	if path != "" && (!strings.HasPrefix(path, "/") || strings.HasPrefix(path, "//") || len(path) > 200 ||
+		strings.ContainsAny(path, " #") || strings.IndexFunc(path, unicode.IsControl) >= 0) {
+		return "", 0, 0, i18n.E("deploy.error.health_path")
+	}
+	return path, timeout, grace, nil
+}
+
+// checkCommand applies SplitCommand's bounds to a command already split
+// (a project restore's file keeps them as JSON lists).
+func checkCommand(cmd []string) error {
+	n := 0
+	for _, a := range cmd {
+		if strings.ContainsRune(a, 0) {
+			return i18n.E("deploy.error.command")
+		}
+		n += len(a) + 1
+	}
+	if len(cmd) > 64 || n > 2000 {
+		return i18n.E("deploy.error.command")
+	}
 	return nil
 }
 

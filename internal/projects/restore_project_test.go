@@ -2,6 +2,7 @@ package projects
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -65,12 +66,38 @@ func TestCheckSnapshots(t *testing.T) {
 		"port":       func(s *ServiceSnapshot) { s.Endpoints = []SnapshotEndpoint{{Port: 70000}} },
 		"health":     func(s *ServiceSnapshot) { s.Check = []byte("{") },
 		"grace":      func(s *ServiceSnapshot) { s.Deploy = &SnapshotDeploy{StartupGraceS: 24 * 3600} },
+		// SEC-008: the deploy settings and the repository go through the
+		// same checks as their forms; the health path is appended to the
+		// container's address, so anything but a path reaches another host.
+		"health path ssrf": func(s *ServiceSnapshot) {
+			s.Deploy = &SnapshotDeploy{HealthPath: "@169.254.169.254/latest/meta-data/"}
+		},
+		"health path host": func(s *ServiceSnapshot) { s.Deploy = &SnapshotDeploy{HealthPath: "//169.254.169.254/"} },
+		"health path ctl":  func(s *ServiceSnapshot) { s.Deploy = &SnapshotDeploy{HealthPath: "/ok\r\nHost: x"} },
+		"validate timeout": func(s *ServiceSnapshot) { s.Deploy = &SnapshotDeploy{ValidateTimeoutS: 7 * 24 * 3600} },
+		"predeploy":        func(s *ServiceSnapshot) { s.Deploy = &SnapshotDeploy{Predeploy: []byte(`"sh -c x"`)} },
+		"predeploy long": func(s *ServiceSnapshot) {
+			s.Deploy = &SnapshotDeploy{Predeploy: []byte(`["` + strings.Repeat("a", 3000) + `"]`)}
+		},
+		"pids":     func(s *ServiceSnapshot) { s.Res.Pids = 1 << 30 },
+		"no pids":  func(s *ServiceSnapshot) { s.Res.Pids = 0 },
+		"git url":  func(s *ServiceSnapshot) { s.Image, s.Git = "", &SnapshotGit{URL: "http://169.254.169.254/a/b.git"} },
+		"git path": func(s *ServiceSnapshot) { s.Image, s.Git = "", &SnapshotGit{URL: "https://github.com/a/b.git", Subdir: "../x"} },
 	} {
 		s := ok()
 		edit(&s)
 		if err := checkSnapshots([]ServiceSnapshot{s}); !errors.Is(err, errBadSnapshot) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+	// Good settings pass and come out as the form stores them.
+	good := ok()
+	good.Deploy = &SnapshotDeploy{HealthPath: " /healthz ", Predeploy: []byte(`["sh","-c","migrate"]`)}
+	if err := checkSnapshots([]ServiceSnapshot{good}); err != nil {
+		t.Fatalf("good deploy settings: %v", err)
+	}
+	if good.Deploy.HealthPath != "/healthz" || good.Deploy.ValidateTimeoutS != int64(DefaultValidateTimeout.Seconds()) {
+		t.Fatalf("normalized: %+v", good.Deploy)
 	}
 	if err := checkSnapshots([]ServiceSnapshot{ok(), ok()}); !errors.Is(err, errBadSnapshot) {
 		t.Error("the same service twice")

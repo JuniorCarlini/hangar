@@ -36,8 +36,11 @@ const (
 	DefaultMemoryMB = 512
 	DefaultCPUs     = 1.0
 	DefaultPids     = 512
-	MaxEnvValue     = 32 << 10
-	deployTimeout   = 15 * time.Minute
+	// MaxPids bounds the process limit a service can arrive with (a
+	// project restore's file): no form sets more than DefaultPids.
+	MaxPids       = 8 * DefaultPids
+	MaxEnvValue   = 32 << 10
+	deployTimeout = 15 * time.Minute
 )
 
 // Errors the UI translates.
