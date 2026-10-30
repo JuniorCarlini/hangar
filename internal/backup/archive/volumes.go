@@ -156,7 +156,7 @@ func ScanVolumesTo(r io.Reader, o VolumeScan) (VolumeManifest, error) {
 			return m, fmt.Errorf("read the copy: %w", err)
 		}
 		// The entry's content goes through as it is read.
-		if _, err := io.CopyBuffer(io.Discard, tr, buf); err != nil {
+		if _, err := io.CopyBuffer(io.Discard, tr, buf); err != nil { //nolint:gosec // bounded by the entry size checked above (Limits, Declared)
 			return m, fmt.Errorf("read the copy: %w", err)
 		}
 	}
