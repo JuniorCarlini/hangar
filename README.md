@@ -14,7 +14,7 @@ o painel não escuta na internet, 2FA é obrigatória para donos e admins (e,
 por padrão, para toda a equipe), segredos aparecem mascarados até alguém
 revelá-los com sudo, e toda ação fica numa auditoria encadeada.
 
-> Versão atual: **v0.5.37**. Projeto em desenvolvimento ativo: use, teste e
+> Versão atual: **v0.5.38**. Projeto em desenvolvimento ativo: use, teste e
 > reporte, mas leia as [notas de cada versão](CHANGELOG.md) antes de atualizar.
 
 ## Sumário

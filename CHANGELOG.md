@@ -12,8 +12,38 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.38] - 2026-10-30
+
+Correções da auditoria de segurança de 30/10 (24 itens: 1 alto, 5 médios,
+14 baixos e 4 informativos).
+
 ### Segurança
 
+- **Backup do painel só do dono, por qualquer caminho**: o link de download,
+  a restauração de projeto e a restauração simples recusam o backup do
+  painel (chave mestra e banco) para quem não é dono.
+- **Backups autênticos**: cada arquivo enviado ao bucket leva uma assinatura
+  (HMAC) e a restauração só aceita o que o painel confirma; backup forjado,
+  trocado ou reapresentado com outro nome é recusado. Um backup antigo ou de
+  outro servidor pede a confirmação "Aceitar backups que o painel não
+  consegue confirmar".
+- **hangar-cofre**: restaura sem rede e com permissões mínimas, e anula os
+  comandos que o app tenha deixado na configuração do Postgres.
+- **Restauração de projeto**: passa pelas mesmas validações do deploy, tem
+  limite de tamanho (`[backup] max_restore_upload_gb`, 100 GB), de arquivos
+  no zip e de tamanho declarado, e confere cada entrada de disco antes de
+  extrair. Kit com frase-senha não aceita custo de memória absurdo.
+- **Certificados sob demanda**: o limite por hora não desliga mais com o log
+  cheio, nomes inválidos não enchem o log, e a memória das decisões tem teto.
+- **Auditoria assinada**: a corrente passa a ser assinada com uma chave
+  derivada da chave mestra, e os blocos arquivados ficam presos a ela.
+- **Desligar backup ou WAL pede sudo**; o log de deploy não aceita linhas
+  forjadas por mensagem de commit; o token CSRF do upload saiu do endereço.
+- **Atualizador** (root) não segue atalhos para fora da pasta dele; a release
+  assina num job isolado, só com CI verde na main; o catálogo de templates
+  ganhou sequência e validade (sem replay) e a comunidade só pode subir a
+  versão da imagem de um template embutido; imagens auxiliares fixadas por
+  digest; Dependabot também para Go e Docker, govulncheck semanal.
 - **2FA obrigatória para donos e admins**, e para toda a equipe por padrão.
   "Exigir 2FA de todos" virou opção do painel em **Equipe → Segurança**
   (ligada num painel novo; desligar pede sudo e confirmação, e fica na
@@ -953,7 +983,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.37...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.38...HEAD
+[0.5.38]: https://github.com/JuniorCarlini/hangar/compare/v0.5.37...v0.5.38
 [0.5.37]: https://github.com/JuniorCarlini/hangar/compare/v0.5.36...v0.5.37
 [0.5.36]: https://github.com/JuniorCarlini/hangar/compare/v0.5.35...v0.5.36
 [0.5.35]: https://github.com/JuniorCarlini/hangar/compare/v0.5.34...v0.5.35
