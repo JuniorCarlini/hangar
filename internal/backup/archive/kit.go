@@ -28,6 +28,13 @@ const (
 	codeLabel    = "hangar-kit-code-v1\n"
 )
 
+// KitWorkFactor is the scrypt work factor (log2 N) of a protected kit:
+// what ProtectKit writes and the most ParseKit accepts. age itself
+// accepts up to 22, about 4 GiB of memory per try, so a kit uploaded to
+// the panel could exhaust a small server's memory with one request.
+// 18 is age's own default (about 256 MiB, a second or so).
+const KitWorkFactor = 18
+
 // ErrKitPassphrase means the kit is passphrase-protected and the
 // passphrase is missing or wrong.
 var ErrKitPassphrase = errors.New("archive: the kit is protected and the passphrase does not open it")
@@ -44,6 +51,8 @@ func ParseKit(data []byte, passphrase string) ([]*age.X25519Identity, error) {
 		if err != nil {
 			return nil, err
 		}
+		// A higher factor is refused from the header, before any work.
+		id.SetMaxWorkFactor(KitWorkFactor)
 		var in io.Reader = bytes.NewReader(trimmed)
 		if bytes.HasPrefix(trimmed, []byte(armor.Header)) {
 			in = armor.NewReader(in)
@@ -139,6 +148,7 @@ func ProtectKit(kit []byte, passphrase string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	r.SetWorkFactor(KitWorkFactor)
 	var buf bytes.Buffer
 	aw := armor.NewWriter(&buf)
 	w, err := age.Encrypt(aw, r)

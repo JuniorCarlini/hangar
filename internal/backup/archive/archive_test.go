@@ -130,6 +130,46 @@ func TestParseKitPlainAndProtected(t *testing.T) {
 	}
 }
 
+// SEC-009: a protected kit names its own scrypt work factor. One above
+// KitWorkFactor (22 costs about 4 GiB per try) is refused from the header,
+// before any work: an upload must not be able to exhaust the memory.
+func TestParseKitRefusesAHighWorkFactor(t *testing.T) {
+	r, err := age.NewScryptRecipient("uma frase longa o bastante")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.SetWorkFactor(10) // cheap to make; the header is edited below
+	var buf bytes.Buffer
+	w, err := age.Encrypt(&buf, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.WriteString(w, kitText(newKey(t)))
+	_ = w.Close()
+	kit := buf.Bytes()
+	i := bytes.Index(kit, []byte("-> scrypt "))
+	end := i + bytes.IndexByte(kit[i:], '\n')
+	if i < 0 || !bytes.HasSuffix(kit[i:end], []byte(" 10")) {
+		t.Fatalf("unexpected header %q", kit[:min(len(kit), 120)])
+	}
+	heavy := append(append(append([]byte{}, kit[:end-2]...), "22"...), kit[end:]...)
+	start := time.Now()
+	if _, err := ParseKit(heavy, "uma frase longa o bastante"); !errors.Is(err, ErrKitPassphrase) {
+		t.Fatalf("work factor 22: %v", err)
+	}
+	if took := time.Since(start); took > 2*time.Second {
+		t.Fatalf("refusing the kit took %s: scrypt ran", took)
+	}
+	// What ProtectKit writes opens.
+	prot, err := ProtectKit([]byte(kitText(newKey(t))), "uma frase longa o bastante")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ParseKit(prot, "uma frase longa o bastante"); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // KnownKey and KnownCode pin the confirmation code algorithm; the browser
 // (kit.js) must produce the same code, which kit_test.go checks with node.
 const (
