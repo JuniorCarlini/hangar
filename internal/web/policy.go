@@ -1,9 +1,13 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -33,8 +37,9 @@ type Policy struct {
 	AuditByHandler bool
 	// Upload marks a route whose body is a large file the handler streams
 	// to disk with its own limit (uploadRoutes): the global body cap does
-	// not apply, and the CSRF token comes in the URL ("?csrf="), since
-	// reading it from the form would read the whole file first.
+	// not apply, and the CSRF token must be the form's first field (or the
+	// X-CSRF-Token header): only that small head of the body is read before
+	// the handler, never the file, and the token stays out of the URL.
 	Upload bool
 }
 
@@ -282,9 +287,43 @@ func csrfFromRequest(r *http.Request, upload bool) string {
 	}
 	if upload {
 		// The body is left for the handler to stream (Policy.Upload).
-		return r.URL.Query().Get("csrf")
+		return csrfFromUploadHead(r)
 	}
 	return r.PostFormValue("csrf")
+}
+
+// uploadHeadBytes bounds what is read of an upload before its handler: the
+// first multipart part, the CSRF token, fits in far less.
+const uploadHeadBytes = 4 << 10
+
+// csrfFromUploadHead reads the CSRF token from the first part of a
+// multipart upload and puts the bytes it read back in front of the body,
+// so the handler still sees the whole form. A token anywhere else (a later
+// part, the URL, which leaks into history and logs) is not accepted.
+func csrfFromUploadHead(r *http.Request) string {
+	mt, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mt != "multipart/form-data" || params["boundary"] == "" {
+		return ""
+	}
+	head := make([]byte, uploadHeadBytes)
+	n, err := io.ReadFull(r.Body, head)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return ""
+	}
+	head = head[:n]
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(head), r.Body), r.Body}
+	part, err := multipart.NewReader(bytes.NewReader(head), params["boundary"]).NextPart()
+	if err != nil || part.FormName() != "csrf" || part.FileName() != "" {
+		return ""
+	}
+	token, err := io.ReadAll(io.LimitReader(part, 512))
+	if err != nil {
+		return ""
+	}
+	return string(token)
 }
 
 type statusWriter struct {

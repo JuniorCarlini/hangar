@@ -2,7 +2,6 @@ package views
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 )
 
@@ -525,13 +524,15 @@ templ newProjectDialog(n Nav) {
 
 // restoreProjectForm is "A partir de um backup": a project backup file
 // (and the kit, when it was made with one) becomes a new project. The file
-// is streamed, so the CSRF token goes in the URL (Policy.Upload).
+// is streamed, so the CSRF token must be the form's first field
+// (Policy.Upload): the panel reads it without reading the file.
 templ restoreProjectForm(n Nav) {
 	if !n.SudoCritical {
 		<p class="m-0 text-[13px] text-muted">{ t(ctx, "projects.restore.sudo") }</p>
 		@sudoFormID("np-sudo", n.CSRF, "/?new=1&from=backup", t(ctx, "service.sudo_label"))
 	} else {
-		<form method="post" action={ templ.SafeURL("/projects/restore?csrf=" + url.QueryEscape(n.CSRF)) } enctype="multipart/form-data" class="flex flex-col gap-4">
+		<form method="post" action="/projects/restore" enctype="multipart/form-data" class="flex flex-col gap-4">
+			<input type="hidden" name="csrf" value={ n.CSRF }/>
 			<p class="m-0 text-[13px] text-muted">{ t(ctx, "projects.restore.hint") }</p>
 			<div class="flex min-w-0 flex-col gap-1.5">
 				<label class="tuc-label" for="np-rname">{ t(ctx, "projects.form.name") }</label>

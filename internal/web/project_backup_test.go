@@ -15,15 +15,20 @@ import (
 )
 
 // postUpload sends the "A partir de um backup" form as a browser does: a
-// multipart body with the file, the CSRF token in the URL.
-func (e *env) postUpload(t *testing.T, c *http.Cookie, query string, file []byte, bodyCSRF string) *httptest.ResponseRecorder {
+// multipart body whose first field is the CSRF token, then the file.
+// lateCSRF puts the token after the name instead (not accepted).
+func (e *env) postUpload(t *testing.T, c *http.Cookie, query string, file []byte, bodyCSRF string, lateCSRF ...bool) *httptest.ResponseRecorder {
 	t.Helper()
 	var mb bytes.Buffer
 	mw := multipart.NewWriter(&mb)
-	if bodyCSRF != "" {
+	late := len(lateCSRF) > 0 && lateCSRF[0]
+	if bodyCSRF != "" && !late {
 		_ = mw.WriteField("csrf", bodyCSRF)
 	}
 	_ = mw.WriteField("name", "Cópia")
+	if bodyCSRF != "" && late {
+		_ = mw.WriteField("csrf", bodyCSRF)
+	}
 	fw, _ := mw.CreateFormFile("file", "lab.hangar.zip")
 	_, _ = fw.Write(file)
 	_ = mw.Close()
@@ -38,21 +43,25 @@ func (e *env) postUpload(t *testing.T, c *http.Cookie, query string, file []byte
 }
 
 // Restoring a project takes an upload past the panel's body limit, with
-// sudo and the CSRF token in the URL; a restore that cannot start comes
+// sudo and the CSRF token as the form's first field; a restore that cannot start comes
 // back to the dialog with the reason (here: no Docker, once the whole file
 // was read), and nothing is created.
 func TestRestoreProjectUpload(t *testing.T) {
 	e := newEnv(t)
 	c, p := e.session(t, auth.RoleAdmin)
 	big := bytes.Repeat([]byte("x"), 2*maxBodyBytes)
-	if rec := e.postUpload(t, c, "?csrf="+url.QueryEscape(p.CSRFToken), big, ""); rec.Code != http.StatusForbidden {
+	if rec := e.postUpload(t, c, "", big, p.CSRFToken); rec.Code != http.StatusForbidden {
 		t.Fatalf("without sudo: %d", rec.Code)
 	}
 	sc, sp := e.sudo(t, c, p)
-	if rec := e.postUpload(t, sc, "", big, sp.CSRFToken); rec.Code != http.StatusForbidden {
-		t.Fatalf("the token only in the body must not be read (it would read the whole file): %d", rec.Code)
+	if rec := e.postUpload(t, sc, "", big, sp.CSRFToken, true); rec.Code != http.StatusForbidden {
+		t.Fatalf("a token after other fields must not be looked for (it could sit past the file): %d", rec.Code)
 	}
-	rec := e.postUpload(t, sc, "?csrf="+url.QueryEscape(sp.CSRFToken), big, "")
+	// SEC-024: the token in the URL leaks into history and logs; refused.
+	if rec := e.postUpload(t, sc, "?csrf="+url.QueryEscape(sp.CSRFToken), big, ""); rec.Code != http.StatusForbidden {
+		t.Fatalf("the token in the URL must not be accepted: %d", rec.Code)
+	}
+	rec := e.postUpload(t, sc, "", big, sp.CSRFToken)
 	body := rec.Body.String()
 	if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body, `role="alert"`) || !strings.Contains(body, `id="new-project" aria-labelledby="new-project-title" data-open="true"`) {
 		t.Fatalf("a restore that cannot start: %d %s", rec.Code, body)
@@ -93,7 +102,7 @@ func TestProjectBackupButtons(t *testing.T) {
 	}
 	sc, _ := e.sudo(t, c, p)
 	home = e.do(req{method: "GET", target: "/?new=1&from=backup", cookies: []*http.Cookie{sc}}).Body.String()
-	if !strings.Contains(home, `action="/projects/restore?csrf=`) || !strings.Contains(home, `enctype="multipart/form-data"`) {
+	if !strings.Contains(home, `action="/projects/restore" enctype="multipart/form-data" class="flex flex-col gap-4"><input type="hidden" name="csrf"`) {
 		t.Fatal("with sudo, the upload form")
 	}
 	page := e.do(req{method: "GET", target: "/p/lab/settings", cookies: []*http.Cookie{sc}}).Body.String()
