@@ -7,8 +7,11 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +23,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/netguard"
@@ -32,6 +36,13 @@ import (
 // CI. The panel fetches it once a day, checks the signature with the key
 // embedded below, and then validates every template with exactly the rules
 // the embedded ones pass: a signed but unsafe template is still refused.
+//
+// Next to it, catalog.tar.gz.meta (CatalogMeta, JSON) and its signature
+// catalog.tar.gz.meta.sig bind the tarball's SHA-256 to a sequence number
+// and an expiry. The panel keeps the highest sequence it accepted and
+// refuses an older catalog (a replay of a once-valid signed catalog that
+// would freeze vulnerable images) and an expired one, so the catalog's CI
+// re-signs it on a schedule.
 
 // CatalogPublicKeyHex is the community catalog's public key. Empty turns
 // the sync off. Test builds may set it with -ldflags "-X
@@ -47,16 +58,105 @@ const (
 	maxUnpackedBytes  = 20 << 20 // everything inside it
 	maxCatalogEntries = 2000
 	maxSigBytes       = 1 << 10
+	maxMetaBytes      = 4 << 10
+	// MaxCatalogValidity caps expires - issued: a catalog cannot be signed
+	// to stay valid for longer, whatever its metadata says.
+	MaxCatalogValidity = 45 * 24 * time.Hour
+	// DefaultCatalogValidity is what pack signs for; the catalog's CI
+	// re-signs weekly, so a few failed runs do not expire it.
+	DefaultCatalogValidity = 30 * 24 * time.Hour
 )
+
+// metaFormat is the only CatalogMeta format this build understands.
+const metaFormat = 1
+
+// metaContext prefixes the signed metadata bytes, so a signature over the
+// metadata can never be taken for one over a tarball (or the other way).
+const metaContext = "hangar-template-catalog-meta/v1\n"
 
 // Files kept in data_dir/templates/.
 const (
 	storedCatalog = "catalog.tar.gz"
 	storedSig     = "catalog.tar.gz.sig"
+	storedMeta    = "catalog.tar.gz.meta"
+	storedMetaSig = "catalog.tar.gz.meta.sig"
+)
+
+// Suffixes, after the catalog URL, of its signature and metadata.
+const (
+	sigSuffix     = ".sig"
+	metaSuffix    = ".meta"
+	metaSigSuffix = ".meta.sig"
 )
 
 // ErrBadSignature means the catalog was not signed by the catalog key.
 var ErrBadSignature = errors.New("template catalog: bad signature")
+
+// Errors of the signed catalog metadata.
+var (
+	ErrBadMeta         = errors.New("template catalog: invalid metadata")
+	ErrCatalogExpired  = errors.New("template catalog: expired")
+	ErrCatalogRollback = errors.New("template catalog: older than the one already accepted")
+)
+
+// CatalogMeta is the signed metadata of a catalog tarball.
+type CatalogMeta struct {
+	Format int `json:"format"`
+	// Sequence grows with every publication (pack uses the Unix time).
+	Sequence int64     `json:"sequence"`
+	Issued   time.Time `json:"issued"`
+	Expires  time.Time `json:"expires"`
+	// SHA256 is the hex digest of the tarball it describes.
+	SHA256 string `json:"sha256"`
+}
+
+// SignCatalogMeta builds the metadata for tarball and signs it. It returns
+// the metadata file and its signature (base64).
+func SignCatalogMeta(tarball []byte, sequence int64, issued time.Time, validity time.Duration, priv ed25519.PrivateKey) ([]byte, string, error) {
+	if sequence <= 0 || validity <= 0 || validity > MaxCatalogValidity {
+		return nil, "", fmt.Errorf("%w: sequence must be positive and validity at most %s", ErrBadMeta, MaxCatalogValidity)
+	}
+	sum := sha256.Sum256(tarball)
+	issued = issued.UTC().Truncate(time.Second)
+	meta, err := json.Marshal(CatalogMeta{
+		Format: metaFormat, Sequence: sequence, Issued: issued, Expires: issued.Add(validity), SHA256: hex.EncodeToString(sum[:]),
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return meta, base64.StdEncoding.EncodeToString(ed25519.Sign(priv, append([]byte(metaContext), meta...))), nil
+}
+
+// VerifyCatalogMeta checks the metadata's signature with pub and that it
+// describes tarball. Expiry and sequence are checked by the caller (an
+// expired catalog still tells which sequence was accepted).
+func VerifyCatalogMeta(pub ed25519.PublicKey, tarball, meta []byte, sigB64 string) (*CatalogMeta, error) {
+	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(sigB64))
+	if err != nil || len(sig) != ed25519.SignatureSize || len(pub) != ed25519.PublicKeySize {
+		return nil, ErrBadSignature
+	}
+	if !ed25519.Verify(pub, append([]byte(metaContext), meta...), sig) {
+		return nil, ErrBadSignature
+	}
+	var m CatalogMeta
+	dec := json.NewDecoder(bytes.NewReader(meta))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&m); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrBadMeta, err) //nolint:errorlint // the cause is only for the log
+	}
+	sum := sha256.Sum256(tarball)
+	switch {
+	case m.Format != metaFormat:
+		return nil, fmt.Errorf("%w: format %d", ErrBadMeta, m.Format)
+	case m.Sequence <= 0:
+		return nil, fmt.Errorf("%w: sequence %d", ErrBadMeta, m.Sequence)
+	case !m.Expires.After(m.Issued) || m.Expires.Sub(m.Issued) > MaxCatalogValidity:
+		return nil, fmt.Errorf("%w: validity from %s to %s", ErrBadMeta, m.Issued, m.Expires)
+	case subtle.ConstantTimeCompare([]byte(m.SHA256), []byte(hex.EncodeToString(sum[:]))) != 1:
+		return nil, fmt.Errorf("%w: it describes another tarball", ErrBadMeta)
+	}
+	return &m, nil
+}
 
 // CatalogPublicKey decodes CatalogPublicKeyHex; nil when it is empty.
 func CatalogPublicKey() (ed25519.PublicKey, error) {
@@ -257,6 +357,14 @@ type Syncer struct {
 	Base     *Catalog
 	HTTP     *http.Client
 	Log      *slog.Logger
+	// Now is the clock for expiry (default time.Now).
+	Now func() time.Time
+
+	mu sync.Mutex
+	// accepted is the metadata of the catalog in use (or, when that one
+	// expired, of the last one accepted): its sequence is the floor for
+	// the next one.
+	accepted *CatalogMeta
 }
 
 // NewSyncer prepares the sync with the embedded key and the safe HTTP
@@ -280,25 +388,98 @@ func NewSyncer(url, dir, version string, reg *Registry, log *slog.Logger) (*Sync
 	return &Syncer{URL: url, Dir: dir, Version: version, Key: key, Registry: reg, Base: Builtin(), HTTP: c, Log: log}, nil
 }
 
+func (s *Syncer) now() time.Time {
+	if s.Now != nil {
+		return s.Now()
+	}
+	return time.Now()
+}
+
+// signed is a catalog as published: the tarball, its signature, its
+// metadata and the metadata's signature.
+type signed struct {
+	tarball, sig, meta, metaSig []byte
+}
+
 // LoadStored applies the catalog saved by an earlier sync, checking it
-// again (the disk is not trusted more than the network).
+// again (the disk is not trusted more than the network). An expired one is
+// not applied, but its sequence still is the floor for the next sync. A
+// catalog stored by a build without metadata fails here and is replaced by
+// the next sync.
 func (s *Syncer) LoadStored() error {
 	if s.Key == nil {
 		return nil
 	}
-	tarball, err := os.ReadFile(filepath.Join(s.Dir, storedCatalog))
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
+	var c signed
+	for _, f := range []struct {
+		name string
+		dst  *[]byte
+	}{{storedCatalog, &c.tarball}, {storedSig, &c.sig}, {storedMeta, &c.meta}, {storedMetaSig, &c.metaSig}} {
+		b, err := os.ReadFile(filepath.Join(s.Dir, f.name))
+		if errors.Is(err, os.ErrNotExist) && f.name == storedCatalog {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		*f.dst = b
 	}
+	if err := VerifyCatalog(s.Key, c.tarball, string(c.sig)); err != nil {
+		return err
+	}
+	meta, err := VerifyCatalogMeta(s.Key, c.tarball, c.meta, string(c.metaSig))
 	if err != nil {
 		return err
 	}
-	sig, err := os.ReadFile(filepath.Join(s.Dir, storedSig))
-	if err != nil {
-		return err
+	s.mu.Lock()
+	s.accepted = meta
+	s.mu.Unlock()
+	if !s.now().Before(meta.Expires) {
+		return fmt.Errorf("%w on %s", ErrCatalogExpired, meta.Expires.Format(time.RFC3339))
 	}
-	_, err = s.apply(tarball, string(sig))
+	_, err = s.apply(c.tarball)
 	return err
+}
+
+// check verifies a fetched catalog against the key, the clock and the
+// sequence already accepted.
+func (s *Syncer) check(c signed) (*CatalogMeta, error) {
+	if err := VerifyCatalog(s.Key, c.tarball, string(c.sig)); err != nil {
+		return nil, err
+	}
+	meta, err := VerifyCatalogMeta(s.Key, c.tarball, c.meta, string(c.metaSig))
+	if err != nil {
+		return nil, err
+	}
+	if !s.now().Before(meta.Expires) {
+		return nil, fmt.Errorf("%w on %s", ErrCatalogExpired, meta.Expires.Format(time.RFC3339))
+	}
+	s.mu.Lock()
+	floor := s.accepted
+	s.mu.Unlock()
+	if floor != nil {
+		switch {
+		case meta.Sequence < floor.Sequence:
+			return nil, fmt.Errorf("%w: sequence %d, already accepted %d", ErrCatalogRollback, meta.Sequence, floor.Sequence)
+		case meta.Sequence == floor.Sequence && meta.SHA256 != floor.SHA256:
+			// Two different catalogs signed with one sequence: keep the
+			// first.
+			return nil, fmt.Errorf("%w: sequence %d reused for another catalog", ErrCatalogRollback, meta.Sequence)
+		}
+	}
+	return meta, nil
+}
+
+// dropIfExpired goes back to the embedded catalog once the accepted one
+// expired and no newer one could be fetched.
+func (s *Syncer) dropIfExpired() {
+	s.mu.Lock()
+	meta := s.accepted
+	s.mu.Unlock()
+	if meta != nil && !s.now().Before(meta.Expires) && s.Registry.Catalog() != s.Base {
+		s.Log.Warn("community template catalog expired; using only the embedded templates", "expired", meta.Expires)
+		s.Registry.Set(s.Base)
+	}
 }
 
 // Sync downloads, verifies and applies the community catalog, then saves
@@ -307,41 +488,61 @@ func (s *Syncer) Sync(ctx context.Context) (int, error) {
 	if s.Key == nil {
 		return 0, errors.New("template catalog: no public key in this build")
 	}
-	tarball, err := s.fetch(ctx, s.URL, MaxCatalogBytes)
+	var c signed
+	var err error
+	if c.tarball, err = s.fetch(ctx, s.URL, MaxCatalogBytes); err != nil {
+		return 0, err
+	}
+	if c.sig, err = s.fetch(ctx, s.URL+sigSuffix, maxSigBytes); err != nil {
+		return 0, err
+	}
+	if c.meta, err = s.fetch(ctx, s.URL+metaSuffix, maxMetaBytes); err != nil {
+		return 0, err
+	}
+	if c.metaSig, err = s.fetch(ctx, s.URL+metaSigSuffix, maxSigBytes); err != nil {
+		return 0, err
+	}
+	meta, err := s.check(c)
 	if err != nil {
 		return 0, err
 	}
-	sig, err := s.fetch(ctx, s.URL+".sig", maxSigBytes)
+	n, err := s.apply(c.tarball)
 	if err != nil {
 		return 0, err
 	}
-	n, err := s.apply(tarball, string(sig))
-	if err != nil {
-		return 0, err
-	}
+	s.mu.Lock()
+	s.accepted = meta
+	s.mu.Unlock()
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
 		return n, err
 	}
-	if err := writeAtomic(filepath.Join(s.Dir, storedSig), sig); err != nil {
-		return n, err
+	// Each file is replaced on its own; a crash halfway leaves a set whose
+	// signatures do not match, which the next start refuses and the next
+	// sync replaces.
+	for _, f := range []struct {
+		name string
+		data []byte
+	}{{storedSig, c.sig}, {storedCatalog, c.tarball}, {storedMetaSig, c.metaSig}, {storedMeta, c.meta}} {
+		if err := writeAtomic(filepath.Join(s.Dir, f.name), f.data); err != nil {
+			return n, err
+		}
 	}
-	return n, writeAtomic(filepath.Join(s.Dir, storedCatalog), tarball)
+	return n, nil
 }
 
-func (s *Syncer) apply(tarball []byte, sig string) (int, error) {
-	if err := VerifyCatalog(s.Key, tarball, sig); err != nil {
-		return 0, err
-	}
+// apply unpacks an already verified tarball and puts it in use.
+func (s *Syncer) apply(tarball []byte) (int, error) {
 	folders, err := Unpack(tarball)
 	if err != nil {
 		return 0, err
 	}
 	ok, skipped := Accept(folders, s.Version)
-	for _, e := range skipped {
+	merged, refused := MergeChecked(s.Base, ok)
+	for _, e := range append(skipped, refused...) {
 		s.Log.Warn("community template skipped", "reason", e.Error())
 	}
-	s.Registry.Set(Merge(s.Base, ok))
-	return len(ok), nil
+	s.Registry.Set(merged)
+	return len(ok) - len(refused), nil
 }
 
 func (s *Syncer) fetch(ctx context.Context, url string, limit int64) ([]byte, error) {
@@ -387,6 +588,7 @@ func (s *Syncer) Run(ctx context.Context) {
 		}
 		if n, err := s.Sync(ctx); err != nil {
 			s.Log.Warn("sync community template catalog", "error", err)
+			s.dropIfExpired()
 		} else {
 			s.Log.Info("community template catalog synced", "templates", n)
 		}

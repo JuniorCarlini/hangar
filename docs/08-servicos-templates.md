@@ -213,19 +213,44 @@ declara um `start_period` honesto.
   públicos). A assinatura é Ed25519 sobre os bytes do arquivo, com uma chave
   própria do catálogo embutida no binário (separada da chave das releases).
   Sem essa chave no binário, a sincronização fica desligada.
+- Junto vêm `catalog.tar.gz.meta` e `catalog.tar.gz.meta.sig`: metadados
+  assinados com a mesma chave (com um prefixo de contexto próprio) que
+  amarram o SHA-256 do arquivo a um **número de sequência** e a uma
+  **validade** (no máximo 45 dias; o `pack` assina 30 por padrão). O painel
+  guarda a maior sequência que aceitou e recusa:
+  - catálogo sem metadados;
+  - sequência menor que a aceita (reapresentação de um catálogo antigo, que
+    congelaria imagens vulneráveis), mesmo depois de reiniciar ou de o
+    aceito vencer;
+  - a mesma sequência com outro conteúdo;
+  - catálogo vencido. Se o aceito vence sem chegar um novo, o painel volta
+    a oferecer só os embutidos.
+  Por isso o CI do catálogo assina de novo toda semana, mesmo sem mudança.
 - Depois da assinatura, **cada template passa pelas mesmas regras** dos
   embutidos; um template inválido é pulado sozinho (o log diz o motivo),
   assim como um com `min_hangar` mais novo que o painel. Nada remoto pula a
   validação.
-- Regra de junção: por id, vence a `version` maior; no empate, vence o
-  embutido.
+- Regra de junção:
+  - id novo: entra como está;
+  - id que o binário já traz: o catálogo **não substitui** o embutido. Uma
+    `version` maior só vale como atualização de imagem: tudo o que decide o
+    que roda (serviços, comando, env, volumes, capabilities, healthcheck,
+    campos, exports, backup, endpoints, tamanhos) tem que ser idêntico, e
+    cada imagem só pode mudar a tag ou o digest, nunca o repositório. O
+    resultado é o embutido com as imagens novas; nome, texto, logo e README
+    continuam os do binário. Qualquer outra diferença é recusada (o log diz
+    o motivo) e o embutido fica;
+  - no empate, vence o embutido.
 - O catálogo aceito fica em `data_dir/templates/` e é conferido de novo ao
   subir o painel.
 - Desligar: `[templates] sync = false` no `hangar.toml` (há também
   `catalog_url`, para um espelho).
 - No CI do `hangar-templates`: `hangard template check .` em todo PR e, na
   release, `hangard template pack . -out dist` com a chave privada em
-  `HANGAR_CATALOG_KEY`. O par de chaves sai de `just catalog-key` (a pública
+  `HANGAR_CATALOG_KEY` (segredo do environment `catalog`, liberado só para
+  a `main`). A sequência padrão é o horário Unix da publicação; `-valid-days`
+  muda a validade. As trocas de tag do atualizador diário viram pull
+  request, e só o que entrou na `main` é assinado. O par de chaves sai de `just catalog-key` (a pública
   vai para `CatalogPublicKeyHex` em `internal/templates/remote.go`).
 
 ### Teste automático de cada template

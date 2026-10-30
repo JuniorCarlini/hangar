@@ -699,9 +699,11 @@ Usage: hangard template <subcommand>
 Subcommands:
   check <dir>...                     checks templates with the panel's own rules
                                      (one template folder or a catalog of folders)
-  pack <catalog> [-key file] [-out dir]
-                                     builds catalog.tar.gz and catalog.tar.gz.sig (catalog CI);
-                                     without -key, the key comes from HANGAR_CATALOG_KEY
+  pack <catalog> [-key file] [-out dir] [-sequence n] [-valid-days n]
+                                     builds catalog.tar.gz, catalog.tar.gz.sig and the signed
+                                     metadata (catalog.tar.gz.meta and .meta.sig: sequence and
+                                     expiry) in the catalog CI; without -key, the key comes from
+                                     HANGAR_CATALOG_KEY
   keygen                             generates the catalog key pair
 """
 no_dir = "Give the templates directory."
@@ -709,9 +711,11 @@ check_ok = "{n} templates checked, all valid."
 check_failed = "{bad} templates with problems ({ok} valid)."
 flag_key = "file with the private key (base64); default: the HANGAR_CATALOG_KEY variable"
 flag_out = "directory to write catalog.tar.gz and its signature to"
+flag_sequence = "sequence number of this publication (must grow with each one; default: the Unix time)"
+flag_valid_days = "days panels accept this catalog before it must be re-signed (at most 45)"
 bad_key = "Private key missing or invalid (base64 of an Ed25519 key)."
 key_mismatch = "This key does not match the catalog public key embedded in Hangar."
-packed = "Catalog written to {file} ({bytes} bytes) with its signature next to it."
+packed = "Catalog written to {file} ({bytes} bytes) with its signature and signed metadata next to it."
 keygen = """Public key (paste into CatalogPublicKeyHex, internal/templates/remote.go):
 {public}
 

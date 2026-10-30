@@ -699,9 +699,11 @@ Uso: hangard template <subcomando>
 Subcomandos:
   check <pasta>...                   confere templates com as mesmas regras do painel
                                      (uma pasta de template ou um catálogo de pastas)
-  pack <catálogo> [-key arquivo] [-out pasta]
-                                     gera catalog.tar.gz e catalog.tar.gz.sig (CI do catálogo);
-                                     sem -key, a chave vem de HANGAR_CATALOG_KEY
+  pack <catálogo> [-key arquivo] [-out pasta] [-sequence n] [-valid-days n]
+                                     gera catalog.tar.gz, catalog.tar.gz.sig e os metadados
+                                     assinados (catalog.tar.gz.meta e .meta.sig: sequência e
+                                     validade) no CI do catálogo; sem -key, a chave vem de
+                                     HANGAR_CATALOG_KEY
   keygen                             gera o par de chaves do catálogo
 """
 no_dir = "Informe a pasta dos templates."
@@ -709,9 +711,11 @@ check_ok = "{n} templates conferidos, todos válidos."
 check_failed = "{bad} templates com problemas ({ok} válidos)."
 flag_key = "arquivo com a chave privada (base64); padrão: variável HANGAR_CATALOG_KEY"
 flag_out = "pasta onde gravar catalog.tar.gz e a assinatura"
+flag_sequence = "número de sequência desta publicação (tem que crescer a cada uma; padrão: o horário Unix)"
+flag_valid_days = "dias em que os painéis aceitam este catálogo antes de precisar assinar de novo (no máximo 45)"
 bad_key = "Chave privada ausente ou inválida (base64 de uma chave Ed25519)."
 key_mismatch = "Essa chave não corresponde à chave pública do catálogo embutida no Hangar."
-packed = "Catálogo gravado em {file} ({bytes} bytes) com a assinatura ao lado."
+packed = "Catálogo gravado em {file} ({bytes} bytes) com a assinatura e os metadados assinados ao lado."
 keygen = """Chave pública (cole em CatalogPublicKeyHex, internal/templates/remote.go):
 {public}
 

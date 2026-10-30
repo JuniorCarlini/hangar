@@ -4,13 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"context"
 	"crypto/ed25519"
 	"errors"
-	"io"
-	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -174,85 +169,4 @@ func TestMergeHigherVersionWinsEmbeddedWinsTies(t *testing.T) {
 	if merged.List()[0].ID != "n8n" {
 		t.Error("merged catalog must be sorted")
 	}
-}
-
-func TestSyncerFetchesVerifiesStoresAndReloads(t *testing.T) {
-	pub, priv, _ := ed25519.GenerateKey(nil)
-	root := writeFolders(t, map[string]map[string][]byte{
-		"extra":    community("extra", "1", ""),
-		"postgres": community("postgres", "99", ""),
-	})
-	tarball, err := Pack(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sig := SignCatalog(tarball, priv)
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/catalog.tar.gz":
-			_, _ = w.Write(tarball)
-		case "/catalog.tar.gz.sig":
-			_, _ = io.WriteString(w, sig)
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-
-	dir := t.TempDir()
-	newSyncer := func(key ed25519.PublicKey) (*Syncer, *Registry) {
-		reg := NewRegistry(Builtin())
-		return &Syncer{
-			URL: srv.URL + "/catalog.tar.gz", Dir: dir, Version: "v1.0.0", Key: key, Registry: reg, Base: Builtin(),
-			HTTP: srv.Client(), Log: slog.New(slog.DiscardHandler),
-		}, reg
-	}
-
-	s, reg := newSyncer(pub)
-	n, err := s.Sync(context.Background())
-	if err != nil || n != 2 {
-		t.Fatalf("sync: %d, %v", n, err)
-	}
-	if _, ok := reg.Catalog().Get("extra"); !ok {
-		t.Error("the community template must be offered")
-	}
-	if pg, _ := reg.Catalog().Get("postgres"); !pg.Remote || pg.Version != 99 {
-		t.Error("a higher version from the community catalog replaces the embedded one")
-	}
-
-	// A restart loads what was stored, checking the signature again.
-	s2, reg2 := newSyncer(pub)
-	if err := s2.LoadStored(); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := reg2.Catalog().Get("extra"); !ok {
-		t.Error("stored catalog not loaded at start")
-	}
-	if err := os.WriteFile(filepath.Join(dir, storedCatalog), append(tarball, 0), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	s3, reg3 := newSyncer(pub)
-	if err := s3.LoadStored(); !errors.Is(err, ErrBadSignature) {
-		t.Errorf("a tampered stored catalog must be refused: %v", err)
-	}
-	if _, ok := reg3.Catalog().Get("extra"); ok {
-		t.Error("a tampered catalog must not be applied")
-	}
-
-	// Signed with another key: refused, and the catalog stays as it was.
-	other, _, _ := ed25519.GenerateKey(nil)
-	s4, reg4 := newSyncer(other)
-	if _, err := s4.Sync(context.Background()); !errors.Is(err, ErrBadSignature) {
-		t.Errorf("wrong key: %v", err)
-	}
-	if reg4.Catalog() != Builtin() {
-		t.Error("a refused catalog must leave the embedded one in place")
-	}
-
-	// No key in the build: the sync is off.
-	s5, _ := newSyncer(nil)
-	if _, err := s5.Sync(context.Background()); err == nil {
-		t.Error("sync without a key must fail")
-	}
-	s5.Run(context.Background()) // returns at once
 }

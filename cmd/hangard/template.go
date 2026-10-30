@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/templates"
@@ -101,6 +102,10 @@ func templatePack(args []string, stdout, stderr io.Writer) error {
 	fs.SetOutput(stderr)
 	keyFile := fs.String("key", "", tr("cli.template.flag_key"))
 	out := fs.String("out", ".", tr("cli.template.flag_out"))
+	// The Unix time grows with every publication, so the CI needs no state
+	// to keep the sequence monotonic.
+	sequence := fs.Int64("sequence", time.Now().Unix(), tr("cli.template.flag_sequence"))
+	validDays := fs.Int("valid-days", int(templates.DefaultCatalogValidity/(24*time.Hour)), tr("cli.template.flag_valid_days"))
 	var dir string
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		dir, args = args[0], args[1:]
@@ -145,6 +150,18 @@ func templatePack(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if err := os.WriteFile(tgz+".sig", []byte(templates.SignCatalog(tarball, priv)+"\n"), 0o644); err != nil { //nolint:gosec // public release file
+		return err
+	}
+	// The metadata binds the tarball to a sequence and an expiry; panels
+	// refuse a catalog without it, an older one, or an expired one.
+	meta, metaSig, err := templates.SignCatalogMeta(tarball, *sequence, time.Now(), time.Duration(*validDays)*24*time.Hour, priv)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(tgz+".meta", meta, 0o644); err != nil { //nolint:gosec // public release file
+		return err
+	}
+	if err := os.WriteFile(tgz+".meta.sig", []byte(metaSig+"\n"), 0o644); err != nil { //nolint:gosec // public release file
 		return err
 	}
 	fmt.Fprintln(stdout, tr("cli.template.packed", "file", tgz, "bytes", len(tarball)))

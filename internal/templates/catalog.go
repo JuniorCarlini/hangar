@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -93,23 +94,107 @@ func LoadEach(fsys fs.FS, root string) ([]*Template, []error) {
 }
 
 // Merge combines the embedded catalog with templates from the community
-// catalog: per id, the higher version wins and the embedded one wins ties.
+// catalog (see MergeChecked); the refused ones are dropped silently.
 func Merge(base *Catalog, extra []*Template) *Catalog {
+	c, _ := MergeChecked(base, extra)
+	return c
+}
+
+// MergeChecked combines the embedded catalog with templates from the
+// community catalog, returning one error per community template it refused.
+//
+// A new id is added as is. An id the binary already ships cannot be
+// replaced by the community catalog (the catalog key must not be as
+// powerful as the release key): a higher version is only taken as an image
+// update of the embedded template. Everything that decides what runs and
+// how (services, commands, env, volumes, caps, health, inputs, exports,
+// backup, endpoints, sizes) must be identical, and each image must keep its
+// repository; only the tag or digest may move. The result is the embedded
+// template with those images and the higher version. Anything else keeps
+// the embedded one. Ties keep the embedded one too.
+func MergeChecked(base *Catalog, extra []*Template) (*Catalog, []error) {
 	byID := map[string]*Template{}
+	builtin := map[string]*Template{}
 	for _, t := range base.List() {
 		byID[t.ID] = t
+		builtin[t.ID] = t
 	}
+	var refused []error
 	for _, t := range extra {
-		if cur, ok := byID[t.ID]; ok && cur.Version >= t.Version {
+		emb, ok := builtin[t.ID]
+		if !ok {
+			if cur, dup := byID[t.ID]; dup && cur.Version >= t.Version {
+				continue
+			}
+			byID[t.ID] = t
 			continue
 		}
-		byID[t.ID] = t
+		if t.Version <= emb.Version {
+			continue
+		}
+		bumped, err := imageUpdate(emb, t)
+		if err != nil {
+			refused = append(refused, fmt.Errorf("%s: %w", t.ID, err))
+			continue
+		}
+		byID[t.ID] = bumped
 	}
 	list := make([]*Template, 0, len(byID))
 	for _, t := range byID {
 		list = append(list, t)
 	}
-	return NewCatalog(list)
+	return NewCatalog(list), refused
+}
+
+// imageUpdate returns emb with remote's images and version when remote
+// differs from emb only in its images' tags or digests.
+func imageUpdate(emb, remote *Template) (*Template, error) {
+	if len(emb.Services) != len(remote.Services) {
+		return nil, errors.New("replaces an embedded template with different services; only image tags may change")
+	}
+	a, b := runtimeView(emb), runtimeView(remote)
+	for i := range a.Services {
+		if imageRepo(a.Services[i].Image) != imageRepo(b.Services[i].Image) {
+			return nil, fmt.Errorf("service %s: image %s replaces %s; only the tag may change", b.Services[i].Name, b.Services[i].Image, a.Services[i].Image)
+		}
+		a.Services[i].Image, b.Services[i].Image = "", ""
+	}
+	if !reflect.DeepEqual(a, b) {
+		return nil, errors.New("changes more than image tags of an embedded template")
+	}
+	out := *emb
+	out.Services = slices.Clone(emb.Services)
+	for i := range out.Services {
+		out.Services[i].Image = remote.Services[i].Image
+	}
+	out.Version = remote.Version
+	out.Remote = true
+	return &out, nil
+}
+
+// runtimeView is t without what is only shown (names, text, logo, readme,
+// tags, version, warnings): everything left decides what runs and how, and
+// a field added to Template later is compared by default. The presentation
+// of a merged template always comes from the embedded one.
+func runtimeView(t *Template) Template {
+	v := *t
+	v.Version, v.Category, v.Tags, v.Name, v.Description, v.Docs = 0, "", nil, nil, nil, ""
+	v.MinHangar, v.Logo, v.Readme, v.Remote, v.Warnings = "", nil, "", false, nil
+	v.Services = slices.Clone(t.Services)
+	for i := range v.Services {
+		v.Services[i].warnings = nil
+	}
+	return v
+}
+
+// imageRepo is an image reference without its tag and digest
+// ("docker.io/library/postgres:18.1@sha256:..." -> "docker.io/library/postgres").
+func imageRepo(ref string) string {
+	ref, _, _ = strings.Cut(ref, "@")
+	if i := strings.LastIndex(ref, ":"); i > strings.LastIndex(ref, "/") {
+		ref = ref[:i]
+	}
+	return ref
 }
 
 // Registry holds the catalog in use; the background sync swaps it while
