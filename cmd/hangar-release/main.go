@@ -24,6 +24,9 @@ const usage = `Usage:
   hangar-release sign <version> <dir>
       creates <dir>/release.json with the hash of every hangard-linux-* and
       signs it with the key in HANGAR_RELEASE_KEY (base64)
+  hangar-release verify <dir>
+      checks <dir>/release.json.sig with the embedded public key and the hash
+      of every listed file present in <dir>; prints the version
 `
 
 func main() {
@@ -66,6 +69,17 @@ func run(args []string, out io.Writer) error {
 			return errors.New("sign needs the version and the directory")
 		}
 		return sign(args[1], args[2])
+
+	case "verify":
+		if len(args) != 2 {
+			return errors.New("verify needs the directory")
+		}
+		v, err := verify(args[1])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(out, v)
+		return nil
 	}
 	return fmt.Errorf("unknown command %q", args[0])
 }
@@ -111,4 +125,52 @@ func sign(version, dir string) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "release.json.sig"), []byte(release.Sign(manifest, priv)+"\n"), 0o644) //nolint:gosec // public release file
+}
+
+// verify checks a release directory the way a server does: the manifest's
+// signature against the embedded public key, then the hash of every listed
+// file found in dir (at least one must be there). The release workflow uses
+// it on the previous release, to trust an image digest only when a signed
+// binary already shipped it, and on its own output before publishing.
+func verify(dir string) (string, error) {
+	manifest, err := os.ReadFile(filepath.Join(dir, "release.json")) //nolint:gosec // directory named on the command line
+	if err != nil {
+		return "", err
+	}
+	sig, err := os.ReadFile(filepath.Join(dir, "release.json.sig")) //nolint:gosec // directory named on the command line
+	if err != nil {
+		return "", err
+	}
+	m, err := release.VerifyManifest(manifest, string(sig))
+	if err != nil {
+		return "", err
+	}
+	names := make([]string, 0, len(m.Files))
+	for n := range m.Files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	checked := 0
+	for _, n := range names {
+		if n != filepath.Base(n) {
+			return "", fmt.Errorf("manifest lists %q outside the directory", n)
+		}
+		f, err := os.Open(filepath.Join(dir, n)) //nolint:gosec // name checked above
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		err = m.CheckFile(n, f)
+		_ = f.Close()
+		if err != nil {
+			return "", err
+		}
+		checked++
+	}
+	if checked == 0 {
+		return "", errors.New("none of the files in release.json is in the directory")
+	}
+	return m.Version, nil
 }

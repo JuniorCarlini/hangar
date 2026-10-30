@@ -1,17 +1,78 @@
 name: Release
 
+# The release signing key (HANGAR_RELEASE_KEY) signs the updates every
+# server installs, so it is kept away from anything that runs third-party or
+# test code (SEC-012):
+#
+#   gate        the tag is on main and CI passed on that exact commit
+#   edge-image  builds (or reuses, by a digest a signed release shipped) the
+#               edge Caddy image
+#   build       tests and builds the binaries; no secrets at all
+#   sign        only job with the key, in the protected "release"
+#               environment; receives the binaries as an artifact, checks
+#               them against the checksums the build job reported, builds
+#               the small signer from source and signs
+#   publish     creates the GitHub release from the signed artifact
+#
+# Repository settings this relies on (not visible in code, see
+# docs/21-atualizacao-do-painel.md): the "release" environment holding the
+# key, limited to v* tags; a tag ruleset protecting v* tags; and CI as a
+# required check on main.
+
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
-permissions:
-  contents: write
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Tag on main, CI green on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Only a commit that reached main (through its review and checks)
+          # is released.
+          status=$(gh api "repos/$REPO/compare/main...$SHA" --jq .status)
+          case "$status" in
+            identical|behind) ;;
+            *) echo "::error::$SHA is not on main (compare: $status)"; exit 1 ;;
+          esac
+          # CI of the push to main for this commit must have succeeded. It
+          # may still be running when the tag is pushed right after.
+          for _ in $(seq 1 80); do
+            runs=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=20" \
+              --jq '[.workflow_runs[] | {status, conclusion}]')
+            if jq -e 'any(.[]; .status == "completed" and .conclusion == "success")' <<<"$runs" >/dev/null; then
+              echo "CI passed on $SHA"
+              exit 0
+            fi
+            if jq -e 'length > 0 and all(.[]; .status == "completed")' <<<"$runs" >/dev/null; then
+              echo "::error::CI did not pass on $SHA"
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "::error::no finished CI run for $SHA after 40 minutes"
+          exit 1
+
   # Build and publish the edge Caddy image (with the DNS-01 provider modules)
   # for this version, and expose its digest. The binary below is pinned to that
   # digest, so the signed binary names the exact image the edge pulls.
   edge-image:
+    needs: gate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,6 +83,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
 
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -35,6 +101,7 @@ jobs:
       - name: Resolve the edge image (reuse when the Dockerfile is unchanged)
         id: resolve
         env:
+          GH_TOKEN: ${{ github.token }}
           IMAGE: ghcr.io/juniorcarlini/hangar-caddy
           # Through the environment, never pasted into the script: the
           # shell then sees the tag as data, whatever it contains.
@@ -47,28 +114,50 @@ jobs:
           # container — changes only on releases that actually change this image.
           SOURCE_DATE_EPOCH: "0"
         run: |
+          set -euo pipefail
           H=$(sha256sum deploy/caddy/Dockerfile | cut -c1-16)
           TAG="$IMAGE:df-$H"
-          if digest=$(docker buildx imagetools inspect "$TAG" --format '{{.Manifest.Digest}}' 2>/dev/null); then
-            echo "reusing $TAG ($digest)"
-          else
+          digest=""
+          # The df- tag is mutable (anyone with packages:write can move it),
+          # so its digest is reused only when the previous signed release's
+          # binary already names exactly that image.
+          if cand=$(docker buildx imagetools inspect "$TAG" --format '{{.Manifest.Digest}}' 2>/dev/null); then
+            prev="$RUNNER_TEMP/prev"
+            mkdir -p "$prev"
+            if gh release download --repo "$GITHUB_REPOSITORY" --pattern release.json --pattern release.json.sig \
+                 --pattern hangard-linux-amd64 --dir "$prev" &&
+               go run ./cmd/hangar-release verify "$prev" &&
+               grep -aqF "$IMAGE@$cand" "$prev/hangard-linux-amd64"; then
+              digest="$cand"
+              echo "reusing $TAG ($digest), shipped by the previous signed release"
+            else
+              echo "::warning::$TAG ($cand) is not the image of the previous signed release; rebuilding"
+            fi
+          fi
+          if [ -z "$digest" ]; then
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
               --provenance=false --sbom=false \
+              --metadata-file "$RUNNER_TEMP/build.json" \
               --output "type=image,name=$TAG,push=true,rewrite-timestamp=true" \
               deploy/caddy
-            digest=$(docker buildx imagetools inspect "$TAG" --format '{{.Manifest.Digest}}')
+            # The digest of what this job pushed, not a lookup of the tag.
+            digest=$(jq -r '."containerimage.digest"' "$RUNNER_TEMP/build.json")
           fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::bad digest $digest"; exit 1; }
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
           # A version-tagged alias on the same manifest, for browsing the registry.
           docker buildx imagetools create --tag "$IMAGE:$VERSION" "$IMAGE@$digest"
 
-  # Depends on edge-image on purpose: if the image push fails, no release is
-  # cut, so a binary never ships pointing at an image that is not in the
-  # registry.
-  release:
+  # Tests and binaries. No secret reaches this job: whatever a dependency or
+  # a test does here, it cannot read the signing key.
+  build:
     needs: edge-image
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sums: ${{ steps.sums.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -77,6 +166,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          cache: false
 
       - name: Tests
         run: go test -race ./...
@@ -97,11 +187,111 @@ jobs:
           done
           cp deploy/install.sh dist/install.sh
 
+      # The checksum list's own hash goes through a job output, which the
+      # artifact store cannot change: the signing job signs exactly these
+      # bytes or nothing.
+      - name: Checksums
+        id: sums
+        working-directory: dist
+        run: |
+          sha256sum hangard-linux-amd64 hangard-linux-arm64 install.sh > SHA256SUMS
+          echo "sha256=$(sha256sum SHA256SUMS | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  # The only job that sees HANGAR_RELEASE_KEY. It runs no tests and no
+  # third-party actions after the key is in reach: it builds the signer
+  # (cmd/hangar-release, standard library plus internal packages) from the
+  # tagged source and signs the checked binaries.
+  sign:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned
+          path: dist
+
+      - name: Check the artifact against the build's checksums
+        working-directory: dist
+        env:
+          WANT: ${{ needs.build.outputs.sums }}
+        run: |
+          set -euo pipefail
+          [ "$(sha256sum SHA256SUMS | cut -d' ' -f1)" = "$WANT" ] || { echo "::error::SHA256SUMS changed after the build"; exit 1; }
+          sha256sum --strict -c SHA256SUMS
+          # Nothing but what the build listed gets signed or published.
+          for f in * .[!.]*; do
+            [ -e "$f" ] || continue
+            case "$f" in
+              SHA256SUMS|hangard-linux-amd64|hangard-linux-arm64|install.sh) ;;
+              *) echo "::error::unexpected file: $f"; exit 1 ;;
+            esac
+          done
+
+      - name: Build the signer
+        run: go build -trimpath -o "$RUNNER_TEMP/hangar-release" ./cmd/hangar-release
+
       - name: Sign
         env:
           VERSION: ${{ github.ref_name }}
           HANGAR_RELEASE_KEY: ${{ secrets.HANGAR_RELEASE_KEY }}
-        run: go run ./cmd/hangar-release sign "$VERSION" dist
+        run: |
+          "$RUNNER_TEMP/hangar-release" sign "$VERSION" dist
+          "$RUNNER_TEMP/hangar-release" verify dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: sign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: signed
+          path: dist
+
+      - name: Verify before publishing
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          got=$(go run ./cmd/hangar-release verify dist)
+          [ "$got" = "$VERSION" ] || { echo "::error::signed manifest is for $got"; exit 1; }
+          (cd dist && sha256sum --strict -c SHA256SUMS)
 
       - name: Publish
         env:
@@ -112,4 +302,5 @@ jobs:
         run: |
           awk -v h="## [${VERSION#v}]" 'index($0, h) == 1 { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "Veja o CHANGELOG.md." > notes.md
-          gh release create "$VERSION" dist/* --title "$VERSION" --notes-file notes.md --verify-tag
+          rm dist/SHA256SUMS
+          gh release create "$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --title "$VERSION" --notes-file notes.md --verify-tag

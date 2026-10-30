@@ -69,7 +69,20 @@ pela chave de release do projeto**.
 
 - O CI do GitHub gera os binários (Linux amd64 e arm64), o `release.json` (com o SHA-256 de cada binário) e
   uma assinatura **Ed25519** desse arquivo (`release.json.sig`), com a chave privada guardada
-  como segredo do repositório.
+  como segredo do environment `release`. Só o job que assina recebe a chave:
+  testes e build rodam antes, em outro job, sem segredo nenhum
+  ([12](12-padroes-de-codigo.md)).
+- Configuração do GitHub que o workflow pressupõe (não aparece no código):
+  - environment `release` (Settings → Environments) com o segredo
+    `HANGAR_RELEASE_KEY` e "Deployment branches and tags" limitado a tags
+    `v*`. O segredo de mesmo nome no nível do repositório é apagado, senão
+    qualquer workflow continua lendo a chave. Revisor obrigatório é opcional
+    (cada release espera um clique de aprovação);
+  - ruleset de tags (Settings → Rules → Rulesets) para `refs/tags/v*`:
+    restringir criação, atualização e remoção a quem publica, e bloquear
+    force push;
+  - ruleset da `main` com o job `check` do CI como status obrigatório;
+  - em Settings → Actions → General: "Workflow permissions" só leitura.
 - A **chave pública vai embutida no binário**. A verificação usa só a
   biblioteca padrão do Go, sem ferramenta externa.
 - Binário sem assinatura válida, versão menor que a atual (downgrade) ou
