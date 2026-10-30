@@ -504,8 +504,16 @@ se ele foi feito com o kit, o kit (e a frase-senha). Sempre vira um
 **projeto novo**: nunca sobrescreve um projeto que existe.
 
 1. O arquivo sobe direto para a pasta de staging (em streaming, sem passar do
-   espaço livre do disco); o manifesto é conferido (formato, caminhos, o que
-   cada serviço precisa) e o kit é testado lendo o `project.json`.
+   espaço livre do disco nem de `[backup] max_restore_upload_gb`, 100 GiB por
+   padrão: acima disso a resposta é 413); o manifesto é conferido (formato,
+   caminhos, no máximo 10 mil arquivos no `.zip`, cada tamanho igual ao do
+   `.zip`, o que cada serviço precisa) e o kit é testado lendo o
+   `project.json`. Só o kit enviado abre o arquivo: a chave do próprio
+   servidor nunca é usada aqui (ela abre os backups do painel feitos no modo
+   simples, que são só do dono).
+   As configurações de deploy (health path, comandos, tempos), a origem Git
+   e os limites de cada serviço passam pelas mesmas validações dos
+   formulários.
 2. O projeto e os serviços são criados com a configuração de cada um. As
    referências e os nomes dos containers do projeto original passam a apontar
    para a cópia (`${{lab.db.X}}` → `${{db.X}}`, `lab_db` → `copia_db`);

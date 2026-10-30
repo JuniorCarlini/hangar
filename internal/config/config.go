@@ -91,6 +91,9 @@ type Backup struct {
 	// address (a MinIO in the lab). Off in production: the anti-SSRF filter
 	// (docs/17) refuses internal addresses.
 	AllowPrivateEndpoints bool `toml:"allow_private_endpoints"`
+	// MaxRestoreUploadGB bounds the project backup a restore takes from
+	// the browser, in GiB (0: 100). The disk's free space bounds it too.
+	MaxRestoreUploadGB int64 `toml:"max_restore_upload_gb"`
 }
 
 // Auth configures login.

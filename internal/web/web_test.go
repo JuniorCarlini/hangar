@@ -114,7 +114,7 @@ func newEnv(t *testing.T, opts ...func(*auth.Options)) *env {
 	})
 	e.alerts.Observe(al)
 	e.lock = lockdown.New(st.DB, al)
-	e.bm, err = backup.New(st.DB, box, e.pm, al, discard, backup.Options{StagingDir: filepath.Join(dir, "staging"), DBPath: filepath.Join(dir, "h.db")})
+	e.bm, err = backup.New(st.DB, box, e.pm, al, discard, backup.Options{StagingDir: filepath.Join(dir, "staging"), DBPath: filepath.Join(dir, "h.db"), MaxRestoreUpload: testMaxUpload})
 	if err != nil {
 		t.Fatal(err)
 	}

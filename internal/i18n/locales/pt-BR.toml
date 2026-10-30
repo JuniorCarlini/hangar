@@ -3460,6 +3460,7 @@ format = "Este backup de projeto foi feito por um Hangar mais novo. Atualize est
 wrong_key = "O kit enviado não abre este backup. Use o kit do Hangar onde ele foi feito."
 corrupt = "O arquivo {file} do backup está corrompido (não confere com o manifesto)."
 method = "{service} não pode ser restaurado aqui: este servidor faz o backup dele de outro jeito (o template não é o mesmo)."
+too_large = "O arquivo passa do limite de {max} para restaurar um projeto. Aumente max_restore_upload_gb em [backup] no hangar.toml se precisar."
 
 [projrestore]
 running = "Restaurando o projeto a partir de {file}…"

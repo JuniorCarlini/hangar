@@ -78,6 +78,26 @@ func TestRestoreProjectUpload(t *testing.T) {
 	}
 }
 
+// testMaxUpload is the project backup upload limit of the test panel.
+const testMaxUpload = 4 * maxBodyBytes
+
+// SEC-018: an upload over the limit is refused with 413 (the backup
+// package checks the staging dir is left empty, also for a file that
+// only turns out too large as it streams in).
+func TestRestoreProjectUploadLimit(t *testing.T) {
+	e := newEnv(t)
+	c, p := e.session(t, auth.RoleAdmin)
+	sc, sp := e.sudo(t, c, p)
+	huge := bytes.Repeat([]byte("x"), testMaxUpload+1)
+	rec := e.postUpload(t, sc, "?csrf="+url.QueryEscape(sp.CSRFToken), huge, "")
+	if rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "max_restore_upload_gb") {
+		t.Fatalf("over the limit: %d", rec.Code)
+	}
+	if ps, _ := e.pm.ListProjects(context.Background()); len(ps) != 0 {
+		t.Fatalf("a refused file created projects: %+v", ps)
+	}
+}
+
 // Only the listed upload route may take an upload policy.
 func TestUploadPolicyOnlyOnUploadRoutes(t *testing.T) {
 	rt := newRouter(nil, nil)

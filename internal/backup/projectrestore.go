@@ -43,13 +43,35 @@ const projectRestoreTimeout = 2 * restoreTimeout
 const (
 	maxManifest   = 4 << 20
 	maxConfigFile = 8 << 20
+	// maxZipEntries bounds the files in an uploaded backup: a manifest,
+	// the project's file and a handful per service.
+	maxZipEntries = 10_000
 )
+
+// DefaultMaxRestoreUpload bounds an uploaded project backup when the
+// configuration does not ([backup] max_restore_upload_gb).
+const DefaultMaxRestoreUpload int64 = 100 << 30
 
 // Errors of a project restore the UI translates.
 var (
 	ErrProjectFile   = &i18n.Error{Key: "project.restore.error.file"}
 	ErrProjectFormat = &i18n.Error{Key: "project.restore.error.format"}
+	// ErrUploadTooLarge is an upload over the limit (an HTTP 413).
+	ErrUploadTooLarge = errors.New("the uploaded project backup is over the limit")
 )
+
+// maxUpload is the most a project backup upload may hold.
+func (m *Manager) maxUpload() int64 {
+	if m.opt.MaxRestoreUpload > 0 {
+		return m.opt.MaxRestoreUpload
+	}
+	return DefaultMaxRestoreUpload
+}
+
+// uploadTooLarge is ErrUploadTooLarge with the message the user reads.
+func (m *Manager) uploadTooLarge() error {
+	return fmt.Errorf("%w: %w", ErrUploadTooLarge, i18n.E("project.restore.error.too_large", "max", gbText(m.maxUpload())))
+}
 
 // ProjectRestoreRequest is the "Novo projeto → A partir de um backup" form.
 type ProjectRestoreRequest struct {
@@ -116,9 +138,15 @@ func (m *Manager) LatestProjectRestore(ctx context.Context, projectID string) (P
 }
 
 // StageUpload writes an uploaded project backup of size bytes (-1 when
-// unknown) into the staging dir, refusing one the server's disk cannot
-// hold with room to spare. It returns the file's path.
+// unknown) into the staging dir, refusing one over the upload limit
+// (ErrUploadTooLarge, also once more than that has arrived) or one the
+// server's disk cannot hold with room to spare. It returns the file's
+// path.
 func (m *Manager) StageUpload(r io.Reader, size int64) (string, error) {
+	limit := m.maxUpload()
+	if size > limit+1<<20 { // size is the whole request: the form fields and the kit come along
+		return "", m.uploadTooLarge()
+	}
 	if free, ok := freeSpace(m.opt.StagingDir); ok && size > 0 && free < size+stagingReserve {
 		return "", i18n.E("backup.error.no_room", "need", gbText(size+stagingReserve), "free", gbText(free))
 	}
@@ -126,7 +154,10 @@ func (m *Manager) StageUpload(r io.Reader, size int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, err = io.Copy(&roomWriter{w: f, dir: m.opt.StagingDir}, r)
+	n, err := io.Copy(&roomWriter{w: f, dir: m.opt.StagingDir}, io.LimitReader(r, limit+1))
+	if err == nil && n > limit {
+		err = m.uploadTooLarge()
+	}
 	if cerr := f.Close(); err == nil {
 		err = cerr
 	}
@@ -165,6 +196,9 @@ func openProjectFile(path string, ids []age.Identity) (*projectFile, error) {
 			pf.close()
 		}
 	}()
+	if len(zr.File) > maxZipEntries {
+		return nil, fmt.Errorf("%w: %d files", ErrProjectFile, len(zr.File))
+	}
 	for _, f := range zr.File {
 		if _, dup := pf.byName[f.Name]; dup {
 			return nil, fmt.Errorf("%w: %s twice", ErrProjectFile, f.Name)
@@ -231,6 +265,10 @@ func (pf *projectFile) check() error {
 			return fmt.Errorf("%w: %q out of place", ErrProjectFile, p.Path)
 		case pf.byName[p.Path] == nil:
 			return fmt.Errorf("%w: %q missing", ErrProjectFile, p.Path)
+		case p.Size < 0 || uint64(p.Size) != pf.byName[p.Path].UncompressedSize64:
+			// The zip and the manifest agree on every size; reading a file
+			// then stops at that size (archive/zip and verify).
+			return fmt.Errorf("%w: %q size", ErrProjectFile, p.Path)
 		case p.Role == partData || p.Role == partConfig || p.Role == partRoles:
 			if strings.HasSuffix(p.Path, ".age") != man.Encrypted {
 				return fmt.Errorf("%w: %q encrypted or not, against the manifest", ErrProjectFile, p.Path)

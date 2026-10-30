@@ -3462,6 +3462,7 @@ format = "This project backup was made by a newer Hangar. Update this server and
 wrong_key = "The kit you sent does not open this backup. Use the kit of the Hangar where it was made."
 corrupt = "The file {file} of the backup is corrupted (it does not match the manifest)."
 method = "{service} cannot be restored here: this server backs it up another way (the template is not the same)."
+too_large = "The file is over the {max} limit to restore a project. Raise max_restore_upload_gb under [backup] in hangar.toml if you need to."
 
 [projrestore]
 running = "Restoring the project from {file}…"

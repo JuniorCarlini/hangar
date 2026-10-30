@@ -544,6 +544,7 @@ func NewBackups(core *Core, pm *projects.Manager, cfg config.Config, version str
 	m, err := backup.New(core.Store.DB, core.Box, pm, core.Audit, log, backup.Options{
 		StagingDir:            filepath.Join(cfg.DataDir, "backups", "staging"),
 		AllowPrivateEndpoints: cfg.Backup.AllowPrivateEndpoints,
+		MaxRestoreUpload:      cfg.Backup.MaxRestoreUploadGB << 30,
 		DBPath:                filepath.Join(cfg.DataDir, "hangar.db"),
 		MasterKeyFile:         cfg.MasterKeyFile,
 		ConfigFile:            cfg.Path,

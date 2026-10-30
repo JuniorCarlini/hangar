@@ -1,13 +1,16 @@
 package backup
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -142,5 +145,60 @@ func TestPanelBackupLinkIsOwnerOnly(t *testing.T) {
 	}
 	if u, err := f.m.RunDownloadURL(ctx, f.who, dumpRun, false); err != nil || u == "" {
 		t.Fatalf("an admin downloads a service backup: %q %v", u, err)
+	}
+}
+
+// SEC-018: an upload is bounded as it streams, whatever length the
+// request announced, and nothing stays in the staging dir; a .zip with
+// too many files, or whose sizes disagree with its manifest, is refused
+// before anything is made.
+func TestProjectRestoreUploadLimits(t *testing.T) {
+	f := newFixture(t)
+	f.m.opt.MaxRestoreUpload = 1 << 20
+	staged := func() int {
+		left, _ := os.ReadDir(f.m.opt.StagingDir)
+		return len(left)
+	}
+	for _, size := range []int64{-1, 10, 4 << 20} {
+		_, err := f.m.StageUpload(bytes.NewReader(make([]byte, 1<<20+1)), size)
+		if !errors.Is(err, ErrUploadTooLarge) {
+			t.Fatalf("announced %d: %v", size, err)
+		}
+	}
+	if n := staged(); n != 0 {
+		t.Fatalf("%d refused uploads stayed in staging", n)
+	}
+	path, err := f.m.StageUpload(bytes.NewReader(make([]byte, 1<<20)), -1)
+	if err != nil {
+		t.Fatalf("at the limit: %v", err)
+	}
+	_ = os.Remove(path)
+
+	f.m.opt.MaxRestoreUpload = 0
+	var many bytes.Buffer
+	zw := zip.NewWriter(&many)
+	for i := range maxZipEntries + 1 {
+		_, _ = zw.Create(fmt.Sprintf("f%d", i))
+	}
+	_ = zw.Close()
+	var ie *i18n.Error
+	if _, _, err := f.startRestore(t, many.Bytes()); !errors.As(err, &ie) || ie.Key != "project.restore.error.file" {
+		t.Fatalf("too many files: %v", err)
+	}
+
+	f.projectLab(t)
+	zipped := f.takeProject(t)
+	lying := rezip(t, zipped, func(name string, data []byte) []byte {
+		if name != ManifestName {
+			return data
+		}
+		var man ProjectManifest
+		_ = json.Unmarshal(data, &man)
+		man.Parts[0].Size++
+		b, _ := json.Marshal(man)
+		return b
+	})
+	if _, _, err := f.startRestore(t, lying, f.id); !errors.As(err, &ie) || ie.Key != "project.restore.error.file" {
+		t.Fatalf("a size the zip does not have: %v", err)
 	}
 }

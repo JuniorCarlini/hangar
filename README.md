@@ -233,6 +233,7 @@ allowed_ports = [22]                            # portas fora do painel que não
 
 [backup]
 allow_private_endpoints = false                 # true só para MinIO de laboratório
+max_restore_upload_gb = 100                     # teto do arquivo de "Novo projeto ▸ A partir de um backup"
 ```
 
 Todas as chaves, padrões e validações estão em

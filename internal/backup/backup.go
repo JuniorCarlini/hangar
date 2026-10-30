@@ -47,6 +47,9 @@ type Options struct {
 	// AllowPrivateEndpoints lets a destination live on a private address
 	// (a MinIO in the lab). Off in production: anti-SSRF (docs/17).
 	AllowPrivateEndpoints bool
+	// MaxRestoreUpload bounds an uploaded project backup, in bytes
+	// (0: DefaultMaxRestoreUpload).
+	MaxRestoreUpload int64
 	// Panel backup inputs.
 	DBPath        string
 	MasterKeyFile string

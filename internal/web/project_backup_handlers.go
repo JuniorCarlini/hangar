@@ -132,6 +132,9 @@ func (h *handlers) restoreProject(w http.ResponseWriter, r *http.Request) {
 // "A partir de um backup" and the reason.
 func (h *handlers) restoreProjectFailed(w http.ResponseWriter, r *http.Request, name string, err error) {
 	code, msg := userError(r, err)
+	if errors.Is(err, backup.ErrUploadTooLarge) {
+		code = http.StatusRequestEntityTooLarge
+	}
 	n := views.NavFrom(r.Context())
 	n.NewProject = views.NewProjectForm{Open: true, Error: msg, Name: name, Backup: true}
 	h.renderOverview(w, r.WithContext(views.WithNav(r.Context(), n)), code)
