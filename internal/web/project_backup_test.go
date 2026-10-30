@@ -88,8 +88,21 @@ func TestRestoreProjectUploadLimit(t *testing.T) {
 	e := newEnv(t)
 	c, p := e.session(t, auth.RoleAdmin)
 	sc, sp := e.sudo(t, c, p)
-	huge := bytes.Repeat([]byte("x"), testMaxUpload+1)
-	rec := e.postUpload(t, sc, "?csrf="+url.QueryEscape(sp.CSRFToken), huge, "")
+	// The token goes in the header, which every way of sending it accepts.
+	var mb bytes.Buffer
+	mw := multipart.NewWriter(&mb)
+	_ = mw.WriteField("name", "Cópia")
+	fw, _ := mw.CreateFormFile("file", "lab.hangar.zip")
+	_, _ = fw.Write(bytes.Repeat([]byte("x"), testMaxUpload+1))
+	_ = mw.Close()
+	r := httptest.NewRequest(http.MethodPost, "http://"+testHost+projectRestorePath, &mb)
+	r.Host = testHost
+	r.Header.Set("Content-Type", mw.FormDataContentType())
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
+	r.Header.Set("X-CSRF-Token", sp.CSRFToken)
+	r.AddCookie(sc)
+	rec := httptest.NewRecorder()
+	e.h.ServeHTTP(rec, r)
 	if rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "max_restore_upload_gb") {
 		t.Fatalf("over the limit: %d", rec.Code)
 	}
