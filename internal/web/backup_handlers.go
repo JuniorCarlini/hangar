@@ -789,7 +789,8 @@ func (h *handlers) runDownload(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	u, err := h.backups.RunDownloadURL(r.Context(), actor(r), r.PathValue("id"))
+	owner := PrincipalFrom(r.Context()).Role >= auth.RoleOwner
+	u, err := h.backups.RunDownloadURL(r.Context(), actor(r), r.PathValue("id"), owner)
 	if err != nil {
 		code, msg := userError(r, err)
 		h.renderBackups(w, r, code, msg, "")

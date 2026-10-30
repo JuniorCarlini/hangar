@@ -142,8 +142,9 @@ type projectFile struct {
 	zr     *zip.ReadCloser
 	byName map[string]*zip.File
 	man    ProjectManifest
-	// ids open its sealed files: the kit's, the server's, and eph, which
-	// seals its open files on the way to the restore (localSource).
+	// ids open its sealed files: the kit's (never the server's own key,
+	// see StartProjectRestore) and eph, which seals its open files on the
+	// way to the restore (localSource).
 	ids []age.Identity
 	eph *age.X25519Identity
 }
@@ -463,7 +464,13 @@ func (m *Manager) StartProjectRestore(ctx context.Context, a Actor, req ProjectR
 	if _, _, err := m.tasker(); err != nil {
 		return "", err
 	}
-	pf, err := openProjectFile(req.File, m.withServerIdentity(ctx, req.Identities))
+	// Only the uploaded kit opens an uploaded file, never the server's own
+	// key: that key opens the panel's backups made in the simple mode
+	// (master key, every secret), and a file sealed to it, dropped into a
+	// bundle, would be decrypted and handed to a container the bundle
+	// names. Hangar's own bundles never need it: in the simple mode they
+	// leave the server open, with the kit they are sealed to the kit.
+	pf, err := openProjectFile(req.File, req.Identities)
 	if err != nil {
 		return "", err
 	}

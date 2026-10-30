@@ -14,6 +14,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/backup/archive"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
 	"github.com/JuniorCarlini/hangar/internal/projects"
@@ -370,9 +371,18 @@ func (m *Manager) dropLocked(token string) {
 
 // RunDownloadURL returns a short-lived signed link to an older backup in
 // the first destination that has it (docs/09: "do bucket direto").
-func (m *Manager) RunDownloadURL(ctx context.Context, a Actor, runID string) (string, error) {
+//
+// The panel's own backup is the owner's alone, as in OpenRun: one made
+// while the server held its own key opens with that key, which the panel
+// still has, so a link to it is as good as the decrypted file (master
+// key, every secret). ownerOK says the caller is an owner.
+func (m *Manager) RunDownloadURL(ctx context.Context, a Actor, runID string, ownerOK bool) (string, error) {
 	r, err := m.q.GetBackupRun(ctx, runID)
 	if err != nil || r.ObjectKey == "" || r.Status != "ok" {
+		return "", projects.ErrNotFound
+	}
+	if r.Kind == archive.KindPanel && !ownerOK {
+		m.record(ctx, a, "backup.download_link", "backup_run", runID, audit.Denied, map[string]any{"label": r.Label, "kind": r.Kind, "reason": "owner_only"})
 		return "", projects.ErrNotFound
 	}
 	ts, err := m.targets(ctx)
