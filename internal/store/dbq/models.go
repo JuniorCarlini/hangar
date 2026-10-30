@@ -72,6 +72,15 @@ type AuditArchive struct {
 	DataSha256 []byte
 	ArchivedAt int64
 	ExpiredAt  sql.NullInt64
+	Mac        []byte
+}
+
+type AuditChain struct {
+	Version   int64
+	FromID    int64
+	KeyEnc    []byte
+	KeyID     []byte
+	CreatedAt int64
 }
 
 type AuditLog struct {

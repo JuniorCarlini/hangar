@@ -4,7 +4,9 @@
 package secrets
 
 import (
+	"crypto/hkdf"
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -92,6 +94,14 @@ func NewBox(key []byte) (*Box, error) {
 		return nil, fmt.Errorf("key has %d bytes, want %d", len(key), keySize)
 	}
 	return &Box{key: append([]byte(nil), key...)}, nil
+}
+
+// DeriveKey derives a 32-byte key for one purpose (info) from the master key
+// with HKDF-SHA256, so a key used elsewhere (the audit chain's HMAC) never
+// is the master key itself. Callers that must survive a master key rotation
+// store the result sealed (Seal), not re-derive it.
+func (b *Box) DeriveKey(info string) ([]byte, error) {
+	return hkdf.Key(sha256.New, b.key, nil, info, keySize)
 }
 
 // Seal encrypts plaintext. ad (associated data) binds the value to where it

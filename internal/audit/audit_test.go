@@ -43,7 +43,7 @@ func TestChainVerifies(t *testing.T) {
 		record(t, l, a)
 	}
 
-	n, err := audit.Verify(context.Background(), s.Q)
+	n, err := audit.Verify(context.Background(), s.Q, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestVerifyDetectsTampering(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			_, err := audit.Verify(context.Background(), s.Q)
+			_, err := audit.Verify(context.Background(), s.Q, nil)
 			var te *audit.TamperError
 			if !errors.As(err, &te) {
 				t.Fatalf("expected TamperError, got %v", err)

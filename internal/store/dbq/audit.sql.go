@@ -64,6 +64,23 @@ func (q *Queries) ExpireAuditArchive(ctx context.Context, arg ExpireAuditArchive
 	return err
 }
 
+const getAuditChain = `-- name: GetAuditChain :one
+SELECT version, from_id, key_enc, key_id, created_at FROM audit_chain WHERE version = 2
+`
+
+func (q *Queries) GetAuditChain(ctx context.Context) (AuditChain, error) {
+	row := q.db.QueryRowContext(ctx, getAuditChain)
+	var i AuditChain
+	err := row.Scan(
+		&i.Version,
+		&i.FromID,
+		&i.KeyEnc,
+		&i.KeyID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertAudit = `-- name: InsertAudit :one
 INSERT INTO audit_log (
     ts, actor_id, ip, user_agent, action, target_type, target_id, outcome, summary_json, prev_hash, hash
@@ -105,8 +122,8 @@ func (q *Queries) InsertAudit(ctx context.Context, arg InsertAuditParams) (int64
 }
 
 const insertAuditArchive = `-- name: InsertAuditArchive :exec
-INSERT INTO audit_archive (first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO audit_archive (first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, mac)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertAuditArchiveParams struct {
@@ -120,6 +137,7 @@ type InsertAuditArchiveParams struct {
 	Data       []byte
 	DataSha256 []byte
 	ArchivedAt int64
+	Mac        []byte
 }
 
 func (q *Queries) InsertAuditArchive(ctx context.Context, arg InsertAuditArchiveParams) error {
@@ -134,12 +152,34 @@ func (q *Queries) InsertAuditArchive(ctx context.Context, arg InsertAuditArchive
 		arg.Data,
 		arg.DataSha256,
 		arg.ArchivedAt,
+		arg.Mac,
+	)
+	return err
+}
+
+const insertAuditChain = `-- name: InsertAuditChain :exec
+INSERT INTO audit_chain (version, from_id, key_enc, key_id, created_at) VALUES (2, ?, ?, ?, ?)
+`
+
+type InsertAuditChainParams struct {
+	FromID    int64
+	KeyEnc    []byte
+	KeyID     []byte
+	CreatedAt int64
+}
+
+func (q *Queries) InsertAuditChain(ctx context.Context, arg InsertAuditChainParams) error {
+	_, err := q.db.ExecContext(ctx, insertAuditChain,
+		arg.FromID,
+		arg.KeyEnc,
+		arg.KeyID,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const lastAuditArchive = `-- name: LastAuditArchive :one
-SELECT first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, expired_at FROM audit_archive ORDER BY first_id DESC LIMIT 1
+SELECT first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, expired_at, mac FROM audit_archive ORDER BY first_id DESC LIMIT 1
 `
 
 func (q *Queries) LastAuditArchive(ctx context.Context) (AuditArchive, error) {
@@ -157,6 +197,7 @@ func (q *Queries) LastAuditArchive(ctx context.Context) (AuditArchive, error) {
 		&i.DataSha256,
 		&i.ArchivedAt,
 		&i.ExpiredAt,
+		&i.Mac,
 	)
 	return i, err
 }
@@ -238,7 +279,7 @@ func (q *Queries) ListAuditAfter(ctx context.Context, arg ListAuditAfterParams) 
 }
 
 const listAuditArchive = `-- name: ListAuditArchive :many
-SELECT first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, expired_at FROM audit_archive ORDER BY first_id
+SELECT first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, expired_at, mac FROM audit_archive ORDER BY first_id
 `
 
 func (q *Queries) ListAuditArchive(ctx context.Context) ([]AuditArchive, error) {
@@ -262,6 +303,7 @@ func (q *Queries) ListAuditArchive(ctx context.Context) ([]AuditArchive, error) 
 			&i.DataSha256,
 			&i.ArchivedAt,
 			&i.ExpiredAt,
+			&i.Mac,
 		); err != nil {
 			return nil, err
 		}
@@ -274,6 +316,18 @@ func (q *Queries) ListAuditArchive(ctx context.Context) ([]AuditArchive, error) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const nextAuditID = `-- name: NextAuditID :one
+SELECT CAST(max(coalesce((SELECT max(id) FROM audit_log), 0), coalesce((SELECT max(last_id) FROM audit_archive), 0)) + 1 AS INTEGER)
+`
+
+// The id the next record gets: past every hot and archived record.
+func (q *Queries) NextAuditID(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, nextAuditID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const oldestAudit = `-- name: OldestAudit :one
@@ -366,4 +420,18 @@ func (q *Queries) RecentActivity(ctx context.Context, arg RecentActivityParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const setAuditArchiveMac = `-- name: SetAuditArchiveMac :exec
+UPDATE audit_archive SET mac = ? WHERE first_id = ? AND mac IS NULL
+`
+
+type SetAuditArchiveMacParams struct {
+	Mac     []byte
+	FirstID int64
+}
+
+func (q *Queries) SetAuditArchiveMac(ctx context.Context, arg SetAuditArchiveMacParams) error {
+	_, err := q.db.ExecContext(ctx, setAuditArchiveMac, arg.Mac, arg.FirstID)
+	return err
 }

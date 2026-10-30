@@ -18,6 +18,7 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/audit"
 	"github.com/JuniorCarlini/hangar/internal/config"
 	"github.com/JuniorCarlini/hangar/internal/i18n"
+	"github.com/JuniorCarlini/hangar/internal/secrets"
 )
 
 // version is set at build time: -ldflags "-X main.version=v1.2.3".
@@ -103,7 +104,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return err
 		}
 		defer func() { _ = st.Close() }()
-		n, err := audit.Verify(ctx, st.Q)
+		// The chain is keyed by the master key (SEC-010). Only read it when
+		// it exists: verifying must never create a new key.
+		var box *secrets.Box
+		if _, err := os.Stat(cfg.MasterKeyFile); err == nil {
+			if box, err = secrets.LoadOrCreateKey(cfg.MasterKeyFile); err != nil {
+				return err
+			}
+		}
+		n, err := audit.Verify(ctx, st.Q, box)
 		var te *audit.TamperError
 		if errors.As(err, &te) {
 			return i18n.E("cli.audit_tampered", "id", te.ID, "reason", tr("audit.tamper."+te.Reason))

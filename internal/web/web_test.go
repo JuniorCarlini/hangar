@@ -352,7 +352,7 @@ func TestLoginFlowEndToEnd(t *testing.T) {
 		t.Error("the session token must not appear in the HTML")
 	}
 
-	n, err := audit.Verify(context.Background(), e.st.Q)
+	n, err := audit.Verify(context.Background(), e.st.Q, nil)
 	if err != nil || n == 0 {
 		t.Fatalf("audit: %d records, err %v", n, err)
 	}
@@ -529,7 +529,7 @@ func TestRoleAndSudoEnforcement(t *testing.T) {
 			t.Errorf("%s: status = %d, want %d", c.name, got, c.want)
 		}
 	}
-	if _, err := audit.Verify(context.Background(), e.st.Q); err != nil {
+	if _, err := audit.Verify(context.Background(), e.st.Q, nil); err != nil {
 		t.Fatal(err)
 	}
 }

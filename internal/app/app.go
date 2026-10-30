@@ -80,6 +80,13 @@ func Open(ctx context.Context, cfg config.Config, log *slog.Logger) (*Core, erro
 		return nil, err
 	}
 	al := audit.New(st.DB)
+	// The audit chain is keyed by the master key (SEC-010): the first start
+	// keys it, later ones load the key. A key that does not open means the
+	// database and the master key do not belong together.
+	if err := al.UseKey(ctx, box); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
 	svc, err := auth.NewService(st.DB, box, al, auth.Options{
 		Require2FA: cfg.Auth.Require2FA, FirstRunSetup: true,
 	})
@@ -323,7 +330,7 @@ func Serve(ctx context.Context, cfg config.Config, version string, log *slog.Log
 		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
 	}
 
-	go retention.New(st, cfg.DataDir, log).Run(ctx)
+	go retention.New(st, cfg.DataDir, log).WithAudit(al).Run(ctx)
 	go cleanupSessions(ctx, core.Auth, log)
 	go mc.Run(ctx)
 	if cfg.Scan.Enabled {

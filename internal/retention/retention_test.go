@@ -282,7 +282,7 @@ func TestAuditArchivedAndChainVerifies(t *testing.T) {
 	if rep.Removed["audit_log"] != 2 {
 		t.Fatalf("archived %d, want 2", rep.Removed["audit_log"])
 	}
-	if n, err := audit.Verify(context.Background(), j.st.Q); err != nil || n != 3 {
+	if n, err := audit.Verify(context.Background(), j.st.Q, nil); err != nil || n != 3 {
 		t.Fatalf("verify = %d, %v", n, err)
 	}
 }

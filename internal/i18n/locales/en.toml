@@ -587,6 +587,12 @@ token_mode = "GitHub token {path} has mode {mode}: use 0600."
 [audit.tamper]
 removed_or_reordered = "previous hash does not match (record removed or reordered)"
 content_changed = "content changed"
+unauthenticated = "archived chunk not authenticated by the chain key"
+expired_early = "archived records dropped before their retention ended"
+
+[audit.error]
+key_required = "The audit log is keyed by the master key: it is needed to write and verify it."
+key_mismatch = "The audit log key does not open with this master key (database and key from different servers?)."
 
 [cli]
 config_permission = "No permission to read {path} ({error}). The file must belong to the hangar group with mode 640; the next service start fixes it, or run: sudo hangard system fix-perms"

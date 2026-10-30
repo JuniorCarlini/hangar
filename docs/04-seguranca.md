@@ -111,8 +111,15 @@ servidos localmente, e o Editor do Tucano, que grava `style` em atributo, não
 
 - Toda ação que muda estado gera um registro em `audit_log`: quem, quando, IP,
   user-agent, ação, alvo, resumo (sem segredos).
-- Cada registro guarda `hash = SHA-256(hash_anterior || conteúdo)`; um comando
-  `hangard audit verify` detecta adulteração.
+- Cada registro guarda `hash = HMAC-SHA256(chave, hash_anterior || conteúdo)`,
+  com uma chave derivada da chave mestra (HKDF) e guardada no banco cifrada
+  por ela (`audit_chain`), junto com o SHA-256 da chave e o id do primeiro
+  registro assinado. Quem escreve no banco mas não tem a chave mestra não
+  consegue reescrever registros e recalcular a cadeia. Registros de antes da
+  chave seguem em SHA-256 puro e ficam presos pelo primeiro registro assinado
+  (a âncora `audit.chain.keyed`, que encadeia a partir deles). O comando
+  `hangard audit verify` lê a chave mestra e detecta adulteração. A rotação
+  da chave mestra recifra a chave da auditoria, que continua a mesma.
 - Exportação opcional para syslog/arquivo remoto.
 
 ## Host (aplicado pelo instalador, com confirmação)

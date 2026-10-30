@@ -158,7 +158,7 @@ var dynamicPrefixes = map[string][]string{
 	"target.providers.":         {"b2", "wasabi", "aws", "r2", "custom"},
 	"domain.reason.":            {"fixed_domain", "wildcard_domain", "app_authorized", "invalid_hostname", "blocked", "no_dynamic_service", "rate_limited", "app_denied", "app_error", "app_bad_signature", "dns_mismatch", "internal_error", "txt_missing"},
 	"domain.path.":              {"direct", "cloudflare", "elsewhere"},
-	"audit.tamper.":             {"removed_or_reordered", "content_changed"},
+	"audit.tamper.":             {"removed_or_reordered", "content_changed", "unauthenticated", "expired_early"},
 	"pista.tone.":               {"default", "info", "success", "warning", "danger"},
 	"pista.alert.":              {"info", "success", "warning", "danger"},
 	"pista.toast.":              {"info", "success", "warning", "danger"},

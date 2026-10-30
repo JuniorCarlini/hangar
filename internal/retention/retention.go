@@ -97,6 +97,9 @@ type Janitor struct {
 	now     func() time.Time
 	batch   int64
 	pause   time.Duration
+	// audit archives the audit log; it holds the chain's key (UseKey),
+	// which the archive needs to verify and authenticate what it moves.
+	audit *audit.Logger
 }
 
 // New creates the janitor of the panel database; dataDir holds the files
@@ -106,6 +109,14 @@ func New(st *store.Store, dataDir string, log *slog.Logger) *Janitor {
 		st: st, q: st.Q, dataDir: dataDir, log: log, policy: Default,
 		now: time.Now, batch: Batch, pause: pause,
 	}
+}
+
+// WithAudit makes the janitor archive the audit log through al (the
+// panel's logger, keyed). Without it, it uses a plain logger, which a keyed
+// chain refuses.
+func (j *Janitor) WithAudit(al *audit.Logger) *Janitor {
+	j.audit = al
+	return j
 }
 
 // Report is what one run removed, by rule.
@@ -227,7 +238,11 @@ func (j *Janitor) rules() []rule {
 			})
 		}},
 		{"audit_log", func(ctx context.Context, now time.Time) (int64, error) {
-			n, err := audit.Archive(ctx, j.st.DB, now)
+			al := j.audit
+			if al == nil {
+				al = audit.New(j.st.DB)
+			}
+			n, err := al.Archive(ctx, now)
 			if err != nil {
 				return int64(n), err
 			}

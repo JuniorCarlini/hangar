@@ -49,8 +49,21 @@ SELECT * FROM audit_archive ORDER BY first_id;
 SELECT * FROM audit_archive ORDER BY first_id DESC LIMIT 1;
 
 -- name: InsertAuditArchive :exec
-INSERT INTO audit_archive (first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO audit_archive (first_id, last_id, records, first_ts, last_ts, prev_hash, last_hash, data, data_sha256, archived_at, mac)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: SetAuditArchiveMac :exec
+UPDATE audit_archive SET mac = ? WHERE first_id = ? AND mac IS NULL;
+
+-- name: GetAuditChain :one
+SELECT * FROM audit_chain WHERE version = 2;
+
+-- name: InsertAuditChain :exec
+INSERT INTO audit_chain (version, from_id, key_enc, key_id, created_at) VALUES (2, ?, ?, ?, ?);
+
+-- name: NextAuditID :one
+-- The id the next record gets: past every hot and archived record.
+SELECT CAST(max(coalesce((SELECT max(id) FROM audit_log), 0), coalesce((SELECT max(last_id) FROM audit_archive), 0)) + 1 AS INTEGER);
 
 -- name: ExpirableAuditArchives :many
 SELECT first_id FROM audit_archive WHERE data IS NOT NULL AND last_ts < ? ORDER BY first_id;

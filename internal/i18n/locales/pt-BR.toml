@@ -587,6 +587,12 @@ token_mode = "Token do GitHub {path} com permissão {mode}: use 0600."
 [audit.tamper]
 removed_or_reordered = "hash anterior não confere (registro removido ou reordenado)"
 content_changed = "conteúdo alterado"
+unauthenticated = "bloco arquivado sem autenticação da chave da cadeia"
+expired_early = "registros arquivados apagados antes do fim da retenção"
+
+[audit.error]
+key_required = "A auditoria é assinada com a chave mestra: ela é necessária para gravar e conferir."
+key_mismatch = "A chave da auditoria não abre com esta chave mestra (banco e chave de servidores diferentes?)."
 
 [cli]
 config_permission = "Sem permissão para ler {path} ({error}). O arquivo precisa ser do grupo hangar com modo 640; o próximo início do serviço corrige sozinho, ou rode: sudo hangard system fix-perms"

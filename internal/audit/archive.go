@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
@@ -89,12 +90,13 @@ func monthStart(t time.Time) string {
 // a time, into audit_archive. Each month is one transaction: the chunk is
 // written and its records deleted together, so a crash leaves either the
 // rows or the chunk, never neither. It refuses to archive a chain that
-// does not verify. It returns how many records it moved.
-func Archive(ctx context.Context, db *sql.DB, now time.Time) (int, error) {
+// does not verify, and a keyed chain needs the logger's key (UseKey): the
+// chunk is authenticated with it. It returns how many records it moved.
+func (l *Logger) Archive(ctx context.Context, now time.Time) (int, error) {
 	cutoff := monthStart(now.Add(-HotKeep))
 	moved := 0
 	for range archiveMonths {
-		n, err := archiveMonth(ctx, db, cutoff, now)
+		n, err := l.archiveMonth(ctx, cutoff, now)
 		if err != nil || n == 0 {
 			return moved, err
 		}
@@ -103,13 +105,19 @@ func Archive(ctx context.Context, db *sql.DB, now time.Time) (int, error) {
 	return moved, nil
 }
 
-func archiveMonth(ctx context.Context, db *sql.DB, cutoff string, now time.Time) (int, error) {
-	tx, err := db.BeginTx(ctx, nil)
+func (l *Logger) archiveMonth(ctx context.Context, cutoff string, now time.Time) (int, error) {
+	tx, err := l.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
 	q := dbq.New(tx)
+	l.mu.Lock()
+	c, err := l.chainIn(ctx, q)
+	l.mu.Unlock()
+	if err != nil {
+		return 0, err
+	}
 
 	oldest, err := q.OldestAudit(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -157,7 +165,7 @@ func archiveMonth(ctx context.Context, db *sql.DB, cutoff string, now time.Time)
 				after = lastID
 				break
 			}
-			if err := checkLink(prev, r); err != nil {
+			if err := checkLink(prev, r, c.keyFor(r.ID)); err != nil {
 				return 0, err
 			}
 			if err := enc.Encode(toArchived(r)); err != nil {
@@ -180,6 +188,12 @@ func archiveMonth(ctx context.Context, db *sql.DB, cutoff string, now time.Time)
 	chunk.Data = buf.Bytes()
 	sum := sha256.Sum256(chunk.Data)
 	chunk.DataSha256 = sum[:]
+	if c.keyed() {
+		chunk.Mac = chunkMAC(c.key, dbq.AuditArchive{
+			FirstID: chunk.FirstID, LastID: chunk.LastID, Records: chunk.Records, FirstTs: chunk.FirstTs, LastTs: chunk.LastTs,
+			PrevHash: chunk.PrevHash, LastHash: chunk.LastHash, DataSha256: chunk.DataSha256, ArchivedAt: chunk.ArchivedAt,
+		})
+	}
 	if err := q.InsertAuditArchive(ctx, chunk); err != nil {
 		return 0, fmt.Errorf("audit archive: %w", err)
 	}
@@ -190,7 +204,8 @@ func archiveMonth(ctx context.Context, db *sql.DB, cutoff string, now time.Time)
 }
 
 // ExpireArchive drops the data of chunks whose newest record is older
-// than ArchiveKeep; their hashes stay, so the chain still verifies.
+// than ArchiveKeep; their hashes and HMAC stay, so the chain still
+// verifies. The database refuses to drop the data of a younger chunk.
 func ExpireArchive(ctx context.Context, db *sql.DB, now time.Time) (int, error) {
 	q := dbq.New(db)
 	ids, err := q.ExpirableAuditArchives(ctx, now.Add(-ArchiveKeep).UTC().Format(time.RFC3339Nano))
@@ -205,12 +220,13 @@ func ExpireArchive(ctx context.Context, db *sql.DB, now time.Time) (int, error) 
 	return len(ids), nil
 }
 
-// checkLink verifies that r chains from prev and its hash matches.
-func checkLink(prev []byte, r dbq.AuditLog) error {
+// checkLink verifies that r chains from prev and its hash (keyed with key,
+// nil for a plain record) matches.
+func checkLink(prev []byte, r dbq.AuditLog, key []byte) error {
 	if !bytes.Equal(r.PrevHash, prev) {
 		return &TamperError{ID: r.ID, Reason: "removed_or_reordered"}
 	}
-	if !bytes.Equal(r.Hash, chainHash(prev, r)) {
+	if !hmac.Equal(r.Hash, chainHash(key, prev, r)) {
 		return &TamperError{ID: r.ID, Reason: "content_changed"}
 	}
 	return nil
@@ -218,13 +234,18 @@ func checkLink(prev []byte, r dbq.AuditLog) error {
 
 // verifyChunk checks one archived chunk: it continues the chain from prev,
 // its data matches the stored SHA-256 and its records chain to last_hash.
-// An expired chunk (no data) is checked by its hashes only. It returns how
-// many records it verified one by one.
-func verifyChunk(prev []byte, c dbq.AuditArchive) (int, error) {
+// An expired chunk (no data) is checked by its hashes only, and only if it
+// really is past ArchiveKeep: dropping a younger chunk's data would erase
+// records. It returns how many records it verified one by one.
+func verifyChunk(prev []byte, c dbq.AuditArchive, ch chain, now time.Time) (int, error) {
 	if !bytes.Equal(c.PrevHash, prev) {
 		return 0, &TamperError{ID: c.FirstID, Reason: "removed_or_reordered"}
 	}
 	if c.Data == nil {
+		last, err := time.Parse(time.RFC3339Nano, c.LastTs)
+		if err != nil || !c.ExpiredAt.Valid || last.After(now.Add(-ArchiveKeep)) {
+			return 0, &TamperError{ID: c.FirstID, Reason: "expired_early"}
+		}
 		return 0, nil
 	}
 	if sum := sha256.Sum256(c.Data); !bytes.Equal(sum[:], c.DataSha256) {
@@ -244,7 +265,7 @@ func verifyChunk(prev []byte, c dbq.AuditArchive) (int, error) {
 		} else if err != nil {
 			return n, &TamperError{ID: c.FirstID, Reason: "content_changed"}
 		}
-		if err := checkLink(prev, a.row()); err != nil {
+		if err := checkLink(prev, a.row(), ch.keyFor(a.ID)); err != nil {
 			return n, err
 		}
 		prev, last = a.Hash, a

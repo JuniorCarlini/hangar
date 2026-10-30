@@ -32,7 +32,7 @@ func TestArchiveMovesWholeOldMonthsAndChainStillVerifies(t *testing.T) {
 		now.Add(-time.Hour),
 	)
 
-	moved, err := audit.Archive(context.Background(), s.DB, now)
+	moved, err := l.Archive(context.Background(), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,14 +46,14 @@ func TestArchiveMovesWholeOldMonthsAndChainStillVerifies(t *testing.T) {
 		t.Fatalf("hot=%d chunks=%d, want 3 and 2 (one per month)", hot, chunks)
 	}
 	// A second run finds nothing new.
-	if moved, err := audit.Archive(context.Background(), s.DB, now); err != nil || moved != 0 {
+	if moved, err := l.Archive(context.Background(), now); err != nil || moved != 0 {
 		t.Fatalf("second run moved %d (%v), want 0", moved, err)
 	}
 
 	// New records keep chaining from the newest hot one.
 	l.WithClock(func() time.Time { return now })
 	record(t, l, "login.ok")
-	n, err := audit.Verify(context.Background(), s.Q)
+	n, err := audit.Verify(context.Background(), s.Q, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestArchiveKeepsTheNewestRecord(t *testing.T) {
 	now := time.Date(2028, 1, 10, 0, 0, 0, 0, time.UTC)
 	recordAt(t, l, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC))
 
-	if _, err := audit.Archive(context.Background(), s.DB, now); err != nil {
+	if _, err := l.Archive(context.Background(), now); err != nil {
 		t.Fatal(err)
 	}
 	var hot int
@@ -79,7 +79,7 @@ func TestArchiveKeepsTheNewestRecord(t *testing.T) {
 	// Its id is past the archived range: a new record never reuses one.
 	l.WithClock(func() time.Time { return now })
 	record(t, l, "login.ok")
-	if _, err := audit.Verify(context.Background(), s.Q); err != nil {
+	if _, err := audit.Verify(context.Background(), s.Q, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -89,7 +89,7 @@ func TestDeleteOnlyArchivedRecords(t *testing.T) {
 	l := audit.New(s.DB)
 	now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
 	recordAt(t, l, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), now, now)
-	if _, err := audit.Archive(context.Background(), s.DB, now); err != nil {
+	if _, err := l.Archive(context.Background(), now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DB.Exec(`DELETE FROM audit_log WHERE id = 2`); err == nil {
@@ -106,10 +106,11 @@ func TestDeleteOnlyArchivedRecords(t *testing.T) {
 func TestExpireArchiveKeepsHashes(t *testing.T) {
 	s := openStore(t)
 	l := audit.New(s.DB)
-	old := time.Date(2020, 2, 3, 0, 0, 0, 0, time.UTC)
+	// Really past ArchiveKeep: the database judges the age by its own clock.
+	old := time.Now().UTC().AddDate(-8, 0, 0).Truncate(time.Hour)
 	now := old.Add(audit.ArchiveKeep + 60*24*time.Hour)
 	recordAt(t, l, old, old.Add(time.Hour), now)
-	if _, err := audit.Archive(context.Background(), s.DB, now); err != nil {
+	if _, err := l.Archive(context.Background(), now); err != nil {
 		t.Fatal(err)
 	}
 	n, err := audit.ExpireArchive(context.Background(), s.DB, now)
@@ -122,7 +123,7 @@ func TestExpireArchiveKeepsHashes(t *testing.T) {
 		t.Fatal("the chunk's data should be gone")
 	}
 	// Only the hot record is checked one by one; the chain still holds.
-	if n, err := audit.Verify(context.Background(), s.Q); err != nil || n != 1 {
+	if n, err := audit.Verify(context.Background(), s.Q, nil); err != nil || n != 1 {
 		t.Fatalf("verify = %d, %v; want 1, nil", n, err)
 	}
 	// A chunk not yet past ArchiveKeep keeps its data.
@@ -146,7 +147,7 @@ func TestVerifyDetectsArchiveTampering(t *testing.T) {
 			l := audit.New(s.DB)
 			now := time.Date(2027, 6, 15, 0, 0, 0, 0, time.UTC)
 			recordAt(t, l, time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC), now, now)
-			if _, err := audit.Archive(context.Background(), s.DB, now); err != nil {
+			if _, err := l.Archive(context.Background(), now); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := s.DB.Exec(`DROP TRIGGER audit_archive_no_update; DROP TRIGGER audit_archive_no_delete; DROP TRIGGER audit_log_no_delete;`); err != nil {
@@ -156,7 +157,7 @@ func TestVerifyDetectsArchiveTampering(t *testing.T) {
 				t.Fatal(err)
 			}
 			var te *audit.TamperError
-			if _, err := audit.Verify(context.Background(), s.Q); !errors.As(err, &te) {
+			if _, err := audit.Verify(context.Background(), s.Q, nil); !errors.As(err, &te) {
 				t.Fatalf("expected TamperError, got %v", err)
 			}
 		})
@@ -172,7 +173,7 @@ func TestArchiveRefusesABrokenChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	var te *audit.TamperError
-	if _, err := audit.Archive(context.Background(), s.DB, now); !errors.As(err, &te) {
+	if _, err := l.Archive(context.Background(), now); !errors.As(err, &te) {
 		t.Fatalf("expected TamperError, got %v", err)
 	}
 	var chunks int

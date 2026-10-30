@@ -47,6 +47,7 @@ domains          (id, service_id → services, hostname UNIQUE, kind CHECK(kind 
 domain_blocklist (hostname PRIMARY KEY, reason, created_at, created_by)
 tls_ask_log      (hostname, decision, reason, hour, count, last_at,              -- agregado por hora,
                   PRIMARY KEY(hostname, decision, hour))                        -- negadas 7 dias, aprovadas 180 ([20])
+tls_approvals    (hostname PRIMARY KEY, first_hour, last_hour)                  -- teto por hora; 180 dias ([03])
 app_check_config (service_id PRIMARY KEY → services, path, hmac_secret_enc, timeout_ms)
 
 -- Operação
@@ -99,7 +100,9 @@ service_aliases  (service_id PRIMARY KEY → services, public_label)
 audit_log        (id INTEGER PRIMARY KEY, ts, user_id, ip, user_agent, action, target_type,
                   target_id, summary_json, prev_hash, hash)
 audit_archive    (first_id PRIMARY KEY, last_id, records, first_ts, last_ts, prev_hash,
-                  last_hash, data NULL, data_sha256, archived_at, expired_at NULL) -- um mês por linha ([20])
+                  last_hash, data NULL, data_sha256, archived_at, expired_at NULL,
+                  mac NULL)                                                     -- um mês por linha ([20])
+audit_chain      (version PRIMARY KEY, from_id, key_enc, key_id, created_at)    -- chave HMAC da cadeia ([04])
 settings         (key PRIMARY KEY, value_json)
 ```
 

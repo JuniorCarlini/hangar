@@ -140,11 +140,17 @@ A auditoria é pequena (ações humanas). Estimativa: 200 ações/dia × ~500 by
   ponta a ponta desde a gênese.
 - O arquivamento **recusa** uma cadeia que não confere, e sempre deixa o
   registro mais novo na tabela (os ids novos nunca repetem os arquivados).
-- O trigger de `audit_log` só deixa apagar o que um bloco já guarda; blocos
-  não podem ser apagados nem alterados.
+- Um bloco só entra se bater com os registros que diz guardar: começa no
+  registro mais antigo da tabela, confere o hash anterior e o hash do último
+  registro, a contagem, e continua o bloco anterior. Com a cadeia assinada,
+  cada bloco leva um HMAC dos seus metadados (`mac`). Um bloco inventado não
+  destrava mais a apagação sem ser pego pelo `verify`.
+- O trigger de `audit_log` só deixa apagar o que um bloco com dados guarda;
+  blocos não podem ser apagados nem alterados.
 - Depois de **7 anos**, só os dados do bloco saem (`data = NULL`); ids,
-  hashes e o SHA-256 dos dados ficam (centenas de bytes por mês), e a cadeia
-  continua verificável.
+  hashes, o SHA-256 dos dados e o HMAC ficam (centenas de bytes por mês), e a
+  cadeia continua verificável. O banco recusa tirar os dados de um bloco mais
+  novo que isso, e o `verify` também acusa.
 
 ## Leitura dos logs no painel
 
