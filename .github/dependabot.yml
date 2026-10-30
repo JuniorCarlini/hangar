@@ -1,5 +1,9 @@
 # The workflows pin each action by commit (the release job holds the signing
 # key, and a tag can be moved); this keeps those pins on the newest release.
+# Go modules and the base images of the Dockerfiles (pinned by digest) are
+# kept current the same way, so a fixed vulnerability does not wait for
+# someone to notice it. Images named in Go code (helper images, see
+# SEC-021) are not seen by Dependabot: refresh those digests by hand.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,3 +15,30 @@ updates:
         patterns: ["*"]
     commit-message:
       prefix: ci
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # golang.org/x/* move together and are where most advisories land.
+      golang-x:
+        patterns: ["golang.org/x/*"]
+      go-modules:
+        patterns: ["*"]
+        exclude-patterns: ["golang.org/x/*"]
+    commit-message:
+      prefix: build
+      include: scope
+
+  - package-ecosystem: docker
+    directories:
+      - /deploy/caddy
+    schedule:
+      interval: weekly
+    groups:
+      images:
+        patterns: ["*"]
+    commit-message:
+      prefix: build
+      include: scope

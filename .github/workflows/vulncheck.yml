@@ -1,0 +1,31 @@
+name: Vulnerabilities
+
+# CI runs govulncheck on every push and pull request, but a new advisory
+# against code that did not change would wait for the next push. This runs
+# it weekly on main and fails (notifying the repository's watchers) when
+# the code reaches a known vulnerability.
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The version pinned in go.mod (tool directive), against the live
+      # vulnerability database.
+      - name: govulncheck
+        run: go tool govulncheck ./...

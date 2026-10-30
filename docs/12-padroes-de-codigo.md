@@ -118,10 +118,24 @@ para multi-servidor).
 6. build para Linux amd64 e arm64
 7. E2E com Playwright (opcional, não bloqueia)
 
-`release.yml`, em tag `v*.*.*`: testes, binários `hangard-linux-{amd64,arm64}`,
-`release.json` com o SHA-256 de cada um assinado com Ed25519 por
-`hangar-release sign` (`release.json.sig`) e o `install.sh`
-([21](21-atualizacao-do-painel.md)).
+`release.yml`, em tag `vX.Y.Z` ([21](21-atualizacao-do-painel.md)), em jobs
+separados para a chave de release nunca estar perto de código de teste ou de
+terceiros:
+
+1. `gate`: a tag aponta para um commit da `main` e o CI desse commit passou;
+2. `edge-image`: imagem do Caddy do edge; reaproveita a de antes só se o
+   binário assinado da release anterior já cita aquele digest;
+3. `build`: testes, binários `hangard-linux-{amd64,arm64}`, `install.sh` e
+   `SHA256SUMS`, sem nenhum segredo;
+4. `sign`: único job com `HANGAR_RELEASE_KEY`, no environment `release`.
+   Confere o artefato contra o hash que o `build` passou como saída, compila
+   o `hangar-release` do código da tag e gera `release.json` (SHA-256 de cada
+   binário) e `release.json.sig` (Ed25519);
+5. `publish`: confere a assinatura de novo e cria a release.
+
+`vulncheck.yml` roda o `govulncheck` toda segunda-feira, para aviso novo não
+esperar o próximo push. O Dependabot cobre actions, módulos Go e as imagens
+dos Dockerfiles.
 
 ## Dependências
 
