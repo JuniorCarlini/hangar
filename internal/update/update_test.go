@@ -497,7 +497,8 @@ func TestRestoreFileReplacesThroughRename(t *testing.T) {
 	if err := os.WriteFile(dst, []byte("banco migrado"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := restoreFile(src, dst); err != nil {
+	root := openTestRoot(t, dir)
+	if err := restoreFile(root, "copia", "hangar.db"); err != nil {
 		t.Fatal(err)
 	}
 	if got := read(t, dst); got != "copia boa" {
@@ -512,7 +513,7 @@ func TestRestoreFileReplacesThroughRename(t *testing.T) {
 	}
 
 	// A copy that cannot be read leaves the current file whole.
-	if err := restoreFile(filepath.Join(dir, "nao-existe"), dst); err == nil {
+	if err := restoreFile(root, "nao-existe", "hangar.db"); err == nil {
 		t.Fatal("restore from a missing copy succeeded")
 	}
 	if got := read(t, dst); got != "copia boa" {

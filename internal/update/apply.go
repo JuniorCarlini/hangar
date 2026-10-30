@@ -1,13 +1,16 @@
 package update
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -89,13 +92,30 @@ type Applier struct {
 	// path (default: statfs). The disk check runs before the panel stops.
 	FreeSpace func(path string) (uint64, error)
 	Now       func() time.Time
+
+	// root is DataDir, opened for the duration of Apply. DataDir and
+	// everything in it belong to the hangar user, so every path the applier
+	// (root) touches there goes through it: a symlink planted anywhere on
+	// the way (releases/, backups/, update/, a file) can never make root
+	// read, write or delete outside DataDir.
+	root *os.Root
 }
 
 // keepBackups is how many pre-update copies (and pre-migration copies) are
 // kept; older ones are deleted after a successful update.
 const keepBackups = 3
 
-func (a *Applier) updateDir() string { return filepath.Join(a.DataDir, "update") }
+// Paths inside DataDir, relative to the applier's root.
+const (
+	updateRel   = "update"
+	releasesRel = "releases"
+	backupsRel  = "backups"
+	// releasePrefix is the name of every kept binary; pruning never deletes
+	// anything else.
+	releasePrefix = "hangard-v"
+)
+
+func (a *Applier) updateDir() string { return filepath.Join(a.DataDir, updateRel) }
 
 // Apply runs the pending request, if any. It never leaves the panel without a
 // binary that starts: any failure after stopping the service rolls
@@ -120,17 +140,29 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 		a.FreeSpace = freeSpace
 	}
 
-	reqPath := filepath.Join(a.updateDir(), requestFile)
-	raw, err := os.ReadFile(reqPath) //nolint:gosec // fixed path
+	root, err := os.OpenRoot(a.DataDir)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = root.Close() }()
+	a.root = root
+	defer func() { a.root = nil }()
+
+	reqPath := path.Join(updateRel, requestFile)
+	raw, err := readRegular(root, reqPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		_ = root.Remove(reqPath)
+		return nil, err
+	}
 	// Remove the request before anything else: a broken request must not make
 	// the applier loop.
-	if err := os.Remove(reqPath); err != nil {
+	if err := root.Remove(reqPath); err != nil {
 		return nil, err
 	}
 	var req Request
@@ -167,8 +199,10 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 		return a.finish("failed", req.Version, current, "preflight (the panel was not stopped): "+err.Error())
 	}
 
-	backupDir := filepath.Join(a.DataDir, "backups", "pre-update-"+current+"-"+a.Now().UTC().Format("20060102T150405Z"))
-	oldBin := filepath.Join(a.DataDir, "releases", "hangard-"+current)
+	// current was parsed as a version by verifiedCopy, so it holds no path
+	// separator.
+	backupDir := path.Join(backupsRel, "pre-update-"+current+"-"+a.Now().UTC().Format("20060102T150405Z"))
+	oldBin := path.Join(releasesRel, "hangard-"+current)
 
 	if err := a.Service.Stop(ctx); err != nil {
 		return a.finish("failed", req.Version, current, "stop the panel: "+err.Error())
@@ -176,7 +210,7 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 	if err := a.backupDB(backupDir); err != nil {
 		return a.rollback(ctx, req.Version, current, "", "", "copy database: "+err.Error())
 	}
-	if err := copyFile(a.BinaryPath, oldBin, 0o755); err != nil {
+	if err := a.keepBinary(oldBin); err != nil {
 		return a.rollback(ctx, req.Version, current, "", "", "keep current binary: "+err.Error())
 	}
 	if err := installBinary(newBin, a.BinaryPath); err != nil {
@@ -185,7 +219,7 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 	if err := a.InstallUnits(ctx, a.BinaryPath); err != nil {
 		return a.rollback(ctx, req.Version, current, oldBin, backupDir, "systemd units: "+err.Error())
 	}
-	_ = os.Remove(filepath.Join(a.DataDir, ReadyFile))
+	_ = root.Remove(ReadyFile)
 	if err := a.Service.Start(ctx); err != nil {
 		return a.rollback(ctx, req.Version, current, oldBin, backupDir, "start new version: "+err.Error())
 	}
@@ -193,9 +227,9 @@ func (a *Applier) Apply(ctx context.Context) (*Status, error) {
 		return a.rollback(ctx, req.Version, current, oldBin, backupDir, err.Error())
 	}
 
-	_ = os.RemoveAll(filepath.Join(a.updateDir(), stagingDir))
-	pruneReleases(filepath.Join(a.DataDir, "releases"), 3)
-	pruneOldest(filepath.Join(a.DataDir, "backups"), "pre-update-", keepBackups)
+	_ = root.RemoveAll(path.Join(updateRel, stagingDir))
+	pruneReleases(root, releasesRel, keepBackups)
+	pruneOldest(root, backupsRel, "pre-update-", keepBackups)
 	return a.finish("ok", req.Version, current, "")
 }
 
@@ -203,12 +237,13 @@ func (a *Applier) verifiedCopy(version, current string) (string, error) {
 	if ok, err := release.IsUpgrade(current, version); err != nil || !ok {
 		return "", fmt.Errorf("%s is not an upgrade of %s", version, current)
 	}
-	dir := filepath.Join(a.updateDir(), stagingDir, version)
-	manifest, err := os.ReadFile(filepath.Join(dir, "release.json")) //nolint:gosec // path inside data_dir
+	// IsUpgrade parsed version: it is a plain "vX.Y.Z", no path in it.
+	dir := path.Join(updateRel, stagingDir, version)
+	manifest, err := readRegular(a.root, path.Join(dir, "release.json"))
 	if err != nil {
 		return "", err
 	}
-	sig, err := os.ReadFile(filepath.Join(dir, "release.json.sig")) //nolint:gosec // path inside data_dir
+	sig, err := readRegular(a.root, path.Join(dir, "release.json.sig"))
 	if err != nil {
 		return "", err
 	}
@@ -225,7 +260,7 @@ func (a *Applier) verifiedCopy(version, current string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	src, err := os.Open(filepath.Join(dir, name)) //nolint:gosec // path inside data_dir
+	src, err := openRegular(a.root, path.Join(dir, name))
 	if err != nil {
 		_ = tmp.Close()
 		_ = os.Remove(tmp.Name())
@@ -326,7 +361,7 @@ func (a *Applier) rollback(ctx context.Context, version, current, oldBin, backup
 	var errs []string
 	if oldBin != "" {
 		_ = a.Service.Stop(ctx)
-		if err := installCopy(oldBin, a.BinaryPath); err != nil {
+		if err := a.installCopy(oldBin); err != nil {
 			errs = append(errs, "restore binary: "+err.Error())
 		} else if err := a.InstallUnits(ctx, a.BinaryPath); err != nil {
 			errs = append(errs, "restore units: "+err.Error())
@@ -337,7 +372,7 @@ func (a *Applier) rollback(ctx context.Context, version, current, oldBin, backup
 			errs = append(errs, "restore database: "+err.Error())
 		}
 	}
-	_ = os.Remove(filepath.Join(a.DataDir, ReadyFile))
+	_ = a.root.Remove(ReadyFile)
 	if err := a.Service.Start(ctx); err != nil {
 		errs = append(errs, "start previous version: "+err.Error())
 	} else if err := a.waitReady(ctx, current); err != nil {
@@ -354,14 +389,13 @@ func (a *Applier) rollback(ctx context.Context, version, current, oldBin, backup
 
 func (a *Applier) waitReady(ctx context.Context, version string) error {
 	deadline := a.Now().Add(a.ReadyWait)
-	ready := filepath.Join(a.DataDir, ReadyFile)
 	counter, canCount := a.Service.(restartCounter)
 	base := 0
 	if canCount {
 		base, _ = counter.Restarts(ctx)
 	}
 	for {
-		b, err := os.ReadFile(ready) //nolint:gosec // fixed path
+		b, err := readRegular(a.root, ReadyFile)
 		if err == nil && strings.TrimSpace(string(b)) == version {
 			return nil
 		}
@@ -386,15 +420,15 @@ var dbFiles = []string{"hangar.db", "hangar.db-wal", "hangar.db-shm"}
 // backupDB copies the database with the service stopped, keeping owner and
 // permissions.
 func (a *Applier) backupDB(dir string) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := mkdirAllNoFollow(a.root, dir, 0o700); err != nil {
 		return err
 	}
 	for _, f := range dbFiles {
-		src := filepath.Join(a.DataDir, f)
-		if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
+		err := copyPreserving(a.root, f, path.Join(dir, f))
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		if err := copyPreserving(src, filepath.Join(dir, f)); err != nil {
+		if err != nil {
 			return err
 		}
 	}
@@ -403,53 +437,32 @@ func (a *Applier) backupDB(dir string) error {
 
 func (a *Applier) restoreDB(dir string) error {
 	for _, f := range dbFiles {
-		dst := filepath.Join(a.DataDir, f)
-		src := filepath.Join(dir, f)
-		if _, err := os.Stat(src); errors.Is(err, os.ErrNotExist) {
-			_ = os.Remove(dst) // the new version's -wal/-shm must not be left behind
+		err := restoreFile(a.root, path.Join(dir, f), f)
+		if errors.Is(err, os.ErrNotExist) {
+			_ = a.root.Remove(f) // the new version's -wal/-shm must not be left behind
 			continue
 		}
-		if err := restoreFile(src, dst); err != nil {
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// restoreFile puts src at dst through a temporary file in dst's directory
-// and a rename: if the copy fails halfway (disk full, the applier killed),
-// dst is still the whole file it was, never a truncated database.
-func restoreFile(src, dst string) error {
-	info, err := os.Stat(src)
-	if err != nil {
+// restoreFile puts src at dst (both inside root) through a temporary file in
+// dst's directory and a rename: if the copy fails halfway (disk full, the
+// applier killed), dst is still the whole file it was, never a truncated
+// database. The backup's mode and owner come along.
+func restoreFile(root *os.Root, src, dst string) error {
+	if err := copyPreserving(root, src, dst); err != nil {
 		return err
 	}
-	dir := filepath.Dir(dst)
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(dst)+".restoring-")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	_ = tmp.Close()
-	if err := copyPreserving(src, tmpName); err != nil {
-		_ = os.Remove(tmpName)
-		return err
-	}
-	// CreateTemp makes 0600; give back the backup's mode.
-	if err := os.Chmod(tmpName, info.Mode().Perm()); err != nil {
-		_ = os.Remove(tmpName)
-		return err
-	}
-	if err := os.Rename(tmpName, dst); err != nil {
-		_ = os.Remove(tmpName)
-		return err
-	}
-	return syncDir(dir)
+	return syncDir(root, path.Dir(dst))
 }
 
 // syncDir makes a rename in dir durable.
-func syncDir(dir string) error {
-	d, err := os.Open(dir) //nolint:gosec // the applier's own paths
+func syncDir(root *os.Root, dir string) error {
+	d, err := root.Open(dir)
 	if err != nil {
 		return err
 	}
@@ -460,10 +473,10 @@ func syncDir(dir string) error {
 func (a *Applier) finish(state, version, from, msg string) (*Status, error) {
 	s := &Status{State: state, Version: version, From: from, Message: truncate(msg, 2000), At: a.Now().UTC()}
 	b, _ := json.Marshal(s)
-	if err := os.MkdirAll(a.updateDir(), 0o750); err != nil {
+	if err := mkdirAllNoFollow(a.root, updateRel, 0o750); err != nil {
 		return s, err
 	}
-	if err := writeFileAtomic(filepath.Join(a.updateDir(), statusFile), b, 0o644); err != nil {
+	if err := writeIn(a.root, path.Join(updateRel, statusFile), bytes.NewReader(b), 0o644, -1, -1); err != nil {
 		return s, err
 	}
 	if state == "failed" || state == "rolled_back" {
@@ -489,23 +502,116 @@ func installBinary(src, dst string) error {
 	return os.Rename(src, dst)
 }
 
-func installCopy(src, dst string) error {
-	tmp := dst + ".restaurando"
-	if err := copyFile(src, tmp, 0o755); err != nil {
+// keepBinary copies the installed binary (a root-owned path) to rel inside
+// DataDir, so a rollback can put it back.
+func (a *Applier) keepBinary(rel string) error {
+	in, err := os.Open(a.BinaryPath)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, dst)
+	defer func() { _ = in.Close() }()
+	if err := mkdirAllNoFollow(a.root, path.Dir(rel), 0o750); err != nil {
+		return err
+	}
+	return writeIn(a.root, rel, in, 0o755, -1, -1)
 }
 
-func copyFile(src, dst string, perm os.FileMode) error {
-	return copyTo(src, dst, perm, -1, -1)
+// installCopy puts the kept binary rel (inside DataDir) back in place of
+// BinaryPath, through a temporary file and a rename next to it.
+func (a *Applier) installCopy(rel string) error {
+	in, err := openRegular(a.root, rel)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	binRoot, err := os.OpenRoot(filepath.Dir(a.BinaryPath))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = binRoot.Close() }()
+	return writeIn(binRoot, filepath.Base(a.BinaryPath), in, 0o755, -1, -1)
 }
 
-// copyPreserving copies keeping permissions and owner (the database belongs
-// to the hangar user; a root-owned copy would leave the panel unable to open
-// it).
-func copyPreserving(src, dst string) error {
-	info, err := os.Lstat(src)
+// errNotRegular refuses symlinks and anything else that is not a plain file
+// (or, for directories, a plain directory) where the applier expects one.
+var errNotRegular = errors.New("not a regular file or directory (symlink?)")
+
+// openRegular opens name inside root for reading, refusing a symlink or
+// anything that is not a regular file. root itself keeps every lookup
+// inside DataDir; the Lstat and the SameFile check also refuse a link that
+// stays inside it, or a swap between the check and the open.
+func openRegular(root *os.Root, name string) (*os.File, error) {
+	before, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: %w", name, errNotRegular)
+	}
+	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return nil, err
+	}
+	after, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if !after.Mode().IsRegular() || !os.SameFile(before, after) {
+		_ = f.Close()
+		return nil, fmt.Errorf("%s: %w", name, errNotRegular)
+	}
+	return f, nil
+}
+
+// readRegular reads a small file through openRegular.
+func readRegular(root *os.Root, name string) ([]byte, error) {
+	f, err := openRegular(root, name)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return io.ReadAll(io.LimitReader(f, maxManifestBytes))
+}
+
+// mkdirAllNoFollow creates dir (relative to root) one component at a time,
+// refusing any component that exists as something other than a real
+// directory: a releases/ or backups/ swapped for a symlink makes the step
+// fail instead of being followed.
+func mkdirAllNoFollow(root *os.Root, dir string, perm os.FileMode) error {
+	cur := ""
+	for part := range strings.SplitSeq(path.Clean(dir), "/") {
+		if part == "." || part == "" {
+			continue
+		}
+		cur = path.Join(cur, part)
+		info, err := root.Lstat(cur)
+		if errors.Is(err, os.ErrNotExist) {
+			if err := root.Mkdir(cur, perm); err != nil && !errors.Is(err, os.ErrExist) {
+				return err
+			}
+			info, err = root.Lstat(cur)
+		}
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("%s: %w", cur, errNotRegular)
+		}
+	}
+	return nil
+}
+
+// copyPreserving copies src to dst, both inside root, keeping permissions
+// and owner (the database belongs to the hangar user; a root-owned copy
+// would leave the panel unable to open it).
+func copyPreserving(root *os.Root, src, dst string) error {
+	in, err := openRegular(root, src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	info, err := in.Stat()
 	if err != nil {
 		return err
 	}
@@ -513,36 +619,22 @@ func copyPreserving(src, dst string) error {
 	if st, ok := info.Sys().(*syscall.Stat_t); ok {
 		uid, gid = int(st.Uid), int(st.Gid)
 	}
-	return copyTo(src, dst, info.Mode().Perm(), uid, gid)
+	return writeIn(root, dst, in, info.Mode().Perm(), uid, gid)
 }
 
-// copyTo copies src to dst as root without following a symlink at either
-// end: these paths live in directories the hangar user owns, and a link
-// planted there would otherwise make root read or overwrite (and chown) any
-// file on the host. The copy goes to a fresh temporary file, gets its mode
-// and owner through the open descriptor, and is renamed into place; rename
-// replaces a link itself, never what it points at. uid/gid -1 keep root's.
-func copyTo(src, dst string, perm os.FileMode, uid, gid int) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
-		return err
-	}
-	in, err := os.OpenFile(src, os.O_RDONLY|syscall.O_NOFOLLOW, 0) //nolint:gosec // the applier's own paths
+// writeIn writes r to dst inside root, as root, without following a
+// symlink: the data goes to a fresh temporary file (O_EXCL, random name),
+// gets its mode and owner through the open descriptor, and is renamed into
+// place; rename replaces a link itself, never what it points at. uid/gid -1
+// keep root's.
+func writeIn(root *os.Root, dst string, r io.Reader, perm os.FileMode, uid, gid int) error {
+	tmp := path.Join(path.Dir(dst), "."+path.Base(dst)+"."+rand.Text())
+	out, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = in.Close() }()
-	if st, err := in.Stat(); err != nil {
-		return err
-	} else if !st.Mode().IsRegular() {
-		return fmt.Errorf("%s is not a regular file", src)
-	}
-	out, err := os.CreateTemp(filepath.Dir(dst), "."+filepath.Base(dst)+".*")
-	if err != nil {
-		return err
-	}
-	tmp := out.Name()
-	defer func() { _ = os.Remove(tmp) }()
-	if _, err := io.Copy(out, in); err != nil {
+	defer func() { _ = root.Remove(tmp) }()
+	if _, err := io.Copy(out, r); err != nil {
 		_ = out.Close()
 		return err
 	}
@@ -563,15 +655,32 @@ func copyTo(src, dst string, perm os.FileMode, uid, gid int) error {
 	if err := out.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, dst)
+	return root.Rename(tmp, dst)
 }
 
-// pruneOldest keeps the keep newest entries of dir whose name starts with
-// prefix and deletes the rest (files or directories). Names end in a UTC
-// timestamp, but what comes before it (a version) does not sort, so age is
-// the modification time.
-func pruneOldest(dir, prefix string, keep int) {
-	entries, err := os.ReadDir(dir)
+// readDirNoFollow lists dir inside root, refusing a dir that is a symlink.
+func readDirNoFollow(root *os.Root, dir string) ([]os.DirEntry, error) {
+	info, err := root.Lstat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("%s: %w", dir, errNotRegular)
+	}
+	d, err := root.Open(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = d.Close() }()
+	return d.ReadDir(-1)
+}
+
+// pruneNewest deletes from dir (inside root) every entry accepted by match
+// except the keep most recently modified ones. Names end in a version or a
+// timestamp that does not sort, so age is the modification time. Entries are
+// listed without following links (DirEntry.Type comes from lstat).
+func pruneNewest(root *os.Root, dir string, keep int, match func(os.DirEntry) bool, remove func(string) error) {
+	entries, err := readDirNoFollow(root, dir)
 	if err != nil {
 		return
 	}
@@ -579,38 +688,39 @@ func pruneOldest(dir, prefix string, keep int) {
 		name string
 		mod  time.Time
 	}
-	var match []aged
+	var found []aged
 	for _, e := range entries {
-		if !strings.HasPrefix(e.Name(), prefix) {
+		if !match(e) {
 			continue
 		}
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
-		match = append(match, aged{e.Name(), info.ModTime()})
+		found = append(found, aged{e.Name(), info.ModTime()})
 	}
-	if len(match) <= keep {
+	if len(found) <= keep {
 		return
 	}
-	sort.Slice(match, func(i, j int) bool { return match[i].mod.After(match[j].mod) })
-	for _, m := range match[keep:] {
-		_ = os.RemoveAll(filepath.Join(dir, m.name))
+	sort.Slice(found, func(i, j int) bool { return found[i].mod.After(found[j].mod) })
+	for _, f := range found[keep:] {
+		_ = remove(path.Join(dir, f.name))
 	}
 }
 
-// pruneReleases keeps only the keep most recent old binaries.
-func pruneReleases(dir string, keep int) {
-	entries, err := os.ReadDir(dir)
-	if err != nil || len(entries) <= keep {
-		return
-	}
-	sort.Slice(entries, func(i, j int) bool {
-		ii, _ := entries[i].Info()
-		jj, _ := entries[j].Info()
-		return ii.ModTime().After(jj.ModTime())
-	})
-	for _, e := range entries[keep:] {
-		_ = os.Remove(filepath.Join(dir, e.Name()))
-	}
+// pruneOldest keeps the keep newest entries of dir whose name starts with
+// prefix and deletes the rest (files or directories, never a symlink).
+func pruneOldest(root *os.Root, dir, prefix string, keep int) {
+	pruneNewest(root, dir, keep, func(e os.DirEntry) bool {
+		return strings.HasPrefix(e.Name(), prefix) && e.Type()&os.ModeSymlink == 0
+	}, root.RemoveAll)
+}
+
+// pruneReleases keeps only the keep most recent old binaries. Only regular
+// files named like a kept binary are candidates: nothing else that ends up
+// in releases/ is ever deleted.
+func pruneReleases(root *os.Root, dir string, keep int) {
+	pruneNewest(root, dir, keep, func(e os.DirEntry) bool {
+		return strings.HasPrefix(e.Name(), releasePrefix) && e.Type().IsRegular()
+	}, root.Remove)
 }
