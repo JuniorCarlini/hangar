@@ -79,10 +79,12 @@ func TestCheckSnapshots(t *testing.T) {
 		"predeploy long": func(s *ServiceSnapshot) {
 			s.Deploy = &SnapshotDeploy{Predeploy: []byte(`["` + strings.Repeat("a", 3000) + `"]`)}
 		},
-		"pids":     func(s *ServiceSnapshot) { s.Res.Pids = 1 << 30 },
-		"no pids":  func(s *ServiceSnapshot) { s.Res.Pids = 0 },
-		"git url":  func(s *ServiceSnapshot) { s.Image, s.Git = "", &SnapshotGit{URL: "http://169.254.169.254/a/b.git"} },
-		"git path": func(s *ServiceSnapshot) { s.Image, s.Git = "", &SnapshotGit{URL: "https://github.com/a/b.git", Subdir: "../x"} },
+		"pids":    func(s *ServiceSnapshot) { s.Res.Pids = 1 << 30 },
+		"no pids": func(s *ServiceSnapshot) { s.Res.Pids = 0 },
+		"git url": func(s *ServiceSnapshot) { s.Image, s.Git = "", &SnapshotGit{URL: "http://169.254.169.254/a/b.git"} },
+		"git path": func(s *ServiceSnapshot) {
+			s.Image, s.Git = "", &SnapshotGit{URL: "https://github.com/a/b.git", Subdir: "../x"}
+		},
 	} {
 		s := ok()
 		edit(&s)
