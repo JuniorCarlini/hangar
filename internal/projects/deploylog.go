@@ -65,18 +65,31 @@ func (d *deployLog) progress(phase, line string) {
 		}
 		d.phase = phase
 	}
-	line = strings.TrimRightFunc(strings.Map(func(r rune) rune {
+	line = strings.Map(func(r rune) rune {
+		if r == '\u2028' || r == '\u2029' {
+			return '\n' // Unicode line and paragraph separators break lines too
+		}
 		if r == '\n' || r == '\t' || !unicode.IsControl(r) {
 			return r
 		}
 		return -1
-	}, d.mask.apply(line)), unicode.IsSpace)
-	if line != "" {
-		prefix := "[" + phase + "] "
-		if phase == "log" {
-			prefix = "  "
+	}, d.mask.apply(line))
+	// Only the first line of a message carries the phase marker; every
+	// other line is indented like process output. Text from outside (a
+	// commit message, a build step) can hold newlines, and must never
+	// start a line that looks like the panel's own "[deploy] ..."
+	// (SEC-019, CWE-117).
+	first := true
+	for l := range strings.SplitSeq(line, "\n") {
+		if l = strings.TrimRightFunc(l, unicode.IsSpace); l == "" {
+			continue
 		}
-		d.buf.WriteString(prefix + line + "\n")
+		prefix := "  "
+		if first && phase != "log" {
+			prefix = "[" + phase + "] "
+		}
+		first = false
+		d.buf.WriteString(prefix + l + "\n")
 	}
 	if time.Since(d.last) >= deployLogEvery {
 		d.writeLocked()

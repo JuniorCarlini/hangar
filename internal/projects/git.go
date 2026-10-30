@@ -555,7 +555,7 @@ func (m *Manager) buildFromGit(ctx context.Context, p dbq.Project, s dbq.Service
 		return "", err
 	}
 	_ = m.q.SetDeploymentCommit(ctx, dbq.SetDeploymentCommitParams{CommitSha: commit.SHA, CommitMessage: commit.Message, ID: depID})
-	dl.progress(node.PhaseClone, shortSHA(commit.SHA)+" "+commit.Message)
+	dl.progress(node.PhaseClone, shortSHA(commit.SHA)+" "+commitSubject(commit.Message))
 
 	contextDir, err := buildContextDir(ws, g.Subdir)
 	if err != nil {
@@ -805,4 +805,11 @@ func (m *Manager) GitHubHook(ctx context.Context, d HookDelivery) (HookOutcome, 
 	}
 	m.record(ctx, a, "service.webhook", "service", row.ServiceID, audit.OK, summary)
 	return HookDeployed, nil
+}
+
+// commitSubject is the first line of a commit message: the deploy log shows
+// only that, the rest is the author's free text (SEC-019).
+func commitSubject(msg string) string {
+	subject, _, _ := strings.Cut(strings.TrimLeft(msg, "\r\n"), "\n")
+	return strings.TrimRight(subject, "\r")
 }
