@@ -2454,6 +2454,7 @@ every = "Frequência"
 every_hours = { one = "a cada hora", other = "a cada {n} horas" }
 at = "A partir de"
 wal = "Voltar a qualquer minuto"
+wal_sudo = "Confirme sua senha para desligar."
 next = "Próximo: {when}"
 save = "Salvar"
 wal_title = "Recuperação até o minuto"

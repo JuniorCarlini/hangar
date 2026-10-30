@@ -572,6 +572,15 @@ func (h *handlers) setBackupPolicy(w http.ResponseWriter, r *http.Request) {
 		h.renderService(w, r, serviceView{status: http.StatusUnprocessableEntity, errMsg: i18n.T(r.Context(), "backup.error.schedule")})
 		return
 	}
+	// Switching a service's backups or WAL off removes the protection of
+	// its data, the same weight as deleting it: like the other destructive
+	// backup actions it needs a recent password confirmation (SEC-016).
+	// Turning them on or moving the schedule does not.
+	if pr := PrincipalFrom(r.Context()); !pr.SudoFor(auth.SudoCritical, time.Now()) && h.weakensBackups(r, in) {
+		h.recordDenied(r, "backup.policy.set", "sudo_required")
+		http.Error(w, i18n.T(r.Context(), "error.sudo_required"), http.StatusForbidden)
+		return
+	}
 	if err := h.backups.SetServicePolicy(r.Context(), actor(r), r.PathValue("project"), r.PathValue("service"), in); err != nil {
 		code, msg := userError(r, err)
 		h.renderService(w, r, serviceView{status: code, errMsg: msg})

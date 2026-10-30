@@ -618,7 +618,8 @@ painel com credencial só leitura).
 - **Painel** — tela `/backups` (kit, destinos, bancos, histórico, regras do
   bucket) e aba **Backups** de cada serviço que guarda dados (rotina, WAL no
   Postgres, baixar, restaurar). Chaves e destinos: dono + sudo. Restaurar e baixar: admin +
-  sudo. Tudo auditado.
+  sudo. Desligar a rotina ou o WAL de um serviço: admin + sudo (ligar ou
+  mudar o horário não pede). Tudo auditado.
 - **Destino** — ao salvar, o painel grava um objeto de prova com trava, lê
   de volta e tenta apagar: se conseguir apagar, ou se o bucket não tiver
   Object Lock, o destino é recusado. Endpoint passa pelo filtro anti-SSRF

@@ -2456,6 +2456,7 @@ every = "Frequency"
 every_hours = { one = "every hour", other = "every {n} hours" }
 at = "From"
 wal = "Back to any minute"
+wal_sudo = "Confirm your password to turn it off."
 next = "Next: {when}"
 save = "Save"
 wal_title = "Point-in-time recovery"

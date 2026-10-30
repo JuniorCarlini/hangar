@@ -223,17 +223,24 @@ templ svcBackupRoutines(d ServiceData) {
 						<button type="button" class="tuc-btn is-ghost is-icon is-sm" data-tuc-modal="#routine-modal" title={ t(ctx, "svcbackup.routine_edit") } aria-label={ t(ctx, "svcbackup.routine_edit") }>
 							@Icon("pencil", "size-3.5")
 						</button>
-						<form method="post" action={ templ.SafeURL(d.base() + "/backups/policy") } data-confirm={ t(ctx, "confirm.routine_remove.title") } data-confirm-text={ t(ctx, "confirm.routine_remove.text") } data-confirm-ok={ t(ctx, "confirm.routine_remove.ok") } data-tone="warning">
-							<input type="hidden" name="csrf" value={ d.CSRF }/>
-							<input type="hidden" name="every_hours" value={ fmt.Sprint(d.Backups.EveryHours) }/>
-							<input type="hidden" name="at" value={ d.Backups.AtTime }/>
-							if d.Backups.WAL {
-								<input type="hidden" name="wal" value="1"/>
-							}
-							<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "svcbackup.routine_remove") } aria-label={ t(ctx, "svcbackup.routine_remove") }>
+						// Turning the routine off needs a recent password (SEC-016).
+						if d.SudoCritical {
+							<form method="post" action={ templ.SafeURL(d.base() + "/backups/policy") } data-confirm={ t(ctx, "confirm.routine_remove.title") } data-confirm-text={ t(ctx, "confirm.routine_remove.text") } data-confirm-ok={ t(ctx, "confirm.routine_remove.ok") } data-tone="warning">
+								<input type="hidden" name="csrf" value={ d.CSRF }/>
+								<input type="hidden" name="every_hours" value={ fmt.Sprint(d.Backups.EveryHours) }/>
+								<input type="hidden" name="at" value={ d.Backups.AtTime }/>
+								if d.Backups.WAL {
+									<input type="hidden" name="wal" value="1"/>
+								}
+								<button class="tuc-btn is-ghost is-icon is-sm text-danger" type="submit" title={ t(ctx, "svcbackup.routine_remove") } aria-label={ t(ctx, "svcbackup.routine_remove") }>
+									@Icon("trash", "size-3.5")
+								</button>
+							</form>
+						} else {
+							<button type="button" class="tuc-btn is-ghost is-icon is-sm text-danger" data-tuc-modal="#sudo-dialog" title={ t(ctx, "svcbackup.routine_remove") } aria-label={ t(ctx, "svcbackup.routine_remove") }>
 								@Icon("trash", "size-3.5")
 							</button>
-						</form>
+						}
 					</span>
 				}
 			</div>
@@ -311,10 +318,21 @@ templ svcRoutineDialog(d ServiceData) {
 					</div>
 				</div>
 				if d.Backups.WALSupported && d.Backups.WAL {
-					<label class="tuc-choice is-end">
-						<input type="checkbox" role="switch" class="tuc-switch" name="wal" value="1" checked/>
-						<span>{ t(ctx, "svcbackup.wal") }</span>
-					</label>
+					if d.SudoCritical {
+						<label class="tuc-choice is-end">
+							<input type="checkbox" role="switch" class="tuc-switch" name="wal" value="1" checked/>
+							<span>{ t(ctx, "svcbackup.wal") }</span>
+						</label>
+					} else {
+						// Turning WAL off needs a recent password (SEC-016): the
+						// switch stays on here and the schedule can still change.
+						<input type="hidden" name="wal" value="1"/>
+						<label class="tuc-choice is-end">
+							<input type="checkbox" role="switch" class="tuc-switch" checked disabled/>
+							<span>{ t(ctx, "svcbackup.wal") }</span>
+						</label>
+						<p class="tuc-hint">{ t(ctx, "svcbackup.wal_sudo") }</p>
+					}
 				}
 				<div class="flex justify-end gap-2">
 					<button type="button" class="tuc-btn is-ghost" data-tuc-modal-close>{ t(ctx, "tucano.cancel") }</button>
