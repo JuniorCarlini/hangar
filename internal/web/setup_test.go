@@ -47,6 +47,10 @@ func TestFirstVisitCreatesTheOwner(t *testing.T) {
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `name="email"`) || !strings.Contains(rec.Body.String(), "30 min") {
 		t.Fatalf("setup page: status %d", rec.Code)
 	}
+	// 2FA is recommended, not forced: a ticked box the owner may untick.
+	if !strings.Contains(rec.Body.String(), `name="twofa" value="1" checked`) {
+		t.Error("the setup page must offer 2FA, ticked by default")
+	}
 
 	form := url.Values{"email": {testEmail}, "password": {testPassword}, "confirm": {testPassword + "x"}, "twofa": {"1"}}
 	if rec = e.postSetup(form); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), i18n.Tl("pt-BR", "setup.error.mismatch")) {
@@ -54,16 +58,17 @@ func TestFirstVisitCreatesTheOwner(t *testing.T) {
 	}
 	form.Set("confirm", testPassword)
 	rec = e.postSetup(form)
-	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != enrollPath {
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account#totp" {
 		t.Fatalf("setup: status %d, location %q, body %s", rec.Code, rec.Header().Get("Location"), rec.Body)
 	}
 	session := cookie(rec, sessionCookie)
 	if session == nil || !session.Secure || !session.HttpOnly {
 		t.Fatalf("session cookie: %+v", session)
 	}
-	if rec = e.do(req{method: "GET", target: enrollPath, cookies: []*http.Cookie{session}}); rec.Code != http.StatusOK ||
+	// With the box ticked the owner lands on the 2FA card of My account.
+	if rec = e.do(req{method: "GET", target: "/account", cookies: []*http.Cookie{session}}); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `src="data:image/png;base64,`) {
-		t.Fatalf("enrollment after setup: status %d", rec.Code)
+		t.Fatalf("2FA card after setup: status %d", rec.Code)
 	}
 
 	// Done once, the page is gone for everyone.
@@ -79,11 +84,33 @@ func TestFirstVisitCreatesTheOwner(t *testing.T) {
 	}
 }
 
-// The owner cannot skip the second factor: whatever the form says, the
-// setup ends on the enrollment page and the panel stays closed until a
-// factor is on.
+// A new panel does not force 2FA: an owner who unticks the box goes
+// straight to the panel.
+func TestSetupWithoutTwoFactor(t *testing.T) {
+	e := newSetupEnv(t)
+	rec := e.postSetup(url.Values{"email": {testEmail}, "password": {testPassword}, "confirm": {testPassword}, "twofa": {"0"}})
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/" {
+		t.Fatalf("setup without 2FA: status %d, location %q", rec.Code, rec.Header().Get("Location"))
+	}
+	session := cookie(rec, sessionCookie)
+	p, _ := e.svc.Authenticate(context.Background(), session.Value)
+	if p == nil || p.MustEnroll || p.HasTOTP {
+		t.Fatalf("principal: %+v", p)
+	}
+	if rec := e.do(req{method: "GET", target: "/", cookies: []*http.Cookie{session}, header: map[string]string{"Accept": "text/html"}}); rec.Code != http.StatusOK {
+		t.Errorf("the panel after a setup without 2FA: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+// When the panel requires 2FA of everyone, the owner cannot skip it:
+// whatever the form says, the setup ends on the enrollment page and the
+// panel stays closed until a factor is on.
 func TestSetupCannotSkipTwoFactor(t *testing.T) {
 	e := newSetupEnv(t)
+	e.require2FA(t)
+	if page := e.do(req{method: "GET", target: "/setup"}); strings.Contains(page.Body.String(), `name="twofa"`) {
+		t.Error("with 2FA required the setup page must not offer to skip it")
+	}
 	rec := e.postSetup(url.Values{"email": {testEmail}, "password": {testPassword}, "confirm": {testPassword}, "twofa": {"0"}})
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != enrollPath {
 		t.Fatalf("setup without 2FA: status %d, location %q", rec.Code, rec.Header().Get("Location"))

@@ -71,11 +71,20 @@ func TestLimitedUserSeesOnlyTheirProjects(t *testing.T) {
 	}
 }
 
-// optional2FA turns the team's "require 2FA of everyone" off, so operators
-// and viewers may sign in with a password alone.
+// optional2FA turns the team's "require 2FA of everyone" off (a new
+// panel's default), so any account may sign in with a password alone.
 func (e *env) optional2FA(t *testing.T) {
 	t.Helper()
 	if err := e.svc.SetRequire2FA(context.Background(), "", false, auth.Client{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// require2FA turns the team's "require 2FA of everyone" on: every account,
+// owners and admins included, must enroll a second factor.
+func (e *env) require2FA(t *testing.T) {
+	t.Helper()
+	if err := e.svc.SetRequire2FA(context.Background(), "", true, auth.Client{}); err != nil {
 		t.Fatal(err)
 	}
 }

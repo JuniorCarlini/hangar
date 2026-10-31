@@ -42,15 +42,18 @@ servidos localmente, e o Editor do Tucano, que grava `style` em atributo, não
   (lista local, k-anonymity opcional), hash **argon2id** (m=64 MiB, t=3, p=2,
   ajustável).
 - **2FA**: TOTP com códigos de recuperação (10, de uso único).
-  **Obrigatória para donos e admins, sempre.** "Exigir 2FA de todos"
-  (operadores e leitores também) é uma opção do painel em **Equipe →
-  Segurança**, ligada num painel novo; desligar pede sudo em qualquer nível,
+  **Opcional por padrão e recomendada**, como em outros painéis
+  self-hosted: Minha conta e o menu do usuário lembram quem está sem ela
+  (donos e admins com mais ênfase). "Exigir 2FA de todos" (todos os papéis,
+  donos e admins inclusive) é uma opção do painel em **Equipe →
+  Segurança**, desligada num painel novo; desligar pede sudo em qualquer nível,
   confirmação vermelha e fica na auditoria (`security.require_2fa`, que
   também vira alerta). Conta que precisa de 2FA e não tem entra com a senha
   e cai na tela de cadastro (`/account/2fa`): qualquer outra tela volta para
   ela, toda escrita é recusada e auditada, só sair é permitido; cadastrou, o
-  painel abre. O primeiro acesso termina nessa tela, sem "pular". Onde a 2FA
-  é opcional, quem está sem ela vê um aviso fixo no topo e as ações
+  painel abre. Ligar a opção sem ter 2FA leva o próprio dono a essa tela,
+  sem trancá-lo fora. Onde a 2FA é opcional, quem está sem ela vê um aviso
+  fixo no topo e as ações
   perigosas pedem a senha de novo. O `[auth] require_2fa` do `hangar.toml`
   só vale como valor inicial da opção para um painel que já tinha contas
   (atualização); depois, vale a opção do painel. No servidor,

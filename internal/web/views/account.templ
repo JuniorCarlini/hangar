@@ -29,6 +29,9 @@ type SessionRow struct {
 type TOTPSection struct {
 	On       bool
 	Required bool
+	// Recommend: an owner or admin, who reaches every project and the
+	// server, so the card asks a little more firmly (still optional).
+	Recommend bool
 	// Setup, when 2FA is off: a fresh secret, its QR code (PNG data URI) and
 	// the otpauth link (tapping it on the phone opens the authenticator).
 	Secret   string
@@ -177,7 +180,11 @@ templ totpCard(d AccountData) {
 					</form>
 				}
 			} else {
-				@notice("info", "shield-check", t(ctx, "account.totp.why"))
+				if d.TOTP.Recommend {
+					@notice("info", "shield-check", t(ctx, "account.totp.why_admin"))
+				} else {
+					@notice("info", "shield-check", t(ctx, "account.totp.why"))
+				}
 				<div class="flex flex-wrap items-start gap-5">
 					if d.TOTP.QR != "" {
 						<img class="size-[164px] rounded-sm bg-white p-2.5" src={ d.TOTP.QR } alt={ t(ctx, "account.totp.qr_alt") } width="164" height="164"/>

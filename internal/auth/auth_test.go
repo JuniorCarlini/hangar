@@ -449,8 +449,11 @@ func TestSecondFactorFailuresLock(t *testing.T) {
 func TestLoginWithoutRequiredTOTPMustEnroll(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	if !f.svc.Require2FA(ctx) {
-		t.Fatal("a new panel must require 2FA of everyone")
+	if f.svc.Require2FA(ctx) {
+		t.Fatal("a new panel must start with 2FA optional")
+	}
+	if err := f.svc.SetRequire2FA(ctx, "", true, cli); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := f.svc.CreateUser(ctx, "sem2fa@hangar.dev", goodPassword, RoleViewer); err != nil {
 		t.Fatal(err)
@@ -468,46 +471,62 @@ func TestLoginWithoutRequiredTOTPMustEnroll(t *testing.T) {
 	}
 }
 
-// Owners and admins always need a second factor; the setting only decides
-// for operators and viewers. It is the database's, seeded once.
+// Only the panel setting decides, for every role alike: off, nobody is
+// forced (owners and admins included); on, everybody is. It is the
+// database's, seeded once.
 func TestRequire2FASetting(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	if err := f.svc.SetRequire2FA(ctx, "usr_owner", false, cli); err != nil {
+	roles := []Role{RoleOwner, RoleAdmin, RoleOperator, RoleViewer}
+	for _, role := range roles {
+		if f.svc.RequiredFor(ctx, role) {
+			t.Errorf("%s: required with the setting off", role)
+		}
+	}
+	tokens := map[Role]string{}
+	for _, role := range roles {
+		email := role.String() + "@hangar.dev"
+		if _, err := f.svc.CreateUser(ctx, email, goodPassword, role); err != nil {
+			t.Fatal(err)
+		}
+		token, complete, err := f.svc.Login(ctx, email, goodPassword, cli)
+		if err != nil || !complete {
+			t.Fatalf("%s: login without 2FA: %v %v", role, complete, err)
+		}
+		if p, _ := f.svc.Authenticate(ctx, token); p == nil || p.MustEnroll {
+			t.Fatalf("%s: with the setting off the password alone opens the panel", role)
+		}
+		tokens[role] = token
+	}
+	// Turning it on reaches the sessions already open, the owner's too.
+	if err := f.svc.SetRequire2FA(ctx, "usr_owner", true, cli); err != nil {
 		t.Fatal(err)
 	}
-	if f.svc.Require2FA(ctx) {
-		t.Fatal("setting off")
+	if !f.svc.Require2FA(ctx) {
+		t.Fatal("setting on")
 	}
-	for role, want := range map[Role]bool{RoleOwner: true, RoleAdmin: true, RoleOperator: false, RoleViewer: false} {
-		if got := f.svc.RequiredFor(ctx, role); got != want {
-			t.Errorf("%s: required %v, want %v", role, got, want)
+	for _, role := range roles {
+		if !f.svc.RequiredFor(ctx, role) {
+			t.Errorf("%s: not required with the setting on", role)
+		}
+		if p, _ := f.svc.Authenticate(ctx, tokens[role]); p == nil || !p.MustEnroll {
+			t.Errorf("%s: an open session must be sent to enroll once 2FA is required", role)
 		}
 	}
 	if n := f.countAudit(t, "security.require_2fa"); n != 1 {
 		t.Errorf("%d audit records for the change", n)
 	}
-	if _, err := f.svc.CreateUser(ctx, "op@hangar.dev", goodPassword, RoleOperator); err != nil {
+	// And off again releases them.
+	if err := f.svc.SetRequire2FA(ctx, "usr_owner", false, cli); err != nil {
 		t.Fatal(err)
 	}
-	token, _, err := f.svc.Login(ctx, "op@hangar.dev", goodPassword, cli)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p, _ := f.svc.Authenticate(ctx, token); p == nil || p.MustEnroll {
-		t.Fatal("with the setting off an operator signs in with the password alone")
-	}
-	// Turning it on reaches the sessions already open.
-	if err := f.svc.SetRequire2FA(ctx, "usr_owner", true, cli); err != nil {
-		t.Fatal(err)
-	}
-	if p, _ := f.svc.Authenticate(ctx, token); p == nil || !p.MustEnroll {
-		t.Fatal("an open session must be sent to enroll once 2FA is required")
+	if p, _ := f.svc.Authenticate(ctx, tokens[RoleOwner]); p == nil || p.MustEnroll {
+		t.Error("with the setting off again the owner is not forced")
 	}
 }
 
 // A panel upgraded with accounts in it takes hangar.toml's value once; a new
-// one starts with 2FA required. The row is never rewritten after that.
+// one starts with 2FA optional. The row is never rewritten after that.
 func TestRequire2FASeed(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(context.Background(), filepath.Join(dir, "h.db"), filepath.Join(dir, "b"),
@@ -518,6 +537,24 @@ func TestRequire2FASeed(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 	ctx := context.Background()
 	box, _ := secrets.NewBox(bytes.Repeat([]byte{9}, 32))
+	// A brand-new panel (no accounts) seeds the setting off, even when
+	// hangar.toml says true: that value is only for upgrades.
+	fresh, err := NewService(st.DB, box, audit.New(st.DB), Options{Argon: cheap, Require2FA: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.SeedRequire2FA(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if fresh.Require2FA(ctx) || fresh.RequiredFor(ctx, RoleOwner) {
+		t.Error("a new panel starts with 2FA optional, the owner's too")
+	}
+	var raw string
+	if err := st.DB.QueryRow(`SELECT value_json FROM settings WHERE key = ?`, require2FAKey).Scan(&raw); err != nil ||
+		raw != `{"on":false,"seeded":"new"}` {
+		t.Errorf("seeded row %q: %v", raw, err)
+	}
+
 	// An install from before the setting: accounts, no row.
 	old, err := NewService(st.DB, box, audit.New(st.DB), Options{Argon: cheap})
 	if err != nil {
@@ -534,10 +571,10 @@ func TestRequire2FASeed(t *testing.T) {
 		t.Fatal(err)
 	}
 	if upgraded.Require2FA(ctx) {
-		t.Error("an upgrade keeps hangar.toml's require_2fa = false for operators and viewers")
+		t.Error("an upgrade keeps hangar.toml's require_2fa = false")
 	}
-	if !upgraded.RequiredFor(ctx, RoleAdmin) {
-		t.Error("an upgraded admin must still need 2FA")
+	if upgraded.RequiredFor(ctx, RoleAdmin) || upgraded.RequiredFor(ctx, RoleOwner) {
+		t.Error("with require_2fa = false an upgraded owner or admin is not forced either")
 	}
 	// hangar.toml changing later does not override the panel's setting.
 	again, err := NewService(st.DB, box, audit.New(st.DB), Options{Argon: cheap, Require2FA: true})
@@ -552,10 +589,7 @@ func TestRequire2FASeed(t *testing.T) {
 func TestOptionalTOTP(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
-	// Optional only below admin, with the team's setting off.
-	if err := f.svc.SetRequire2FA(ctx, "", false, cli); err != nil {
-		t.Fatal(err)
-	}
+	// Optional for every role while the team's setting is off (the default).
 	if _, err := f.svc.CreateUser(ctx, "sem2fa@hangar.dev", goodPassword, RoleOperator); err != nil {
 		t.Fatal(err)
 	}
@@ -640,13 +674,13 @@ func TestOptionalTOTP(t *testing.T) {
 	if err := f.svc.DisableTOTP(ctx, p, goodPassword, code, cli); !errors.Is(err, ErrTOTPRequired) {
 		t.Errorf("require_2fa forbids turning it off: %v", err)
 	}
-	// An admin can never turn it off, whatever the setting.
+	// With the setting off, an admin may turn it off like anyone else.
 	if err := f.svc.SetRequire2FA(ctx, "", false, cli); err != nil {
 		t.Fatal(err)
 	}
 	admin := &Principal{UserID: p.UserID, Role: RoleAdmin, SessionToken: p.SessionToken}
-	if err := f.svc.DisableTOTP(ctx, admin, goodPassword, code, cli); !errors.Is(err, ErrTOTPRequired) {
-		t.Errorf("an admin turning 2FA off: %v", err)
+	if err := f.svc.DisableTOTP(ctx, admin, goodPassword, code, cli); errors.Is(err, ErrTOTPRequired) {
+		t.Errorf("an admin turning 2FA off with the setting off: %v", err)
 	}
 }
 

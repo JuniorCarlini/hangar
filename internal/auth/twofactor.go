@@ -10,15 +10,16 @@ import (
 	"github.com/JuniorCarlini/hangar/internal/store/dbq"
 )
 
-// Mandatory second factor (docs/04, docs/17 § 1.4).
+// Second factor: optional by default, enforceable (docs/04, docs/17 § 1.4).
 //
-// Owners and admins always need a second factor: they reach every project,
-// its secrets and the server itself. The panel setting "require 2FA of
-// everyone" extends that to operators and viewers; it lives in the database
-// (Team → Security), not in hangar.toml, so nobody needs a shell to change
-// it. hangar.toml's [auth] require_2fa only seeds it once, on the first
-// start of a panel that already had accounts (an upgrade); a brand-new
-// panel starts with it on.
+// Like other self-hosted panels, Hangar recommends 2FA without forcing it:
+// "My account" and the user menu nudge every account that has none, owners
+// and admins most of all. The panel setting "require 2FA of everyone" makes
+// it mandatory for every role, owners and admins included; it lives in the
+// database (Team → Security), not in hangar.toml, so nobody needs a shell to
+// change it. hangar.toml's [auth] require_2fa only seeds it once, on the
+// first start of a panel that already had accounts (an upgrade); a
+// brand-new panel starts with it off.
 //
 // An account that must have a second factor and has none is not turned
 // away at the door (that used to need a shell on the server to fix): it
@@ -30,13 +31,13 @@ const require2FAKey = "auth.require_2fa"
 type require2FASetting struct {
 	On bool `json:"on"`
 	// Seeded tells how the value was first chosen: "new" (fresh panel,
-	// on) or "config" (an upgrade, from hangar.toml). It only documents the
+	// off) or "config" (an upgrade, from hangar.toml). It only documents the
 	// row; the panel reads On.
 	Seeded string `json:"seeded,omitempty"`
 }
 
 // SeedRequire2FA writes the setting the first time the panel (or the
-// command line) opens the database with this version: on for a panel
+// command line) opens the database with this version: off for a panel
 // without accounts, hangar.toml's value for one that already has them. An
 // existing row is never touched. app.Open calls it before anything can
 // create a user; Require2FA does it too when the row is missing.
@@ -52,7 +53,7 @@ func (s *Service) initRequire2FA(ctx context.Context, fromConfig bool) error {
 	if err != nil {
 		return err
 	}
-	v := require2FASetting{On: true, Seeded: "new"}
+	v := require2FASetting{On: false, Seeded: "new"}
 	if n > 0 {
 		v = require2FASetting{On: fromConfig, Seeded: "config"}
 	}
@@ -60,9 +61,8 @@ func (s *Service) initRequire2FA(ctx context.Context, fromConfig bool) error {
 	return s.q.SetSetting(ctx, dbq.SetSettingParams{Key: require2FAKey, ValueJson: string(raw)})
 }
 
-// Require2FA reports whether every account (operators and viewers too)
-// must have a second factor. Owners and admins always must (see
-// RequiredFor). A read error answers true: when in doubt, ask for more.
+// Require2FA reports whether every account, whatever its role, must have a
+// second factor. A read error answers true: when in doubt, ask for more.
 func (s *Service) Require2FA(ctx context.Context) bool {
 	s.twoFAMu.Lock()
 	defer s.twoFAMu.Unlock()
@@ -88,13 +88,18 @@ func (s *Service) Require2FA(ctx context.Context) bool {
 }
 
 // RequiredFor reports whether an account with this role must have a second
-// factor.
-func (s *Service) RequiredFor(ctx context.Context, r Role) bool {
-	return r >= RoleAdmin || s.Require2FA(ctx)
+// factor. Only the panel setting decides, with no role exempt and none
+// singled out: on, every account (the owner too) must enroll; off, nobody
+// is forced. The role stays in the signature so a per-role policy, if one
+// ever comes, has a single place to live.
+func (s *Service) RequiredFor(ctx context.Context, _ Role) bool {
+	return s.Require2FA(ctx)
 }
 
 // SetRequire2FA turns "require 2FA of everyone" on or off. Turning it off
 // is the owner's, with a fresh confirmation (the route asks for sudo).
+// Turning it on while the caller has no factor does not lock them out: the
+// next request lands on the enrollment page (Principal.MustEnroll).
 func (s *Service) SetRequire2FA(ctx context.Context, userID string, on bool, c Client) error {
 	old := s.Require2FA(ctx)
 	raw, _ := json.Marshal(require2FASetting{On: on})

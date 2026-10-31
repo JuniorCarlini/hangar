@@ -150,11 +150,13 @@ func (h *handlers) loginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handlers) setupForm(r *http.Request, until time.Time) views.SetupForm {
-	// The owner always needs a second factor: the setup ends on the
-	// enrollment page, with no way around it.
+	// 2FA is recommended, not forced: the box comes ticked and the owner
+	// may untick it, unless the panel requires 2FA of everyone (seeded from
+	// hangar.toml), where the setup ends on the enrollment page with no way
+	// around it.
 	return views.SetupForm{
 		Email: strings.TrimSpace(r.PostFormValue("email")), TwoFA: true,
-		Required: true, MinLen: auth.MinPasswordLen,
+		Required: h.auth.RequiredFor(r.Context(), auth.RoleOwner), MinLen: auth.MinPasswordLen,
 		MinutesLeft: max(1, int(time.Until(until).Minutes()+0.999)),
 	}
 }
@@ -196,6 +198,7 @@ func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	valid := validLoginToken(r)
 	form := withLoginToken(w, r)
 	f := h.setupForm(r, until)
+	f.TwoFA = f.Required || r.PostFormValue("twofa") == "1"
 	if !valid {
 		render(w, form, http.StatusForbidden, views.Setup(f, i18n.T(r.Context(), "login.error.form_expired")))
 		return
@@ -212,9 +215,16 @@ func (h *handlers) setupSubmit(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case err == nil:
 		setCookie(w, sessionCookie, token, auth.SessionMax)
-		// Straight to the enrollment page: the panel stays closed to this
-		// session until a second factor is on (the router's gate).
-		http.Redirect(w, r, enrollPath, http.StatusSeeOther)
+		switch {
+		case f.Required:
+			// The panel stays closed to this session until a second
+			// factor is on (the router's gate).
+			http.Redirect(w, r, enrollPath, http.StatusSeeOther)
+		case f.TwoFA:
+			http.Redirect(w, r, "/account#totp", http.StatusSeeOther)
+		default:
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+		}
 	case errors.Is(err, auth.ErrSetupClosed):
 		st, _ := h.auth.Setup(r.Context())
 		h.setupClosed(w, r, st)

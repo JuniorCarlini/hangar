@@ -32,7 +32,7 @@ func (h *handlers) renderAccount(w http.ResponseWriter, r *http.Request, status 
 	d := views.AccountData{
 		CSRF: p.CSRFToken, Email: p.Email, Name: p.Name, Role: p.Role.String(),
 		Locale: p.Locale, Theme: p.Theme, Flash: flash, Error: errMsg,
-		TOTP:     views.TOTPSection{On: p.HasTOTP || len(recovery) > 0, Required: h.auth.RequiredFor(r.Context(), p.Role), Recovery: recovery},
+		TOTP:     views.TOTPSection{On: p.HasTOTP || len(recovery) > 0, Required: h.auth.RequiredFor(r.Context(), p.Role), Recommend: p.Role >= auth.RoleAdmin, Recovery: recovery},
 		Security: h.securityCard(r),
 	}
 	if list, err := h.auth.ListSessions(r.Context(), p); err == nil {
@@ -77,7 +77,7 @@ func (h *handlers) renderEnroll(w http.ResponseWriter, r *http.Request, status i
 		http.Redirect(w, r, "/account#totp", http.StatusSeeOther)
 		return
 	}
-	d := views.EnrollData{CSRF: p.CSRFToken, Email: p.Email, Role: p.Role.String(), Error: errMsg}
+	d := views.EnrollData{CSRF: p.CSRFToken, Email: p.Email, Error: errMsg}
 	d.Secret, d.URI, d.QR = newTOTPSetup(r, p.Email)
 	render(w, r, status, views.Enroll(d))
 }

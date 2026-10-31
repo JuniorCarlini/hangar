@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"html"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -9,16 +10,18 @@ import (
 	"testing"
 
 	"github.com/JuniorCarlini/hangar/internal/auth"
+	"github.com/JuniorCarlini/hangar/internal/i18n"
 )
 
 var htmlAccept = map[string]string{"Accept": "text/html"}
 
-// An admin without a second factor (an upgraded panel, or a factor reset
-// from the command line) signs in with the password and lands on the
-// enrollment page: every other page sends them back there, every write is
-// refused, leaving is allowed, and enrolling opens the panel.
+// With "require 2FA of everyone" on, an admin without a second factor
+// signs in with the password and lands on the enrollment page: every other
+// page sends them back there, every write is refused, leaving is allowed,
+// and enrolling opens the panel.
 func TestAdminWithoutTOTPMustEnroll(t *testing.T) {
 	e := newEnv(t)
+	e.require2FA(t)
 	if _, err := e.svc.CreateUser(context.Background(), testEmail, testPassword, auth.RoleAdmin); err != nil {
 		t.Fatal(err)
 	}
@@ -72,12 +75,16 @@ func TestAdminWithoutTOTPMustEnroll(t *testing.T) {
 // Leaving is always possible before enrolling.
 func TestLogoutBeforeEnrolling(t *testing.T) {
 	e := newEnv(t)
+	e.require2FA(t)
 	if _, err := e.svc.CreateUser(context.Background(), testEmail, testPassword, auth.RoleOwner); err != nil {
 		t.Fatal(err)
 	}
 	rec := e.do(req{method: "POST", target: "/login", form: url.Values{"email": {testEmail}, "password": {testPassword}}})
 	session := cookie(rec, sessionCookie)
 	p, _ := e.svc.Authenticate(context.Background(), session.Value)
+	if p == nil || !p.MustEnroll {
+		t.Fatalf("an owner without 2FA must enroll while it is required: %+v", p)
+	}
 	rec = e.do(req{method: "POST", target: "/logout", form: url.Values{"csrf": {p.CSRFToken}}, cookies: []*http.Cookie{session}})
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
 		t.Fatalf("logout: %d %q", rec.Code, rec.Header().Get("Location"))
@@ -87,12 +94,85 @@ func TestLogoutBeforeEnrolling(t *testing.T) {
 	}
 }
 
-// "Require 2FA of everyone" is the owner's, on the team page. Turning it off
-// asks for sudo at every level (and is audited); turning it on does not,
-// and reaches the sessions already open.
+// 2FA is optional by default, for every role: an owner and an admin
+// without it reach the panel, and "My account" recommends it to them
+// without forcing it.
+func TestOwnerWithoutTOTPIsNotForced(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleOwner, auth.RoleAdmin} {
+		e := newEnv(t)
+		if _, err := e.svc.CreateUser(context.Background(), testEmail, testPassword, role); err != nil {
+			t.Fatal(err)
+		}
+		rec := e.do(req{method: "POST", target: "/login", form: url.Values{"email": {testEmail}, "password": {testPassword}}})
+		session := cookie(rec, sessionCookie)
+		if rec.Code != http.StatusSeeOther || session == nil {
+			t.Fatalf("%s: password login: %d", role, rec.Code)
+		}
+		if p, _ := e.svc.Authenticate(context.Background(), session.Value); p == nil || p.MustEnroll {
+			t.Fatalf("%s: forced to enroll with 2FA optional: %+v", role, p)
+		}
+		if rec := e.do(req{method: "GET", target: "/", cookies: []*http.Cookie{session}, header: htmlAccept}); rec.Code != http.StatusOK {
+			t.Errorf("%s: the panel must open without 2FA: %d %q", role, rec.Code, rec.Header().Get("Location"))
+		}
+		account := e.do(req{method: "GET", target: "/account", cookies: []*http.Cookie{session}, header: htmlAccept})
+		body := account.Body.String()
+		if account.Code != http.StatusOK || !strings.Contains(body, html.EscapeString(i18n.Tl("pt-BR", "account.totp.why_admin"))) {
+			t.Errorf("%s: My account must recommend 2FA: %d", role, account.Code)
+		}
+		if strings.Contains(body, html.EscapeString(i18n.Tl("pt-BR", "account.totp.required"))) {
+			t.Errorf("%s: My account must not call 2FA mandatory", role)
+		}
+		// The enrollment page is only for the forced; anyone else goes to
+		// the 2FA card of My account.
+		if rec := e.do(req{method: "GET", target: enrollPath, cookies: []*http.Cookie{session}}); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/account#totp" {
+			t.Errorf("%s: enrollment page with 2FA optional: %d %q", role, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}
+
+// The owner turning the requirement on while having no 2FA is not locked
+// out: the next page is the enrollment page, and enrolling opens the panel.
+func TestOwnerRequires2FAWithoutHavingIt(t *testing.T) {
+	e := newEnv(t)
+	if _, err := e.svc.CreateUser(context.Background(), testEmail, testPassword, auth.RoleOwner); err != nil {
+		t.Fatal(err)
+	}
+	rec := e.do(req{method: "POST", target: "/login", form: url.Values{"email": {testEmail}, "password": {testPassword}}})
+	session := cookie(rec, sessionCookie)
+	p, _ := e.svc.Authenticate(context.Background(), session.Value)
+	rec = e.do(req{method: "POST", target: "/team/2fa/require", form: url.Values{"csrf": {p.CSRFToken}}, cookies: []*http.Cookie{session}})
+	if rec.Code != http.StatusSeeOther || !e.svc.Require2FA(context.Background()) {
+		t.Fatalf("turning 2FA on: %d", rec.Code)
+	}
+	next := rec.Header().Get("Location")
+	if rec := e.do(req{method: "GET", target: next, cookies: []*http.Cookie{session}, header: htmlAccept}); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != enrollPath {
+		t.Fatalf("after requiring 2FA without having it: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	page := e.do(req{method: "GET", target: enrollPath, cookies: []*http.Cookie{session}})
+	body := page.Body.String()
+	if page.Code != http.StatusOK || !strings.Contains(body, `action="/logout"`) {
+		t.Fatalf("enrollment page: %d", page.Code)
+	}
+	e.secret = regexp.MustCompile(`name="secret" value="([A-Z2-7]+)"`).FindStringSubmatch(body)[1]
+	rec = e.do(req{
+		method: "POST", target: "/account/totp/enable", cookies: []*http.Cookie{session},
+		form: url.Values{"csrf": {p.CSRFToken}, "secret": {e.secret}, "code": {e.code(t)}, "password": {testPassword}},
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("enroll: %d", rec.Code)
+	}
+	if rec := e.do(req{method: "GET", target: "/team", cookies: []*http.Cookie{session}, header: htmlAccept}); rec.Code != http.StatusOK {
+		t.Fatalf("after enrolling the panel opens: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+// "Require 2FA of everyone" is the owner's, on the team page. Turning it on
+// needs no sudo and reaches the sessions already open; turning it off asks
+// for sudo at every level (and is audited).
 func TestRequire2FAToggle(t *testing.T) {
 	e := newEnv(t)
 	e.setLevel(t, auth.LevelBasic) // even where nothing else asks again
+	e.require2FA(t)
 	c, p := e.session(t, auth.RoleOwner)
 	team := e.do(req{method: "GET", target: "/team", cookies: []*http.Cookie{c}}).Body.String()
 	if !strings.Contains(team, `id="security"`) || !strings.Contains(team, `data-tuc-modal="#sudo-dialog"`) {
@@ -111,8 +191,8 @@ func TestRequire2FAToggle(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || e.svc.Require2FA(context.Background()) {
 		t.Fatalf("turning 2FA off with sudo: %d", rec.Code)
 	}
-	if n := countAudit(t, e, "security.require_2fa"); n != 1 {
-		t.Errorf("%d audit records for turning it off", n)
+	if n := countAudit(t, e, "security.require_2fa"); n != 2 {
+		t.Errorf("%d audit records after turning it off", n)
 	}
 
 	// An operator without 2FA now signs in with the password alone...
@@ -132,8 +212,8 @@ func TestRequire2FAToggle(t *testing.T) {
 	if rec := e.do(req{method: "GET", target: "/", cookies: []*http.Cookie{op}, header: htmlAccept}); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != enrollPath {
 		t.Errorf("an open session without 2FA after it became required: %d %q", rec.Code, rec.Header().Get("Location"))
 	}
-	if n := countAudit(t, e, "security.require_2fa"); n != 2 {
-		t.Errorf("%d audit records, want 2", n)
+	if n := countAudit(t, e, "security.require_2fa"); n != 3 {
+		t.Errorf("%d audit records, want 3", n)
 	}
 	// Only the owner may change it.
 	e2 := newEnv(t)

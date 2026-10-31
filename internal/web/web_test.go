@@ -84,7 +84,7 @@ func newEnv(t *testing.T, opts ...func(*auth.Options)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// As app.Open does: a new panel requires 2FA of everyone.
+	// As app.Open does: a new panel starts with 2FA optional.
 	if err := e.svc.SeedRequire2FA(context.Background()); err != nil {
 		t.Fatal(err)
 	}

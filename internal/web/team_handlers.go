@@ -65,14 +65,14 @@ func (h *handlers) renderTeam(w http.ResponseWriter, r *http.Request, status int
 	render(w, r, status, views.Team(d))
 }
 
-// teamRequire2FA makes every account need a second factor; the ones
-// without it enroll at their next page.
+// teamRequire2FA makes every account need a second factor, the owner's
+// included; the ones without it (the caller too) enroll at their next page.
 func (h *handlers) teamRequire2FA(w http.ResponseWriter, r *http.Request) {
 	h.setRequire2FA(w, r, true)
 }
 
-// teamOptional2FA lets operators and viewers sign in without a second
-// factor (owners and admins always need one). The route asks for sudo at
+// teamOptional2FA lets every account sign in without a second factor (it
+// stays recommended). The route asks for sudo at
 // every level, and the page asks for a red confirmation first.
 func (h *handlers) teamOptional2FA(w http.ResponseWriter, r *http.Request) {
 	h.setRequire2FA(w, r, false)

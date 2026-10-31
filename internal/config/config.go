@@ -100,9 +100,9 @@ type Backup struct {
 type Auth struct {
 	// Require2FA seeds the panel's "require 2FA of everyone" setting once,
 	// on the first start of a panel that already had accounts (an upgrade);
-	// a new panel starts with it on, and from then on the setting in the
-	// database (Team → Security) wins. Owners and admins need 2FA whatever
-	// it says.
+	// a new panel starts with it off, and from then on the setting in the
+	// database (Team → Security) wins. On, every account (owners and admins
+	// included) must have a second factor; off, 2FA is optional.
 	Require2FA bool `toml:"require_2fa"`
 }
 

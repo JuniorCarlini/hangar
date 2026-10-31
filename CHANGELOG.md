@@ -12,6 +12,21 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.39] - 2026-10-31
+
+### Mudado
+
+- **2FA opcional por padrão**, como em outros painéis self-hosted: donos e
+  admins não são mais obrigados a cadastrar o segundo fator para usar o
+  painel, e um painel novo começa com a 2FA opcional (o primeiro acesso
+  oferece ativá-la, já marcado, mas deixa pular).
+- **Exigir de todos, em Equipe → Segurança**: ligada, a opção "Exigir 2FA
+  de todos" vale para todos os papéis, dono e admins inclusive. Quem liga
+  sem ter 2FA cai na tela de cadastro logo em seguida, sem ficar trancado
+  fora. Painéis que já tinham a opção ligada continuam como estavam.
+- **Recomendada em Minha conta**: dono ou admin sem 2FA vê uma recomendação
+  discreta no cartão de verificação em duas etapas.
+
 ## [0.5.38] - 2026-10-30
 
 Correções da auditoria de segurança de 30/10 (24 itens: 1 alto, 5 médios,
@@ -983,7 +998,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.38...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.39...HEAD
+[0.5.39]: https://github.com/JuniorCarlini/hangar/compare/v0.5.38...v0.5.39
 [0.5.38]: https://github.com/JuniorCarlini/hangar/compare/v0.5.37...v0.5.38
 [0.5.37]: https://github.com/JuniorCarlini/hangar/compare/v0.5.36...v0.5.37
 [0.5.36]: https://github.com/JuniorCarlini/hangar/compare/v0.5.35...v0.5.36

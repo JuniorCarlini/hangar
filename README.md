@@ -208,7 +208,7 @@ public = true                                   # painel com HTTPS pelo Caddy (e
 # public_host = "painel.exemplo.com"            # padrão: hangar.<ip>.sslip.io
 
 [auth]
-require_2fa = true    # só o valor inicial numa atualização; depois vale Equipe → Segurança
+require_2fa = false   # exigir 2FA de todos; só o valor inicial numa atualização, depois vale Equipe → Segurança
 
 [update]
 repo       = "JuniorCarlini/hangar"

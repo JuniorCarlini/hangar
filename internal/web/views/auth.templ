@@ -189,7 +189,7 @@ templ Sudo(errMsg, next, csrf string) {
 type SetupForm struct {
 	Email       string
 	TwoFA       bool
-	Required    bool // always true: the owner must enroll a second factor
+	Required    bool // the panel requires 2FA of everyone: no way to skip it
 	MinLen      int
 	MinutesLeft int // until the setup window closes
 }
@@ -199,7 +199,6 @@ type SetupForm struct {
 type EnrollData struct {
 	CSRF  string
 	Email string
-	Role  string
 	Error string
 	// A fresh secret, its otpauth link and QR code (PNG data URI).
 	Secret string
@@ -216,7 +215,7 @@ templ Enroll(d EnrollData) {
 				@brand(d.Email)
 				<div>
 					<h1 class="m-0 text-xl font-semibold">{ t(ctx, "enroll.title") }</h1>
-					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "enroll.subtitle", "role", t(ctx, "role."+d.Role)) }</p>
+					<p class="mt-1 text-[13px] text-muted">{ t(ctx, "enroll.subtitle") }</p>
 				</div>
 				@errorAlert(d.Error)
 				<div class="flex flex-wrap items-start gap-5">
@@ -314,12 +313,22 @@ templ Setup(f SetupForm, errMsg string) {
 					<label class="tuc-label" for="confirm">{ t(ctx, "setup.confirm") }</label>
 					<input class="tuc-input" id="confirm" name="confirm" type="password" autocomplete="new-password" minlength={ f.MinLen } maxlength="256" required data-tuc-reveal/>
 				</div>
-				// The owner always enrolls a second factor right after: the
-				// panel stays closed until then (no "skip").
-				<div class="tuc-alert is-info" role="note">
-					@Icon("shield-check", "size-4")
-					<div class="tuc-alert__body"><p>{ t(ctx, "setup.twofa_required") }</p></div>
-				</div>
+				// Recommended and ticked by default; only when the panel requires
+				// 2FA of everyone is there no way to skip it.
+				if f.Required {
+					<div class="tuc-alert is-info" role="note">
+						@Icon("shield-check", "size-4")
+						<div class="tuc-alert__body"><p>{ t(ctx, "setup.twofa_required") }</p></div>
+					</div>
+				} else {
+					<div class="flex flex-col gap-1">
+						<label class="tuc-choice">
+							<input type="checkbox" class="tuc-check" name="twofa" value="1" checked?={ f.TwoFA }/>
+							<span>{ t(ctx, "setup.twofa") }</span>
+						</label>
+						<p class="tuc-hint">{ t(ctx, "setup.twofa_hint") }</p>
+					</div>
+				}
 				<button class="tuc-btn is-primary is-block" type="submit">
 					@Icon("arrow-right", "size-4")
 					{ t(ctx, "setup.submit") }

@@ -132,8 +132,9 @@ type Options struct {
 	Now   func() time.Time
 	// Require2FA is hangar.toml's [auth] require_2fa: the first value of the
 	// panel's "require 2FA of everyone" setting on a panel upgraded with
-	// accounts already in it (a new panel starts with it on). After that
-	// the setting in the database wins (Team → Security).
+	// accounts already in it (a new panel starts with it off: 2FA is
+	// recommended, not forced). After that the setting in the database
+	// wins (Team → Security).
 	Require2FA bool
 	// FirstRunSetup lets the owner be created from the browser while there
 	// is no user, for SetupWindow after start. Off, only the command line
