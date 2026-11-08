@@ -8,3 +8,7 @@ master_key_file = ".data/master.key"
 [panel]
 listen = ["127.0.0.1:7710"]
 hosts  = ["127.0.0.1:7710", "localhost:7710"]
+
+# Local lab only: the test MinIO on 127.0.0.1:9190.
+[backup]
+allow_private_endpoints = true
