@@ -12,6 +12,8 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.40] - 2026-11-07
+
 ### Corrigido
 
 - **Terminal do serviço com o ambiente da imagem**: o shell abria como
@@ -20,6 +22,12 @@ servidor pelo botão **Atualização** do painel.
   por exemplo). Com isso, `python manage.py` não achava o Django. Agora o
   terminal abre como o `docker exec`, o Portainer e o EasyPanel: interativo,
   sem login, com o `PATH` da imagem.
+
+### Mudado
+
+- **Dependências atualizadas**: templ 0.3.1100, SQLite (modernc) 1.61.1 e
+  yaml 3.0.6. O QR code da 2FA continua aparecendo com o templ novo, que
+  passou a filtrar imagens embutidas no HTML.
 
 ## [0.5.39] - 2026-10-31
 
@@ -1007,7 +1015,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.39...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.40...HEAD
+[0.5.40]: https://github.com/JuniorCarlini/hangar/compare/v0.5.39...v0.5.40
 [0.5.39]: https://github.com/JuniorCarlini/hangar/compare/v0.5.38...v0.5.39
 [0.5.38]: https://github.com/JuniorCarlini/hangar/compare/v0.5.37...v0.5.38
 [0.5.37]: https://github.com/JuniorCarlini/hangar/compare/v0.5.36...v0.5.37
