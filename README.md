@@ -14,7 +14,7 @@ o painel não escuta na internet, 2FA é recomendada a todos (e o dono pode
 exigi-la da equipe inteira), segredos aparecem mascarados até alguém
 revelá-los com sudo, e toda ação fica numa auditoria encadeada.
 
-> Versão atual: **v0.5.39**. Projeto em desenvolvimento ativo: use, teste e
+> Versão atual: **v0.5.40**. Projeto em desenvolvimento ativo: use, teste e
 > reporte, mas leia as [notas de cada versão](CHANGELOG.md) antes de atualizar.
 
 ## Sumário
