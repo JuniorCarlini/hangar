@@ -33,7 +33,12 @@ const (
 	maxSavedCommands  = 50
 )
 
-const bashOrSh = `if command -v bash >/dev/null 2>&1; then exec bash -l; else echo "bash não existe nesta imagem: usando sh"; exec sh -l; fi`
+// The shells are interactive (the TTY makes them so) but not login shells,
+// like docker exec, Portainer and EasyPanel: a login shell reads
+// /etc/profile, which on Debian-based images resets PATH and drops what
+// the image put there (a Python venv in /opt/venv/bin, say), so `python`
+// would not be the app's.
+const bashOrSh = `if command -v bash >/dev/null 2>&1; then exec bash; else echo "bash não existe nesta imagem: usando sh"; exec sh; fi`
 
 // ShellCommand is what the container runs for a shell choice. A custom
 // command is one line of at most 1000 characters (no control characters);
@@ -43,7 +48,7 @@ func ShellCommand(shell, custom string) ([]string, error) {
 	case "", ShellBash:
 		return []string{"/bin/sh", "-c", bashOrSh}, nil
 	case ShellSh:
-		return []string{"/bin/sh", "-l"}, nil
+		return []string{"/bin/sh"}, nil
 	case ShellCustom:
 		cmd, err := cleanCommand(custom)
 		if err != nil {

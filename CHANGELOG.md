@@ -12,6 +12,15 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Corrigido
+
+- **Terminal do serviço com o ambiente da imagem**: o shell abria como
+  shell de login, e o `/etc/profile` das imagens Debian trocava o `PATH`,
+  perdendo o que a imagem pôs nele (um venv do Python em `/opt/venv/bin`,
+  por exemplo). Com isso, `python manage.py` não achava o Django. Agora o
+  terminal abre como o `docker exec`, o Portainer e o EasyPanel: interativo,
+  sem login, com o `PATH` da imagem.
+
 ## [0.5.39] - 2026-10-31
 
 ### Mudado

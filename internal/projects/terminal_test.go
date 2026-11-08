@@ -9,10 +9,16 @@ import (
 )
 
 func TestShellCommand(t *testing.T) {
-	for shell, want := range map[string]string{"": "exec bash -l", "bash": "exec bash -l", "sh": "/bin/sh -l"} {
+	for shell, want := range map[string]string{"": "exec bash;", "bash": "exec bash;", "sh": "/bin/sh"} {
 		cmd, err := ShellCommand(shell, "ignored")
-		if err != nil || !strings.Contains(strings.Join(cmd, " "), want) {
+		joined := strings.Join(cmd, " ")
+		if err != nil || !strings.Contains(joined, want) {
 			t.Errorf("ShellCommand(%q) = %v, %v", shell, cmd, err)
+		}
+		// A login shell would reset PATH from /etc/profile and lose the
+		// image's own (a venv, say).
+		if slices.Contains(cmd, "-l") || strings.Contains(joined, " -l") {
+			t.Errorf("ShellCommand(%q) = %v: must not be a login shell", shell, cmd)
 		}
 	}
 	cmd, err := ShellCommand("custom", "  python manage.py migrate --noinput  ")
