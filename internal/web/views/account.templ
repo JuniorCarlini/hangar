@@ -187,7 +187,7 @@ templ totpCard(d AccountData) {
 				}
 				<div class="flex flex-wrap items-start gap-5">
 					if d.TOTP.QR != "" {
-						<img class="size-[164px] rounded-sm bg-white p-2.5" src={ d.TOTP.QR } alt={ t(ctx, "account.totp.qr_alt") } width="164" height="164"/>
+						<img class="size-[164px] rounded-sm bg-white p-2.5" src={ templ.SafeURL(d.TOTP.QR) } alt={ t(ctx, "account.totp.qr_alt") } width="164" height="164"/>
 					}
 					<form method="post" action="/account/totp/enable" class="flex flex-[1_1_280px] flex-col gap-3">
 						<input type="hidden" name="csrf" value={ d.CSRF }/>
