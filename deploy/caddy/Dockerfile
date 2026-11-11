@@ -23,7 +23,7 @@ RUN xcaddy build v2.11.7 \
     --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6 \
     --replace github.com/go-chi/chi/v5=github.com/go-chi/chi/v5@v5.4.0
 
-FROM caddy:2.11-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+FROM caddy:2.11-alpine@sha256:78bd35025c7ba85961dd149ae670315129954e77abe2383ac47c89106b35ade9
 # The official image is rebuilt rarely: take the Alpine fixes published
 # since (this runs only when this file changes; the release reuses the
 # image otherwise).
