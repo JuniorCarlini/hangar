@@ -14,7 +14,7 @@
 # Caddy, update both digests to the new tag's digest and the module versions
 # below; to add a DNS provider, add a --with line with its pinned caddy-dns
 # module and list the provider in edge.DNSProviders.
-FROM caddy:2.11-builder-alpine@sha256:ef9b65adf9a224770c6d5f6d1ae1bf99bc3caaa78d8c4bae3ea949ee6984f301 AS builder
+FROM caddy:2.11-builder-alpine@sha256:a0fde94c08a09fc31a8f2aeb42d0c2003807a325f04efeb98fa6cc89e25682e0 AS builder
 # The Caddy release and the Go modules with fixes newer than that release
 # are named here, so the edge does not wait for the next official image.
 RUN xcaddy build v2.11.7 \
@@ -23,7 +23,7 @@ RUN xcaddy build v2.11.7 \
     --replace github.com/go-jose/go-jose/v4=github.com/go-jose/go-jose/v4@v4.1.6 \
     --replace github.com/go-chi/chi/v5=github.com/go-chi/chi/v5@v5.4.0
 
-FROM caddy:2.11-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+FROM caddy:2.11-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
 # The official image is rebuilt rarely: take the Alpine fixes published
 # since (this runs only when this file changes; the release reuses the
 # image otherwise).
