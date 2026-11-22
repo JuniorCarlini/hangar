@@ -26,6 +26,17 @@ func connection(v string) (string, string) {
 	return g[1], g[2]
 }
 
+// connectsToNothing: none of the service's variables reads another
+// service yet (the Variables tab then says how to connect one).
+func connectsToNothing(rows []EnvRow) bool {
+	for _, r := range rows {
+		if isRef(r.Value) {
+			return false
+		}
+	}
+	return true
+}
+
 // refWarning explains a broken reference in plain words.
 func refWarning(ctx context.Context, w RefWarning) string {
 	switch {
@@ -121,6 +132,12 @@ templ tabVariables(d ServiceData) {
 					.env
 				</button>
 			}
+		}
+		if d.CanOperate && len(d.ConnectOffers) > 0 && connectsToNothing(d.Env) {
+			<p class="m-0 flex items-start gap-2 px-4 pt-3 text-xs text-muted" data-connect-hint>
+				@Icon("cable", "size-3.5 shrink-0 mt-0.5")
+				{ t(ctx, "connect.discover") }
+			</p>
 		}
 		if len(d.RefWarnings) > 0 {
 			<div class="px-4 pt-4">

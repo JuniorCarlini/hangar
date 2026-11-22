@@ -431,7 +431,7 @@ templ servicePanel(d ServiceData) {
 	// A Tucano drawer: it closes with the X, Escape or a click outside, and
 	// canvas.js takes the address back to the project.
 	<button type="button" hidden data-tuc-drawer="#svc-panel" id="svc-open"></button>
-	<dialog class="tuc-drawer is-right is-lg svc-drawer" id="svc-panel" data-open="true" data-project={ d.Project } aria-labelledby="svc-title">
+	<dialog class="tuc-drawer is-right is-lg svc-drawer" id="svc-panel" data-open="true" data-project={ d.Project } data-resize-label={ t(ctx, "service.resize") } aria-labelledby="svc-title">
 		<div class="tuc-drawer__panel">
 			<div class="svc-head">
 				<span class={ stateDot(d.State) } aria-hidden="true"></span>
@@ -444,6 +444,16 @@ templ servicePanel(d ServiceData) {
 					</a>
 				}
 				<span class="grow"></span>
+				// Wider or back to normal (canvas.js; the width can also be
+				// dragged from the drawer's left edge, and is remembered).
+				<button type="button" class="tuc-btn is-ghost is-icon is-sm svc-wide" data-svc-wide aria-pressed="false" title={ t(ctx, "service.widen") } aria-label={ t(ctx, "service.widen") } data-label-on={ t(ctx, "service.narrow") } data-label-off={ t(ctx, "service.widen") }>
+					<span class="svc-wide__on">
+						@Icon("chevron-left", "size-4")
+					</span>
+					<span class="svc-wide__off">
+						@Icon("chevron-right", "size-4")
+					</span>
+				</button>
 				<button type="button" class="tuc-btn is-ghost is-icon is-sm tuc-drawer__close" data-tuc-drawer-close aria-label={ t(ctx, "service.close") }>
 					@Icon("x", "size-4")
 				</button>

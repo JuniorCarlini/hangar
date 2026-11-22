@@ -134,7 +134,20 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 
 /* ---------------------------------------------------------------- Service panel */
 /* The service opens in a Tucano drawer (right side). */
-.svc-drawer.is-right.is-lg .tuc-drawer__panel { max-width: min(520px, 100%); padding: 0; gap: 0; background: var(--p-surface); }
+.svc-drawer.is-right.is-lg .tuc-drawer__panel { width: min(var(--svc-w, 520px), 100%); max-width: min(var(--svc-w, 520px), 100%); padding: 0; gap: 0; background: var(--p-surface); }
+/* The drawer's width: dragged from its left edge (canvas.js sets --svc-w
+   on the page, remembered per browser) or toggled wide from its head. */
+.svc-grip { position: fixed; top: 0; bottom: 0; right: calc(min(var(--svc-w, 520px), 100%) - 4px); z-index: 1; width: 8px; cursor: col-resize; touch-action: none; }
+.svc-grip::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background 0.15s; }
+.svc-grip:hover::after, .is-resizing .svc-grip::after { background: var(--p-accent, currentColor); }
+.is-resizing, .is-resizing * { cursor: col-resize !important; user-select: none; }
+.svc-wide .svc-wide__off, .svc-wide[aria-pressed="true"] .svc-wide__on { display: none; }
+.svc-wide[aria-pressed="true"] .svc-wide__off { display: inline-flex; }
+/* In the drawer the logs take the height there is, and can be pulled
+   taller or shorter from their corner. */
+.svc-drawer .logs { height: max(280px, calc(100dvh - 330px)); resize: vertical; }
+/* On a phone the drawer already takes the whole width. */
+@media (max-width: 40rem) { .svc-grip, .svc-wide { display: none; } }
 .svc-meta { padding: 0 20px 4px; }
 /* The main actions (deploy, restart, stop, terminal): side by side, full
    width, wrapping on a narrow drawer. */

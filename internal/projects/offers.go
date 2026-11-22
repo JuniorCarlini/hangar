@@ -77,6 +77,17 @@ func (m *Manager) Offers(ctx context.Context, serviceID string) ([]Offer, error)
 		if s.InternalPort > 0 && !hasOffer(out, "PORT") {
 			out = append(out, Offer{Key: "PORT"})
 		}
+		// A database made by hand offers its connection URL too, as a
+		// template's does (dburl.go).
+		vals := make(map[string]string, len(vars))
+		for _, v := range vars {
+			if plain, err := m.box.Open(v.ValueEnc, envAD(serviceID, v.Key)); err == nil {
+				vals[v.Key] = string(plain)
+			}
+		}
+		if key, _, secret, ok := derivedURL(s.Image, vals, "host", ""); ok && !hasOffer(out, key) {
+			out = append(out, Offer{Key: key, Secret: secret})
+		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil

@@ -12,6 +12,30 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Adicionado
+
+- **URL de conexão para bancos feitos à mão**: um serviço criado a partir
+  da imagem oficial do PostgreSQL, MySQL/MariaDB, MongoDB ou Redis/Valkey
+  agora oferece `DATABASE_URL` (ou `MONGODB_URL`, `REDIS_URL`) montada com
+  as variáveis dele, como os bancos de template já faziam. Quem se conecta
+  a ele recebe um valor só, já marcado no conector, que acompanha quando a
+  senha muda.
+- **Largura do painel lateral**: arraste a borda esquerda do painel do
+  serviço para alargar ou estreitar (duplo clique volta ao padrão), ou use
+  a seta no topo para alternar entre normal e largo. A largura fica
+  guardada no navegador.
+- **Botão Logs** nas ações do serviço: abre os logs direto em tela cheia.
+  Dentro do painel, os logs ocupam a altura disponível e podem ser
+  esticados pelo canto.
+
+### Alterado
+
+- **Parar, iniciar, reiniciar e fazer deploy pelo painel** não recarregam
+  mais a página: o painel fica aberto e só o conteúdo dele é atualizado.
+- O botão **Conector** passou a se chamar **Conectar serviço**, e a aba
+  Variáveis explica como ligar um banco ou outro serviço enquanto nenhum
+  estiver ligado.
+
 ## [0.5.40] - 2026-11-07
 
 ### Corrigido
