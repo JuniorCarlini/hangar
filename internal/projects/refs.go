@@ -143,6 +143,14 @@ func (l *refLookup) load(ctx context.Context, projectSlug, serviceSlug string) (
 	if _, ok := vals["PORT"]; !ok && port != "" {
 		vals["PORT"] = port
 	}
+	// A database made by hand: its connection URL from its own variables
+	// (dburl.go), unless it has one under that name already.
+	if key, v, sec, ok := derivedURL(s.Image, vals, host, port); ok {
+		if _, has := vals[key]; !has {
+			vals[key] = v
+			secret[key] = sec
+		}
+	}
 	return refTarget{vals: vals, secret: secret}, nil
 }
 

@@ -555,7 +555,7 @@ func deployBadge(status string) string {
 // Service is a service's page.
 templ serviceActions(d ServiceData) {
 	if d.CanOperate {
-		<form method="post" action={ templ.SafeURL(d.base() + "/deploy") }>
+		<form data-panel-swap method="post" action={ templ.SafeURL(d.base() + "/deploy") }>
 			<input type="hidden" name="csrf" value={ d.CSRF }/>
 			<button class="tuc-btn is-primary w-full" type="submit" disabled?={ d.Deploying }>
 				if d.Deploying {
@@ -567,7 +567,7 @@ templ serviceActions(d ServiceData) {
 				}
 			</button>
 		</form>
-		<form data-confirm={ t(ctx, "confirm.restart.title") } data-confirm-text={ t(ctx, "confirm.restart.text") } data-confirm-ok={ t(ctx, "confirm.restart.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/action") }>
+		<form data-panel-swap data-confirm={ t(ctx, "confirm.restart.title") } data-confirm-text={ t(ctx, "confirm.restart.text") } data-confirm-ok={ t(ctx, "confirm.restart.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/action") }>
 			<input type="hidden" name="csrf" value={ d.CSRF }/>
 			<input type="hidden" name="action" value="restart"/>
 			<button class="tuc-btn is-outline w-full" type="submit">
@@ -576,7 +576,7 @@ templ serviceActions(d ServiceData) {
 			</button>
 		</form>
 		if d.State == "running" {
-			<form data-confirm={ t(ctx, "confirm.stop.title") } data-confirm-text={ t(ctx, "confirm.stop.text") } data-confirm-ok={ t(ctx, "confirm.stop.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/action") }>
+			<form data-panel-swap data-confirm={ t(ctx, "confirm.stop.title") } data-confirm-text={ t(ctx, "confirm.stop.text") } data-confirm-ok={ t(ctx, "confirm.stop.ok") } data-tone="warning" method="post" action={ templ.SafeURL(d.base() + "/action") }>
 				<input type="hidden" name="csrf" value={ d.CSRF }/>
 				<input type="hidden" name="action" value="stop"/>
 				<button class="tuc-btn is-danger w-full" type="submit">
@@ -585,7 +585,7 @@ templ serviceActions(d ServiceData) {
 				</button>
 			</form>
 		} else {
-			<form method="post" action={ templ.SafeURL(d.base() + "/action") }>
+			<form data-panel-swap method="post" action={ templ.SafeURL(d.base() + "/action") }>
 				<input type="hidden" name="csrf" value={ d.CSRF }/>
 				<input type="hidden" name="action" value="start"/>
 				<button class="tuc-btn is-success w-full" type="submit">
@@ -595,11 +595,11 @@ templ serviceActions(d ServiceData) {
 			</form>
 		}
 	}
-	if d.CanAdmin {
-		// The terminal opens in a large modal (terminalDialogs); without
-		// sudo the button asks for it first, then the page comes back with
-		// the terminal open.
-		<div class="svc-actions__pair">
+	<div class="svc-actions__pair">
+		if d.CanAdmin {
+			// The terminal opens in a large modal (terminalDialogs); without
+			// sudo the button asks for it first, then the page comes back with
+			// the terminal open.
 			if d.Git != nil {
 				@autoDeployButton(d)
 			}
@@ -619,8 +619,14 @@ templ serviceActions(d ServiceData) {
 					{ t(ctx, "terminal.title") }
 				</button>
 			}
-		</div>
-	}
+		}
+		// The logs straight on the whole screen (ui.js expands the block on
+		// ?expand=1), one click from the top of the drawer.
+		<a class="tuc-btn is-outline w-full" href={ templ.SafeURL(d.base() + "?tab=logs&expand=1") } data-logs-open>
+			@Icon("file-text", "size-4")
+			{ t(ctx, "service.tab.logs") }
+		</a>
+	</div>
 }
 
 // autoDeployButton turns the branch polling on or off, the same two-state

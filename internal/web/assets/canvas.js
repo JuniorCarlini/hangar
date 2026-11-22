@@ -321,6 +321,7 @@
   // streams, so it still loads as a full page. Closing the drawer (X,
   // Escape, click outside) takes the address back to the project.
   var closingByCode = false;
+  var watchCards = function () {}; // set below, with the card polling
   function select(slug) {
     svg.querySelectorAll('.node').forEach(function (n) {
       n.classList.toggle('is-selected', !!slug && n.dataset.slug === slug && !n.classList.contains('is-external'));
@@ -386,6 +387,7 @@
         closeDrawer();
       }
       if (window.HangarLogs) HangarLogs.start();
+      ensureGrip();
       select((/\/s\/([^/?#]+)/.exec(url) || [])[1]);
       if (doc.title) document.title = doc.title;
       if (push) history.pushState({ panel: true }, '', url);
@@ -394,10 +396,148 @@
       document.documentElement.classList.remove('is-busy');
     });
   }
+  // Deploy, restart, stop and start from the drawer: sent without leaving
+  // the page, then only the drawer's content is replaced. A full load
+  // closed the drawer and opened it again, which read as the screen
+  // closing on the operator. Capture phase: after the confirm dialog (it
+  // stops the first submit and sends again once confirmed), before the
+  // one-request-at-a-time lock, which this does itself.
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (e.defaultPrevented || !f.matches || !f.matches('#svc-panel form[data-panel-swap]')) return;
+    if (f.dataset.confirm && f.dataset.confirmed !== '1') return;
+    e.preventDefault();
+    if (f.dataset.sending === '1') return;
+    f.dataset.sending = '1';
+    delete f.dataset.confirmed;
+    var submitter = e.submitter;
+    var body = new URLSearchParams(new FormData(f));
+    f.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+    if (submitter && submitter.tagName === 'BUTTON' && !submitter.querySelector('.tuc-spinner')) {
+      var sp = document.createElement('span');
+      sp.className = 'tuc-spinner';
+      sp.setAttribute('aria-hidden', 'true');
+      submitter.prepend(sp);
+    }
+    document.documentElement.classList.add('is-busy');
+    // getAttribute: these forms have a field named "action", which
+    // shadows form.action.
+    fetch(f.getAttribute('action'), {
+      method: 'POST', credentials: 'same-origin', body: body,
+      headers: { Accept: 'text/html', 'X-Hangar-Fragment': 'panel' }
+    }).then(function (r) {
+      return r.text().then(function (html) { return { url: r.url, html: html }; });
+    }).then(function (res) {
+      var doc = new DOMParser().parseFromString(res.html, 'text/html');
+      var next = doc.getElementById('svc-panel');
+      var cur = document.getElementById('svc-panel');
+      if (!next || !cur || !cur.open) throw new Error('reload');
+      if (window.HangarLogs) HangarLogs.stop();
+      var panel = cur.querySelector('.tuc-drawer__panel');
+      var fresh = document.importNode(next.querySelector('.tuc-drawer__panel'), true);
+      panel.replaceChildren.apply(panel, Array.prototype.slice.call(fresh.childNodes));
+      if (window.Tucano && Tucano.init) Tucano.init(panel);
+      if (window.HangarLogs) HangarLogs.start();
+      ensureGrip();
+      // The address follows (the tab the answer shows), without the
+      // one-off ?ok= that asked for the message.
+      var u = new URL(res.url, location.href);
+      u.searchParams.delete('ok');
+      if (u.origin === location.origin) history.replaceState({ panel: true }, '', u.pathname + u.search);
+      watchCards();
+    }).catch(function () {
+      // Anything unexpected: send it the old way, a full page.
+      delete f.dataset.sending;
+      f.submit();
+    }).finally(function () {
+      document.documentElement.classList.remove('is-busy');
+    });
+  }, true);
+  // The drawer's width. Dragged from its left edge (a grip the drawer gets
+  // when it opens), toggled wide from its head; remembered per browser
+  // (localStorage, which may be off: then only for this page). Set on the
+  // page, not the drawer, so a drawer swapped in keeps it.
+  var WIDTH_KEY = 'hangar.drawerW', WIDE = 0.62, MIN_W = 380;
+  function maxW() { return Math.max(MIN_W, window.innerWidth - 48); }
+  function setWidth(w, save) {
+    var root = document.documentElement;
+    if (!w) {
+      root.style.removeProperty('--svc-w');
+    } else {
+      root.style.setProperty('--svc-w', Math.round(Math.min(Math.max(w, MIN_W), maxW())) + 'px');
+    }
+    if (save) {
+      try { if (w) localStorage.setItem(WIDTH_KEY, String(Math.round(w))); else localStorage.removeItem(WIDTH_KEY); } catch (err) { /* storage off */ }
+    }
+    syncWide();
+  }
+  function curWidth() {
+    var p = document.querySelector('#svc-panel .tuc-drawer__panel');
+    return p ? p.getBoundingClientRect().width : 0;
+  }
+  function syncWide() {
+    var b = document.querySelector('#svc-panel [data-svc-wide]');
+    if (!b) return;
+    var on = !!document.documentElement.style.getPropertyValue('--svc-w') && curWidth() > 600;
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    var label = on ? b.dataset.labelOn : b.dataset.labelOff;
+    if (label) { b.title = label; b.setAttribute('aria-label', label); }
+  }
+  function ensureGrip() {
+    var d = document.getElementById('svc-panel');
+    if (!d || d.querySelector(':scope > .svc-grip')) { syncWide(); return; }
+    var g = document.createElement('div');
+    g.className = 'svc-grip';
+    g.setAttribute('aria-hidden', 'true');
+    if (d.dataset.resizeLabel) g.title = d.dataset.resizeLabel;
+    d.appendChild(g);
+    syncWide();
+  }
+  try { var saved = parseInt(localStorage.getItem(WIDTH_KEY), 10); if (saved > 0) setWidth(saved, false); } catch (err) { /* storage off */ }
+  ensureGrip();
+  var dragging = null;
+  document.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0 || !e.target.classList || !e.target.classList.contains('svc-grip')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = e.target;
+    dragging.setPointerCapture(e.pointerId);
+    document.documentElement.classList.add('is-resizing');
+  }, true);
+  document.addEventListener('pointermove', function (e) {
+    if (!dragging) return;
+    setWidth(window.innerWidth - e.clientX, false);
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    // The click that ends a drag must not reach the drawer's backdrop.
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    dragging = null;
+    document.documentElement.classList.remove('is-resizing');
+    setWidth(curWidth(), true);
+  }
+  document.addEventListener('pointerup', endDrag, true);
+  document.addEventListener('pointercancel', endDrag, true);
+  document.addEventListener('click', function (e) {
+    if (e.target.classList && e.target.classList.contains('svc-grip')) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  document.addEventListener('dblclick', function (e) {
+    if (e.target.classList && e.target.classList.contains('svc-grip')) { e.preventDefault(); setWidth(0, true); }
+  }, true);
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('#svc-panel [data-svc-wide]');
+    if (!b) return;
+    e.preventDefault();
+    setWidth(b.getAttribute('aria-pressed') === 'true' ? 0 : window.innerWidth * WIDE, true);
+  });
+  window.addEventListener('resize', function () {
+    var v = parseInt(document.documentElement.style.getPropertyValue('--svc-w'), 10);
+    if (v > maxW()) setWidth(maxW(), false);
+  });
   function local(a) {
     if (!a || a.target || a.hasAttribute('download')) return false;
     var u = new URL(a.href, location.href);
-    return u.origin === location.origin && (u.pathname === '/p/' + project || u.pathname.indexOf('/p/' + project + '/s/') === 0) && !/\/logs$/.test(u.pathname) && u.searchParams.get('tab') !== 'terminal';
+    return u.origin === location.origin && (u.pathname === '/p/' + project || u.pathname.indexOf('/p/' + project + '/s/') === 0) && !/\/logs$/.test(u.pathname) && u.searchParams.get('tab') !== 'terminal' && u.searchParams.get('expand') !== '1';
   }
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -449,7 +589,9 @@
     }
   }
   var drawerStale = false;
+  var polling = false; // one loop at a time
   function poll() {
+    polling = true;
     if (busy()) { setTimeout(poll, 2000); return; }
     fetch('/p/' + project, { credentials: 'same-origin', headers: { Accept: 'text/html' } }).then(function (r) {
       if (!r.ok || r.redirected) throw new Error('poll');
@@ -479,6 +621,7 @@
         setTimeout(poll, 2000);
         return;
       }
+      polling = false;
       // Done: refresh the drawer once if it is open (its deploy list and
       // state changed), without touching a closed one.
       var panel = document.getElementById('svc-panel');
@@ -487,5 +630,12 @@
       }
     }).catch(function () { setTimeout(poll, 5000); });
   }
-  if (svg.dataset.watch === 'true') setTimeout(poll, 2000);
+  if (svg.dataset.watch === 'true') { polling = true; setTimeout(poll, 2000); }
+  // After an action sent from the drawer (no page load), the cards follow
+  // it the same way.
+  watchCards = function () {
+    if (polling) return;
+    polling = true;
+    setTimeout(poll, 1500);
+  };
 })();

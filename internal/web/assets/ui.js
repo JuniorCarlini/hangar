@@ -189,6 +189,20 @@
   // listener, which adopts the dialogs. A page shown again from the
   // back/forward cache does not run this again.
   document.addEventListener('DOMContentLoaded', openMarked);
+  // ?expand=1 opens the page with its first expandable block (the logs)
+  // already on the whole screen: the drawer's "Logs" button.
+  document.addEventListener('DOMContentLoaded', function () {
+    if (new URLSearchParams(location.search).get('expand') !== '1') return;
+    // After the drawer it sits in has opened (it opens itself, a moment
+    // later), else the drawer would come up over it.
+    var tries = 0;
+    (function expand() {
+      var drawer = document.querySelector('dialog.tuc-drawer[data-open="true"]');
+      if (drawer && !drawer.open && tries++ < 40) { setTimeout(expand, 50); return; }
+      var block = document.querySelector('[data-expandable]');
+      if (block) setTimeout(function () { setExpanded(block, true); }, drawer ? 250 : 0);
+    })();
+  });
 
   // Forms that destroy or change something important ask first, in a
   // Tucano dialog whose color says what kind of action it is (data-tone:
