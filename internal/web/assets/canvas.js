@@ -537,7 +537,7 @@
   function local(a) {
     if (!a || a.target || a.hasAttribute('download')) return false;
     var u = new URL(a.href, location.href);
-    return u.origin === location.origin && (u.pathname === '/p/' + project || u.pathname.indexOf('/p/' + project + '/s/') === 0) && !/\/logs$/.test(u.pathname) && u.searchParams.get('tab') !== 'terminal' && u.searchParams.get('expand') !== '1';
+    return u.origin === location.origin && (u.pathname === '/p/' + project || u.pathname.indexOf('/p/' + project + '/s/') === 0) && !/\/logs$/.test(u.pathname) && u.searchParams.get('tab') !== 'terminal';
   }
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -546,7 +546,16 @@
     var u = new URL(a.href, location.href);
     if (u.searchParams.get('view') === 'list') return;
     e.preventDefault();
-    swap(u.pathname + u.search, true);
+    // The drawer's "Logs" button (?expand=1): the logs tab comes in like
+    // any other, then its block goes to full screen. The address keeps
+    // the tab, not the one-off expand.
+    var expand = u.searchParams.get('expand') === '1';
+    u.searchParams.delete('expand');
+    swap(u.pathname + u.search, true).then(function () {
+      if (!expand) return;
+      var b = document.querySelector('#svc-panel [data-expandable] [data-expand]');
+      if (b) b.click();
+    });
   });
   window.addEventListener('popstate', function () { swap(location.pathname + location.search, false); });
 

@@ -48,8 +48,12 @@
 .qr { width: 200px; height: 200px; image-rendering: pixelated; border: 8px solid var(--p-on-accent); }
 
 /* Deploy log in the timeline */
-.deploy-log { flex-basis: 100%; }
-.deploy-log pre { max-height: 240px; overflow: auto; margin: 6px 0 0; padding: 8px 10px; background: var(--p-log-bg); color: var(--p-log-fg); border-radius: var(--p-radius); white-space: pre-wrap; word-break: break-word; }
+/* The deploy log: a link-like button in the timeline; the log itself only
+   shows in the full-screen modal (ui.js moves it there). */
+.deploy-log-open { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 0; border: 0; background: none; font-size: 12px; line-height: 16px; color: var(--p-muted); cursor: pointer; }
+.deploy-log-open:hover, .deploy-log-open:focus-visible { color: var(--p-fg); text-decoration: underline; }
+.deploy-log:not(.is-expanded) { display: none; }
+.deploy-log pre { height: 100%; overflow: auto; margin: 0; padding: 12px 14px; background: var(--p-log-bg); color: var(--p-log-fg); border-radius: var(--p-radius); white-space: pre-wrap; word-break: break-word; }
 
 /* ---------------------------------------------------------------- Canvas */
 @keyframes hg-in { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
@@ -154,9 +158,11 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 .svc-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 20px 16px; }
 .svc-actions > * { flex: 1 1 auto; }
 .svc-actions form { display: flex; min-width: 0; }
-/* The second row: automatic deploys beside the terminal, half each. */
+/* The second row: automatic deploys, the terminal and the logs. Each starts
+   at the width of its label (a form counts the same as a bare button), so
+   the long label gets the room it needs and the rest is shared. */
 .svc-actions__pair { display: flex; flex-basis: 100%; gap: 8px; min-width: 0; }
-.svc-actions__pair > * { flex: 1 1 0; min-width: 0; }
+.svc-actions__pair > * { flex: 1 1 max-content; min-width: 0; }
 /* A label longer than its third of the row is cut with an ellipsis instead
    of spilling out of the button (the full text is in its title). */
 .svc-actions__pair .tuc-btn { min-width: 0; overflow: hidden; }
