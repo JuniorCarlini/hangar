@@ -12,6 +12,8 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.42] - 2026-11-23
+
 ### Alterado
 
 - **Log do deploy em tela grande**: no histórico de deploys, "Log do deploy"
@@ -1065,7 +1067,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.41...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.42...HEAD
+[0.5.42]: https://github.com/JuniorCarlini/hangar/compare/v0.5.41...v0.5.42
 [0.5.41]: https://github.com/JuniorCarlini/hangar/compare/v0.5.40...v0.5.41
 [0.5.40]: https://github.com/JuniorCarlini/hangar/compare/v0.5.39...v0.5.40
 [0.5.39]: https://github.com/JuniorCarlini/hangar/compare/v0.5.38...v0.5.39
