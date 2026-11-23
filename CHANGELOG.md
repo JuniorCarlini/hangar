@@ -12,6 +12,8 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+## [0.5.41] - 2026-11-22
+
 ### Adicionado
 
 - **URL de conexão para bancos feitos à mão**: um serviço criado a partir
@@ -35,6 +37,13 @@ servidor pelo botão **Atualização** do painel.
 - O botão **Conector** passou a se chamar **Conectar serviço**, e a aba
   Variáveis explica como ligar um banco ou outro serviço enquanto nenhum
   estiver ligado.
+- **Dependências atualizadas**: Caddy, módulos Go (golang.org/x e outros) e
+  as GitHub Actions do CI.
+
+### Segurança
+
+- **Go 1.27.4**: o painel passa a ser compilado com a versão que corrige a
+  falha GO-2026-6859 no `net/http`.
 
 ## [0.5.40] - 2026-11-07
 
@@ -1039,7 +1048,8 @@ Primeira versão pública.
   assinada (Ed25519) e volta automática se a versão nova não subir.
 - Português e inglês, tema claro, escuro ou do sistema.
 
-[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.40...HEAD
+[Não lançado]: https://github.com/JuniorCarlini/hangar/compare/v0.5.41...HEAD
+[0.5.41]: https://github.com/JuniorCarlini/hangar/compare/v0.5.40...v0.5.41
 [0.5.40]: https://github.com/JuniorCarlini/hangar/compare/v0.5.39...v0.5.40
 [0.5.39]: https://github.com/JuniorCarlini/hangar/compare/v0.5.38...v0.5.39
 [0.5.38]: https://github.com/JuniorCarlini/hangar/compare/v0.5.37...v0.5.38
