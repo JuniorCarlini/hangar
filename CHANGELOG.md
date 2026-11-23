@@ -12,6 +12,13 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Corrigido
+
+- **Botão de deploy automático**: o texto "Desligar deploy automático"
+  vazava para fora do botão quando o painel lateral estava estreito. O
+  rótulo ficou mais curto ("Desligar auto deploy") e, se ainda faltar
+  espaço, é cortado com reticências dentro do botão.
+
 ## [0.5.41] - 2026-11-22
 
 ### Adicionado

@@ -157,6 +157,10 @@ main.page:has(> .canvas-area) { height: calc(100vh - 48px); }
 /* The second row: automatic deploys beside the terminal, half each. */
 .svc-actions__pair { display: flex; flex-basis: 100%; gap: 8px; min-width: 0; }
 .svc-actions__pair > * { flex: 1 1 0; min-width: 0; }
+/* A label longer than its third of the row is cut with an ellipsis instead
+   of spilling out of the button (the full text is in its title). */
+.svc-actions__pair .tuc-btn { min-width: 0; overflow: hidden; }
+.svc-actions__pair .tuc-btn > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The tabs in a narrow drawer: tighter. */
 .svc-drawer .tuc-tabs__list { overflow-x: auto; padding: 0 12px; scrollbar-width: none; }
 .svc-drawer .tuc-tabs__tab { padding-inline: 8px; font-size: 13px; white-space: nowrap; }

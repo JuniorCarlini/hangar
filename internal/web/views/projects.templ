@@ -635,15 +635,15 @@ templ autoDeployButton(d ServiceData) {
 	<form method="post" action={ templ.SafeURL(d.base() + "/git/auto") } title={ t(ctx, "git.auto.hint", "branch", d.Git.Branch) }>
 		<input type="hidden" name="csrf" value={ d.CSRF }/>
 		if d.Git.AutoDeploy {
-			<button class="tuc-btn is-outline w-full" type="submit" id="git-auto">
+			<button class="tuc-btn is-outline w-full" type="submit" id="git-auto" title={ t(ctx, "git.auto.off") }>
 				@Icon("refresh-cw", "size-4")
-				{ t(ctx, "git.auto.off") }
+				<span>{ t(ctx, "git.auto.off") }</span>
 			</button>
 		} else {
 			<input type="hidden" name="on" value="1"/>
-			<button class="tuc-btn is-success w-full" type="submit" id="git-auto">
+			<button class="tuc-btn is-success w-full" type="submit" id="git-auto" title={ t(ctx, "git.auto.on") }>
 				@Icon("refresh-cw", "size-4")
-				{ t(ctx, "git.auto.on") }
+				<span>{ t(ctx, "git.auto.on") }</span>
 			</button>
 		}
 	</form>
