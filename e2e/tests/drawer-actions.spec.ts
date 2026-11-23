@@ -50,11 +50,12 @@ test.describe('ações na gaveta', () => {
     await expect(page.locator('.node[data-slug="cache"] .node-state.is-ok')).toBeVisible({ timeout: 60_000 });
   });
 
-  test('botão Logs abre os logs em tela cheia', async ({ page }) => {
+  test('botão Logs abre os logs em tela cheia sem recarregar', async ({ page }) => {
     await page.goto(`/p/${slug}/s/cache`);
     const drawer = page.locator('dialog#svc-panel');
+    await page.evaluate(() => { (window as any).__semRecarregar = true; });
     await drawer.locator('[data-logs-open]').click();
-    await expect(page).toHaveURL(/tab=logs&expand=1/);
+    await expect(page).toHaveURL(/tab=logs$/);
     const full = page.locator('dialog.expand-dialog');
     await expect(full).toBeVisible();
     await expect(full.locator('#logs')).toBeVisible();
@@ -62,6 +63,25 @@ test.describe('ações na gaveta', () => {
     await page.keyboard.press('Escape');
     await expect(full).toHaveCount(0);
     await expect(drawer.locator('#logs')).toBeVisible();
+    expect(await page.evaluate(() => (window as any).__semRecarregar)).toBe(true);
+  });
+
+  test('log do deploy abre em tela cheia', async ({ page }) => {
+    await page.goto(`/p/${slug}/s/cache`);
+    const drawer = page.locator('dialog#svc-panel');
+    const open = drawer.locator('[data-expand-open]').first();
+    await expect(open).toBeVisible();
+    // The log is not on the timeline itself, only in the modal.
+    await expect(drawer.locator('.deploy-log pre').first()).toBeHidden();
+    await open.click();
+    const full = page.locator('dialog.expand-dialog');
+    await expect(full).toBeVisible();
+    await expect(full.locator('.deploy-log pre')).toBeVisible();
+    await expect(full.locator('.deploy-log pre')).not.toBeEmpty();
+    await page.keyboard.press('Escape');
+    await expect(full).toHaveCount(0);
+    await expect(drawer).toBeVisible();
+    await expect(drawer.locator('.deploy-log pre').first()).toBeHidden();
   });
 
   test('largura da gaveta: arrastar, lembrar, alargar e voltar', async ({ page }) => {

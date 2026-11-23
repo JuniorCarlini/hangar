@@ -635,15 +635,15 @@ templ autoDeployButton(d ServiceData) {
 	<form method="post" action={ templ.SafeURL(d.base() + "/git/auto") } title={ t(ctx, "git.auto.hint", "branch", d.Git.Branch) }>
 		<input type="hidden" name="csrf" value={ d.CSRF }/>
 		if d.Git.AutoDeploy {
-			<button class="tuc-btn is-outline w-full" type="submit" id="git-auto">
+			<button class="tuc-btn is-outline w-full" type="submit" id="git-auto" title={ t(ctx, "git.auto.off") }>
 				@Icon("refresh-cw", "size-4")
-				{ t(ctx, "git.auto.off") }
+				<span>{ t(ctx, "git.auto.off") }</span>
 			</button>
 		} else {
 			<input type="hidden" name="on" value="1"/>
-			<button class="tuc-btn is-success w-full" type="submit" id="git-auto">
+			<button class="tuc-btn is-success w-full" type="submit" id="git-auto" title={ t(ctx, "git.auto.on") }>
 				@Icon("refresh-cw", "size-4")
-				{ t(ctx, "git.auto.on") }
+				<span>{ t(ctx, "git.auto.on") }</span>
 			</button>
 		}
 	</form>
@@ -731,11 +731,28 @@ templ deploysTimeline(d ServiceData) {
 					if dp.Error != "" {
 						<p class="text-xs break-words whitespace-pre-line text-danger">{ dp.Error }</p>
 					}
+					// The log opens in the large modal the service logs use
+					// (ui.js, data-expand-open): a build log is long, and the
+					// timeline had room for a few lines of it.
 					if dp.Log != "" {
-						<details class="deploy-log">
-							<summary class="text-xs text-muted">{ t(ctx, "deploy.log") }</summary>
-							<pre class="font-mono text-xs">{ dp.Log }</pre>
-						</details>
+						<button type="button" class="deploy-log-open" data-expand-open={ "deploy-log-" + dp.ID }>
+							@Icon("maximize", "size-3.5")
+							{ t(ctx, "deploy.log") }
+						</button>
+						<section class="deploy-log" id={ "deploy-log-" + dp.ID } data-expandable>
+							<div class={ cardHeadClass }>
+								<h2 class="m-0 text-sm leading-5 font-semibold">{ t(ctx, "deploy.log") }</h2>
+								<span class="text-xs text-muted">{ t(ctx, "deploy.status." + dp.Status) } · { dp.When }</span>
+								if dp.Commit != "" {
+									<code class="font-mono text-xs text-muted">{ dp.Commit }</code>
+								}
+								<span class="grow"></span>
+								@expandButton()
+							</div>
+							<div>
+								<pre class="font-mono text-xs" tabindex="0">{ dp.Log }</pre>
+							</div>
+						</section>
 					}
 				</div>
 			</li>

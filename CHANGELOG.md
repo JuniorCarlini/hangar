@@ -12,6 +12,23 @@ servidor pelo botão **Atualização** do painel.
 
 ## [Não lançado]
 
+### Alterado
+
+- **Log do deploy em tela grande**: no histórico de deploys, "Log do deploy"
+  abre o log inteiro na mesma janela grande dos logs do serviço, em vez de
+  um quadro pequeno dentro da linha do tempo. Esc ou o botão do canto
+  fecham.
+- **Botão Logs sem recarregar a página**: abre a aba Logs dentro do painel
+  lateral, como as outras ações, e põe os logs em tela cheia.
+
+### Corrigido
+
+- **Botão de deploy automático**: o texto "Desligar deploy automático"
+  vazava para fora do botão. O rótulo ficou mais curto ("Desligar auto
+  deploy"), os três botões da linha dividem o espaço pelo tamanho do texto
+  e, se ainda faltar espaço, o texto é cortado com reticências dentro do
+  botão.
+
 ## [0.5.41] - 2026-11-22
 
 ### Adicionado

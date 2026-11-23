@@ -348,6 +348,14 @@
       block._expand = null;
     }
   }
+  // A button elsewhere that opens a block straight in full screen
+  // (data-expand-open="<id>"): the deploy log in the timeline.
+  document.addEventListener('click', function (e) {
+    var o = e.target.closest('[data-expand-open]');
+    if (!o) return;
+    var block = document.getElementById(o.dataset.expandOpen);
+    if (block) setExpanded(block, true);
+  });
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-expand]');
     if (!b) return;
